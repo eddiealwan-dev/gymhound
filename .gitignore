@@ -1,0 +1,18 @@
+# dependencies (junctioned outside OneDrive)
+node_modules/
+
+# Expo / build output
+.expo/
+dist/
+web-build/
+ios/
+android/
+
+# logs and local env
+*.log
+.env*.local
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
