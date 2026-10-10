@@ -50,7 +50,7 @@ Non-goals for v1
 | Pro lapses | Nothing is deleted. Extra routines stay visible and runnable. Fuel data is kept and locks again. No new routines until Pro is back |
 | History edits | Editing or deleting a past workout re-runs the rule and the PR check. It never changes a workout that is in progress |
 | Charts | Hand-drawn SVG, no chart library |
-| Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked. 40px hound, 10px gap, blue outline in dark mode. GYMHOUND keeps a fixed size when phone text is enlarged; everything else scales |
+| Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked. 48px hound, 38px wordmark, 10px gap, blue outline in dark mode (sizes raised by the owner on 2026-10-10). GYMHOUND keeps a fixed size when phone text is enlarged; everything else scales |
 | Footer | Matches FieldHound: "powered by" over the GruntHound wordmark image (white GRUNT on dark, black on light, blue HOUND, small LLC). Pinned to the bottom of short pages. No hound in the footer |
 | Previous result | Every set row shows that same set from last time, beside the input. Matched by set type and number. Empty when there is no history. A warmup is never the previous result for a working set (§8.4) |
 | Up next | Advances only when that routine day is finished. Rest days, discarded sessions and empty workouts never consume it (§8.3) |
@@ -355,7 +355,7 @@ Saving an edit to a finished workout, or deleting one, runs one transaction:
 
 ### 8.1 Shell
 - **Header** (Train, History, Stats, Fuel, Settings):
-  - The hound mark at 40px on the left of the red GYMHOUND, 10px apart, on one line and vertically centred with it. This holds at every phone width, including under 360pt. The wordmark never wraps or drops under the mark.
+  - The hound mark at 48px on the left of the red GYMHOUND (38px), 10px apart, on one line and vertically centred with it. This holds at every phone width, including under 360pt. The wordmark never wraps or drops under the mark.
   - A round Settings icon button on the right.
   - On Settings, the round button closes Settings.
   - The header is hidden on the session screen and the finish summary.
@@ -388,7 +388,7 @@ Settings offers Light, Dark or System, with System the default.
 - **Type:** display and big numbers in Barlow Condensed 600/700/800, body in Inter 400/500/600. Numbers use `fontVariant: ['tabular-nums']`. Both fonts are bundled.
 - **Hound mark:** the dog from the GruntHound logo, cut from the owner's logo file with its background removed. It is never redrawn.
   - **Master:** `assets/brand/hound-head.png`, a 650px transparent square.
-  - **Header exports:** `mark.png`, `mark@2x.png` and `mark@3x.png` (40, 80 and 120px).
+  - **Header exports:** `mark.png`, `mark@2x.png` and `mark@3x.png` (48, 96 and 144px).
   - **Dark exports:** `mark-dark*.png`, the same sizes with a thin #2f8cff outline baked in, so the navy reads against #100f0c.
   - `src/ui/HoundMark.tsx` renders the right export for the scheme.
   - The owner approves how the mark sits in the header, in both themes, before phase 1 is done.

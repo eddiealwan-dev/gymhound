@@ -50,8 +50,8 @@
   | red | #E10600 | #E10600 |
 
 - **Red** is used only for the GYMHOUND wordmark, the active tab and PR marks. Primary buttons are filled with `text` and labelled in `bg`.
-- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, 32px, red, uppercase, letterSpacing −0.5, one line.
-  - It sits on the right of the 40px hound with a 10px gap, vertically centred, at every width. It is never stacked.
+- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, 38px, red, uppercase, letterSpacing −0.5, one line.
+  - It sits on the right of the 48px hound with a 10px gap, vertically centred, at every width. It is never stacked.
   - It keeps a fixed size (`allowFontScaling={false}`). Every other text in the app follows the phone's text size.
 - **Previous result** (spec §8.4):
   - Every set row shows that same set's last result beside the input, matched by set type and number.
@@ -1395,6 +1395,30 @@ catch first: close(db)
 
 ---
 
+### Task 12G: A bigger hound and GYMHOUND
+
+The owner asked on 2026-10-10 for the hound and GYMHOUND to be a little bigger.
+
+**Files:**
+- Modify: `src/ui/Header.tsx`
+- Uses (already re-exported): `assets/brand/mark{,@2x,@3x}.png` and `mark-dark{,@2x,@3x}.png`, now 48, 96 and 144px.
+
+**Interfaces:** none new.
+
+- [ ] **Step 1: Resize.**
+  - `HoundMark size={48}` (was 40).
+  - The wordmark `fontSize: 38` (was 32).
+  - The header row is 72px tall (was 64), with everything vertically centred.
+  - **Unchanged:** the 10px gap, red, letterSpacing −0.5, `numberOfLines={1}`, `allowFontScaling={false}`, the round 40px Settings button, and the dark-mode outline art.
+- [ ] **Step 2: Verify in the browser pane** at widths 390, 340 and 320, light and dark. Use `npm run web` in the background and one tab.
+  - The hound and GYMHOUND stay on one line, vertically centred.
+  - Nothing overlaps the Settings button. At 320 the wordmark ends at least 40px before the button.
+  - Record the measured x positions in the report.
+  - Regenerate the screenshots in the `shots` folder with the headless-Edge-over-DevTools method: `header-light.png`, `header-dark.png` (390), `header-narrow.png` (340) and `header-320.png` (320). View each with Read.
+- [ ] **Step 3:** Run `npm run typecheck` and `npm test`, both green.
+- [ ] **Step 4: Commit.** `git commit -m "feat(ui): a bigger hound and GYMHOUND in the header"`
+
+---
 
 ### Task 13: Train screen and minimal Routines list
 
