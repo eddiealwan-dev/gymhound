@@ -1,6 +1,6 @@
 import { formatRest } from './dates';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
-import { formatWeight } from './units';
+import { convertWeight, formatWeight } from './units';
 
 /** The set in the same position from the most recent finished workout with this exercise. */
 export type PrevSet = {
@@ -25,7 +25,10 @@ export type TickInput = {
   loggingType: LoggingType;
   /** What the user typed; null for a field left empty. */
   entered: SetFields;
-  /** Today's target weight for this exercise, if it has one. */
+  /**
+   * Today's target weight for this exercise, if it has one. It must already be in the unit the
+   * user is entering in (the same unit as `entered.weight`); the caller converts it.
+   */
   target: number | null;
   placeholders: ReturnType<typeof placeholdersFor>;
 };
@@ -48,21 +51,42 @@ export function setLabels(types: SetType[]): string[] {
   return types.map((t) => (t === 'working' ? String(++working) : OTHER_SET_LABELS[t]));
 }
 
-/** The greyed-out values a set row shows: the previous set, else the rule's top rep count. */
-export function placeholdersFor(a: { previous: PrevSet | null; ruleRepMax: number | null }): SetFields {
-  const { previous } = a;
+/**
+ * The greyed-out values a set row shows: the previous set, else the rule's value.
+ *
+ * `ruleRepMax` is a rep count for the weighted types, seconds for `timed` (it feeds the duration
+ * and reps stay empty), and unused for `distance_time`. Without `loggingType` it is treated as reps.
+ *
+ * Pass `unit` (the unit the user is entering in) so a previous weight logged in the other unit is
+ * converted and rounded to 2 decimals; otherwise the previous weight is returned as logged.
+ */
+export function placeholdersFor(a: {
+  previous: PrevSet | null;
+  ruleRepMax: number | null;
+  loggingType?: LoggingType;
+  unit?: WeightUnit;
+}): SetFields {
+  const { previous, loggingType } = a;
+
+  let weight = previous?.weight ?? null;
+  if (weight !== null && a.unit && previous?.weightUnit && previous.weightUnit !== a.unit) {
+    weight = Number(convertWeight(weight, previous.weightUnit, a.unit).toFixed(2));
+  }
+
+  const ruleReps = loggingType === 'timed' || loggingType === 'distance_time' ? null : a.ruleRepMax;
   return {
-    weight: previous?.weight ?? null,
-    reps: previous?.reps ?? a.ruleRepMax,
-    durationS: previous?.durationS ?? null,
+    weight,
+    reps: loggingType === 'timed' ? null : (previous?.reps ?? ruleReps),
+    durationS: previous?.durationS ?? (loggingType === 'timed' ? a.ruleRepMax : null),
     distance: previous?.distance ?? null,
   };
 }
 
 /**
  * The values a tick records (spec 8.4): each field is what was entered, else (weight only) today's
- * target, else the placeholder. Null when a field the logging type needs still has no value, which
- * keeps the tick disabled.
+ * target, else the placeholder. Only the fields the logging type uses come back; the rest are
+ * null. Null when a field the logging type needs still has no value, which keeps the tick
+ * disabled.
  */
 export function resolveTick(i: TickInput): TickValues | null {
   const { entered, placeholders } = i;
@@ -74,13 +98,13 @@ export function resolveTick(i: TickInput): TickValues | null {
   switch (i.loggingType) {
     case 'weighted':
     case 'assisted':
-      return weight !== null && reps !== null ? { weight, reps, durationS, distance } : null;
+      return weight !== null && reps !== null ? { weight, reps, durationS: null, distance: null } : null;
     case 'bodyweight_plus':
-      return reps !== null ? { weight: weight ?? 0, reps, durationS, distance } : null;
+      return reps !== null ? { weight: weight ?? 0, reps, durationS: null, distance: null } : null;
     case 'timed':
-      return durationS !== null ? { weight, reps, durationS, distance } : null;
+      return durationS !== null ? { weight: null, reps: null, durationS, distance: null } : null;
     case 'distance_time':
-      return distance !== null && durationS !== null ? { weight, reps, durationS, distance } : null;
+      return distance !== null && durationS !== null ? { weight: null, reps: null, durationS, distance } : null;
   }
 }
 

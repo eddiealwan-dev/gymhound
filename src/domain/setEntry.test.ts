@@ -43,6 +43,60 @@ describe('placeholdersFor', () => {
       distance: null,
     });
   });
+
+  describe('for a logging type', () => {
+    it('feeds the rule value into the duration for a timed exercise, and leaves reps empty', () => {
+      expect(placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'timed' })).toEqual({
+        ...none,
+        durationS: 60,
+      });
+    });
+
+    it('prefers the previous duration over the rule value for a timed exercise', () => {
+      const plank: PrevSet = { ...prev, weight: null, reps: null, durationS: 50 };
+      expect(placeholdersFor({ previous: plank, ruleRepMax: 60, loggingType: 'timed' })).toEqual({
+        ...none,
+        durationS: 50,
+      });
+    });
+
+    it('ignores the rule value for distance_time', () => {
+      expect(placeholdersFor({ previous: null, ruleRepMax: 12, loggingType: 'distance_time' })).toEqual(none);
+    });
+
+    it('still feeds the rule value into reps for the weighted types', () => {
+      expect(placeholdersFor({ previous: null, ruleRepMax: 12, loggingType: 'assisted' })).toEqual({
+        ...none,
+        reps: 12,
+      });
+    });
+  });
+
+  describe('with an entry unit', () => {
+    it('converts a previous weight logged in the other unit (84 kg -> 185.19 lb)', () => {
+      const logged: PrevSet = { ...prev, weight: 84, weightUnit: 'kg' };
+      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'lb' }).weight).toBe(185.19);
+    });
+
+    it('converts pounds to kilograms the same way (185 lb -> 83.91 kg)', () => {
+      const logged: PrevSet = { ...prev, weight: 185, weightUnit: 'lb' };
+      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'kg' }).weight).toBe(83.91);
+    });
+
+    it('leaves a previous weight alone when it is already in the entry unit', () => {
+      expect(placeholdersFor({ previous: prev, ruleRepMax: null, unit: 'lb' }).weight).toBe(180);
+    });
+
+    it('leaves a previous weight alone when no entry unit is given', () => {
+      const logged: PrevSet = { ...prev, weight: 84, weightUnit: 'kg' };
+      expect(placeholdersFor({ previous: logged, ruleRepMax: null }).weight).toBe(84);
+    });
+
+    it('leaves a previous weight alone when it has no recorded unit', () => {
+      const logged: PrevSet = { ...prev, weight: 84, weightUnit: null };
+      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'lb' }).weight).toBe(84);
+    });
+  });
 });
 
 describe('resolveTick', () => {
@@ -105,6 +159,61 @@ describe('resolveTick', () => {
         placeholders: none,
       }),
     ).toBeNull();
+  });
+
+  describe('returns only the fields the logging type uses', () => {
+    it('ticks a timed plank with a 60 s rule from the entered duration, storing no reps', () => {
+      const placeholders = placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'timed' });
+      expect(placeholders).toEqual({ ...none, durationS: 60 });
+      expect(
+        resolveTick({ loggingType: 'timed', entered: { ...none, durationS: 45 }, target: null, placeholders }),
+      ).toEqual({ weight: null, reps: null, durationS: 45, distance: null });
+    });
+
+    it('nulls the duration and distance of a weighted set', () => {
+      expect(
+        resolveTick({
+          loggingType: 'weighted',
+          entered: none,
+          target: 180,
+          placeholders: { ...none, reps: 12, durationS: 30, distance: 5 },
+        }),
+      ).toEqual({ ...none, weight: 180, reps: 12 });
+    });
+
+    it('nulls the duration and distance of assisted and bodyweight_plus sets', () => {
+      const placeholders = { ...none, reps: 8, durationS: 30, distance: 5 };
+      expect(
+        resolveTick({ loggingType: 'assisted', entered: { ...none, weight: 40 }, target: null, placeholders }),
+      ).toEqual({ ...none, weight: 40, reps: 8 });
+      expect(resolveTick({ loggingType: 'bodyweight_plus', entered: none, target: null, placeholders })).toEqual({
+        ...none,
+        weight: 0,
+        reps: 8,
+      });
+    });
+
+    it('nulls the weight, reps and distance of a timed set', () => {
+      expect(
+        resolveTick({
+          loggingType: 'timed',
+          entered: { ...none, weight: 20 },
+          target: 20,
+          placeholders: { ...none, weight: 20, reps: 12, durationS: 45, distance: 5 },
+        }),
+      ).toEqual({ ...none, durationS: 45 });
+    });
+
+    it('nulls the weight and reps of a distance_time set', () => {
+      expect(
+        resolveTick({
+          loggingType: 'distance_time',
+          entered: { ...none, distance: 5, durationS: 1500 },
+          target: 20,
+          placeholders: { ...none, weight: 20, reps: 12 },
+        }),
+      ).toEqual({ ...none, distance: 5, durationS: 1500 });
+    });
   });
 });
 
