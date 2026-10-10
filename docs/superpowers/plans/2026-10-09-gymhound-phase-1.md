@@ -71,7 +71,7 @@
 - **Footer:** it matches FieldHound exactly.
   - Two centred lines: "powered by" (Inter 400, 10px/12px, `textMuted`, 10px below it), then the GruntHound wordmark image, 153.5px wide. Use `grunthound-on-dark*.png` on dark and `grunthound-on-light*.png` on light.
   - It is pinned to the bottom of short pages. On long pages it follows the content.
-  - It appears on Train, History, Stats and Settings only, never on Fuel, the session, or the finish summary.
+  - It appears on Train, History, Stats, Fuel and Settings (Fuel added by the owner, spec §18.4), never on the session or the finish summary.
   - It never contains the hound.
 - **Layout:** content is capped at a 512px max width and centred, with a 16px side gutter.
 - **Banned imagery:** no quotes, flames or skulls.

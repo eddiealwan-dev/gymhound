@@ -478,7 +478,7 @@ In order:
   - Remove.
 - **Footer of the screen:** Add set (inside each block), Add exercise (library picker), **Finish**, Discard.
 - **Rest timer:**
-  - A bar docked just above the bottom safe area, with **−15s**, the clock, and **Skip**.
+  - The countdown, with **−15s** and **Skip**, shows under the set that started it (§18.4). A bar docked above the bottom safe area appears only as a fallback when that set no longer exists (ruling R41).
   - Ticking a set starts it.
   - It is driven by `rest_ends_at`, so it survives the app being killed.
   - **When it ends:** a short bell and a haptic, including when the phone is locked.
@@ -832,7 +832,7 @@ The owner's report is kept in the build log. Where this section and an earlier o
 - **Units and bar:** Settings gets Units (lb or kg, and mi or km) and Bar (Standard 45 lb / 20 kg, Women's 35 lb / 15 kg, Technique 15 lb / 5 kg, or a custom weight) for each unit. Switching the unit follows 7.1.
 - **Plate calculator** (the ⋯ menu, barbell exercises): bar plus plates per side for a target weight, using the Settings bar and plates (7.7).
 - **Rest per exercise:** the ⋯ menu gets **Rest time**. It belongs to the exercise, like its note, and follows it everywhere. **Off** turns rest off for that exercise, and **Default** uses the Settings length.
-- **Rest under the set:** while a rest runs, its countdown, **−15s** and **Skip** also show under the set that started it. The bar at the bottom stays.
+- **Rest under the set:** while a rest runs, its countdown, **−15s** and **Skip** also show under the set that started it. (Superseded by §18.4: the bottom bar is now only a fallback.)
 - **Music in Expo Go:** a music button in the session header opens a sheet with buttons that open Apple Music (iPhone only), Spotify and Audible. Not in the browser build. Real controls stay in phase 7 (§17.3). Audible on iPhone only ever gets the open button.
 
 ### 18.3 Folded into later phases
