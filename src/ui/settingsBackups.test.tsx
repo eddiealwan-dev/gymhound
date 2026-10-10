@@ -20,8 +20,16 @@ const STARTING = {
   lastSnapshotError: null,
 };
 const FOLDER = '/docs/%40anonymous%2Fgymhound-1234/snapshots';
+/** The phone's raw listing of the snapshot folder (`describeSnapshotFolder`). */
+const REPORT = [
+  `Folder exists: ${FOLDER}`,
+  '1 entry',
+  'gymhound-20261009-090000-000.db: File, file:///private/docs/%2540anonymous%252Fgymhound-1234/snapsh…, listed size null, size 40960',
+].join('\n');
 const SAVED = new Date(2026, 9, 9, 9, 0).getTime();
 const FAILED = SAVED + 3_600_000;
+
+let mockReport: string | null = null;
 
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/settingsRepo', () => ({
@@ -32,7 +40,7 @@ jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() 
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
 jest.mock('../state/backup', () => ({
   snapshotListing: jest.fn(),
-  snapshotFolder: () => '/docs/%40anonymous%2Fgymhound-1234/snapshots',
+  snapshotFolderReport: () => mockReport,
   shareFile: jest.fn(),
 }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
@@ -69,6 +77,7 @@ beforeEach(() => {
   for (const key of Object.keys(mockStored)) delete mockStored[key];
   Object.assign(mockStored, STARTING);
   listing({});
+  mockReport = REPORT;
 });
 
 afterEach(() => {
@@ -117,7 +126,7 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
     expect(backupLines(mount())).toEqual([`Last snapshot: ${formatDateTime(FAILED)}`, 'Share latest snapshot']);
   });
 
-  it("says a saved snapshot's file isn't listed, and in development how many files were listed and where", () => {
+  it("says a saved snapshot's file isn't listed, and in development shows the phone's raw listing of the folder (G2)", () => {
     mockStored.lastSnapshotAt = SAVED;
     listing({ names: [] });
 
@@ -126,19 +135,27 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
     expect(backupLines(tree)).toEqual([
       `Last snapshot: ${formatDateTime(SAVED)}`,
       `A snapshot was saved at ${formatDateTime(SAVED)}, but its file isn't listed.`,
-      `0 files listed. Folder: ${FOLDER}`,
+      REPORT,
     ]);
     expect(hasShare(tree)).toBe(false);
   });
 
-  it('shows the listing error in place of the count in development', () => {
+  it('keeps the raw listing selectable, so it can be copied off the phone', () => {
+    mockStored.lastSnapshotAt = SAVED;
+
+    const line = mount().root.findAllByType(Text).find((n) => n.props.children === REPORT)!;
+
+    expect(line.props.selectable).toBe(true);
+  });
+
+  it('shows the listing error above the raw listing in development', () => {
     mockStored.lastSnapshotAt = SAVED;
     listing({ error: 'Unable to list the directory (ERR_DIRECTORY_LIST)' });
 
     expect(backupLines(mount())).toEqual([
       `Last snapshot: ${formatDateTime(SAVED)}`,
       `A snapshot was saved at ${formatDateTime(SAVED)}, but its file isn't listed.`,
-      `Unable to list the directory (ERR_DIRECTORY_LIST). Folder: ${FOLDER}`,
+      `Unable to list the directory (ERR_DIRECTORY_LIST)\n${REPORT}`,
     ]);
   });
 

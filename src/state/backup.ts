@@ -2,15 +2,9 @@ import * as Sharing from 'expo-sharing';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { newestSnapshot, snapshotTime, writeSnapshot } from '../db/snapshots';
 import type { Db } from '../db/types';
-import { getSnapshotFiles, snapshotDirPath } from '../platform/snapshots';
+import { describeSnapshotFolder, getSnapshotFiles } from '../platform/snapshots';
+import { describeError } from '../platform/snapshots/describeError';
 import { fileUri } from '../platform/snapshots/fileUri';
-
-/** An error's message, followed by its `code` in brackets when it has one (expo modules throw a CodedError). */
-function describeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' || typeof code === 'number' ? `${message} (${code})` : message;
-}
 
 /**
  * Writes a snapshot of the whole database and records the time as `lastSnapshotAt`. Returns true when both worked,
@@ -85,12 +79,15 @@ export function latestSnapshotPath(): string | null {
   return snapshotListing().path;
 }
 
-/** The absolute path of the snapshot folder, or null where snapshots never run (web) or it can't be found. Never throws. */
-export function snapshotFolder(): string | null {
+/**
+ * The snapshot folder as the phone lists it (`describeSnapshotFolder`): whether it exists, its path, and each entry with
+ * both of its sizes, for the development line in Settings. Null where snapshots never run (web). Never throws.
+ */
+export function snapshotFolderReport(): string | null {
   try {
-    return getSnapshotFiles() ? snapshotDirPath() : null;
-  } catch {
-    return null;
+    return getSnapshotFiles() ? describeSnapshotFolder() : null;
+  } catch (error) {
+    return describeError(error);
   }
 }
 

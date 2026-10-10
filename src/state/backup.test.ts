@@ -8,11 +8,18 @@ import { snapshotName, type SnapshotFiles } from '../db/snapshots';
 import type { Db } from '../db/types';
 import { createTestDb } from '../db/testing/createTestDb';
 import { nodeSnapshotFiles } from '../db/testing/nodeSnapshotFiles';
-import { getSnapshotFiles } from '../platform/snapshots';
-import { latestSnapshotPath, recordRestoredSnapshot, shareFile, snapshotListing, takeSnapshotSafely } from './backup';
+import { describeSnapshotFolder, getSnapshotFiles } from '../platform/snapshots';
+import {
+  latestSnapshotPath,
+  recordRestoredSnapshot,
+  shareFile,
+  snapshotFolderReport,
+  snapshotListing,
+  takeSnapshotSafely,
+} from './backup';
 
-// Only the files lookup is faked; shareFile runs the real fileUri.
-jest.mock('../platform/snapshots', () => ({ getSnapshotFiles: jest.fn() }));
+// Only the files lookup and the folder description are faked; shareFile runs the real fileUri.
+jest.mock('../platform/snapshots', () => ({ getSnapshotFiles: jest.fn(), describeSnapshotFolder: jest.fn() }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => {}) }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -183,6 +190,29 @@ describe('snapshotListing', () => {
     jest.mocked(getSnapshotFiles).mockReturnValue(null);
 
     expect(snapshotListing()).toEqual({ path: null, names: [], error: null });
+  });
+});
+
+describe('snapshotFolderReport', () => {
+  it("is the phone's raw listing of the snapshot folder", () => {
+    jest.mocked(describeSnapshotFolder).mockReturnValue('Folder exists: /docs/snapshots\n0 entries');
+
+    expect(snapshotFolderReport()).toBe('Folder exists: /docs/snapshots\n0 entries');
+  });
+
+  it('is null where snapshots never run (web)', () => {
+    jest.mocked(getSnapshotFiles).mockReturnValue(null);
+
+    expect(snapshotFolderReport()).toBeNull();
+    expect(describeSnapshotFolder).not.toHaveBeenCalled();
+  });
+
+  it('never throws: a failure comes back as its message', () => {
+    jest.mocked(getSnapshotFiles).mockImplementation(() => {
+      throw new Error('No documents folder');
+    });
+
+    expect(snapshotFolderReport()).toBe('No documents folder');
   });
 });
 

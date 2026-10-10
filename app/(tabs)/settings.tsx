@@ -8,7 +8,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { playBell } from '../../src/platform/restTimer/bell';
-import { shareFile, snapshotFolder, snapshotListing } from '../../src/state/backup';
+import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDbQuery } from '../../src/state/dataVersion';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
@@ -294,16 +294,17 @@ function RestTimerSection() {
 /** Module-level, so `useDbQuery` reads again only when the data changes or the screen regains focus (after a finish, too). */
 const readBackups = (db: Db) => {
   const { lastSnapshotAt, lastSnapshotError } = getSettings(db);
-  return { lastSnapshotAt, lastSnapshotError, listing: snapshotListing(), folder: __DEV__ ? snapshotFolder() : null };
+  return { lastSnapshotAt, lastSnapshotError, listing: snapshotListing(), folderReport: __DEV__ ? snapshotFolderReport() : null };
 };
 
 /**
  * When the last good snapshot was written, and a way to send the newest one somewhere safe. Snapshots run in the phone app only.
  * Below the time, a line says why the last snapshot failed, or that a saved snapshot's file isn't listed (with the
- * listing's own result and the folder in development builds), so a missing Share button can be explained.
+ * listing's error and the phone's raw listing of the folder in development builds), so a missing Share button can be
+ * explained.
  */
 function BackupsSection() {
-  const { lastSnapshotAt, lastSnapshotError, listing, folder } = useDbQuery(readBackups);
+  const { lastSnapshotAt, lastSnapshotError, listing, folderReport } = useDbQuery(readBackups);
   const [shareFailed, setShareFailed] = useState(false);
   const latestPath = listing.path;
   const failedSinceLastGood = lastSnapshotError !== null && (lastSnapshotAt === null || lastSnapshotError.at > lastSnapshotAt);
@@ -325,7 +326,7 @@ function BackupsSection() {
               <Body>{`A snapshot was saved at ${formatDateTime(lastSnapshotAt)}, but its file isn't listed.`}</Body>
               {__DEV__ ? (
                 <Body muted selectable>
-                  {`${listing.error ?? `${listing.names.length} files listed`}. Folder: ${folder ?? 'unknown'}`}
+                  {[listing.error, folderReport].filter((line) => line !== null).join('\n')}
                 </Body>
               ) : null}
             </>

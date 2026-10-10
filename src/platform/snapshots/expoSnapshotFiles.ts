@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { liveDbPath } from '../../db/client';
 import type { SnapshotFiles } from '../../db/snapshots';
+import { describeError } from './describeError';
 import { fileUri, pathFromUri } from './fileUri';
 
 /** SQLite's write-ahead-log files, which sit beside the database and can hold committed data. */
@@ -9,6 +10,10 @@ const SIDECARS = ['-wal', '-shm'];
 const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
 const fileAt = (path: string) => new File(fileUri(path));
 const dirAt = (path: string) => new Directory(fileUri(path));
+/** The name of an entry `Directory.list()` returned, taken from its uri. */
+const nameOf = (entry: File | Directory) => pathFromUri(entry.uri).split('/').pop()!;
+/** The path of a snapshot by its name, in the app's own form (which `remove`, `rename` and `copyToLive` use too). */
+const snapshotPathIn = (snapshotDir: string, name: string) => `${snapshotDir}/${name}`;
 
 function ensureDirectory(path: string): void {
   dirAt(path).create({ intermediates: true, idempotent: true });
@@ -48,7 +53,7 @@ export function snapshotDirPath(): string {
  */
 export function expoSnapshotFiles(): SnapshotFiles {
   const snapshotDir = snapshotDirPath();
-  const snapshotPath = (name: string) => `${snapshotDir}/${name}`;
+  const snapshotPath = (name: string) => snapshotPathIn(snapshotDir, name);
   const liveIsMissingOrEmpty = () => {
     const live = fileAt(liveDbPath());
     return !live.exists || live.size === 0;
@@ -58,10 +63,19 @@ export function expoSnapshotFiles(): SnapshotFiles {
     list() {
       const dir = dirAt(snapshotDir);
       if (!dir.exists) return [];
-      return dir
-        .list()
-        .filter((entry): entry is File => entry instanceof File && entry.size > 0)
-        .map((file) => pathFromUri(file.uri).split('/').pop()!);
+      const names: string[] = [];
+      for (const entry of dir.list()) {
+        // A listed entry is built from the URI iOS listed it under, which can differ from the app's own form, and then
+        // its size reads null. So only its name is taken from it; the size is read through the app's own path.
+        try {
+          if (!(entry instanceof File)) continue;
+          const name = nameOf(entry);
+          if (fileAt(snapshotPath(name)).size > 0) names.push(name);
+        } catch {
+          // One entry that can't be read is skipped; it must not cost the rest of the list.
+        }
+      }
+      return names;
     },
     pathFor(name) {
       ensureDirectory(snapshotDir);
@@ -121,4 +135,44 @@ export function expoSnapshotFiles(): SnapshotFiles {
       }
     },
   };
+}
+
+/** How much of each entry's uri the folder description shows: enough to compare its form with the app's own. */
+const URI_CHARS = 60;
+
+/** A value read from the phone, as text (null included), or the error reading it threw. Never throws. */
+function readText(read: () => unknown): string {
+  try {
+    return String(read());
+  } catch (error) {
+    return `error: ${describeError(error)}`;
+  }
+}
+
+/**
+ * The snapshot folder as the phone lists it, for the development line in Settings → Backups: whether the folder exists
+ * and its path, then each entry `Directory.list()` returned, one per line, with its name, File or Directory, the start of
+ * its uri, the size read from the listed entry (null when the phone can't read it there) and the size read through the
+ * app's own path. So a missing folder, an empty one and files the listing drops can be told apart. Never throws: an
+ * error comes back as its message and code.
+ */
+export function describeSnapshotFolder(): string {
+  try {
+    const snapshotDir = snapshotDirPath();
+    const dir = dirAt(snapshotDir);
+    if (!dir.exists) return `Folder missing: ${snapshotDir}`;
+    const entries = dir.list();
+    const lines = entries.map((entry) => {
+      const uri = readText(() => entry.uri);
+      return [
+        `${readText(() => nameOf(entry))}: ${entry instanceof Directory ? 'Directory' : 'File'}`,
+        uri.length > URI_CHARS ? `${uri.slice(0, URI_CHARS)}…` : uri,
+        `listed size ${readText(() => entry.size)}`,
+        `size ${readText(() => fileAt(snapshotPathIn(snapshotDir, nameOf(entry))).size)}`,
+      ].join(', ');
+    });
+    return [`Folder exists: ${snapshotDir}`, `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`, ...lines].join('\n');
+  } catch (error) {
+    return describeError(error);
+  }
 }

@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { snapshotName, type SnapshotFiles } from '../../db/snapshots';
 import { nodeSnapshotFiles } from '../../db/testing/nodeSnapshotFiles';
-import { expoSnapshotFiles, fileExists, setAsidePath } from './expoSnapshotFiles';
-import { setDocumentDirectory } from './testing/fakeExpoFileSystem';
+import { describeSnapshotFolder, expoSnapshotFiles, fileExists, setAsidePath } from './expoSnapshotFiles';
+import { fileUri } from './fileUri';
+import { Directory, File, Paths, setDocumentDirectory } from './testing/fakeExpoFileSystem';
 
 // The phone's implementation runs unchanged over a stand-in for expo-file-system that behaves like the real one
 // (see the fake for the semantics it models). `liveDbPath()` is the real one, reading expo-sqlite's default folder.
@@ -312,5 +313,138 @@ describe('expoSnapshotFiles on the phone', () => {
   it('says a path is not a file when it is a folder or missing', () => {
     expect(fileExists(h.liveDir)).toBe(false);
     expect(fileExists(`${h.liveDir}/nothing.db`)).toBe(false);
+  });
+});
+
+/**
+ * On the phone, `Directory.list()` hands back each entry built from the URI iOS listed it under, which can differ from the
+ * app's own form for the same file (G2): its size can then read null. These change the listed entries the same way.
+ */
+type Entry = File | Directory;
+function listedAs(change: (entry: Entry) => void): void {
+  const realList = Directory.prototype.list;
+  jest.spyOn(Directory.prototype, 'list').mockImplementation(function (this: Directory) {
+    const entries = realList.call(this);
+    entries.forEach(change);
+    return entries;
+  });
+}
+const sizeReadsNull = (entry: Entry) => Object.defineProperty(entry, 'size', { get: () => null });
+const throwsOn = (entry: Entry, property: 'uri' | 'size', message: string) =>
+  Object.defineProperty(entry, property, {
+    get() {
+      throw new Error(message);
+    },
+  });
+
+describe('expoSnapshotFiles: listing on the phone (G2)', () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = implementations[1].build(root);
+  });
+
+  it("keeps a snapshot whose listed entry can't read its size, reading it through the app's own path", () => {
+    const name = snapshotName(NOW);
+    fs.writeFileSync(h.files.pathFor(name), 'snapshot bytes');
+    listedAs(sizeReadsNull);
+
+    expect(h.files.list()).toEqual([name]);
+  });
+
+  it('still skips an empty file and a folder', () => {
+    const name = snapshotName(NOW);
+    fs.writeFileSync(h.files.pathFor(name), 'snapshot bytes');
+    fs.writeFileSync(h.files.pathFor(snapshotName(NOW + HOUR)), '');
+    fs.mkdirSync(`${h.snapshotDir}/${snapshotName(NOW + 2 * HOUR)}`);
+
+    expect(h.files.list()).toEqual([name]);
+  });
+
+  it('skips an entry that throws, and keeps the rest of the list', () => {
+    const [good, unnamed, unreadable] = [NOW, NOW + HOUR, NOW + 2 * HOUR].map(snapshotName);
+    for (const name of [good, unnamed, unreadable]) fs.writeFileSync(h.files.pathFor(name), 'snapshot bytes');
+    listedAs((entry) => {
+      if (entry.uri.endsWith(unnamed)) throwsOn(entry, 'uri', 'no uri');
+    });
+    const realSize = Object.getOwnPropertyDescriptor(File.prototype, 'size')!.get!;
+    jest.spyOn(File.prototype, 'size', 'get').mockImplementation(function (this: File) {
+      if (this.uri.endsWith(unreadable)) throw new Error('unreadable');
+      return realSize.call(this);
+    });
+
+    expect(h.files.list()).toEqual([good]);
+  });
+});
+
+describe('describeSnapshotFolder: the raw listing for the development line (G2)', () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = implementations[1].build(root);
+  });
+
+  /** The start of a uri as the description shows it. */
+  const uriStart = (uri: string) => (uri.length > 60 ? `${uri.slice(0, 60)}…` : uri);
+
+  it('says the folder is missing, and where it was looked for', () => {
+    expect(describeSnapshotFolder()).toBe(`Folder missing: ${h.snapshotDir}`);
+  });
+
+  it('says an empty folder exists and holds nothing', () => {
+    fs.mkdirSync(h.snapshotDir);
+
+    expect(describeSnapshotFolder()).toBe(`Folder exists: ${h.snapshotDir}\n0 entries`);
+  });
+
+  it("lists each entry: its name, File or Directory, the start of its uri, the listed size and the size at the app's own path", () => {
+    const name = snapshotName(NOW);
+    fs.writeFileSync(h.files.pathFor(name), 'snapshot bytes');
+    fs.mkdirSync(`${h.snapshotDir}/old`);
+    listedAs((entry) => {
+      if (entry instanceof File) sizeReadsNull(entry);
+    });
+    const uri = new File(fileUri(`${h.snapshotDir}/${name}`)).uri;
+
+    const lines = describeSnapshotFolder().split('\n');
+
+    expect(lines.slice(0, 2)).toEqual([`Folder exists: ${h.snapshotDir}`, '2 entries']);
+    // In name order: the listing's own order is the file system's.
+    expect(lines.slice(2).sort()).toEqual([
+      `${name}: File, ${uriStart(uri)}, listed size null, size 14`,
+      expect.stringMatching(/^old: Directory, file:\/\//),
+    ]);
+  });
+
+  it('never throws: an entry that throws shows the error in its line', () => {
+    const name = snapshotName(NOW);
+    fs.writeFileSync(h.files.pathFor(name), 'snapshot bytes');
+    listedAs((entry) => {
+      throwsOn(entry, 'size', 'Unable to read the size');
+      throwsOn(entry, 'uri', 'no uri');
+    });
+
+    expect(describeSnapshotFolder().split('\n')).toEqual([
+      `Folder exists: ${h.snapshotDir}`,
+      '1 entry',
+      'error: no uri: File, error: no uri, listed size error: Unable to read the size, size error: no uri',
+    ]);
+  });
+
+  it('never throws: a listing that fails comes back as its message and code', () => {
+    fs.mkdirSync(h.snapshotDir);
+    jest.spyOn(Directory.prototype, 'list').mockImplementation(() => {
+      throw Object.assign(new Error('Unable to list the directory'), { code: 'ERR_DIRECTORY_LIST' });
+    });
+
+    expect(describeSnapshotFolder()).toBe('Unable to list the directory (ERR_DIRECTORY_LIST)');
+  });
+
+  it('never throws: no documents folder comes back as its message', () => {
+    jest.spyOn(Paths, 'document', 'get').mockImplementation(() => {
+      throw new Error('No documents folder');
+    });
+
+    expect(describeSnapshotFolder()).toBe('No documents folder');
   });
 });

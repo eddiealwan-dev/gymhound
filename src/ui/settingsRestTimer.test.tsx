@@ -22,7 +22,7 @@ jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() 
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
 jest.mock('../state/backup', () => ({
   snapshotListing: () => ({ path: null, names: [], error: null }),
-  snapshotFolder: () => null,
+  snapshotFolderReport: () => null,
   shareFile: jest.fn(),
 }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
