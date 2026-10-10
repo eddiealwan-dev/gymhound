@@ -2,13 +2,14 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
 import { setSetting } from '../db/repositories/settingsRepo';
+import { playBell } from '../platform/restTimer/bell';
 import { bumpData } from '../state/dataVersion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The stored settings the screen reads. A write through `setSetting` lands here, as it would in SQLite. */
 const mockStored: Record<string, unknown> = {};
-const STARTING = { theme: 'system', unit: 'lb', distanceUnit: 'mi', restSeconds: 120, restBell: true, restBellSound: 'bell', lastSnapshotAt: null, lastSnapshotError: null };
+const STARTING = { theme: 'system', unit: 'lb', distanceUnit: 'mi', restSeconds: 120, restBell: true, restBellSound: 'bell', restBellVolume: 1, lastSnapshotAt: null, lastSnapshotError: null };
 
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/settingsRepo', () => ({
@@ -51,11 +52,57 @@ const selected = (tree: ReactTestRenderer) =>
     .filter((n) => n.props.accessibilityState?.selected === true)
     .map((n) => n.props.accessibilityLabel);
 
+/** The bell volume choices in screen order, each pressable, by its percent label. */
+function volumes(tree: ReactTestRenderer) {
+  return tree.root.findAll((n) => typeof n.props.onPress === 'function' && /^\d+%$/.test(String(n.props.accessibilityLabel)));
+}
+
+const selectedVolumes = (tree: ReactTestRenderer) =>
+  volumes(tree)
+    .filter((n) => n.props.accessibilityState?.selected === true)
+    .map((n) => n.props.accessibilityLabel);
+
 beforeEach(() => {
   for (const key of Object.keys(mockStored)) delete mockStored[key];
   Object.assign(mockStored, STARTING);
   jest.mocked(setSetting).mockClear();
   jest.mocked(bumpData).mockClear();
+  jest.mocked(playBell).mockClear();
+});
+
+describe('Settings: the bell volume (Task 26)', () => {
+  it('offers 25%, 50%, 75% and 100%, with the stored volume selected', () => {
+    const tree = mount();
+    expect(volumes(tree).map((n) => n.props.accessibilityLabel)).toEqual(['25%', '50%', '75%', '100%']);
+    expect(selectedVolumes(tree)).toEqual(['100%']);
+  });
+
+  it('stores 0.5 when 50% is chosen, bumps, plays the chosen bell at that volume, and shows 50% selected', () => {
+    mockStored.restBellSound = 'chime';
+    const tree = mount();
+    const choice = volumes(tree).find((n) => n.props.accessibilityLabel === '50%')!;
+
+    act(() => choice.props.onPress());
+
+    expect(setSetting).toHaveBeenCalledWith('db', 'restBellVolume', 0.5);
+    expect(bumpData).toHaveBeenCalledTimes(1);
+    expect(playBell).toHaveBeenCalledWith('chime', 0.5);
+    act(() => tree.update(<Settings />));
+    expect(selectedVolumes(tree)).toEqual(['50%']);
+  });
+
+  it('previews a newly picked sound at the stored volume', () => {
+    mockStored.restBellVolume = 0.75;
+    const tree = mount();
+    const ding = tree.root.findAll(
+      (n) => n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function' && n.findAll((c) => c.props.children === 'Ding').length > 0,
+    )[0];
+
+    act(() => ding.props.onPress());
+
+    expect(setSetting).toHaveBeenCalledWith('db', 'restBellSound', 'ding');
+    expect(playBell).toHaveBeenCalledWith('ding', 0.75);
+  });
 });
 
 describe('Settings: the rest timer length (spec 8.11, F7)', () => {

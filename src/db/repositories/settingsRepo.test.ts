@@ -15,12 +15,14 @@ const SPEC_KEYS = [
   'fuel_targets',
   'last_snapshot_at',
   'last_snapshot_error',
+  'music_app',
   'plates_kg',
   'plates_lb',
   'pro_cached',
   'pro_debug_unlock',
   'rest_bell',
   'rest_bell_sound',
+  'rest_bell_volume',
   'rest_seconds',
   'seed_version',
   'theme',
@@ -167,6 +169,39 @@ describe('bell and snapshot settings', () => {
   it('read back as defaults before ensureSettings has run', () => {
     const { db } = createTestDb();
     expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
+  });
+});
+
+describe('the bell volume and the music app (Task 26)', () => {
+  it('default to full volume and no music app', () => {
+    expect(defaultSettings('us')).toMatchObject({ restBellVolume: 1, musicApp: null });
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    expect(getSettings(db)).toMatchObject({ restBellVolume: 1, musicApp: null });
+  });
+
+  it('are added to a database whose settings predate them, without touching the other keys', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    for (const key of ['rest_bell_volume', 'music_app']) db.delete(settings).where(eq(settings.key, key)).run();
+    setSetting(db, 'restBellSound', 'ding');
+    expect(storedKeys(db)).not.toContain('rest_bell_volume');
+
+    ensureSettings(db, 'us');
+
+    expect(storedKeys(db)).toEqual(SPEC_KEYS);
+    expect(getSettings(db)).toMatchObject({ restBellVolume: 1, musicApp: null, restBellSound: 'ding' });
+  });
+
+  it('keep what the user chose, and the music app clears back to null', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    setSetting(db, 'restBellVolume', 0.5);
+    setSetting(db, 'musicApp', 'spotify');
+    ensureSettings(db, 'us');
+    expect(getSettings(db)).toMatchObject({ restBellVolume: 0.5, musicApp: 'spotify' });
+    setSetting(db, 'musicApp', null);
+    expect(getSettings(db).musicApp).toBeNull();
   });
 });
 

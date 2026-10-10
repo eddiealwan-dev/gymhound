@@ -38,6 +38,9 @@ const BELL_OPTIONS: { value: BellSound; label: string }[] = [
   { value: 'ding', label: 'Ding' },
 ];
 
+/** The bell volumes Settings offers, as the player's 0 to 1. */
+const BELL_VOLUMES = [0.25, 0.5, 0.75, 1];
+
 /** The rest lengths Settings offers. Off is not one: it belongs to an exercise (its ⋯ menu), not to every exercise. */
 const REST_LENGTHS = REST_CHOICES.filter((seconds) => seconds > 0);
 
@@ -190,11 +193,51 @@ function RestLengthControl({ value, onChange }: { value: number; onChange: (seco
   );
 }
 
-/** The rest timer length, whether the timer rings when it ends, and which sound it makes. Choosing a sound plays it once. */
+/**
+ * How loud the in-app bell plays: 25%, 50%, 75% or 100%, in one row. The current one is filled with `text`, and the
+ * screen reader says it is selected.
+ */
+function BellVolumeControl({ value, onChange }: { value: number; onChange: (volume: number) => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
+      {BELL_VOLUMES.map((volume) => {
+        const selected = volume === value;
+        const label = `${Math.round(volume * 100)}%`;
+        return (
+          <Pressable
+            key={volume}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(volume)}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              borderRadius: 9,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: selected ? colors.text : 'transparent',
+            }}
+          >
+            <Body weight={600} style={{ color: selected ? colors.bg : colors.text, fontVariant: ['tabular-nums'] }}>
+              {label}
+            </Body>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The rest timer length, whether the timer rings when it ends, which sound it makes and how loud. Choosing a sound or a
+ * volume plays the bell once, as it will ring.
+ */
 function RestTimerSection() {
   const { colors } = useTheme();
   const db = useDb();
-  const { restSeconds, restBell, restBellSound } = useDbQuery(getSettings);
+  const { restSeconds, restBell, restBellSound, restBellVolume } = useDbQuery(getSettings);
   return (
     <View style={{ gap: 8, marginTop: 24 }}>
       <Body weight={600} muted>
@@ -232,7 +275,16 @@ function RestTimerSection() {
         onChange={(value) => {
           setSetting(db, 'restBellSound', value);
           bumpData();
-          void playBell(value);
+          void playBell(value, restBellVolume);
+        }}
+      />
+      <Body>Bell volume</Body>
+      <BellVolumeControl
+        value={restBellVolume}
+        onChange={(volume) => {
+          setSetting(db, 'restBellVolume', volume);
+          bumpData();
+          void playBell(restBellSound, volume);
         }}
       />
     </View>

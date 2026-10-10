@@ -15,8 +15,8 @@ const TICK_MS = 250;
 
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readRest(db: Db) {
-  const { restBell, restBellSound } = getSettings(db);
-  return { rest: getActiveRest(db), bell: restBell, sound: restBellSound };
+  const { restBell, restBellSound, restBellVolume } = getSettings(db);
+  return { rest: getActiveRest(db), bell: restBell, sound: restBellSound, volume: restBellVolume };
 }
 
 /** A success haptic when the rest ends. The web has none, and a missing one never stops the bell. */
@@ -33,7 +33,7 @@ function endHaptic(): void {
  * Rings the end of the rest timer wherever the user is in the app, so leaving the session for Train mid-rest changes nothing.
  * Mounted once at the root. It draws nothing, and ticks only while a rest is running.
  *
- * When the time runs out while it is watching: a haptic (native), then the bell if Settings has it on (the bell ducks
+ * When the time runs out while it is watching: a haptic (native), then the bell, at its volume, if Settings has it on (the bell ducks
  * any music), then it clears the rest (`restEnded`, which leaves the notification alone: it fires on its own). Once per
  * rest end. A rest that ended while the app was away or closed is cleared quietly (see `restPhase`): on the phone the
  * notification already rang, and ringing again on return would double it. The web has no notification, so it rings.
@@ -43,7 +43,7 @@ function endHaptic(): void {
  */
 export function RestWatcher(): null {
   const db = useDb();
-  const { rest, bell, sound } = useDbQuery(readRest);
+  const { rest, bell, sound, volume } = useDbQuery(readRest);
   const endsAt = rest?.restEndsAt ?? null;
   const workoutId = rest?.workoutId ?? null;
   const running = endsAt !== null;
@@ -88,10 +88,10 @@ export function RestWatcher(): null {
     handled.current = endsAt;
     if (phase === 'ring') {
       endHaptic();
-      if (bell) void playBell(sound);
+      if (bell) void playBell(sound, volume);
     }
     restEnded(db, workoutId, endsAt);
-  }, [db, workoutId, endsAt, now, bell, sound]);
+  }, [db, workoutId, endsAt, now, bell, sound, volume]);
 
   return null;
 }

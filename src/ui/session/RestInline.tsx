@@ -18,8 +18,9 @@ type Props = {
 const TICK_MS = 250;
 
 /**
- * The running rest, under the set that started it: "Rest 1:45", −15s and Skip. It steers the same rest as the bar at
- * the bottom, through the same actions, and shows nothing once the rest has run out.
+ * The running rest, under the set that started it: "Rest 1:45", −15s and Skip. Since Task 26 it is the only countdown
+ * while that set is in the workout; the bar at the bottom shows only when no set row can (R41). It shows nothing once
+ * the rest has run out.
  */
 export function RestInline({ workoutId, endsAt }: Props) {
   const db = useDb();

@@ -10,7 +10,7 @@ import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
 import { gearFor } from '../src/domain/plates';
-import { musicAppsFor } from '../src/platform/music';
+import { musicAppOn, musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -19,6 +19,7 @@ import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
+import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
 import { ConfirmSheet, Sheet } from '../src/ui/Sheet';
@@ -34,8 +35,8 @@ function leave() {
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
   const settings = getSettings(db);
-  const { unit, distanceUnit } = settings;
-  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit };
+  const { unit, distanceUnit, musicApp } = settings;
+  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp };
 }
 
 /** Whether any set of the workout in progress is ticked, read from the database now (not from what was last rendered). */
@@ -113,14 +114,14 @@ export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, gear, distanceUnit } = useDbQuery(readSession);
+  const { workout, unit, gear, distanceUnit, musicApp } = useDbQuery(readSession);
   /** The exercise whose ⋯ menu is open. */
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
   /** How many sets are typed but not ticked, for the question about them. Kept after the question closes so its text does not change while it fades. */
   const [untickedCount, setUntickedCount] = useState(0);
-  /** How tall the rest bar is while it shows, so the content can scroll clear of it. */
-  const [restBarHeight, setRestBarHeight] = useState(0);
+  /** How tall the bars docked at the bottom are (0 with none), so the content can scroll clear of them. */
+  const [dockHeight, setDockHeight] = useState(0);
 
   // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
   // what is typed first (R29, R31). The browser's back button does not remove it (expo-router resets the navigator, which
@@ -140,6 +141,14 @@ export default function Session() {
   }
 
   const { restEndsAt, restSetId } = workout;
+  /**
+   * The rest bar is the fallback for a rest no set row can show (R41): one started without a set, or by a set that has
+   * since gone. Otherwise the countdown is only under its set (`RestInline`, Task 26).
+   */
+  const showRestBar =
+    restEndsAt !== null && (restSetId === null || !workout.exercises.some((ex) => ex.sets.some((set) => set.id === restSetId)));
+  /** The music bar's app: the one picked in the music sheet, if this platform can have it (never on web). */
+  const musicBarApp = musicAppOn(Platform.OS, musicApp);
 
   /**
    * Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a
@@ -206,8 +215,8 @@ export default function Session() {
             alignSelf: 'center',
             paddingHorizontal: 16,
             paddingTop: 16,
-            // The rest bar sits over the bottom of the page and already clears the safe area, so the content ends above it.
-            paddingBottom: 16 + (restEndsAt !== null ? restBarHeight : insets.bottom),
+            // The docked bars sit over the bottom of the page and already clear the safe area, so the content ends above them.
+            paddingBottom: 16 + Math.max(dockHeight, insets.bottom),
           }}
         >
           {workout.exercises.map((ex) => (
@@ -281,9 +290,11 @@ export default function Session() {
         onConfirm={discardNow}
         onCancel={() => setAsk(null)}
       />
-      {restEndsAt !== null ? (
-        <RestBar workoutId={workout.id} endsAt={restEndsAt} onHeight={setRestBarHeight} />
-      ) : null}
+      {/* The bottom dock: the fallback rest bar stacked above the music bar. It is always there, so its height follows them both, down to 0. */}
+      <View onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)} style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+        {showRestBar ? <RestBar workoutId={workout.id} endsAt={restEndsAt} bottomInset={musicBarApp === null} /> : null}
+        {musicBarApp !== null ? <MusicBar app={musicBarApp} /> : null}
+      </View>
     </View>
   );
 }

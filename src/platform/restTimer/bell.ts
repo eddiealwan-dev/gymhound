@@ -38,10 +38,10 @@ function playerFor(sound: BellSound): AudioPlayer {
 }
 
 /**
- * Plays the bell once, over any music, which it only ducks. It never throws: a bell that cannot play (no audio on this
+ * Plays the bell once at `volume` (0 to 1: Settings → Bell volume), over any music, which it only ducks. It never throws: a bell that cannot play (no audio on this
  * device, or on web before the page has had a tap) is logged and the rest timer carries on without it.
  */
-export async function playBell(sound: BellSound): Promise<void> {
+export async function playBell(sound: BellSound, volume = 1): Promise<void> {
   try {
     await audioModeReady();
     const player = playerFor(sound);
@@ -49,6 +49,7 @@ export async function playBell(sound: BellSound): Promise<void> {
     // at the start, and must not be seeked: on iOS a seek before its item is ready (the first ring, while the asset is
     // still loading) raises an Objective-C exception that JS cannot catch. `currentTime` is above 0 only once it has played.
     if (player.currentTime > 0) await player.seekTo(0);
+    player.volume = volume;
     player.play();
   } catch (e) {
     console.warn('GymHound: the bell could not play.', e);

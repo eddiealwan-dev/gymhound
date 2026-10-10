@@ -1,20 +1,28 @@
 // Writes the three rest-timer bells to assets/sounds/: bell.wav, chime.wav and ding.wav.
 // Plain Node with no dependencies. Run it from the project root:  node scripts/make-bells.mjs
 //
-// Each file is 16-bit PCM, mono, 44.1 kHz. The loudest sample sits at -3 dBFS, so nothing clips, and the sound
-// decays exponentially to silence: the envelope falls E_FOLDS e-folds over the file (about -78 dB), a 10 ms fade
-// takes the last few samples to exactly zero, and a 3 ms attack keeps the start from clicking.
+// Each file is 16-bit PCM, mono, 44.1 kHz. The loudest sample sits at -1 dBFS, so nothing clips, and the sound
+// decays exponentially to silence: the envelope falls E_FOLDS e-folds over the file (about -78 dB), and a 5 ms attack
+// keeps the start from clicking.
+//
+// The owner found the bell too quiet over a gym, and raising the peak alone gains under 3 dB. So the summed tone goes
+// through a gentle tanh saturation (DRIVE) before it is scaled to the peak: the loud start is rounded off, the ring
+// holds its level for longer, and the odd harmonics it adds land in the 2-4 kHz band the ear hears best. That puts
+// each file's RMS level 7 to 8 dB above the earlier, unsaturated ones. tanh is smooth and odd, so it adds no clicks
+// and keeps every zero crossing (and so every pitch). The saturation also lifts the quiet tail, so a raised-cosine
+// fade over the last RELEASE_S seconds takes it smoothly to exactly zero.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RATE = 44100;
-const PEAK_DBFS = -3;
+const PEAK_DBFS = -1;
 const PEAK = Math.round(32767 * 10 ** (PEAK_DBFS / 20));
 const E_FOLDS = 9;
-const ATTACK_S = 0.003;
-const RELEASE_S = 0.01;
+const ATTACK_S = 0.005;
+const RELEASE_S = 0.1;
+const DRIVE = 3;
 
 /** The three sounds. A partial is a sine at `freq` Hz, `amp` loud relative to the others, starting `start` seconds in. */
 const SOUNDS = {
@@ -56,11 +64,20 @@ function synthesize({ seconds, partials }) {
       if (since < 0) continue;
       sum += amp * Math.min(1, since / ATTACK_S) * Math.exp(-since / tau) * Math.sin(2 * Math.PI * freq * since);
     }
-    raw[i] = sum * Math.min(1, (seconds - t) / RELEASE_S);
-    loudest = Math.max(loudest, Math.abs(raw[i]));
+    raw[i] = sum;
+    loudest = Math.max(loudest, Math.abs(sum));
   }
-  const gain = PEAK / loudest;
-  return Int16Array.from(raw, (v) => Math.round(v * gain));
+  // Saturate the tone normalised to 1, so DRIVE means the same for every sound, then fade the tail out.
+  const shaped = new Float64Array(length);
+  let shapedLoudest = 0;
+  for (let i = 0; i < length; i++) {
+    const left = (length - i) / RATE;
+    const fade = left >= RELEASE_S ? 1 : 0.5 * (1 - Math.cos((Math.PI * left) / RELEASE_S));
+    shaped[i] = Math.tanh((DRIVE * raw[i]) / loudest) * fade;
+    shapedLoudest = Math.max(shapedLoudest, Math.abs(shaped[i]));
+  }
+  const gain = PEAK / shapedLoudest;
+  return Int16Array.from(shaped, (v) => Math.round(v * gain));
 }
 
 /** A RIFF/WAVE file holding the samples: a 44-byte header, then the little-endian 16-bit PCM data. */

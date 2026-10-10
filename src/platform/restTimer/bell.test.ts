@@ -2,11 +2,19 @@ import type { BellSound } from '../../domain/types';
 
 // expo-audio is native. These tests drive the bell against a stand-in player and read the calls it makes.
 // A player starts at 0 seconds and has no item ready yet; a test sets `currentTime` to say it has played.
-const mockPlayers: { source: unknown; currentTime: number; seekTo: jest.Mock; play: jest.Mock }[] = [];
+// `playedAt` records the player's volume each time it is played.
+const mockPlayers: { source: unknown; currentTime: number; volume: number; playedAt: number[]; seekTo: jest.Mock; play: jest.Mock }[] = [];
 const mockAudio = {
   setAudioModeAsync: jest.fn(),
   createAudioPlayer: jest.fn((source: unknown) => {
-    const player = { source, currentTime: 0, seekTo: jest.fn(() => Promise.resolve()), play: jest.fn() };
+    const player = {
+      source,
+      currentTime: 0,
+      volume: 1,
+      playedAt: [] as number[],
+      seekTo: jest.fn(() => Promise.resolve()),
+      play: jest.fn(() => void player.playedAt.push(player.volume)),
+    };
     mockPlayers.push(player);
     return player;
   }),
@@ -18,8 +26,8 @@ jest.mock('../../../assets/sounds/chime.wav', () => 'chime.wav');
 jest.mock('../../../assets/sounds/ding.wav', () => 'ding.wav');
 
 /** A fresh copy of the module: it keeps the audio mode and the players between calls. */
-function load(): (sound: BellSound) => Promise<void> {
-  let playBell!: (sound: BellSound) => Promise<void>;
+function load(): (sound: BellSound, volume?: number) => Promise<void> {
+  let playBell!: (sound: BellSound, volume?: number) => Promise<void>;
   jest.isolateModules(() => {
     playBell = (require('./bell') as typeof import('./bell')).playBell;
   });
@@ -100,6 +108,33 @@ describe('playBell (Task 15 Step 4)', () => {
 
     expect(mockPlayers[0].seekTo).not.toHaveBeenCalled();
     expect(mockPlayers[0].play).toHaveBeenCalledTimes(2);
+  });
+
+  it('plays at the volume it is given (Settings → Bell volume, Task 26), set before it plays', async () => {
+    const playBell = load();
+
+    await playBell('bell', 0.5);
+
+    expect(mockPlayers[0].volume).toBe(0.5);
+    expect(mockPlayers[0].playedAt).toEqual([0.5]);
+  });
+
+  it('plays at full volume when none is given', async () => {
+    const playBell = load();
+
+    await playBell('chime');
+
+    expect(mockPlayers[0].playedAt).toEqual([1]);
+  });
+
+  it('sets the kept player to the new volume on each ring', async () => {
+    const playBell = load();
+
+    await playBell('ding', 0.25);
+    await playBell('ding', 0.75);
+
+    expect(mockAudio.createAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(mockPlayers[0].playedAt).toEqual([0.25, 0.75]);
   });
 
   it('logs and swallows a bell that cannot play', async () => {

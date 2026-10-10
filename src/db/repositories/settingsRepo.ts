@@ -1,4 +1,4 @@
-import type { BellSound, DistanceUnit, MeasurementSystem, ThemePreference, WeightUnit } from '../../domain/types';
+import type { BellSound, DistanceUnit, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
 import { defaultUnitFor } from '../../domain/units';
 import { settings } from '../schema';
 import type { Db } from '../types';
@@ -20,6 +20,10 @@ export type Settings = {
   /** Whether the rest timer rings when it ends. */
   restBell: boolean;
   restBellSound: BellSound;
+  /** How loud the in-app bell plays, from 0.25 to 1 (Settings offers 25%, 50%, 75% and 100%). */
+  restBellVolume: number;
+  /** The app the session's music bar opens, picked with the header's Music button; null when the bar is closed. */
+  musicApp: MusicAppId | null;
   /** When the last good snapshot was written (epoch ms), or null before the first one. */
   lastSnapshotAt: number | null;
   /** Why the last snapshot attempt failed, and when; null once one works. Settings shows it while it is newer than `lastSnapshotAt`. */
@@ -45,6 +49,8 @@ const KEYS: Record<keyof Settings, string> = {
   restSeconds: 'rest_seconds',
   restBell: 'rest_bell',
   restBellSound: 'rest_bell_sound',
+  restBellVolume: 'rest_bell_volume',
+  musicApp: 'music_app',
   lastSnapshotAt: 'last_snapshot_at',
   lastSnapshotError: 'last_snapshot_error',
   activeRoutineId: 'active_routine_id',
@@ -71,6 +77,8 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     restSeconds: 120,
     restBell: true,
     restBellSound: 'bell',
+    restBellVolume: 1,
+    musicApp: null,
     lastSnapshotAt: null,
     lastSnapshotError: null,
     activeRoutineId: null,

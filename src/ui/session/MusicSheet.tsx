@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { View } from 'react-native';
+import { useDb } from '../../db/DbProvider';
+import { setSetting } from '../../db/repositories/settingsRepo';
 import type { MusicApp } from '../../platform/music';
-import { openMusicApp } from '../../platform/music';
-import { flushAll } from '../../state/draftFlush';
+import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
@@ -15,43 +15,33 @@ type Props = {
 };
 
 /**
- * One button per music app, then Close. Opening one leaves GymHound, so the sheet closes behind it; an app that is not
- * installed says so here instead. Typed sets are saved before leaving, and again by the flush on the app going to the
- * background (R32).
+ * One button per music app, then Close. Picking one stores it (Settings `musicApp`) and closes the sheet; the music bar
+ * at the bottom of the session then opens it. Nothing here leaves GymHound (Task 26).
  */
 export function MusicSheet({ visible, apps, onClose }: Props) {
-  /** The app that would not open, if the last press failed. */
-  const [missing, setMissing] = useState<MusicApp | null>(null);
+  const db = useDb();
 
-  const close = () => {
-    setMissing(null);
+  const pick = (app: MusicApp) => {
+    setSetting(db, 'musicApp', app.id);
+    bumpData();
     onClose();
   };
 
-  const open = async (app: MusicApp) => {
-    flushAll();
-    const result = await openMusicApp(app);
-    if (result === 'opened') close();
-    else setMissing(app);
-  };
-
   return (
-    <Sheet visible={visible} onClose={close}>
-      <Display weight={700} style={{ marginBottom: 16 }}>
+    <Sheet visible={visible} onClose={onClose}>
+      <Display weight={700} style={{ marginBottom: 8 }}>
         Music
       </Display>
+      <Body muted style={{ marginBottom: 16 }}>
+        Pick an app. It stays in a bar at the bottom of your workout.
+      </Body>
       <View style={{ gap: 8 }}>
         {apps.map((app) => (
-          <Button key={app.id} label={`Open ${app.label}`} variant="secondary" onPress={() => void open(app)} />
+          <Button key={app.id} label={app.label} variant="secondary" onPress={() => pick(app)} />
         ))}
       </View>
-      {missing !== null ? (
-        <Body muted accessibilityLiveRegion="polite" style={{ marginTop: 12 }}>
-          {`${missing.label} isn't on this phone.`}
-        </Body>
-      ) : null}
       <View style={{ marginTop: 8 }}>
-        <Button label="Close" variant="quiet" onPress={close} />
+        <Button label="Close" variant="quiet" onPress={onClose} />
       </View>
     </Sheet>
   );

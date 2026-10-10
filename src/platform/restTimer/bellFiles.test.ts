@@ -7,10 +7,14 @@ import { join } from 'path';
 const SOUNDS = join(__dirname, '..', '..', '..', 'assets', 'sounds');
 const RATE = 44100;
 
+/**
+ * `quietest` is the lowest RMS level (dBFS) over the whole file that passes: the files before Task 26 sat at -17.5 (bell),
+ * -17.7 (chime) and -18.4 (ding), and the owner asked for louder, so each must be at least 6 dB above its old level.
+ */
 const FILES = [
-  { name: 'bell', seconds: 1.0 },
-  { name: 'chime', seconds: 1.1 },
-  { name: 'ding', seconds: 0.5 },
+  { name: 'bell', seconds: 1.0, quietest: -17.49 + 6 },
+  { name: 'chime', seconds: 1.1, quietest: -17.69 + 6 },
+  { name: 'ding', seconds: 0.5, quietest: -18.37 + 6 },
 ] as const;
 
 function read(name: string) {
@@ -26,7 +30,7 @@ function rms(samples: Int16Array, from: number, to: number): number {
   return Math.sqrt(part.reduce((sum, s) => sum + s * s, 0) / part.length);
 }
 
-describe.each(FILES)('assets/sounds/$name.wav', ({ name, seconds }) => {
+describe.each(FILES)('assets/sounds/$name.wav', ({ name, seconds, quietest }) => {
   const { file, samples } = read(name);
 
   it('is a 16-bit PCM, mono, 44.1 kHz WAV with a consistent header', () => {
@@ -49,10 +53,14 @@ describe.each(FILES)('assets/sounds/$name.wav', ({ name, seconds }) => {
     expect(samples.length / RATE).toBeCloseTo(seconds, 4);
   });
 
-  it('peaks at -3 dBFS and never clips', () => {
+  it('peaks at -1 dBFS and never clips', () => {
     const peak = samples.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
-    expect(20 * Math.log10(peak / 32767)).toBeCloseTo(-3, 2);
+    expect(20 * Math.log10(peak / 32767)).toBeCloseTo(-1, 2);
     expect(peak).toBeLessThan(32767);
+  });
+
+  it('is at least 6 dB louder (RMS) than before Task 26 (owner: the bell needs to be louder)', () => {
+    expect(20 * Math.log10(rms(samples, 0, seconds) / 32767)).toBeGreaterThanOrEqual(quietest);
   });
 
   it('starts and ends in silence', () => {

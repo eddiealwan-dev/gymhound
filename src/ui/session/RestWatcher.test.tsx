@@ -6,10 +6,11 @@ import { RestWatcher } from './RestWatcher';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // What the screen would read from the database. A test changes it, as a bump after a write would, and the next tick sees it.
-const mockState: { rest: { workoutId: string; restEndsAt: number | null } | null; bell: boolean; sound: BellSound } = {
+const mockState: { rest: { workoutId: string; restEndsAt: number | null } | null; bell: boolean; sound: BellSound; volume: number } = {
   rest: null,
   bell: true,
   sound: 'chime',
+  volume: 1,
 };
 const mockCalls: string[] = [];
 
@@ -73,6 +74,7 @@ beforeEach(() => {
   mockState.rest = { workoutId: 'w1', restEndsAt: null };
   mockState.bell = true;
   mockState.sound = 'chime';
+  mockState.volume = 1;
 });
 
 afterEach(() => {
@@ -146,6 +148,17 @@ describe('RestWatcher: the rest ends with a haptic and a bell wherever the user 
     advance(1_500);
 
     expect(mockCalls).toContain('bell ding');
+  });
+
+  it('rings at the volume Settings has (Task 26)', () => {
+    mockState.volume = 0.5;
+    mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 1_000 };
+    mount();
+
+    advance(1_500);
+
+    const { playBell } = jest.requireMock('../../platform/restTimer/bell') as { playBell: jest.Mock };
+    expect(playBell).toHaveBeenLastCalledWith('chime', 0.5);
   });
 
   it('follows the end time when it moves: a later tick pushes the end out, so no ring at the old end', () => {

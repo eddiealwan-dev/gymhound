@@ -45,5 +45,8 @@ export type DayMark = 'normal' | 'rough_sleep' | 'short_on_food' | 'pain' | 'cut
 
 export type BellSound = 'bell' | 'chime' | 'ding';
 
+/** The music apps the session's music bar can open (`src/platform/music.ts`). */
+export type MusicAppId = 'apple-music' | 'spotify' | 'audible';
+
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type MeasurementSystem = 'us' | 'metric' | 'uk' | null;

@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { MUSIC_APPS, musicAppsFor, openMusicApp } from './music';
+import { MUSIC_APPS, musicAppOn, musicAppsFor, openMusicApp } from './music';
 
 const ids = (os: string) => musicAppsFor(os).map((app) => app.id);
 
@@ -14,6 +14,19 @@ describe('musicAppsFor', () => {
 
   it('lists nothing on web', () => {
     expect(musicAppsFor('web')).toEqual([]);
+  });
+});
+
+describe('musicAppOn (Task 26: the music bar shows only an app this platform can have)', () => {
+  it('finds the stored app on a platform that has it', () => {
+    expect(musicAppOn('ios', 'apple-music')?.label).toBe('Apple Music');
+    expect(musicAppOn('android', 'spotify')?.label).toBe('Spotify');
+  });
+
+  it('finds nothing for no app, Apple Music on Android, or anything on web', () => {
+    expect(musicAppOn('ios', null)).toBeNull();
+    expect(musicAppOn('android', 'apple-music')).toBeNull();
+    expect(musicAppOn('web', 'spotify')).toBeNull();
   });
 });
 
