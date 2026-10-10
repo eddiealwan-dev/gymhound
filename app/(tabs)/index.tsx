@@ -1,6 +1,5 @@
 import { getLocales } from 'expo-localization';
-import { router, useFocusEffect } from 'expo-router';
-import type { Href } from 'expo-router';
+import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, View } from 'react-native';
@@ -19,29 +18,16 @@ import { formatWeight } from '../../src/domain/units';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
+import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
 import { Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
-/** The session screen arrives in Task 14. Until its route exists the typed router does not know it, hence the cast. */
-const openSession = () => router.push('/session' as Href);
+const openSession = () => router.push('/session');
 
 const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
-
-/** Reads the clock now, then again every `everyMs` while this screen is focused, so a screen left in the background does no work. */
-function useNow(everyMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useFocusEffect(
-    useCallback(() => {
-      setNow(Date.now());
-      const timer = setInterval(() => setNow(Date.now()), everyMs);
-      return () => clearInterval(timer);
-    }, [everyMs]),
-  );
-  return now;
-}
 
 /** What Train shows from the database. `weekStart` is the Monday on or before today. */
 function readTrain(db: Db, weekStart: string) {

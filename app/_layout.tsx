@@ -166,7 +166,10 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        {/* The session has no swipe-down to leave: a stray drag mid-set must not close it. Its back chevron leaves the workout active. */}
+        <Stack.Screen name="session" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+      </Stack>
       {restoredFrom !== null ? <RestoredNotice restoredFrom={restoredFrom} /> : null}
     </>
   );

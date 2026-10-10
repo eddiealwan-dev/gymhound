@@ -154,7 +154,7 @@ function formatLoaded(p: PrevSet, sign: string, displayUnit: WeightUnit): string
 }
 
 /** Seconds as "40s", or "1:30" from 60 seconds up. */
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
   return total < 60 ? `${total}s` : formatRest(total);
 }
