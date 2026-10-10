@@ -1,4 +1,4 @@
-import { convertWeight, defaultUnitFor, formatWeight, sameWeight, toKg } from './units';
+import { convertIncrement, convertWeight, defaultUnitFor, formatWeight, roundToHalf, sameWeight, toKg } from './units';
 
 describe('units', () => {
   it('converts pounds to kilograms', () => {
@@ -26,5 +26,18 @@ describe('units', () => {
     expect(defaultUnitFor('metric')).toBe('kg');
     expect(defaultUnitFor('uk')).toBe('kg');
     expect(defaultUnitFor(null)).toBe('kg');
+  });
+
+  it('converts increments by the gym convention, kg = lb / 2 and lb = kg x 2', () => {
+    expect(convertIncrement(5, 'lb', 'kg')).toBe(2.5);
+    expect(convertIncrement(2.5, 'kg', 'lb')).toBe(5);
+    expect(convertIncrement(10, 'lb', 'kg')).toBe(5);
+    expect(convertIncrement(5, 'lb', 'lb')).toBe(5);
+    expect(convertIncrement(2.5, 'kg', 'kg')).toBe(2.5);
+  });
+
+  it('rounds to the nearest 0.5', () => {
+    expect(roundToHalf(22.68)).toBe(22.5);
+    expect(roundToHalf(22.75)).toBe(23);
   });
 });

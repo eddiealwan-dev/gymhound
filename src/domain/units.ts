@@ -30,3 +30,14 @@ export function formatWeight(v: number, u: WeightUnit): string {
 export function defaultUnitFor(m: MeasurementSystem): WeightUnit {
   return m === 'us' ? 'lb' : 'kg';
 }
+
+/** Converts a progression increment by the gym convention, not the exact factor: kg = lb / 2, lb = kg x 2. */
+export function convertIncrement(v: number, from: WeightUnit, to: WeightUnit): number {
+  if (from === to) return v;
+  return to === 'kg' ? v / 2 : v * 2;
+}
+
+/** Rounds to the nearest 0.5. */
+export function roundToHalf(v: number): number {
+  return Math.round(v * 2) / 2;
+}
