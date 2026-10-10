@@ -51,6 +51,7 @@ Non-goals for v1
 | History edits | Editing or deleting a past workout re-runs the rule and the PR check. It never changes a workout that is in progress |
 | Charts | Hand-drawn SVG, no chart library |
 | Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked. 40px hound, 10px gap, blue outline in dark mode. GYMHOUND keeps a fixed size when phone text is enlarged; everything else scales |
+| Footer | Matches FieldHound: "powered by" over the GruntHound wordmark image (white GRUNT on dark, black on light, blue HOUND, small LLC). Pinned to the bottom of short pages. No hound in the footer |
 | Previous result | Every set row shows that same set from last time, beside the input. Matched by set type and number. Empty when there is no history. A warmup is never the previous result for a working set (§8.4) |
 | Up next | Advances only when that routine day is finished. Rest days, discarded sessions and empty workouts never consume it (§8.3) |
 | Notes | A note lives on the exercise and follows it into every routine. A finished workout keeps the note it was saved with (§6, §8.4) |
@@ -362,7 +363,12 @@ Saving an edit to a finished workout, or deleting one, runs one transaction:
   - Routines, library, history detail and Settings open inside the tabs, so the header and dock stay. On Settings no tab is highlighted.
   - The session screen, the finish summary and the paywall are full-screen routes above the tabs, so the dock is hidden there.
 - **Width:** content is capped at 512px (32rem) and centred.
-- **Footer:** "Powered by GruntHound LLC", small and muted, at the end of the scroll content on Train, History, Stats and Settings only.
+- **Footer:** on Train, History, Stats and Settings only. It matches FieldHound's footer exactly.
+  - **Two lines, centred:**
+    1. "powered by" in small muted type (Inter 400, 10px).
+    2. The GruntHound wordmark: GRUNT in bold, HOUND in electric blue (#007EF8), and a small raised LLC beside it, 153.5px wide. On dark, GRUNT is white. On light, GRUNT is black. HOUND stays blue in both.
+  - **Pinned to the bottom:** on a short page the footer sits at the bottom of the screen, above the dock. On a long page it follows the content.
+  - **No hound:** the hound appears in the header only, never in the footer.
 
 ### 8.2 Theme and brand
 Settings offers Light, Dark or System, with System the default.
@@ -386,6 +392,11 @@ Settings offers Light, Dark or System, with System the default.
   - **Dark exports:** `mark-dark*.png`, the same sizes with a thin #2f8cff outline baked in, so the navy reads against #100f0c.
   - `src/ui/HoundMark.tsx` renders the right export for the scheme.
   - The owner approves how the mark sits in the header, in both themes, before phase 1 is done.
+- **GruntHound wordmark (footer):** FieldHound's own `grunthound-mark.png`, copied unchanged as `assets/brand/grunthound-master.png` (776×82).
+  - `grunthound-on-dark*.png` is that image as is (white GRUNT and LLC).
+  - `grunthound-on-light*.png` is the same image with only its white parts turned black. HOUND keeps its blue.
+  - Both come at 1x, 2x and 3x.
+  - It is never redrawn.
 - **App icon and splash:** the mark on #100f0c.
 - **Not allowed:** quotes, flames, skulls.
 
@@ -461,8 +472,8 @@ In order:
   - Ticking a set starts it.
   - It is driven by `rest_ends_at`, so it survives the app being killed.
   - **When it ends:** a short bell and a haptic, including when the phone is locked.
-    - When the app is open, the bell plays in the app.
-    - When the app is in the background or the phone is locked, the scheduled notification "Rest's up." carries the sound and vibration. It is rescheduled on −15s and cancelled on Skip.
+    - When the app is open, the bell plays in the app, even with the ringer switch on silent (owner decision).
+    - When the app is in the background or the phone is locked, the scheduled notification "Rest's up." carries the sound and vibration. It follows the phone's own sound settings. It is rescheduled on −15s and cancelled on Skip.
     - The bell ducks any music for a moment and never stops it.
     - Settings can turn the bell off or change its sound. The default is on.
     - In Expo Go the lock-screen notification can only use the system sound. The chosen bell sound on the lock screen arrives with the phase 7 build.
@@ -719,7 +730,7 @@ Each phase gets its own implementation plan and ends with its acceptance check.
 - A marked day keeps the weight and says why on the chart.
 - A free user can save one routine and is stopped, in one sentence, on the second.
 - Pro unlocks more routines and Fuel, and a finished workout uses the training-day targets.
-- "Powered by GruntHound LLC" is at the bottom of Train, History, Stats, and Settings.
+- The FieldHound-style footer ("powered by" over the GRUNTHOUND LLC wordmark) is pinned to the bottom of Train, History, Stats, and Settings.
 - The app opens with no network and no account.
 
 Added by the owner on 2026-10-09:

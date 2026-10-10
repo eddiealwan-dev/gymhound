@@ -13,7 +13,7 @@
 
 **Revision 2026-10-09:**
 - Tasks 1–12 are done (branch `phase-1`, `e0d0a7b..df4ac44`).
-- Tasks 12A–12E are new.
+- Tasks 12A–12F are new. 12A is the FieldHound footer and runs first.
 - Tasks 13–17 are revised.
 - Read "As built" below before any task from 12A on.
 
@@ -68,7 +68,11 @@
   - Display: Barlow Condensed 600, 700 and 800.
   - Body: Inter 400, 500 and 600.
   - Numbers: `fontVariant: ['tabular-nums']`.
-- **Footer:** the exact text "Powered by GruntHound LLC". It appears on Train, History, Stats and Settings only, never on Fuel, the session, or the finish summary.
+- **Footer:** it matches FieldHound exactly.
+  - Two centred lines: "powered by" (Inter 400, 10px/12px, `textMuted`, 10px below it), then the GruntHound wordmark image, 153.5px wide. Use `grunthound-on-dark*.png` on dark and `grunthound-on-light*.png` on light.
+  - It is pinned to the bottom of short pages. On long pages it follows the content.
+  - It appears on Train, History, Stats and Settings only, never on Fuel, the session, or the finish summary.
+  - It never contains the hound.
 - **Layout:** content is capped at a 512px max width and centred, with a 16px side gutter.
 - **Banned imagery:** no quotes, flames or skulls.
 - **Hound mark:** the dog from the GruntHound logo, already cut and exported in `assets/brand/`. Never redraw, trace or replace it.
@@ -98,15 +102,15 @@
 ### Review Focus — revision 2026-10-09
 
 6. **A failed migration or a missing database file with snapshots present.** The user's finished workouts come back from the newest snapshot. The failed file is kept, and the app never opens empty.
-   - Task 12D tests 5–8.
+   - Task 12E tests 5–8.
 7. **The previous column showing the wrong set.** A warmup must not appear as the previous working set. Set n matches set n of the same type, even after unticked sets left gaps. The cell is empty when there is nothing to match.
-   - Task 12B `matchPrevious` tests; Task 14 uses it.
+   - Task 12C `matchPrevious` tests; Task 14 uses it.
 8. **A note edited after finishing.** The finished workout keeps the note it was saved with. A replaced exercise saves its own note.
-   - Task 12C tests.
+   - Task 12D tests.
 9. **The bell with music playing, or with the ringer on silent.** In the app, the bell plays and ducks the music without stopping it. On a locked phone, the notification follows the phone's own sound settings.
    - Task 15 Step 4; phone check in Task 17.
 10. **Phone text at its largest.** GYMHOUND stays fixed and on one line beside the hound, while other text grows.
-    - Task 12A; phone check in Task 17.
+    - Task 12B; phone check in Task 17.
 
 ## As built (Tasks 1–12): read before Task 12A
 
@@ -123,7 +127,7 @@ Where the rulings changed an interface from the original task text, the code is 
   - `moveExercise` moves a superset as one block.
   - `finishWorkout` and `discardWorkout` throw a plain `Error` when the workout is missing or not active.
 - **App shell:**
-  - `src/ui/Footer.tsx` was built in Task 11. `app/index.tsx` was deleted in Task 12, and `(tabs)/index.tsx` owns `/`.
+  - `src/ui/Footer.tsx` was built in Task 11 as a plain sentence. Task 12A replaces it with the FieldHound footer. `app/index.tsx` was deleted in Task 12, and `(tabs)/index.tsx` owns `/`.
   - Tabs come from `expo-router/js-tabs`, with `backBehavior="history"`. The only hidden tab is `settings` until Task 13 adds `routines/index`.
   - The root Stack has no explicit screens yet. Each task registers the routes it creates.
 - **Database:**
@@ -193,6 +197,8 @@ src/state/backup.ts                takeSnapshotSafely, shareFile
 src/platform/restTimer/bell.ts     playBell (expo-audio, ducks other audio)
 scripts/make-bells.mjs             writes assets/sounds/{bell,chime,ding}.wav
 src/db/migrations/0001_*.sql       workout_exercises.note
+assets/brand/grunthound-master.png FieldHound's grunthound-mark.png, unchanged (exists)
+assets/brand/grunthound-on-{dark,light}{,@2x,@3x}.png  footer wordmark: white or black GRUNT, blue HOUND (exist)
 ```
 
 ---
@@ -1086,7 +1092,42 @@ expect(resolveScheme('system', null)).toBe('light');
 
 ---
 
-### Task 12A: GYMHOUND keeps a fixed size
+### Task 12A: Footer matches FieldHound
+
+**Files:**
+- Modify: `src/ui/Footer.tsx`, `src/ui/Screen.tsx`
+- Uses (already in the repo): `assets/brand/grunthound-on-dark.png`, `@2x`, `@3x` and `assets/brand/grunthound-on-light.png`, `@2x`, `@3x`
+
+**Interfaces:**
+- Consumes: `useTheme()` (scheme, colors), `fonts.body400`.
+- Produces: unchanged signatures, `Footer()` and `Screen({ children, footer?: boolean })`.
+
+- [ ] **Step 1: Rebuild `Footer`** as two centred lines, with 24px of bottom padding.
+  1. "powered by", exactly that text and lower case, in Inter 400 at 10px with a 12px line height, `textMuted`, and a 10px margin below.
+  2. An `Image` of the GruntHound wordmark, 153.5 × 16.2 (the 776:82 ratio):
+     - `require('../../assets/brand/grunthound-on-dark.png')` when the scheme is dark;
+     - `require('../../assets/brand/grunthound-on-light.png')` when it is light.
+  - The footer group is one accessible element labelled "Powered by GruntHound LLC".
+  - No hound image anywhere in the footer.
+- [ ] **Step 2: Pin it to the bottom** in `Screen`.
+  - The ScrollView's `contentContainerStyle` gets `flexGrow: 1`.
+  - After the children, when `footer` is set, add a spacer `View` with `flex: 1` and `minHeight: 32` (FieldHound's `.home-spacer`), then the `Footer`.
+  - A short page puts the footer at the bottom of the visible area, just above the dock. A long page puts it after the content.
+- [ ] **Step 3: Verify in the browser pane.** Use `npm run web` in the background and one browser tab.
+  - **Size 390×844, light and dark:**
+    - On Train, History, Stats and Settings, the footer sits at the bottom just above the dock.
+    - "powered by" is over the wordmark.
+    - GRUNT is white on dark and black on light, and HOUND is blue in both.
+    - Fuel has no footer.
+  - **Size 390×420 on Settings:** the page scrolls and the footer comes after the content.
+  - **Size 320×844:** the footer is centred and fits.
+  - **Screenshots:** save `footer-light.png` and `footer-dark.png` (390×844, Train) into the `shots` folder with the headless-Edge method from Task 12.
+- [ ] **Step 4:** Run `npm run typecheck` and `npm test`, both green.
+- [ ] **Step 5: Commit.** `git commit -m "fix(ui): footer matches FieldHound, pinned to the bottom"`
+
+---
+
+### Task 12B: GYMHOUND keeps a fixed size
 
 **Files:**
 - Modify: `src/ui/Header.tsx` (the wordmark), and `src/ui/Text.tsx` only if `Display` does not already forward `allowFontScaling`.
@@ -1102,7 +1143,7 @@ expect(resolveScheme('system', null)).toBe('light');
 
 ---
 
-### Task 12B: Domain — weight and time, and the previous result per set
+### Task 12C: Domain — weight and time, and the previous result per set
 
 **Files:**
 - Modify: `src/domain/types.ts`, `src/domain/setEntry.ts`
@@ -1112,7 +1153,7 @@ expect(resolveScheme('system', null)).toBe('light');
 - Consumes: `PrevSet`, `placeholdersFor`, `resolveTick` and `formatPrevious` as built (see "As built"); `convertWeight`.
 - Produces:
   - `LoggingType` gains `'weighted_time'`.
-  - `type BellSound = 'bell' | 'chime' | 'ding'` in `types.ts` (Task 12C and Task 15 use it).
+  - `type BellSound = 'bell' | 'chime' | 'ding'` in `types.ts` (Task 12D and Task 15 use it).
   - `matchPrevious(current: ReadonlyArray<{ setType: SetType }>, previous: ReadonlyArray<PrevSet>): (PrevSet | null)[]`
     - It matches each current set to the previous set with the same type and the same number within that type.
     - Numbers count in position order.
@@ -1177,7 +1218,7 @@ expect(totalVolume([s({ loggingType: 'weighted_time', reps: null })], 'kg')).toB
 
 ---
 
-### Task 12C: Database — the note saved at finish, bell and snapshot settings, Up next guards
+### Task 12D: Database — the note saved at finish, bell and snapshot settings, Up next guards
 
 **Files:**
 - Modify: `src/db/schema.ts`, `src/db/repositories/workoutsRepo.ts`, `src/db/repositories/settingsRepo.ts`
@@ -1185,7 +1226,7 @@ expect(totalVolume([s({ loggingType: 'weighted_time', reps: null })], 'kg')).toB
 - Test: `src/db/schema.test.ts`, `src/db/repositories/workoutsRepo.test.ts`, `src/db/repositories/settingsRepo.test.ts`
 
 **Interfaces:**
-- Consumes: `BellSound` (Task 12B); `setExerciseNote`, `getExerciseNote`, `replaceExercise`, `addExerciseToWorkout` (Task 9); `setActiveRoutine`, `getUpNext` (Task 7).
+- Consumes: `BellSound` (Task 12C); `setExerciseNote`, `getExerciseNote`, `replaceExercise`, `addExerciseToWorkout` (Task 9); `setActiveRoutine`, `getUpNext` (Task 7).
 - Produces:
   - `workoutExercises.note` (SQL `note`, text, nullable).
   - `Settings` gains three fields, which `ensureSettings` adds for existing installs without touching other keys:
@@ -1239,7 +1280,7 @@ expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', l
 
 ---
 
-### Task 12D: Snapshots and restore — the core
+### Task 12E: Snapshots and restore — the core
 
 **Files:**
 - Create: `src/db/snapshots.ts`, `src/db/testing/nodeSnapshotFiles.ts`, `src/db/testing/openFileDb.ts`
@@ -1314,14 +1355,14 @@ catch first: close(db)
 
 ---
 
-### Task 12E: The app uses snapshots — startup restore, export, Backups row
+### Task 12F: The app uses snapshots — startup restore, export, Backups row
 
 **Files:**
 - Create: `src/platform/snapshots/index.ts`, `src/platform/snapshots/expoSnapshotFiles.ts`, `src/state/backup.ts`
 - Modify: `app/_layout.tsx`, `src/db/client.ts`, `app/(tabs)/settings.tsx`, `package.json` / `package-lock.json` (new dependencies)
 
 **Interfaces:**
-- Consumes: everything in Task 12D; `getSettings` / `setSetting` (`lastSnapshotAt`); `ConfirmSheet` / `Sheet` / `Button`.
+- Consumes: everything in Task 12E; `getSettings` / `setSetting` (`lastSnapshotAt`); `ConfirmSheet` / `Sheet` / `Button`.
 - Produces:
   - `getSnapshotFiles(): SnapshotFiles | null`. It returns null on web, where snapshots never run.
   - `expoSnapshotFiles(): SnapshotFiles`:
@@ -1353,6 +1394,7 @@ catch first: close(db)
 - [ ] **Step 5: Commit.** `git commit -m "feat(app): restore from snapshot at startup; export and Backups in Settings"`
 
 ---
+
 
 ### Task 13: Train screen and minimal Routines list
 
@@ -1412,7 +1454,7 @@ catch first: close(db)
   - `tickSet` with `distanceUnit`, and `untickSet` (Task 8, as built)
   - `updateSet`, `addSet`, `removeSet`, `setExerciseNote` (Task 9)
   - `setLabels`, `placeholdersFor`, `resolveTick` (Task 4, as built)
-  - `matchPrevious` and `formatPrevious` (Task 12B)
+  - `matchPrevious` and `formatPrevious` (Task 12C)
   - `convertWeight` (Task 2)
   - `parseDecimal`, `parseReps`, `parseDuration`, `parseRpe` (Task 2)
   - `getSettings` (`unit`, `distanceUnit`)
@@ -1492,8 +1534,8 @@ catch first: close(db)
   - `setRestEndsAt` (Task 8)
   - `restRemainingSeconds`, `minus15`, `shouldStartRestAfterTick` (Task 4)
   - `formatRest` (Task 2)
-  - `getSettings` (`restSeconds`, `restBell`, `restBellSound`) and `setSetting` (Task 12C)
-  - `BellSound` (Task 12B)
+  - `getSettings` (`restSeconds`, `restBell`, `restBellSound`) and `setSetting` (Task 12D)
+  - `BellSound` (Task 12C)
 - Produces:
   - `interface RestTimerSurface { start(endsAt: number, withSound: boolean): Promise<void>; update(endsAt: number, withSound: boolean): Promise<void>; cancel(): Promise<void> }`
   - `getRestTimerSurface(): RestTimerSurface`, which is a no-op on web and `expoGoNotification` elsewhere.
@@ -1578,9 +1620,9 @@ catch first: close(db)
 
 **Interfaces:**
 - Consumes:
-  - `countUntickedWithValues`, `finishWorkout` (which saves notes and clears rest), `NothingTickedError`, `discardWorkout` (Tasks 8 and 12C)
+  - `countUntickedWithValues`, `finishWorkout` (which saves notes and clears rest), `NothingTickedError`, `discardWorkout` (Tasks 8 and 12D)
   - `getFinishSummary` (Task 10)
-  - `takeSnapshotSafely` (Task 12E)
+  - `takeSnapshotSafely` (Task 12F)
   - `formatElapsed`, `formatVolume`
 - Produces, in `sessionActions.ts`:
   - `finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'`. On success, in this order:
@@ -1630,7 +1672,7 @@ catch first: close(db)
 - [ ] **Step 2: Web check** in the browser pane, at 390×844 and 320×844, light then dark, with screenshots of each.
   - **Header:** the hound sits on the left of red GYMHOUND on one line at both widths, on Train, History, Stats, Fuel and Settings.
   - **Dock:** the active tab is red.
-  - **Footer:** "Powered by GruntHound LLC" appears at the bottom of Train, History, Stats and Settings. It is absent on Fuel, the session and the summary.
+  - **Footer:** "powered by" over the GruntHound wordmark is pinned to the bottom of Train, History, Stats and Settings. GRUNT is white on dark and black on light, and HOUND is blue. It is absent on Fuel, the session and the summary, and it never shows the hound.
   - **A premade day end to end:**
     - Set active, Start this, log, rest, finish, then Done.
     - On the next run of that day, every set row shows that set's last result beside the input.
