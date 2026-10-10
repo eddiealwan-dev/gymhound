@@ -9,7 +9,7 @@ import type { Db } from '../db/types';
 import { createTestDb } from '../db/testing/createTestDb';
 import { nodeSnapshotFiles } from '../db/testing/nodeSnapshotFiles';
 import { getSnapshotFiles } from '../platform/snapshots';
-import { recordRestoredSnapshot, shareFile, takeSnapshotSafely } from './backup';
+import { latestSnapshotPath, recordRestoredSnapshot, shareFile, snapshotListing, takeSnapshotSafely } from './backup';
 
 // Only the files lookup is faked; shareFile runs the real fileUri.
 jest.mock('../platform/snapshots', () => ({ getSnapshotFiles: jest.fn() }));
@@ -64,6 +64,59 @@ describe('takeSnapshotSafely', () => {
     expect(files.list()).toEqual([snapshotName(NOW)]);
   });
 
+  it('stores why it failed, with the time, and leaves the last good time alone', () => {
+    takeSnapshotSafely(handle.db, NOW);
+    jest.mocked(getSnapshotFiles).mockReturnValue({
+      ...files,
+      rename: () => {
+        throw new Error('disk full');
+      },
+    });
+
+    takeSnapshotSafely(handle.db, NOW + 1000);
+
+    expect(getSettings(handle.db)).toMatchObject({ lastSnapshotAt: NOW, lastSnapshotError: { at: NOW + 1000, message: 'disk full' } });
+  });
+
+  it("adds the error's code to the stored message when it has one (expo's CodedError)", () => {
+    jest.mocked(getSnapshotFiles).mockReturnValue({
+      ...files,
+      rename: () => {
+        throw Object.assign(new Error('Unable to move the file'), { code: 'ERR_FILE_SYSTEM' });
+      },
+    });
+
+    takeSnapshotSafely(handle.db, NOW);
+
+    expect(getSettings(handle.db).lastSnapshotError).toEqual({ at: NOW, message: 'Unable to move the file (ERR_FILE_SYSTEM)' });
+    expect(getSettings(handle.db).lastSnapshotAt).toBeNull();
+  });
+
+  it('clears the stored error when a later snapshot works', () => {
+    jest.mocked(getSnapshotFiles).mockImplementationOnce(() => {
+      throw new Error('no documents folder');
+    });
+    takeSnapshotSafely(handle.db, NOW);
+    expect(getSettings(handle.db).lastSnapshotError).toEqual({ at: NOW, message: 'no documents folder' });
+
+    expect(takeSnapshotSafely(handle.db, NOW + 1000)).toBe(true);
+
+    expect(getSettings(handle.db)).toMatchObject({ lastSnapshotAt: NOW + 1000, lastSnapshotError: null });
+  });
+
+  it('never throws when the error cannot be stored either', () => {
+    const broken = {
+      select: () => {
+        throw new Error('database is locked');
+      },
+      insert: () => {
+        throw new Error('database is locked');
+      },
+    } as unknown as Db;
+
+    expect(takeSnapshotSafely(broken, NOW)).toBe(false);
+  });
+
   it('never throws, even when the snapshot files themselves cannot be reached', () => {
     jest.mocked(getSnapshotFiles).mockImplementation(() => {
       throw new Error('no documents folder');
@@ -80,6 +133,56 @@ describe('takeSnapshotSafely', () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(getSettings(handle.db).lastSnapshotAt).toBeNull();
+  });
+});
+
+describe('snapshotListing', () => {
+  it('returns every listed name and the path of the newest snapshot', () => {
+    takeSnapshotSafely(handle.db, NOW);
+    takeSnapshotSafely(handle.db, NOW + 60_000);
+
+    expect(snapshotListing()).toEqual({
+      path: files.pathFor(snapshotName(NOW + 60_000)),
+      names: expect.arrayContaining([snapshotName(NOW), snapshotName(NOW + 60_000)]),
+      error: null,
+    });
+    expect(snapshotListing().names).toHaveLength(2);
+    expect(latestSnapshotPath()).toBe(files.pathFor(snapshotName(NOW + 60_000)));
+  });
+
+  it('returns no path and no error when the folder holds no snapshot', () => {
+    expect(snapshotListing()).toEqual({ path: null, names: [], error: null });
+    expect(latestSnapshotPath()).toBeNull();
+  });
+
+  it('returns no path and the listing error, with its code, when list() throws', () => {
+    jest.mocked(getSnapshotFiles).mockReturnValue({
+      ...files,
+      list: () => {
+        throw Object.assign(new Error('Unable to list the directory'), { code: 'ERR_DIRECTORY_LIST' });
+      },
+    });
+
+    expect(snapshotListing()).toEqual({ path: null, names: [], error: 'Unable to list the directory (ERR_DIRECTORY_LIST)' });
+    expect(latestSnapshotPath()).toBeNull();
+  });
+
+  it('keeps the listed names when a name has no path', () => {
+    takeSnapshotSafely(handle.db, NOW);
+    jest.mocked(getSnapshotFiles).mockReturnValue({
+      ...files,
+      pathFor: () => {
+        throw new Error('Unable to create the folder');
+      },
+    });
+
+    expect(snapshotListing()).toEqual({ path: null, names: [snapshotName(NOW)], error: 'Unable to create the folder' });
+  });
+
+  it('returns nothing, and no error, where snapshots never run (web)', () => {
+    jest.mocked(getSnapshotFiles).mockReturnValue(null);
+
+    expect(snapshotListing()).toEqual({ path: null, names: [], error: null });
   });
 });
 

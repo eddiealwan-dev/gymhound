@@ -14,6 +14,7 @@ const SPEC_KEYS = [
   'distance_unit',
   'fuel_targets',
   'last_snapshot_at',
+  'last_snapshot_error',
   'plates_kg',
   'plates_lb',
   'pro_cached',
@@ -66,7 +67,7 @@ describe('ensureSettings and getSettings', () => {
       fuelTargets: null,
       proDebugUnlock: false,
     });
-    expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
+    expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null, lastSnapshotError: null });
     expect(getSettings(db).platesLb).toEqual({ '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 });
   });
 
@@ -166,6 +167,32 @@ describe('bell and snapshot settings', () => {
   it('read back as defaults before ensureSettings has run', () => {
     const { db } = createTestDb();
     expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
+  });
+});
+
+describe('the last snapshot error', () => {
+  it('is added, as null, to a database whose settings predate it, without touching the other keys', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    db.delete(settings).where(eq(settings.key, 'last_snapshot_error')).run();
+    setSetting(db, 'lastSnapshotAt', 1_791_595_146_459);
+    expect(storedKeys(db)).not.toContain('last_snapshot_error');
+
+    ensureSettings(db, 'us');
+
+    expect(storedKeys(db)).toEqual(SPEC_KEYS);
+    expect(getSettings(db)).toMatchObject({ lastSnapshotError: null, lastSnapshotAt: 1_791_595_146_459 });
+  });
+
+  it('round-trips its time and message, survives ensureSettings, and clears back to null', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    const failure = { at: 1_791_595_146_459, message: 'disk full (ERR_FILE_SYSTEM)' };
+    setSetting(db, 'lastSnapshotError', failure);
+    ensureSettings(db, 'us');
+    expect(getSettings(db).lastSnapshotError).toEqual(failure);
+    setSetting(db, 'lastSnapshotError', null);
+    expect(getSettings(db).lastSnapshotError).toBeNull();
   });
 });
 

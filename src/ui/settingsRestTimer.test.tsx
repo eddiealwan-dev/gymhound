@@ -8,7 +8,7 @@ import { bumpData } from '../state/dataVersion';
 
 /** The stored settings the screen reads. A write through `setSetting` lands here, as it would in SQLite. */
 const mockStored: Record<string, unknown> = {};
-const STARTING = { theme: 'system', unit: 'lb', distanceUnit: 'mi', restSeconds: 120, restBell: true, restBellSound: 'bell', lastSnapshotAt: null };
+const STARTING = { theme: 'system', unit: 'lb', distanceUnit: 'mi', restSeconds: 120, restBell: true, restBellSound: 'bell', lastSnapshotAt: null, lastSnapshotError: null };
 
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/settingsRepo', () => ({
@@ -19,7 +19,11 @@ jest.mock('../db/repositories/settingsRepo', () => ({
 }));
 jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() }));
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
-jest.mock('../state/backup', () => ({ latestSnapshotPath: () => null, shareFile: jest.fn() }));
+jest.mock('../state/backup', () => ({
+  snapshotListing: () => ({ path: null, names: [], error: null }),
+  snapshotFolder: () => null,
+  shareFile: jest.fn(),
+}));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
 jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));

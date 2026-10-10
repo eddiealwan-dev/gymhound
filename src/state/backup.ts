@@ -2,13 +2,22 @@ import * as Sharing from 'expo-sharing';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { newestSnapshot, snapshotTime, writeSnapshot } from '../db/snapshots';
 import type { Db } from '../db/types';
-import { getSnapshotFiles } from '../platform/snapshots';
+import { getSnapshotFiles, snapshotDirPath } from '../platform/snapshots';
 import { fileUri } from '../platform/snapshots/fileUri';
 
+/** An error's message, followed by its `code` in brackets when it has one (expo modules throw a CodedError). */
+function describeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' || typeof code === 'number' ? `${message} (${code})` : message;
+}
+
 /**
- * Writes a snapshot of the whole database and records the time as `lastSnapshotAt`. Returns true when both worked.
- * A failure is logged and returns false: it never throws, because a failed snapshot must never fail a finish.
- * Returns false, without logging, where snapshots never run (web).
+ * Writes a snapshot of the whole database and records the time as `lastSnapshotAt`. Returns true when both worked,
+ * and clears `lastSnapshotError`.
+ * A failure is logged, stored as `lastSnapshotError` (so Settings can say why), and returns false: it never throws,
+ * because a failed snapshot must never fail a finish. `lastSnapshotAt` keeps the last good time.
+ * Returns false, without logging or storing anything, where snapshots never run (web).
  * Call it outside any transaction.
  */
 export function takeSnapshotSafely(db: Db, now: number): boolean {
@@ -17,9 +26,15 @@ export function takeSnapshotSafely(db: Db, now: number): boolean {
     if (!files) return false;
     writeSnapshot(db, files, now);
     setSetting(db, 'lastSnapshotAt', now);
+    setSetting(db, 'lastSnapshotError', null);
     return true;
   } catch (error) {
     console.warn('GymHound could not write a snapshot.', error);
+    try {
+      setSetting(db, 'lastSnapshotError', { at: now, message: describeError(error) });
+    } catch {
+      // The database itself is failing; the warning above is all that can be done.
+    }
     return false;
   }
 }
@@ -39,12 +54,41 @@ export function recordRestoredSnapshot(db: Db, restoredFrom: string): void {
   }
 }
 
-/** The absolute path of the newest snapshot, or null when there is none or snapshots do not run here. Never throws. */
-export function latestSnapshotPath(): string | null {
+export type SnapshotListing = {
+  /** The absolute path of the newest snapshot, or null when there is none, it can't be listed, or snapshots do not run here. */
+  path: string | null;
+  /** The names the snapshot folder listed. */
+  names: string[];
+  /** Why listing (or finding the newest one's path) failed, or null. */
+  error: string | null;
+};
+
+/**
+ * What the snapshot folder holds, for Settings to show and to explain. The same listing feeds keep-7 pruning and the
+ * startup restore. Never throws: a failure comes back as `error`. Where snapshots never run (web), all is empty.
+ */
+export function snapshotListing(): SnapshotListing {
+  let names: string[] = [];
   try {
     const files = getSnapshotFiles();
-    const name = files ? newestSnapshot(files.list()) : null;
-    return files && name ? files.pathFor(name) : null;
+    if (!files) return { path: null, names, error: null };
+    names = files.list();
+    const newest = newestSnapshot(names);
+    return { path: newest ? files.pathFor(newest) : null, names, error: null };
+  } catch (error) {
+    return { path: null, names, error: describeError(error) };
+  }
+}
+
+/** The absolute path of the newest snapshot, or null when there is none or snapshots do not run here. Never throws. */
+export function latestSnapshotPath(): string | null {
+  return snapshotListing().path;
+}
+
+/** The absolute path of the snapshot folder, or null where snapshots never run (web) or it can't be found. Never throws. */
+export function snapshotFolder(): string | null {
+  try {
+    return getSnapshotFiles() ? snapshotDirPath() : null;
   } catch {
     return null;
   }

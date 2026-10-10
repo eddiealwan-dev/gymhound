@@ -22,6 +22,8 @@ export type Settings = {
   restBellSound: BellSound;
   /** When the last good snapshot was written (epoch ms), or null before the first one. */
   lastSnapshotAt: number | null;
+  /** Why the last snapshot attempt failed, and when; null once one works. Settings shows it while it is newer than `lastSnapshotAt`. */
+  lastSnapshotError: { at: number; message: string } | null;
   activeRoutineId: string | null;
   fuelTargets: null | { training: Macros; rest: Macros };
   proDebugUnlock: boolean;
@@ -44,6 +46,7 @@ const KEYS: Record<keyof Settings, string> = {
   restBell: 'rest_bell',
   restBellSound: 'rest_bell_sound',
   lastSnapshotAt: 'last_snapshot_at',
+  lastSnapshotError: 'last_snapshot_error',
   activeRoutineId: 'active_routine_id',
   fuelTargets: 'fuel_targets',
   proDebugUnlock: 'pro_debug_unlock',
@@ -69,6 +72,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     restBell: true,
     restBellSound: 'bell',
     lastSnapshotAt: null,
+    lastSnapshotError: null,
     activeRoutineId: null,
     fuelTargets: null,
     proDebugUnlock: false,

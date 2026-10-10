@@ -34,6 +34,11 @@ export function setAsidePath(name: string): string {
   return `${dirOf(liveDbPath())}/${name}`;
 }
 
+/** The absolute path of the folder snapshots live in: `snapshots` in the app's documents folder. */
+export function snapshotDirPath(): string {
+  return `${pathFromUri(Paths.document.uri)}/snapshots`;
+}
+
 /**
  * `SnapshotFiles` on the phone.
  * - The live database is `gymhound.db` in expo-sqlite's default database folder.
@@ -42,7 +47,7 @@ export function setAsidePath(name: string): string {
  * It honours the same contracts as the Node implementation the tests use; see `SnapshotFiles`.
  */
 export function expoSnapshotFiles(): SnapshotFiles {
-  const snapshotDir = `${pathFromUri(Paths.document.uri)}/snapshots`;
+  const snapshotDir = snapshotDirPath();
   const snapshotPath = (name: string) => `${snapshotDir}/${name}`;
   const liveIsMissingOrEmpty = () => {
     const live = fileAt(liveDbPath());

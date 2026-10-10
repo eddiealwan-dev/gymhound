@@ -8,7 +8,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { playBell } from '../../src/platform/restTimer/bell';
-import { latestSnapshotPath, shareFile } from '../../src/state/backup';
+import { shareFile, snapshotFolder, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDbQuery } from '../../src/state/dataVersion';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
@@ -239,13 +239,22 @@ function RestTimerSection() {
   );
 }
 
-/** Module-level, so `useDbQuery` reads again only when the data changes or the screen regains focus. */
-const readBackups = (db: Db) => ({ lastSnapshotAt: getSettings(db).lastSnapshotAt, latestPath: latestSnapshotPath() });
+/** Module-level, so `useDbQuery` reads again only when the data changes or the screen regains focus (after a finish, too). */
+const readBackups = (db: Db) => {
+  const { lastSnapshotAt, lastSnapshotError } = getSettings(db);
+  return { lastSnapshotAt, lastSnapshotError, listing: snapshotListing(), folder: __DEV__ ? snapshotFolder() : null };
+};
 
-/** When the last good snapshot was written, and a way to send the newest one somewhere safe. Snapshots run in the phone app only. */
+/**
+ * When the last good snapshot was written, and a way to send the newest one somewhere safe. Snapshots run in the phone app only.
+ * Below the time, a line says why the last snapshot failed, or that a saved snapshot's file isn't listed (with the
+ * listing's own result and the folder in development builds), so a missing Share button can be explained.
+ */
 function BackupsSection() {
-  const { lastSnapshotAt, latestPath } = useDbQuery(readBackups);
+  const { lastSnapshotAt, lastSnapshotError, listing, folder } = useDbQuery(readBackups);
   const [shareFailed, setShareFailed] = useState(false);
+  const latestPath = listing.path;
+  const failedSinceLastGood = lastSnapshotError !== null && (lastSnapshotAt === null || lastSnapshotError.at > lastSnapshotAt);
   return (
     <View style={{ gap: 8, marginTop: 24 }}>
       <Body weight={600} muted>
@@ -256,6 +265,19 @@ function BackupsSection() {
       ) : (
         <>
           <Body>{lastSnapshotAt === null ? 'No snapshot yet.' : `Last snapshot: ${formatDateTime(lastSnapshotAt)}`}</Body>
+          {failedSinceLastGood ? (
+            <Body>{`The last snapshot failed: ${lastSnapshotError.message} (${formatDateTime(lastSnapshotError.at)}).`}</Body>
+          ) : null}
+          {lastSnapshotAt !== null && latestPath === null ? (
+            <>
+              <Body>{`A snapshot was saved at ${formatDateTime(lastSnapshotAt)}, but its file isn't listed.`}</Body>
+              {__DEV__ ? (
+                <Body muted selectable>
+                  {`${listing.error ?? `${listing.names.length} files listed`}. Folder: ${folder ?? 'unknown'}`}
+                </Body>
+              ) : null}
+            </>
+          ) : null}
           {latestPath !== null ? (
             <Button
               label="Share latest snapshot"
