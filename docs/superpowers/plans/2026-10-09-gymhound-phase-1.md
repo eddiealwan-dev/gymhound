@@ -2137,3 +2137,62 @@ The owner's iPhone check gave 33 pass, 2 fail and 4 skipped. The fails were "key
   - Open calls `Linking.openURL('spotify://')`.
   - There is no bar on web.
   - Stacking with the fallback RestBar works.
+
+## Owner second check follow-ups (2026-10-10)
+
+Round 2 gave 15 pass, 1 fail and 1 skip. The snapshot fail was a wording problem (the backup is a GymHound-only file), and the Share sheet now works. Spec §18.5.
+
+### Task 27: Workouts CSV export; the backup button explains itself
+
+**Files:**
+- Create:
+  - `src/domain/csv.ts` (+ test): pure RFC 4180 helpers and the row builder;
+  - `src/db/repositories/exportRepo.ts` (+ test): the query;
+  - `src/platform/exportFiles.ts` (+ test): write to the cache folder, then share.
+- Modify: `app/(tabs)/settings.tsx`.
+
+**Interfaces:**
+- `csvField(value: string | number | null): string`:
+  - null gives empty;
+  - a field containing `,`, `"`, CR or LF is quoted, with `"` doubled.
+- `toCsv(header: string[], rows: (string | number | null)[][]): string`: a UTF-8 BOM (`﻿`) first, then lines joined with CRLF.
+- `WORKOUT_CSV_COLUMNS` holds the 21 spec §11 names in order: `workout_id, date, started_at, finished_at, workout, routine, routine_day, day_mark, exercise, exercise_id, set_number, set_type, weight, weight_unit, reps, rpe, duration_s, distance, distance_unit, pr, exercise_note`.
+- `isoWithOffset(epochMs: number, offsetMinutes: number): string`, for example `2026-10-10T17:57:59.401-05:00`. The caller passes the device's offset at that instant (`-new Date(ms).getTimezoneOffset()`).
+- `prKinds(flags: number): string`: bit 1 `heaviest`, bit 2 `reps`, bit 4 `e1rm`, bit 8 `hold`, joined with `|`; empty for 0.
+- `workoutCsvRows(db): (string | number | null)[][]` in `exportRepo.ts`:
+  - one row per done set of finished workouts, ordered by `started_at` then exercise position then set position;
+  - `routine` and `routine_day` are names (empty when the workout was not started from a routine);
+  - `set_number` is the set's 1-based rank within its own set type in that exercise (the previous-result rule);
+  - `exercise_note` is `workout_exercises.note`.
+- `exportWorkoutsCsv(db, now): Promise<'shared' | 'empty' | 'unavailable'>` in `exportFiles.ts`:
+  - It returns 'empty' with no file when there are no rows.
+  - Otherwise it writes `gymhound-workouts-YYYY-MM-DD.csv` (local date of `now`) to `Paths.cache`, overwriting a same-day file.
+  - It shares the file with `expo-sharing` (`mimeType: 'text/csv'`, `UTI: 'public.comma-separated-values-text'`, `dialogTitle: 'GymHound workouts'`).
+  - It returns 'unavailable' when `Sharing.isAvailableAsync()` is false.
+
+**Settings:**
+- Backups: the button reads **Save a backup copy**, with the muted line "A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps." The diagnostic lines (Task 25) are unchanged.
+- A new **Export** section (phone builds only) with **Export workouts (CSV)**:
+  - 'empty' shows "No finished workouts yet.";
+  - 'unavailable' or a throw shows "Couldn't open the share sheet.".
+
+**Tests:**
+- Quoting: comma, quote, newline, null and numbers.
+- The BOM and CRLF.
+- The exact header.
+- `isoWithOffset` for +0, −300 and +330.
+- `prKinds` for 0, 1 and 5.
+- `workoutCsvRows` on seeded SQLite: two finished workouts, one active (excluded), an undone set (excluded), a warmup row with `set_number` 1 and `set_type` warmup, a note copied at finish, and kg and lb rows keeping their units.
+- `exportWorkoutsCsv` with mocked expo-file-system and expo-sharing: file name and content written, the share args, and the empty and unavailable paths.
+- Settings render: button labels and messages.
+
+**Commit.** `feat(export): workouts CSV export; the backup button says what it is`
+
+### Task 28: Bells a little louder at every volume
+
+- Raise each bundled bell's RMS by about 3 dB more (at least +2.5 dB) over the current files, keeping the peak at −1 dBFS with no clipping or harshness.
+- Prefer more sustained energy (a slower decay, or compressing the envelope) over more saturation.
+- Regenerate with `scripts/make-bells.mjs`, and raise the RMS floors in `bellFiles.test.ts` to the new levels.
+- Report peak and RMS before and after for each file.
+
+**Commit.** `feat(bell): a little louder at every volume`

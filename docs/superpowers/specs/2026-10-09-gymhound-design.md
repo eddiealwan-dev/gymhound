@@ -871,3 +871,18 @@ The check gave 33 pass, 2 fail and 4 skipped. The owner decided the following. W
 - **Rest bar:** the countdown shows only under the set that started the rest. The bottom rest bar is removed, which changes §8.4 and §18.2. When that set no longer exists (removed or replaced), the bottom bar shows as a fallback, so a running rest is never invisible (ruling R41).
 - **Music bar (owner, 2026-10-10):** the session's Music button at the top picks Apple Music (iPhone), Spotify or Audible. Picking one slides up a music bar at the bottom of the session, where the rest bar was. In Expo Go it shows the chosen app with **Open {app}** and a close ×, and it remembers the choice (`music_app`) until closed. In phase 7 the same bar gains the song, play/pause, previous/next and ±15s (§17.3). It is never in the browser build.
 - **Keyboard (ruling R43):** the iOS Done key is React Native's built-in Done toolbar on number pads (`returnKeyType="done"`), not a custom accessory bar.
+
+### 18.5 After the owner's second iPhone check (2026-10-10)
+- **Result:** 15 pass, 1 fail, 1 skipped (VoiceOver, optional). The keyboard and the music bar passed, and so did every owner note.
+- **Snapshot root cause, found and fixed:**
+  - On iOS, `Directory.list()` hands back a URI form whose `File.size` reads null. So `expoSnapshotFiles().list()` dropped every snapshot.
+  - That hid the Share button, and it also meant the startup restore and the keep-7 pruning could not see any snapshot.
+  - Reading the size through the app's own path (final fix G2) made Share appear and open the share sheet on the iPhone.
+- **Backup wording:** the snapshot is a backup only GymHound can read, so the owner expected the shared file to open somewhere. The button now reads **Save a backup copy**, with the line "A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps."
+- **Workouts CSV, brought forward from phase 6:** Settings gets an **Export** section with **Export workouts (CSV)**, per §11.
+  - One row per done set of finished workouts, with the §11 columns.
+  - RFC 4180 quoting, UTF-8 with a BOM.
+  - Written to the cache folder, then opened in the share sheet ("Open in Numbers", Save to Files, and so on).
+  - Phone builds only. The food CSV stays with Fuel (phase 5).
+  - Until phase 2 and phase 4, `day_mark` is the workout's stored mark and `pr` lists the kinds in `pr_flags`, which may be empty.
+- **Bells:** "each level needs to be a little louder". The bundled bells gain about 3 dB more average loudness, with the peak still at −1 dBFS and the tone kept clean. The 25/50/75/100% steps keep their meaning.
