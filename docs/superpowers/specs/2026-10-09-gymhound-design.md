@@ -119,6 +119,9 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 ### exercise_notes
 `exercise_id` (PK, FK), `text`, `updated_at`. One note per exercise. It is shown inside that exercise every time the exercise appears, in any routine or in an empty workout.
 
+### exercise_prefs
+`exercise_id` (PK, FK), `rest_seconds` (int null), `updated_at`. Per-exercise preferences that follow the exercise everywhere, like its note (§18.2). A missing row or a null `rest_seconds` uses the Settings rest length, and 0 means rest is off for that exercise. Added in migration 0002.
+
 ### routines
 `id`, `name`, `is_premade`, `next_day_index` (int, the rotation pointer), `created_at`.
 
@@ -151,6 +154,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | started_at, finished_at | int | |
 | local_date | text | local date at start. Used for history, streak, and training day |
 | rest_ends_at | int null | absolute end time of the running rest timer |
+| rest_set_id | text null | the set whose tick started the running rest. The countdown also shows under it. Written and cleared with `rest_ends_at`, and not a foreign key (ruling R38, migration 0003) |
 | food_offer_shown | int | the Short on food offer appears at most once per workout |
 | health_status | text null | phase 7. Null means not attempted, otherwise `done` or `failed`. Never blocks anything (§17.1) |
 | health_record_id | text null | phase 7. The id of the record GymHound wrote to Apple Health or Health Connect |
