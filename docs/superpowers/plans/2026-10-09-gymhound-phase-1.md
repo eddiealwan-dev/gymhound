@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Location:** the project root is `C:\Users\eddie\OneDrive\Documents\GymHound`. `node_modules` is a junction to `C:\Users\eddie\.gymhound\node_modules`. Never run `npm install` in the project itself, because npm 11 deletes the junction. Install in `C:\Users\eddie\.gymhound` and copy `package.json` and `package-lock.json` back.
+- **Location:** the project root is `C:\Users\eddie\OneDrive\Documents\GymHound`. `node_modules` is a junction to `C:\Users\eddie\.gymhound\node_modules`. Never run `npm install` in the project itself, because npm 11 deletes the junction. Install in `C:\Users\eddie\.gymhound` (copy `patches/` there first) and copy `package.json` and `package-lock.json` back. Fixes to dependency code live only as `patch-package` files in `patches/`, never as hand edits in `node_modules`, and the iPhone build must not need any browser-only patch.
 - **Platform:** Phase 1 runs in Expo Go and the web build. No native module outside Expo Go, and no `expo-dev-client`.
 - **Network:** no network calls anywhere in the app. No accounts.
 - **IDs:** text. Bundled rows use stable slugs. User rows use `randomUUID()` from `expo-crypto`.
