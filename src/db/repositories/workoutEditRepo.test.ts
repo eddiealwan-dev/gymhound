@@ -50,6 +50,10 @@ function groups(db: Db): (number | null)[] {
   return view(db).exercises.map((e) => e.supersetGroup);
 }
 
+function rawWorkoutExercise(db: Db, id: string) {
+  return db.select().from(workoutExercises).where(eq(workoutExercises.id, id)).get()!;
+}
+
 function setPositions(db: Db, exerciseIndex = 0): number[] {
   return view(db).exercises[exerciseIndex].sets.map((s) => s.position);
 }
@@ -96,6 +100,90 @@ describe('moveExercise', () => {
     expect(view(db).exercises[1].sets.map((s) => s.id)).toEqual(setIds);
     expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
   });
+  describe('with supersets', () => {
+    const [BENCH, OHP, INCLINE, LATERAL, PUSHDOWN] = PUSH_A_ORDER;
+
+    it('moves a whole superset past the next exercise and keeps the group intact', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[0]);
+      const group = groups(db)[0];
+      moveExercise(db, ids[1], 'down');
+      expect(exerciseOrder(db)).toEqual([INCLINE, BENCH, OHP, LATERAL, PUSHDOWN]);
+      expect(groups(db)).toEqual([null, group, group, null, null]);
+      expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it('moves a whole superset up from either member and keeps the members in order', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[2]);
+      const group = groups(db)[2];
+      moveExercise(db, ids[2], 'up');
+      expect(exerciseOrder(db)).toEqual([BENCH, INCLINE, LATERAL, OHP, PUSHDOWN]);
+      expect(groups(db)).toEqual([null, group, group, null, null]);
+
+      moveExercise(db, ids[3], 'up');
+      expect(exerciseOrder(db)).toEqual([INCLINE, LATERAL, BENCH, OHP, PUSHDOWN]);
+      expect(groups(db)).toEqual([group, group, null, null, null]);
+      expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it('lets a single exercise jump over a whole superset', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[0]);
+      const group = groups(db)[0];
+      moveExercise(db, ids[1], 'down');
+      expect(exerciseOrder(db)).toEqual([INCLINE, BENCH, OHP, LATERAL, PUSHDOWN]);
+      moveExercise(db, ids[2], 'down');
+      expect(exerciseOrder(db)).toEqual([BENCH, OHP, INCLINE, LATERAL, PUSHDOWN]);
+      expect(groups(db)).toEqual([group, group, null, null, null]);
+      expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it('does nothing when the superset is already first or last', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[0]);
+      toggleSupersetWithNext(db, ids[3]);
+      const before = groups(db);
+      moveExercise(db, ids[0], 'up');
+      moveExercise(db, ids[1], 'up');
+      moveExercise(db, ids[3], 'down');
+      moveExercise(db, ids[4], 'down');
+      expect(exerciseOrder(db)).toEqual(PUSH_A_ORDER);
+      expect(groups(db)).toEqual(before);
+      expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it('moves one superset past another', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[0]);
+      toggleSupersetWithNext(db, ids[3]);
+      const [first, second] = [groups(db)[0], groups(db)[3]];
+      expect(first).not.toBe(second);
+
+      moveExercise(db, ids[2], 'up');
+      expect(exerciseOrder(db)).toEqual([INCLINE, BENCH, OHP, LATERAL, PUSHDOWN]);
+
+      moveExercise(db, ids[3], 'up');
+      expect(exerciseOrder(db)).toEqual([INCLINE, LATERAL, PUSHDOWN, BENCH, OHP]);
+      expect(groups(db)).toEqual([null, second, second, first, first]);
+      expect(positions(db)).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    it('moves a superset in the middle with its sets', () => {
+      const { db, ids } = startPushA();
+      toggleSupersetWithNext(db, ids[2]);
+      const setIds = view(db).exercises.map((e) => e.sets.map((s) => s.id));
+      moveExercise(db, ids[2], 'down');
+      expect(exerciseOrder(db)).toEqual([BENCH, OHP, PUSHDOWN, INCLINE, LATERAL]);
+      expect(view(db).exercises.map((e) => e.sets.map((s) => s.id))).toEqual([
+        setIds[0],
+        setIds[1],
+        setIds[4],
+        setIds[2],
+        setIds[3],
+      ]);
+    });
+  });
 });
 
 describe('toggleSupersetWithNext', () => {
@@ -118,12 +206,11 @@ describe('toggleSupersetWithNext', () => {
   });
 
   it('numbers a new group one above the highest in the workout', () => {
-    const { db, workoutId, ids } = startPushA();
+    const { db, ids } = startPushA();
     db.update(workoutExercises).set({ supersetGroup: 3 }).where(eq(workoutExercises.id, ids[3])).run();
     db.update(workoutExercises).set({ supersetGroup: 3 }).where(eq(workoutExercises.id, ids[4])).run();
     toggleSupersetWithNext(db, ids[0]);
     expect(groups(db)).toEqual([4, 4, null, 3, 3]);
-    expect(workoutId).toBeTruthy();
   });
 
   it('adds the next exercise to the group the first one is already in', () => {
@@ -296,6 +383,7 @@ describe('replaceExercise', () => {
     startWorkoutFromDay(db, PUSH_A, NOW);
     const bench = view(db).exercises[0];
     expect(bench).toMatchObject({ plannedWeight: 185, rule: { setCount: 4 } });
+    expect(rawWorkoutExercise(db, bench.id).routineExerciseId).toBe(`${PUSH_A}:barbell-bench-press`);
     for (const s of bench.sets.slice(0, 2)) {
       tickSet(db, s.id, { weight: 185, reps: 5, durationS: null, distance: null }, 'lb', NOW, 'mi');
       db.update(sets).set({ rpe: 8, prFlags: 3 }).where(eq(sets.id, s.id)).run();
@@ -337,6 +425,7 @@ describe('replaceExercise', () => {
     const rows = db.select().from(sets).where(eq(sets.workoutExerciseId, bench.id)).all();
     expect(rows.map((r) => [r.prFlags, r.completedAt])).toEqual(Array(4).fill([0, null]));
     expect(replaced.sets.map((s) => s.position)).toEqual([0, 1, 2, 3]);
+    expect(rawWorkoutExercise(db, bench.id).routineExerciseId).toBeNull();
   });
 
   it('leaves the other exercises and the superset group alone', () => {

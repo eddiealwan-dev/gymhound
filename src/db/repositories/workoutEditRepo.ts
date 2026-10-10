@@ -94,8 +94,9 @@ export function addExerciseToWorkout(db: Db, workoutId: string, exerciseId: stri
 
 /**
  * Swaps in a different exercise. The position, superset group and set count stay. Every set loses its
- * values, its tick and its PR flags, and the rule snapshot, planned weight and today's override go, because
- * they belonged to the old exercise.
+ * values, its tick and its PR flags. The rule snapshot, planned weight, today's override and the link to the
+ * routine exercise go, because they belonged to the old exercise: with no link the row has no rule, and a
+ * finished replacement can never feed the old routine slot's progression.
  */
 export function replaceExercise(db: Db, workoutExerciseId: string, exerciseId: string): void {
   db.transaction((tx) => {
@@ -103,6 +104,7 @@ export function replaceExercise(db: Db, workoutExerciseId: string, exerciseId: s
     tx.update(workoutExercises)
       .set({
         exerciseId,
+        routineExerciseId: null,
         ruleSetCount: null,
         ruleRepMin: null,
         ruleRepMax: null,
@@ -144,21 +146,44 @@ export function removeExercise(db: Db, workoutExerciseId: string): void {
   });
 }
 
-/** Swaps the exercise with its neighbour. Does nothing at either end. */
+/**
+ * Moves the exercise's block one place up or down. A block is a single exercise outside any superset, or the
+ * run of consecutive exercises that share a superset group, so a superset always moves as a whole and stays
+ * contiguous. The block swaps places with the adjacent block, and members keep their order inside their own
+ * group. Does nothing when the block is already first or last. Positions are renumbered 0..n-1.
+ */
 export function moveExercise(db: Db, workoutExerciseId: string, dir: 'up' | 'down'): void {
   db.transaction((tx) => {
     const row = requireWorkoutExercise(tx, workoutExerciseId);
     const ordered = tx
-      .select({ id: workoutExercises.id, position: workoutExercises.position })
+      .select({
+        id: workoutExercises.id,
+        position: workoutExercises.position,
+        supersetGroup: workoutExercises.supersetGroup,
+      })
       .from(workoutExercises)
       .where(eq(workoutExercises.workoutId, row.workoutId))
       .orderBy(asc(workoutExercises.position), asc(workoutExercises.id))
       .all();
-    const index = ordered.findIndex((e) => e.id === workoutExerciseId);
-    const other = ordered[dir === 'up' ? index - 1 : index + 1];
-    if (!other) return;
-    tx.update(workoutExercises).set({ position: other.position }).where(eq(workoutExercises.id, row.id)).run();
-    tx.update(workoutExercises).set({ position: row.position }).where(eq(workoutExercises.id, other.id)).run();
+
+    const blocks: { id: string; position: number }[][] = [];
+    let previousGroup: number | null = null;
+    for (const e of ordered) {
+      if (e.supersetGroup !== null && e.supersetGroup === previousGroup) blocks[blocks.length - 1].push(e);
+      else blocks.push([e]);
+      previousGroup = e.supersetGroup;
+    }
+
+    const index = blocks.findIndex((block) => block.some((e) => e.id === workoutExerciseId));
+    const other = dir === 'up' ? index - 1 : index + 1;
+    if (other < 0 || other >= blocks.length) return;
+    [blocks[index], blocks[other]] = [blocks[other], blocks[index]];
+
+    blocks.flat().forEach((e, position) => {
+      if (e.position !== position) {
+        tx.update(workoutExercises).set({ position }).where(eq(workoutExercises.id, e.id)).run();
+      }
+    });
   });
 }
 
