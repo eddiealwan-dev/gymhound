@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
@@ -7,6 +7,7 @@ import { parseField } from '../domain/setTable';
 import type { WeightUnit } from '../domain/types';
 import { formatWeight } from '../domain/units';
 import { bumpData, useDbQuery } from '../state/dataVersion';
+import { useDraftFlush } from '../state/draftFlush';
 import { Body } from './Text';
 import { fonts } from './theme';
 import { useTheme } from './ThemeProvider';
@@ -77,15 +78,46 @@ function BarChoices({ unit, bar }: { unit: WeightUnit; bar: number }) {
   const { colors } = useTheme();
   const presets = BAR_PRESETS[unit];
   const matched = presets.find((p) => p.weight === bar) ?? null;
-  // The custom field stays open once chosen, even if the typed weight matches a preset.
-  const [customOpen, setCustomOpen] = useState(matched === null);
-  const [draft, setDraft] = useState(String(bar));
-  const invalid = customOpen && parseCustomBar(draft, unit) === null;
+  // Custom ticked by hand while the bar is a preset's weight. A bar no preset has is always Custom.
+  const [customChosen, setCustomChosen] = useState(false);
+  // Text typed into the custom field and not saved yet (null when there is none). It is saved when the field is
+  // left, never per keystroke, so typing "120" does not store 1 and then 12 on the way to being rejected.
+  const [draft, setDraft] = useState<string | null>(null);
+  const customOpen = matched === null || customChosen;
+  const invalid = customOpen && draft !== null && parseCustomBar(draft, unit) === null;
+  // The last weight this picker wrote, so the change it causes is not taken for one made elsewhere.
+  const ownWrite = useRef<number | null>(null);
+
+  // Settings and the plate calculator each have a picker, and Settings stays mounted behind the session. When the
+  // bar changes in the other one, show the new bar and drop what this one held (a Custom tick, a typed draft).
+  useEffect(() => {
+    if (bar === ownWrite.current) return;
+    ownWrite.current = null;
+    setCustomChosen(false);
+    setDraft(null);
+  }, [bar]);
 
   const save = (weight: number) => {
+    ownWrite.current = weight;
     setSetting(db, BAR_KEY[unit], weight);
     bumpData();
   };
+
+  /** Saves a valid draft as leaving the field does. An invalid one stays on screen with its hint and writes nothing. */
+  const commit = () => {
+    if (draft === null) return;
+    const weight = parseCustomBar(draft, unit);
+    if (weight === null) return;
+    if (weight !== bar) save(weight);
+    setDraft(null);
+  };
+
+  // Back, the browser's back button and the app going to the background commit a draft not yet left (R29); so does
+  // closing the plate calculator, which can unmount the field before it blurs.
+  useDraftFlush(commit);
+  const latestCommit = useRef(commit);
+  latestCommit.current = commit;
+  useEffect(() => () => latestCommit.current(), []);
 
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel="Bar" style={{ backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 2 }}>
@@ -96,7 +128,8 @@ function BarChoices({ unit, bar }: { unit: WeightUnit; bar: number }) {
           detail={formatWeight(preset.weight, unit)}
           selected={!customOpen && matched === preset}
           onPress={() => {
-            setCustomOpen(false);
+            setCustomChosen(false);
+            setDraft(null);
             save(preset.weight);
           }}
         />
@@ -105,20 +138,18 @@ function BarChoices({ unit, bar }: { unit: WeightUnit; bar: number }) {
         label="Custom"
         selected={customOpen}
         onPress={() => {
-          setDraft(String(bar));
-          setCustomOpen(true);
+          setDraft(null);
+          setCustomChosen(true);
         }}
       />
       {customOpen ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TextInput
-              value={draft}
-              onChangeText={(text) => {
-                setDraft(text);
-                const weight = parseCustomBar(text, unit);
-                if (weight !== null) save(weight);
-              }}
+              value={draft ?? String(bar)}
+              onChangeText={setDraft}
+              onBlur={commit}
+              onSubmitEditing={commit}
               keyboardType="decimal-pad"
               selectTextOnFocus
               accessibilityLabel={`Custom bar weight, ${unit}`}
