@@ -1,7 +1,8 @@
 import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { setSetting } from '../../db/repositories/settingsRepo';
+import type { MusicAppId } from '../../domain/types';
 import { musicAppsFor } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
@@ -20,10 +21,10 @@ jest.mock('../ThemeProvider', () => {
 
 const onClose = jest.fn();
 
-function render(): ReactTestRenderer {
+function render(musicApp: MusicAppId | null = null): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(<MusicSheet visible apps={musicAppsFor('ios')} onClose={onClose} />);
+    tree = create(<MusicSheet visible apps={musicAppsFor('ios')} musicApp={musicApp} onClose={onClose} />);
   });
   return tree;
 }
@@ -63,4 +64,30 @@ it('stores the app picked for the music bar and closes, without leaving GymHound
   expect(bumpData).toHaveBeenCalledTimes(1);
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(openURL).not.toHaveBeenCalled();
+});
+
+describe('the app already picked (G6)', () => {
+  const button = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).find((b) => b.props.label === label)!;
+  /** Whether the screen reader hears "selected": the native view under the button carries the state. */
+  const saysSelected = (b: ReactTestInstance) =>
+    b.findAll((n) => typeof n.type === 'string' && n.props.accessibilityState?.selected === true).length > 0;
+
+  it('is the selected button, filled, and the screen reader says it is selected', () => {
+    const tree = render('spotify');
+
+    expect(button(tree, 'Spotify').props).toMatchObject({ selected: true, variant: 'primary' });
+    expect(saysSelected(button(tree, 'Spotify'))).toBe(true);
+    for (const label of ['Apple Music', 'Audible']) {
+      expect(button(tree, label).props).toMatchObject({ selected: false, variant: 'secondary' });
+      expect(saysSelected(button(tree, label))).toBe(false);
+    }
+  });
+
+  it('leaves every app unselected while none is picked', () => {
+    const tree = render(null);
+
+    for (const label of ['Apple Music', 'Spotify', 'Audible']) {
+      expect(button(tree, label).props).toMatchObject({ selected: false, variant: 'secondary' });
+    }
+  });
 });

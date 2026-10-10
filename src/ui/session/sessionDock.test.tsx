@@ -171,6 +171,17 @@ describe('the music bar (Task 26)', () => {
     expect(buttonLabels(tree)).not.toContain('Close');
   });
 
+  it('the music sheet shows the app picked as selected (G6)', () => {
+    mockState.musicApp = 'spotify';
+    const tree = mount();
+    const music = tree.root.findAll((n) => n.props.accessibilityLabel === 'Music' && typeof n.props.onPress === 'function')[0];
+
+    act(() => music.props.onPress());
+
+    const picked = tree.root.findAllByType(Button).filter((b) => b.props.selected === true);
+    expect(picked.map((b) => b.props.label)).toEqual(['Spotify']);
+  });
+
   it('Open Spotify opens Spotify by its address', async () => {
     mockState.musicApp = 'spotify';
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);

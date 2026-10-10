@@ -10,6 +10,7 @@ import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
 import { gearFor } from '../src/domain/plates';
+import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
@@ -50,8 +51,11 @@ type Ask = 'nothing_ticked' | 'unticked' | 'discard' | 'finish_failed';
 /** The music apps this phone can have. None on web, so the web build shows no music button. */
 const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
 
-/** The back chevron, the workout name, the running clock and, on a phone, the music button. There is no app header and no dock here. */
-function SessionHeader({ name, startedAt }: { name: string; startedAt: number }) {
+/**
+ * The back chevron, the workout name, the running clock and, on a phone, the music button, whose sheet shows `musicApp`
+ * as picked. There is no app header and no dock here.
+ */
+function SessionHeader({ name, startedAt, musicApp }: { name: string; startedAt: number; musicApp: MusicAppId | null }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const now = useNow(1000);
@@ -104,7 +108,9 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
           </Pressable>
         ) : null}
       </View>
-      {MUSIC_APPS_HERE.length > 0 ? <MusicSheet visible={musicOpen} apps={MUSIC_APPS_HERE} onClose={() => setMusicOpen(false)} /> : null}
+      {MUSIC_APPS_HERE.length > 0 ? (
+        <MusicSheet visible={musicOpen} apps={MUSIC_APPS_HERE} musicApp={musicApp} onClose={() => setMusicOpen(false)} />
+      ) : null}
     </View>
   );
 }
@@ -200,7 +206,7 @@ export default function Session() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <SessionHeader name={workout.name} startedAt={workout.startedAt} />
+      <SessionHeader name={workout.name} startedAt={workout.startedAt} musicApp={musicApp} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1 }}
