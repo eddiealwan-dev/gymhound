@@ -36,6 +36,7 @@ import {
   NothingTickedError,
   setRestEndsAt,
   startEmptyWorkout,
+  startRest,
   startWorkoutFromDay,
   tickSet,
   untickSet,
@@ -475,12 +476,13 @@ describe('finishWorkout saves the note and clears the rest timer', () => {
     const db = seededDb();
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
     tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
-    setRestEndsAt(db, id, NOW + 120_000);
+    startRest(db, id, NOW + 120_000, setIds(db)[0]);
     finishWorkout(db, id, NOW + 90_000);
 
     expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
       status: 'finished',
       restEndsAt: null,
+      restSetId: null,
     });
   });
 
@@ -716,9 +718,59 @@ describe('setRestEndsAt', () => {
     setRestEndsAt(db, id, null);
     expect(getActiveWorkoutView(db)!.restEndsAt).toBeNull();
   });
+
+  it('moves only the end of a started rest: the set that started it stays (R38)', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    const [first] = setIds(db);
+    startRest(db, id, NOW + 120_000, first);
+
+    setRestEndsAt(db, id, NOW + 105_000);
+
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: NOW + 105_000, restSetId: first });
+  });
+
+  it('clears the set that started the rest with the end (R38)', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    startRest(db, id, NOW + 120_000, setIds(db)[0]);
+
+    setRestEndsAt(db, id, null);
+
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: null, restSetId: null });
+  });
+});
+
+describe('startRest (R38)', () => {
+  it('stores the end and the set that started the rest; a later start replaces both', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: null, restSetId: null });
+    const [first, second] = setIds(db);
+
+    startRest(db, id, NOW + 120_000, first);
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: NOW + 120_000, restSetId: first });
+
+    startRest(db, id, NOW + 200_000, second);
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: NOW + 200_000, restSetId: second });
+  });
 });
 
 describe('clearRestEndsAtIf (R31)', () => {
+  it('clears the set that started the rest only when it clears the end (R38)', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    const [first, second] = setIds(db);
+    startRest(db, id, NOW + 120_000, first);
+    startRest(db, id, NOW + 200_000, second);
+
+    clearRestEndsAtIf(db, id, NOW + 120_000);
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: NOW + 200_000, restSetId: second });
+
+    clearRestEndsAtIf(db, id, NOW + 200_000);
+    expect(getActiveWorkoutView(db)).toMatchObject({ restEndsAt: null, restSetId: null });
+  });
+
   it('clears the rest end when it is still the one given', () => {
     const db = seededDb();
     const id = startWorkoutFromDay(db, PUSH_A, NOW);

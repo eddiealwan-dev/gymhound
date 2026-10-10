@@ -35,8 +35,11 @@ type Props = {
   joinsNext: boolean;
   /** When the running rest ends (`rest_ends_at`), or null when none is running. */
   restEndsAt: number | null;
-  /** The set the rest countdown shows under (`restAnchorSetId`). It shows here only when that set is in this block. */
-  restAnchorSetId: string | null;
+  /**
+   * The set whose tick started the running rest (`rest_set_id`, R38): the countdown shows under it, and only when that
+   * set is in this block. A removed set shows none, and the rest bar still does.
+   */
+  restSetId: string | null;
 };
 
 /** Space below a block. A superset's bar crosses it to join the members. */
@@ -56,7 +59,7 @@ export function ExerciseBlock({
   inSuperset,
   joinsNext,
   restEndsAt,
-  restAnchorSetId,
+  restSetId,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
@@ -155,7 +158,7 @@ export function ExerciseBlock({
               onChangeType={() => setTypeFor(row.set.id)}
               onLongPress={() => setRemoveFor(row.set.id)}
             />
-            {restEndsAt !== null && row.set.id === restAnchorSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
+            {restEndsAt !== null && row.set.id === restSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
           </Fragment>
         ))}
       </View>

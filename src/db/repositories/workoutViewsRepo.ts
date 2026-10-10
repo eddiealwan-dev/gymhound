@@ -42,6 +42,8 @@ export type ActiveWorkoutView = {
   startedAt: number;
   dayMark: DayMark;
   restEndsAt: number | null;
+  /** The set whose tick started the running rest (R38); the countdown shows under it. Null when no rest runs. */
+  restSetId: string | null;
   exercises: WorkoutExerciseView[];
 };
 
@@ -150,6 +152,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     startedAt: workout.startedAt,
     dayMark: workout.dayMark,
     restEndsAt: workout.restEndsAt,
+    restSetId: workout.restSetId,
     exercises: rows.map(({ we, exercise, note, restSeconds }) => ({
       id: we.id,
       exerciseId: we.exerciseId,

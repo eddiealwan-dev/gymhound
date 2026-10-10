@@ -44,6 +44,14 @@ it('migration 0002 adds the exercise_prefs table', () => {
   expect(fks).toEqual([expect.objectContaining({ table: 'exercises', from: 'exercise_id', to: 'id' })]);
 });
 
+it('migration 0003 adds workouts.rest_set_id, nullable text (R38)', () => {
+  const { db } = createTestDb();
+  const col = db
+    .all<{ name: string; type: string; notnull: number }>(sql`pragma table_info(workouts)`)
+    .find((c) => c.name === 'rest_set_id');
+  expect(col).toEqual(expect.objectContaining({ type: 'TEXT', notnull: 0 }));
+});
+
 it('allows only one active workout', () => {
   // Review Focus 3
   const { db } = createTestDb();

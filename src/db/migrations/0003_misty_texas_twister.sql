@@ -1,0 +1,1 @@
+ALTER TABLE `workouts` ADD `rest_set_id` text;

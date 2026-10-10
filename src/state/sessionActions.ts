@@ -23,6 +23,7 @@ import {
   NothingTickedError,
   setRestEndsAt,
   startEmptyWorkout,
+  startRest,
   startWorkoutFromDay,
   tickSet,
   untickSet,
@@ -77,7 +78,7 @@ export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, 
   const view = getActiveWorkoutView(db);
   if (view) {
     const length = restLengthFor(ex.restSeconds, settings.restSeconds);
-    applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, length), settings.restBell);
+    applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, length), settings.restBell, set.id);
   }
   bumpData();
   return true;
@@ -98,11 +99,16 @@ function onSurface(call: (surface: RestTimerSurface) => Promise<void>): void {
   }
 }
 
-/** Writes the rest change to the workout and tells the surface. Does not bump: the caller does, once. */
-function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boolean): void {
+/**
+ * Writes the rest change to the workout and tells the surface. Does not bump: the caller does, once. A start stores
+ * `startedBy`, the ticked set, with its end, and the countdown shows under that set (R38); -15s keeps it and a skip
+ * clears it.
+ */
+function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boolean, startedBy?: string): void {
   switch (change.kind) {
     case 'start':
-      setRestEndsAt(db, workoutId, change.endsAt);
+      if (startedBy === undefined) throw new Error('A rest is started only by a tick, which names its set.');
+      startRest(db, workoutId, change.endsAt, startedBy);
       onSurface((surface) => surface.start(change.endsAt, withSound));
       break;
     case 'shorten':

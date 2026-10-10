@@ -103,6 +103,9 @@ export const workouts = sqliteTable(
     localDate: text('local_date').notNull(),
     // Absolute end time of the running rest timer.
     restEndsAt: integer('rest_ends_at'),
+    // The set whose tick started that rest; the countdown shows under it. Written and cleared with rest_ends_at.
+    // Deliberately not a foreign key: the set may be removed while its rest runs.
+    restSetId: text('rest_set_id'),
     foodOfferShown: integer('food_offer_shown', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [

@@ -198,7 +198,7 @@ export function finishWorkout(db: Db, workoutId: string, now: number): void {
     tx.update(workoutExercises).set({ note: currentNote }).where(eq(workoutExercises.workoutId, workoutId)).run();
 
     tx.update(workouts)
-      .set({ status: 'finished', finishedAt: now, restEndsAt: null })
+      .set({ status: 'finished', finishedAt: now, restEndsAt: null, restSetId: null })
       .where(eq(workouts.id, workoutId))
       .run();
 
@@ -237,18 +237,27 @@ export function discardWorkout(db: Db, workoutId: string): void {
   });
 }
 
-/** Stores the absolute end time of the running rest timer, or null to clear it. */
+/**
+ * Moves the end of the running rest timer (-15s), keeping the set that started it; or, with null, clears the rest and
+ * that set together (Skip).
+ */
 export function setRestEndsAt(db: Db, workoutId: string, endsAt: number | null): void {
-  db.update(workouts).set({ restEndsAt: endsAt }).where(eq(workouts.id, workoutId)).run();
+  const patch = endsAt === null ? { restEndsAt: null, restSetId: null } : { restEndsAt: endsAt };
+  db.update(workouts).set(patch).where(eq(workouts.id, workoutId)).run();
+}
+
+/** Starts a rest timer: its absolute end, and the set whose tick started it, which the countdown shows under (R38). */
+export function startRest(db: Db, workoutId: string, endsAt: number, setId: string): void {
+  db.update(workouts).set({ restEndsAt: endsAt, restSetId: setId }).where(eq(workouts.id, workoutId)).run();
 }
 
 /**
- * Clears the rest end only if it is still `endsAt`, the end that was just dealt with. A tick that started a new rest in
- * the meantime keeps its end.
+ * Clears the rest end, and the set that started it, only if the end is still `endsAt`, the end that was just dealt
+ * with. A tick that started a new rest in the meantime keeps its end and its set.
  */
 export function clearRestEndsAtIf(db: Db, workoutId: string, endsAt: number): void {
   db.update(workouts)
-    .set({ restEndsAt: null })
+    .set({ restEndsAt: null, restSetId: null })
     .where(and(eq(workouts.id, workoutId), eq(workouts.restEndsAt, endsAt)))
     .run();
 }

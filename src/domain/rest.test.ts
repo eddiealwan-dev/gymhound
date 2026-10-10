@@ -1,7 +1,6 @@
 import {
   minus15,
   REST_CHOICES,
-  restAnchorSetId,
   restLengthFor,
   restAfterMinus15,
   restAfterTick,
@@ -186,32 +185,5 @@ describe('REST_CHOICES and restLengthFor: rest per exercise (Task 21)', () => {
 
   it('falls back on the Settings rest when the exercise has none', () => {
     expect(restLengthFor(null, 120)).toBe(120);
-  });
-});
-
-describe('restAnchorSetId: the set the countdown shows under (Task 21)', () => {
-  const set = (id: string, done: boolean, completedAt: number | null) => ({ id, done, completedAt });
-
-  it('is the done set ticked last, across exercises', () => {
-    const exercises = [
-      { sets: [set('a1', true, 1_000), set('a2', true, 3_000)] },
-      { sets: [set('b1', true, 2_000), set('b2', false, null)] },
-    ];
-    expect(restAnchorSetId(exercises)).toBe('a2');
-  });
-
-  it('gives a tie to the later set in workout order', () => {
-    const exercises = [{ sets: [set('a1', true, 5_000)] }, { sets: [set('b1', true, 5_000), set('b2', true, 4_000)] }];
-    expect(restAnchorSetId(exercises)).toBe('b1');
-  });
-
-  it('ignores a set that is not done, even with a time', () => {
-    const exercises = [{ sets: [set('a1', true, 1_000), set('a2', false, 9_000)] }];
-    expect(restAnchorSetId(exercises)).toBe('a1');
-  });
-
-  it('is null when nothing is done', () => {
-    expect(restAnchorSetId([])).toBeNull();
-    expect(restAnchorSetId([{ sets: [set('a1', false, null)] }])).toBeNull();
   });
 });

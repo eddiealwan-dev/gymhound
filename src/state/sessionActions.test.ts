@@ -12,7 +12,7 @@ import {
   tickSet,
 } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/workoutViewsRepo';
-import { workoutExercises } from '../db/schema';
+import { workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useDataVersion } from './dataVersion';
@@ -624,6 +624,109 @@ describe('restEnded', () => {
 
     expect(restEndsAt()).toBe(NOW + 240_500);
     expect(mockSurface.cancel).not.toHaveBeenCalled();
+  });
+});
+
+// ---- the set the countdown shows under (R38) ----
+
+describe('restSetId: the set that started the rest', () => {
+  const restSetId = () => activeView().restSetId;
+  const setId = (e: number, i: number) => activeView().exercises[e].sets[i].id;
+
+  it('is the ticked set when its tick starts a rest, and moves to the next set whose tick starts one', () => {
+    startFromDay(db, PUSH_A);
+    expect(restSetId()).toBeNull();
+
+    tickSetOf(0, 0);
+    expect(restSetId()).toBe(setId(0, 0));
+
+    tickSetOf(0, 1);
+    expect(restSetId()).toBe(setId(0, 1));
+  });
+
+  it("stays on bench's set when a set of an exercise whose rest is Off is ticked while bench's rest runs", () => {
+    startFromDay(db, PUSH_A);
+    setExerciseRest(db, activeView().exercises[1].exerciseId, 0);
+    tickSetOf(0, 0);
+
+    tickSetOf(1, 0);
+
+    expect(activeView().exercises[1].sets[0].done).toBe(true);
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(restSetId()).toBe(setId(0, 0));
+  });
+
+  it("stays put when a superset member that is not last in its round is ticked while the round's rest runs", () => {
+    startFromDay(db, PUSH_A);
+    toggleSuperset(db, activeView().exercises[0].id);
+    tickSetOf(0, 0);
+    tickSetOf(1, 0); // the round's last member: the rest starts here
+    jest.setSystemTime(NOW + 30_000);
+
+    tickSetOf(0, 1);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(restSetId()).toBe(setId(1, 0));
+  });
+
+  it('stays when that set is unticked: the rest keeps running', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    const anchor = setId(0, 0);
+
+    untick(db, anchor);
+
+    expect(reread(anchor).done).toBe(false);
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(restSetId()).toBe(anchor);
+  });
+
+  it('stays through -15s', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 105_000);
+    expect(restSetId()).toBe(setId(0, 0));
+  });
+
+  it('is cleared by Skip, and by a -15s that skips', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    restSkip(db, workoutId());
+    expect(restSetId()).toBeNull();
+
+    tickSetOf(0, 1);
+    jest.setSystemTime(NOW + 110_000);
+    restMinus15(db, workoutId(), NOW + 120_000);
+    expect(restEndsAt()).toBeNull();
+    expect(restSetId()).toBeNull();
+  });
+
+  it('is cleared when the rest with the stored end has ended, and kept for another end', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restEnded(db, workoutId(), NOW + 60_000);
+    expect(restSetId()).toBe(setId(0, 0));
+
+    restEnded(db, workoutId(), NOW + 120_000);
+    expect(restEndsAt()).toBeNull();
+    expect(restSetId()).toBeNull();
+  });
+
+  it('is cleared by finishing the workout', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    const id = workoutId();
+
+    expect(finish(db, id)).toBe('finished');
+
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
+      restEndsAt: null,
+      restSetId: null,
+    });
   });
 });
 
