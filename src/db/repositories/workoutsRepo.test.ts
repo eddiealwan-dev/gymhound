@@ -27,6 +27,7 @@ import {
   countUntickedWithValues,
   discardWorkout,
   finishWorkout,
+  getActiveRest,
   getActiveWorkoutId,
   NothingTickedError,
   setRestEndsAt,
@@ -645,6 +646,34 @@ describe('setRestEndsAt', () => {
     expect(getActiveWorkoutView(db)!.restEndsAt).toBe(NOW + 120_000);
     setRestEndsAt(db, id, null);
     expect(getActiveWorkoutView(db)!.restEndsAt).toBeNull();
+  });
+});
+
+describe('getActiveRest', () => {
+  it('is null with no active workout', () => {
+    expect(getActiveRest(seededDb())).toBeNull();
+  });
+
+  it("reads the active workout's id and stored rest end, null when none is running", () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: null });
+
+    setRestEndsAt(db, id, NOW + 120_000);
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: NOW + 120_000 });
+
+    setRestEndsAt(db, id, null);
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: null });
+  });
+
+  it('ignores a finished workout', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    setRestEndsAt(db, id, NOW + 120_000);
+    finishWorkout(db, id, NOW + 90_000);
+
+    expect(getActiveRest(db)).toBeNull();
   });
 });
 

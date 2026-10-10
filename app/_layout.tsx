@@ -23,6 +23,7 @@ import { fileExists, getSnapshotFiles, setAsidePath } from '../src/platform/snap
 import { runSeed } from '../src/seed/seed';
 import { latestSnapshotPath, recordRestoredSnapshot, shareFile } from '../src/state/backup';
 import { Button } from '../src/ui/Button';
+import { RestWatcher } from '../src/ui/session/RestWatcher';
 import { Sheet } from '../src/ui/Sheet';
 import { Body } from '../src/ui/Text';
 import { darkColors, fonts, lightColors, resolveScheme, type Colors } from '../src/ui/theme';
@@ -172,6 +173,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         {/* The exercise picker rises over the session. */}
         <Stack.Screen name="pick-exercise" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* Rings the end of the rest timer wherever the user is in the app. */}
+      <RestWatcher />
       {restoredFrom !== null ? <RestoredNotice restoredFrom={restoredFrom} /> : null}
     </>
   );

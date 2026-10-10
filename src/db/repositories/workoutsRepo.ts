@@ -34,6 +34,16 @@ export function getActiveWorkoutId(db: Db): string | null {
   return db.select({ id: workouts.id }).from(workouts).where(eq(workouts.status, 'active')).get()?.id ?? null;
 }
 
+/** The active workout's id and its stored rest end (epoch ms, null when no rest is running), or null with no active workout. A light read for the rest watcher. */
+export function getActiveRest(db: Db): { workoutId: string; restEndsAt: number | null } | null {
+  const row = db
+    .select({ id: workouts.id, restEndsAt: workouts.restEndsAt })
+    .from(workouts)
+    .where(eq(workouts.status, 'active'))
+    .get();
+  return row ? { workoutId: row.id, restEndsAt: row.restEndsAt } : null;
+}
+
 function assertNoActiveWorkout(db: Db): void {
   if (getActiveWorkoutId(db) !== null) throw new ActiveWorkoutExistsError();
 }

@@ -26,8 +26,8 @@ function leave() {
 
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
-  const { unit, distanceUnit, restBell, restBellSound } = getSettings(db);
-  return { workout: getActiveWorkoutView(db), unit, distanceUnit, restBell, restBellSound };
+  const { unit, distanceUnit } = getSettings(db);
+  return { workout: getActiveWorkoutView(db), unit, distanceUnit };
 }
 
 /** The back chevron, the workout name and the running clock. There is no app header and no dock here. */
@@ -77,7 +77,7 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
 export default function Session() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, distanceUnit, restBell, restBellSound } = useDbQuery(readSession);
+  const { workout, unit, distanceUnit } = useDbQuery(readSession);
   /** The exercise whose ⋯ menu is open. */
   const [menuFor, setMenuFor] = useState<string | null>(null);
   /** How tall the rest bar is while it shows, so the content can scroll clear of it. */
@@ -155,7 +155,7 @@ export default function Session() {
       </ScrollView>
       <ExerciseMenu exercises={workout.exercises} exerciseId={menuFor} onClose={() => setMenuFor(null)} />
       {restEndsAt !== null ? (
-        <RestBar workoutId={workout.id} endsAt={restEndsAt} bell={restBell} sound={restBellSound} onHeight={setRestBarHeight} />
+        <RestBar workoutId={workout.id} endsAt={restEndsAt} onHeight={setRestBarHeight} />
       ) : null}
     </View>
   );
