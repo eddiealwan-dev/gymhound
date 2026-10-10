@@ -167,6 +167,7 @@ const loaded = (equipment: string, weight: number): WorkoutExerciseView =>
     plannedWeight: null,
     plannedUnit: null,
     sets: [{ id: 's0', position: 0, setType: 'working', done: false, weight, weightUnit: 'lb' }],
+    previous: [],
   }) as unknown as WorkoutExerciseView;
 
 describe('ExerciseMenu: the plate calculator (Task 20)', () => {
@@ -188,6 +189,19 @@ describe('ExerciseMenu: the plate calculator (Task 20)', () => {
     expect(tree.root.findByProps({ accessibilityLabel: 'Weight to load, lb' }).props.value).toBe('190');
     expect(text).toEqual(expect.arrayContaining(['Bar 45 lb', 'Per side: 45 · 25 · 2.5']));
     expect(text.join(' ')).not.toContain('Loads');
+  });
+
+  it("opens at last time's weight on a fresh exercise, the placeholder its first set shows (F8)", () => {
+    const fresh = {
+      ...loaded('barbell', 0),
+      sets: [{ id: 's0', position: 0, setType: 'working', done: false, weight: null, weightUnit: null }],
+      previous: [{ position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 5, durationS: null, distance: null, distanceUnit: null }],
+    } as unknown as WorkoutExerciseView;
+    const tree = mount(fresh);
+    press(tree, 'Plate calculator');
+    afterSheetCloses();
+
+    expect(tree.root.findByProps({ accessibilityLabel: 'Weight to load, lb' }).props.value).toBe('185');
   });
 
   it('says what it loads when the plates cannot make the weight, and just the bar below it', () => {

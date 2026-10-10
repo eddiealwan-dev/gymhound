@@ -1,4 +1,5 @@
 import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, supersetAction } from './sessionMenu';
+import type { PrevSet } from './setEntry';
 import type { SetType, WeightUnit } from './types';
 
 const ex = (id: string, supersetGroup: number | null = null) => ({ id, supersetGroup });
@@ -111,7 +112,18 @@ describe('plateTarget: the weight the plate calculator starts from (Task 20, R35
     plannedWeight: p.plannedWeight ?? null,
     plannedUnit: p.plannedUnit ?? null,
   });
-  const exercise = (sets: Set[], p = plan()) => ({ ...p, sets });
+  const exercise = (sets: Set[], p = plan(), previous: PrevSet[] = []) => ({ ...p, sets, previous });
+  /** A set from last time, as `getPreviousSets` returns it. */
+  const prev = (position: number, weight: number, weightUnit: WeightUnit = 'lb', setType: SetType = 'working'): PrevSet => ({
+    position,
+    setType,
+    weight,
+    weightUnit,
+    reps: 5,
+    durationS: null,
+    distance: null,
+    distanceUnit: null,
+  });
 
   it("takes the first undone working set's own value, ahead of the override and the plan", () => {
     const ex = exercise([set(0, true, 185), set(1, false, 205), set(2, false, 225)], plan({ overrideWeight: 195, overrideUnit: 'lb', plannedWeight: 175, plannedUnit: 'lb' }));
@@ -138,9 +150,30 @@ describe('plateTarget: the weight the plate calculator starts from (Task 20, R35
     expect(plateTarget(ex, 'lb')).toBe(205);
   });
 
+  it("falls back to last time's weight for the first undone working set, the placeholder its row shows (F8)", () => {
+    const fresh = exercise([set(0, false, null, null), set(1, false, null, null)], plan(), [prev(0, 185), prev(1, 190)]);
+    expect(plateTarget(fresh, 'lb')).toBe(185);
+  });
+
+  it("matches last time's set by type and number, so a warmup's weight is never the working set's", () => {
+    const ex = exercise([set(0, false, null, null, 'warmup'), set(1, false, null, null)], plan(), [prev(0, 95, 'lb', 'warmup'), prev(1, 185)]);
+    expect(plateTarget(ex, 'lb')).toBe(185);
+  });
+
+  it("converts last time's weight into the display unit as the placeholder does, to the nearest 0.5", () => {
+    expect(plateTarget(exercise([set(0, false, null, null)], plan(), [prev(0, 185)]), 'kg')).toBe(84);
+  });
+
+  it("puts the newest done working set ahead of last time's weight", () => {
+    const ex = exercise([set(0, true, 195), set(1, false, null, null)], plan(), [prev(0, 185), prev(1, 190)]);
+    expect(plateTarget(ex, 'lb')).toBe(195);
+  });
+
   it('is null with no value anywhere', () => {
     expect(plateTarget(exercise([]), 'lb')).toBeNull();
     expect(plateTarget(exercise([set(0, false, null, null), set(1, true, 60, 'lb', 'warmup')]), 'lb')).toBeNull();
+    // Last time had a warmup only: nothing to match the working set with.
+    expect(plateTarget(exercise([set(0, false, null, null)], plan(), [prev(0, 95, 'lb', 'warmup')]), 'lb')).toBeNull();
   });
 
   it('converts kg values to lb, rounded to 2 decimals', () => {

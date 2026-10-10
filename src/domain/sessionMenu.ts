@@ -3,6 +3,7 @@
  * (by position), as `ActiveWorkoutView.exercises` is.
  */
 
+import { matchPrevious, placeholdersFor, type PrevSet } from './setEntry';
 import type { SetType, WeightUnit } from './types';
 import { convertWeight } from './units';
 
@@ -56,6 +57,8 @@ export function replaceNeedsConfirm(ex: { sets: { done: boolean }[] }): boolean 
 /** What `plateTarget` reads from a `WorkoutExerciseView`. Its sets are in position order. */
 type PlateTargetInput = {
   sets: { setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null }[];
+  /** Last time's sets of the exercise, as the set table matches them. */
+  previous: PrevSet[];
   overrideWeight: number | null;
   overrideUnit: WeightUnit | null;
   plannedWeight: number | null;
@@ -63,9 +66,10 @@ type PlateTargetInput = {
 };
 
 /**
- * The weight the plate calculator starts from, in `unit` and rounded to 2 decimals: the first undone working set's
- * own value, else the override, else the planned weight, else the newest done working set's weight (the last done
- * one in position order, R35), else null. A value with no stored unit is read as `unit`.
+ * The weight the plate calculator starts from, in `unit`: the first undone working set's own value, else the override,
+ * else the planned weight, else the newest done working set's weight (the last done one in position order, R35), else
+ * last time's weight for that first undone working set (the placeholder its row shows, converted as the placeholder
+ * is, to the nearest 0.5), else null. The others are rounded to 2 decimals, and one with no stored unit is read as `unit`.
  */
 export function plateTarget(ex: PlateTargetInput, unit: WeightUnit): number | null {
   const inUnit = (weight: number, from: WeightUnit | null) => Number(convertWeight(weight, from ?? unit, unit).toFixed(2));
@@ -75,5 +79,8 @@ export function plateTarget(ex: PlateTargetInput, unit: WeightUnit): number | nu
   if (ex.overrideWeight !== null) return inUnit(ex.overrideWeight, ex.overrideUnit);
   if (ex.plannedWeight !== null) return inUnit(ex.plannedWeight, ex.plannedUnit);
   const newest = working.filter((s) => s.done && s.weight !== null).at(-1);
-  return newest && newest.weight !== null ? inUnit(newest.weight, newest.weightUnit) : null;
+  if (newest && newest.weight !== null) return inUnit(newest.weight, newest.weightUnit);
+  if (!next) return null;
+  const last = matchPrevious(ex.sets, ex.previous)[ex.sets.indexOf(next)];
+  return placeholdersFor({ previous: last, ruleRepMax: null, unit }).weight;
 }
