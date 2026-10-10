@@ -780,6 +780,29 @@ describe('restSetId: the set that started the rest', () => {
     expect(restSetId()).toBeNull();
   });
 
+  it('is cleared when its exercise is replaced: the rest keeps running in the bar, and no set of the new exercise shows it (F6)', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    replaceWith(db, bench().id, RDL);
+
+    const view = activeView();
+    expect(view.exercises[0].exerciseId).toBe(RDL);
+    expect(view.restSetId).toBeNull();
+    expect(view.restEndsAt).toBe(NOW + 120_000);
+    expect(view.exercises.some((e) => e.sets.some((s) => s.id === view.restSetId))).toBe(false);
+  });
+
+  it('stays when another exercise is replaced', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    replaceWith(db, activeView().exercises[1].id, RDL);
+
+    expect(restSetId()).toBe(setId(0, 0));
+    expect(restEndsAt()).toBe(NOW + 120_000);
+  });
+
   it('is cleared by finishing the workout', () => {
     startFromDay(db, PUSH_A);
     tickSetOf(0, 0);

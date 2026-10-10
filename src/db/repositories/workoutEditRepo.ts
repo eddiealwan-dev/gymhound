@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, max, ne, sql } from 'drizzle-orm';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { newId } from '../ids';
-import { sets, workoutExercises } from '../schema';
+import { sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 
 export type SetPatch = Partial<{
@@ -96,11 +96,22 @@ export function addExerciseToWorkout(db: Db, workoutId: string, exerciseId: stri
  * Swaps in a different exercise. The position, superset group and set count stay. Every set loses its
  * values, its tick and its PR flags. The rule snapshot, planned weight, today's override and the link to the
  * routine exercise go, because they belonged to the old exercise: with no link the row has no rule, and a
- * finished replacement can never feed the old routine slot's progression.
+ * finished replacement can never feed the old routine slot's progression. A rest started by one of its sets
+ * loses its set (`rest_set_id`), so the countdown does not move under the new exercise's empty set; its end stays,
+ * and the rest runs on in the rest bar.
  */
 export function replaceExercise(db: Db, workoutExerciseId: string, exerciseId: string): void {
   db.transaction((tx) => {
-    requireWorkoutExercise(tx, workoutExerciseId);
+    const row = requireWorkoutExercise(tx, workoutExerciseId);
+    tx.update(workouts)
+      .set({ restSetId: null })
+      .where(
+        and(
+          eq(workouts.id, row.workoutId),
+          inArray(workouts.restSetId, tx.select({ id: sets.id }).from(sets).where(eq(sets.workoutExerciseId, workoutExerciseId))),
+        ),
+      )
+      .run();
     tx.update(workoutExercises)
       .set({
         exerciseId,
