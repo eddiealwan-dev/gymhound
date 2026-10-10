@@ -53,6 +53,11 @@ export function formatTrainDate(d: Date, locale: string): string {
     .toUpperCase();
 }
 
+/** An instant as a local date and time, laid out for the locale (or the device's, when none is given): "Oct 9, 2026, 9:05 AM". */
+export function formatDateTime(ms: number, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(ms);
+}
+
 /** Elapsed workout time as m:ss, or h:mm:ss from one hour. */
 export function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));

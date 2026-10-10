@@ -8,27 +8,57 @@ const SIDECARS = ['-wal', '-shm'];
 /**
  * `SnapshotFiles` over Node `fs`, for tests. Snapshots live in `${dir}/snapshots`.
  * `liveFile` is the full path of the live database; a set-aside copy goes next to it.
+ * The contracts on `SnapshotFiles` are what the phone's implementation honours too.
  */
 export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles {
   const snapshotDir = path.join(dir, 'snapshots');
   fs.mkdirSync(snapshotDir, { recursive: true });
 
   return {
-    list: () => fs.readdirSync(snapshotDir),
+    list: () => fs.readdirSync(snapshotDir).filter((name) => fs.statSync(path.join(snapshotDir, name)).size > 0),
     pathFor: (name) => path.join(snapshotDir, name),
     remove: (name) => fs.rmSync(path.join(snapshotDir, name), { force: true }),
+    rename: (from, to) => fs.renameSync(path.join(snapshotDir, from), path.join(snapshotDir, to)),
     liveIsMissingOrEmpty: () => !fs.existsSync(liveFile) || fs.statSync(liveFile).size === 0,
     setAsideLive(tag) {
       const name = `gymhound.${tag}.db`;
       const target = path.join(path.dirname(liveFile), name);
-      // renameSync replaces an existing target on Windows, which would delete that file.
-      if (fs.existsSync(target)) throw new Error(`${name} already exists.`);
-      fs.renameSync(liveFile, target);
-      for (const suffix of SIDECARS) {
-        if (fs.existsSync(liveFile + suffix)) fs.renameSync(liveFile + suffix, target + suffix);
+      // The main file always moves (renameSync throws if it is missing). A side file moves only if it exists.
+      const moves = ['', ...SIDECARS]
+        .filter((suffix) => suffix === '' || fs.existsSync(liveFile + suffix))
+        .map((suffix) => ({ from: liveFile + suffix, to: target + suffix }));
+      // renameSync replaces an existing target, which would delete that file. Check before moving anything.
+      for (const { to } of moves) {
+        if (fs.existsSync(to)) throw new Error(`${path.basename(to)} already exists.`);
+      }
+      const moved: typeof moves = [];
+      try {
+        for (const move of moves) {
+          fs.renameSync(move.from, move.to);
+          moved.push(move);
+        }
+      } catch (error) {
+        for (const { from, to } of moved.reverse()) {
+          try {
+            fs.renameSync(to, from);
+          } catch {
+            // Nothing more can be done; the original error is the one to report.
+          }
+        }
+        throw error;
       }
       return name;
     },
-    copyToLive: (name) => fs.copyFileSync(path.join(snapshotDir, name), liveFile),
+    copyToLive(name) {
+      for (const suffix of SIDECARS) fs.rmSync(liveFile + suffix, { force: true });
+      const temp = `${liveFile}.restoring`;
+      try {
+        fs.copyFileSync(path.join(snapshotDir, name), temp);
+        fs.renameSync(temp, liveFile);
+      } catch (error) {
+        fs.rmSync(temp, { force: true });
+        throw error;
+      }
+    },
   };
 }

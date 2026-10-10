@@ -2,20 +2,31 @@ import { sql } from 'drizzle-orm';
 import type { Db } from './types';
 
 /**
- * The files GymHound's second copy lives in. The app and the Node tests each supply one.
+ * The files GymHound's second copy lives in. The app and the Node tests each supply one, and both honour the contracts below.
  * Nothing here ever deletes the live database.
  */
 export interface SnapshotFiles {
-  /** File names in the snapshot folder. */
+  /** File names in the snapshot folder. A 0-byte file is left out: a crash can leave one, and it is not a snapshot. */
   list(): string[];
-  /** Absolute path of a file in the snapshot folder, with no `file://` prefix (used by VACUUM INTO). */
+  /** Absolute path of a file in the snapshot folder, with no `file://` prefix (used by VACUUM INTO). The folder exists afterwards. */
   pathFor(name: string): string;
+  /** Removes a file from the snapshot folder. A file that is not there is not an error. */
   remove(name: string): void;
+  /** Renames a file in the snapshot folder, replacing `to` if it exists. */
+  rename(from: string, to: string): void;
   /** True when the live database file is absent or 0 bytes. */
   liveIsMissingOrEmpty(): boolean;
-  /** Renames the live file to `gymhound.${tag}.db` and returns that name. Never deletes. */
+  /**
+   * Moves the live file, and its -wal and -shm files when they exist, to `gymhound.${tag}.db` (and the same suffixes) beside it. Returns that name.
+   * Either every file moves or the call throws having moved nothing: a part-way failure is rolled back.
+   * Never deletes, and never replaces a file that is already there.
+   */
   setAsideLive(tag: string): string;
-  /** Copies a snapshot over the live database path. */
+  /**
+   * Makes the live database a copy of a snapshot. Call it only when no live database exists (missing, empty or just set aside).
+   * It first removes any -wal and -shm files left at the live path: they belong to a database that is gone and would corrupt the copy.
+   * Then it copies to a temporary file beside the live one and renames that into place, so the live path never holds half a database.
+   */
   copyToLive(name: string): void;
 }
 
@@ -72,19 +83,34 @@ export function snapshotsToPrune(names: string[], keep: number = KEEP_SNAPSHOTS)
  * Copies the whole database to a new snapshot file with `VACUUM INTO`, then removes the snapshots beyond the newest 7.
  * Returns the new name. Throws if the copy fails; the caller keeps the finish and retries at the next one.
  * Call it outside any transaction: VACUUM cannot run inside one.
+ *
+ * The copy is written to `${name}.partial` and renamed to `name` only when it is complete, so a process killed part-way
+ * can never leave a half-written file under a snapshot name for the next startup to restore from.
  */
 export function writeSnapshot(db: Db, files: SnapshotFiles, now: number): string {
   const name = snapshotName(now);
-  const existed = files.list().includes(name);
-  const target = files.pathFor(name).replace(/'/g, "''");
+  if (files.list().includes(name)) throw new Error(`Snapshot ${name} already exists.`);
+  const partial = `${name}.partial`;
+  files.remove(partial); // an earlier killed run may have left one, and VACUUM INTO refuses a target that exists
+  const target = files.pathFor(partial).replace(/'/g, "''");
   try {
     db.run(sql.raw(`VACUUM INTO '${target}'`));
+    files.rename(partial, name);
   } catch (error) {
-    // A half-written file with a snapshot name would be restored from as the newest. Never touch an earlier one.
-    if (!existed) files.remove(name);
+    try {
+      files.remove(partial);
+    } catch {
+      // The copy's own error is the one to report, so this one is dropped.
+    }
     throw error;
   }
-  for (const old of snapshotsToPrune(files.list())) files.remove(old);
+  try {
+    // Never the snapshot just written: if the clock moved back, its name sorts among the oldest.
+    for (const old of snapshotsToPrune(files.list())) if (old !== name) files.remove(old);
+  } catch (error) {
+    // The snapshot is written; a leftover old one costs only space.
+    console.warn('GymHound could not remove an old snapshot.', error);
+  }
   return name;
 }
 
@@ -102,30 +128,49 @@ export type StartupResult =
   | { kind: 'ok'; db: Db; restoredFrom: string | null }
   | { kind: 'failed'; error: Error; newestSnapshot: string | null; setAside: string | null };
 
+/** Closes a connection, ignoring a failure: the caller is already handling a bigger one. */
+function closeQuietly(close: StartupDeps['close'], db: Db): void {
+  try {
+    close(db);
+  } catch {
+    // Nothing more can be done with a connection that will not close.
+  }
+}
+
 /**
  * Opens and migrates the database. The app never starts empty while a snapshot exists, and the live file is never deleted.
  * 1. Live file missing or empty, and a snapshot exists: copy the newest snapshot in.
  * 2. Open and migrate. If that works, done.
  * 3. If it fails and there is no snapshot, report the failure and leave the file as it is.
  * 4. If it fails and there is a snapshot: set the failed file aside, copy the newest snapshot in, open and migrate again.
+ *
+ * "Fails" includes a live file too corrupt to open: `open()` throwing is handled like a failed migration.
  */
 export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
   const { files, open, close, migrate } = deps;
   const newest = newestSnapshot(files.list());
   let restoredFrom: string | null = null;
-  if (files.liveIsMissingOrEmpty() && newest) {
-    files.copyToLive(newest);
+  if (newest && files.liveIsMissingOrEmpty()) {
+    try {
+      files.copyToLive(newest);
+    } catch (error) {
+      // Opening now would create an empty database next to a snapshot that has the user's workouts.
+      return { kind: 'failed', error: asError(error), newestSnapshot: newest, setAside: null };
+    }
     restoredFrom = newest;
   }
 
-  const first = open();
+  let first: Db | null = null;
+  let firstError: Error;
   try {
+    first = open();
     await migrate(first);
     return { kind: 'ok', db: first, restoredFrom };
-  } catch (firstError) {
-    close(first);
-    if (!newest) return { kind: 'failed', error: asError(firstError), newestSnapshot: null, setAside: null };
+  } catch (error) {
+    firstError = asError(error);
+    if (first) closeQuietly(close, first);
   }
+  if (!newest) return { kind: 'failed', error: firstError, newestSnapshot: null, setAside: null };
 
   let setAside: string | null = null;
   let second: Db | null = null;
@@ -134,9 +179,10 @@ export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
     files.copyToLive(newest);
     second = open();
     await migrate(second);
+    console.warn('GymHound restored its data from the newest snapshot because the database would not open.', firstError);
     return { kind: 'ok', db: second, restoredFrom: newest };
   } catch (secondError) {
-    if (second) close(second);
+    if (second) closeQuietly(close, second);
     return { kind: 'failed', error: asError(secondError), newestSnapshot: newest, setAside };
   }
 }

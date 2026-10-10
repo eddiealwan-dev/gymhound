@@ -1,5 +1,6 @@
 import {
   daysBetween,
+  formatDateTime,
   formatElapsed,
   formatRest,
   formatTrainDate,
@@ -67,5 +68,20 @@ describe('formatRest', () => {
   it('formats seconds as m:ss', () => {
     expect(formatRest(105)).toBe('1:45');
     expect(formatRest(5)).toBe('0:05');
+  });
+});
+
+describe('formatDateTime', () => {
+  const spaced = (text: string) => text.replace(/\s/g, ' '); // newer ICU puts a narrow no-break space before AM/PM
+
+  it('shows the local date and time, laid out for the locale', () => {
+    const at = new Date(2026, 9, 9, 9, 5).getTime();
+    expect(spaced(formatDateTime(at, 'en-US'))).toBe('Oct 9, 2026, 9:05 AM');
+    expect(spaced(formatDateTime(at, 'en-GB'))).toMatch(/^9 Oct 2026, 0?9:05$/); // 24-hour; ICU versions differ on the leading zero
+  });
+
+  it('puts a late-night time on its own local day', () => {
+    const at = new Date(2026, 9, 9, 23, 50).getTime();
+    expect(spaced(formatDateTime(at, 'en-US'))).toBe('Oct 9, 2026, 11:50 PM');
   });
 });
