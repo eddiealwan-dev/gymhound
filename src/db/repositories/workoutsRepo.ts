@@ -1,9 +1,17 @@
-import { and, asc, count, eq, inArray, isNotNull, notInArray, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, notInArray, or, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { newId } from '../ids';
-import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
+import {
+  exerciseNotes,
+  routineDays,
+  routineExercises,
+  routines,
+  sets,
+  workoutExercises,
+  workouts,
+} from '../schema';
 import type { Db } from '../types';
 
 /** Raised when a workout is started while another one is still active. */
@@ -124,9 +132,10 @@ export function countUntickedWithValues(db: Db, workoutId: string): number {
 }
 
 /**
- * Finishes a workout in one transaction: unticked sets are dropped, then exercises left with no sets,
- * then the workout is marked finished and the routine's rotation moves to the day after this one.
- * Throws `NothingTickedError`, changing nothing, if no set is ticked.
+ * Finishes a workout in one transaction: unticked sets are dropped, then exercises left with no sets, then each
+ * remaining exercise keeps a copy of its current note (null when it has none) so later note edits never touch
+ * history. The workout is marked finished with its rest timer cleared, and the routine's rotation moves to the
+ * day after this one. Throws `NothingTickedError`, changing nothing, if no set is ticked.
  */
 export function finishWorkout(db: Db, workoutId: string, now: number): void {
   db.transaction((tx) => {
@@ -159,7 +168,17 @@ export function finishWorkout(db: Db, workoutId: string, now: number): void {
       )
       .run();
 
-    tx.update(workouts).set({ status: 'finished', finishedAt: now }).where(eq(workouts.id, workoutId)).run();
+    // One correlated subquery per row: null when the exercise has no note.
+    const currentNote = sql`(
+      select ${exerciseNotes.text} from ${exerciseNotes}
+      where ${exerciseNotes.exerciseId} = ${workoutExercises.exerciseId}
+    )`;
+    tx.update(workoutExercises).set({ note: currentNote }).where(eq(workoutExercises.workoutId, workoutId)).run();
+
+    tx.update(workouts)
+      .set({ status: 'finished', finishedAt: now, restEndsAt: null })
+      .where(eq(workouts.id, workoutId))
+      .run();
 
     // The routine or day may have been deleted since the workout started; then there is no rotation to move.
     const day =

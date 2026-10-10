@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,8 +18,10 @@ import {
 import { createTestDb } from '../testing/createTestDb';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
+import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
 import { ensureSettings } from './settingsRepo';
+import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
   countUntickedWithValues,
@@ -63,6 +65,15 @@ function runDay(db: Db, dayId: string, start: number, weight: number, reps: numb
   tick(db, setIds(db)[0], weight, reps, start + 60_000);
   finishWorkout(db, id, start + HOUR);
   return id;
+}
+
+/** The raw workout_exercises row of `exerciseId` in a workout, straight from the table. */
+function rawWorkoutExercise(db: Db, workoutId: string, exerciseId: string) {
+  return db
+    .select()
+    .from(workoutExercises)
+    .where(and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, exerciseId)))
+    .get()!;
 }
 
 describe('startWorkoutFromDay', () => {
@@ -291,23 +302,6 @@ describe('finishWorkout', () => {
     expect(others.every((r) => r.nextDayIndex === 0)).toBe(true);
   });
 
-  it('finishing with nothing ticked throws and stays active', () => {
-    const db = seededDb();
-    const id = startWorkoutFromDay(db, PUSH_A, NOW);
-    // A typed value that was never ticked does not count.
-    db.update(sets).set({ weight: 135, weightUnit: 'lb' }).where(eq(sets.id, setIds(db)[0])).run();
-
-    expect(() => finishWorkout(db, id, NOW + HOUR)).toThrow(NothingTickedError);
-    expect(getActiveWorkoutId(db)).toBe(id);
-    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
-      status: 'active',
-      finishedAt: null,
-    });
-    expect(db.select().from(sets).all()).toHaveLength(16);
-    expect(db.select().from(workoutExercises).all()).toHaveLength(5);
-    expect(nextDayIndex(db, PPL)).toBe(0);
-  });
-
   it('refuses an empty workout with no sets at all', () => {
     const db = seededDb();
     const id = startEmptyWorkout(db, NOW);
@@ -337,7 +331,119 @@ describe('finishWorkout', () => {
   });
 });
 
+describe('finishWorkout saves the note and clears the rest timer', () => {
+  // Review Focus 8
+  it('saves the note with the finished workout and keeps it after later edits', () => {
+    const db = seededDb();
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    setExerciseNote(db, 'barbell-bench-press', 'Wrists straight', NOW + DAY);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press').note).toBe('Elbows in');
+    expect(getExerciseNote(db, 'barbell-bench-press')).toBe('Wrists straight');
+  });
+
+  it('saves null for an exercise with no note', () => {
+    const db = seededDb();
+    // Another exercise has a note, so a copy that matched the wrong row would show.
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db, 0)[0], 135, 8, NOW + 60_000);
+    tick(db, setIds(db, 1)[0], 95, 8, NOW + 120_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-overhead-press').note).toBeNull();
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press').note).toBe('Elbows in');
+  });
+
+  it('saves null when the note was cleared before the finish', () => {
+    const db = seededDb();
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setExerciseNote(db, 'barbell-bench-press', '  ', NOW + 1_000);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press').note).toBeNull();
+  });
+
+  it('a replaced exercise saves its own note, not the old one', () => {
+    const db = seededDb();
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    setExerciseNote(db, 'dumbbell-bench-press', 'Neutral grip', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    replaceExercise(db, getActiveWorkoutView(db)!.exercises[0].id, 'dumbbell-bench-press');
+    tick(db, setIds(db)[0], 60, 10, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'dumbbell-bench-press').note).toBe('Neutral grip');
+    const replacedAway = db
+      .select()
+      .from(workoutExercises)
+      .where(eq(workoutExercises.exerciseId, 'barbell-bench-press'))
+      .all();
+    expect(replacedAway).toEqual([]);
+  });
+
+  it('copies the note only for the exercises that stay after the cleanup', () => {
+    const db = seededDb();
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    setExerciseNote(db, 'barbell-overhead-press', 'Squeeze the glutes', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    // Only the overhead press is ticked; the bench press has a note but is dropped as empty.
+    tick(db, setIds(db, 1)[0], 95, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    const kept = db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all();
+    expect(kept.map((e) => [e.exerciseId, e.note])).toEqual([['barbell-overhead-press', 'Squeeze the glutes']]);
+  });
+
+  it('clears rest_ends_at on finish', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    setRestEndsAt(db, id, NOW + 120_000);
+    finishWorkout(db, id, NOW + 90_000);
+
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
+      status: 'finished',
+      restEndsAt: null,
+    });
+  });
+
+  it('leaves a refused finish untouched: the rest timer keeps running and no note is copied', () => {
+    const db = seededDb();
+    setExerciseNote(db, 'barbell-bench-press', 'Elbows in', NOW);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setRestEndsAt(db, id, NOW + 120_000);
+
+    expect(() => finishWorkout(db, id, NOW + 30_000)).toThrow(NothingTickedError);
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()!.restEndsAt).toBe(NOW + 120_000);
+    expect(db.select().from(workoutExercises).all().every((e) => e.note === null)).toBe(true);
+  });
+});
+
 describe('discardWorkout', () => {
+  it('discards an empty workout', () => {
+    const db = seededDb();
+    const id = startEmptyWorkout(db, NOW);
+    discardWorkout(db, id);
+    expect(db.select().from(workouts).all()).toEqual([]);
+  });
+
+  it('refuses a finished workout, so history cannot be discarded', () => {
+    const db = seededDb();
+    const id = runDay(db, PUSH_A, NOW, 135, 8);
+    expect(() => discardWorkout(db, id)).toThrow(Error);
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()!.status).toBe('finished');
+    expect(db.select().from(sets).all()).toHaveLength(1);
+  });
+});
+
+describe('Up next only advances on a finished day', () => {
   it('deletes the workout and children and leaves the rotation alone', () => {
     const db = seededDb();
     runDay(db, PUSH_A, NOW, 135, 8);
@@ -361,19 +467,49 @@ describe('discardWorkout', () => {
     expect(nextDayIndex(db, PPL)).toBe(1);
   });
 
-  it('discards an empty workout', () => {
+  it('finishing with nothing ticked throws and stays active', () => {
     const db = seededDb();
-    const id = startEmptyWorkout(db, NOW);
-    discardWorkout(db, id);
-    expect(db.select().from(workouts).all()).toEqual([]);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    // A typed value that was never ticked does not count.
+    db.update(sets).set({ weight: 135, weightUnit: 'lb' }).where(eq(sets.id, setIds(db)[0])).run();
+
+    expect(() => finishWorkout(db, id, NOW + HOUR)).toThrow(NothingTickedError);
+    expect(getActiveWorkoutId(db)).toBe(id);
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
+      status: 'active',
+      finishedAt: null,
+    });
+    expect(db.select().from(sets).all()).toHaveLength(16);
+    expect(db.select().from(workoutExercises).all()).toHaveLength(5);
+    expect(nextDayIndex(db, PPL)).toBe(0);
   });
 
-  it('refuses a finished workout, so history cannot be discarded', () => {
+  it('an empty workout never moves Up next', () => {
     const db = seededDb();
-    const id = runDay(db, PUSH_A, NOW, 135, 8);
-    expect(() => discardWorkout(db, id)).toThrow(Error);
-    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()!.status).toBe('finished');
-    expect(db.select().from(sets).all()).toHaveLength(1);
+    setActiveRoutine(db, PPL);
+    const id = startEmptyWorkout(db, NOW);
+    addExerciseToWorkout(db, id, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(getActiveWorkoutId(db)).toBeNull();
+    expect(getUpNext(db)!.dayName).toBe('Push A');
+    expect(nextDayIndex(db, PPL)).toBe(0);
+  });
+
+  it('an empty workout leaves Up next where the last finished day put it', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    runDay(db, PUSH_A, NOW, 135, 8);
+    expect(getUpNext(db)!.dayName).toBe('Pull A');
+
+    const id = startEmptyWorkout(db, NOW + DAY);
+    addExerciseToWorkout(db, id, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 135, 8, NOW + DAY + 60_000);
+    finishWorkout(db, id, NOW + DAY + HOUR);
+
+    expect(getUpNext(db)!.dayName).toBe('Pull A');
+    expect(nextDayIndex(db, PPL)).toBe(1);
   });
 });
 

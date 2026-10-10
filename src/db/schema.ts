@@ -135,6 +135,8 @@ export const workoutExercises = sqliteTable(
     outcome: text('outcome').$type<WorkoutOutcome>(),
     nextWeight: real('next_weight'),
     nextUnit: text('next_unit').$type<WeightUnit>(),
+    // The exercise's note as it was when the workout finished. Copied at finish, never changed by later edits.
+    note: text('note'),
   },
   (t) => [
     index('workout_exercises_workout_id_idx').on(t.workoutId),

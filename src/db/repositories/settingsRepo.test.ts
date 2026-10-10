@@ -13,10 +13,13 @@ const SPEC_KEYS = [
   'default_increment_lb',
   'distance_unit',
   'fuel_targets',
+  'last_snapshot_at',
   'plates_kg',
   'plates_lb',
   'pro_cached',
   'pro_debug_unlock',
+  'rest_bell',
+  'rest_bell_sound',
   'rest_seconds',
   'seed_version',
   'theme',
@@ -63,6 +66,7 @@ describe('ensureSettings and getSettings', () => {
       fuelTargets: null,
       proDebugUnlock: false,
     });
+    expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
     expect(getSettings(db).platesLb).toEqual({ '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 });
   });
 
@@ -117,6 +121,51 @@ describe('ensureSettings and getSettings', () => {
     db.delete(settings).where(eq(settings.key, 'rest_seconds')).run();
     db.delete(settings).where(eq(settings.key, 'plates_kg')).run();
     expect(getSettings(db)).toMatchObject({ unit: 'lb', restSeconds: 120, platesKg: defaultSettings(null).platesKg });
+  });
+});
+
+describe('bell and snapshot settings', () => {
+  it('are added to a database whose settings predate them, without touching the other keys', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    // The settings an install made before these keys existed.
+    for (const key of ['rest_bell', 'rest_bell_sound', 'last_snapshot_at']) {
+      db.delete(settings).where(eq(settings.key, key)).run();
+    }
+    setSetting(db, 'theme', 'dark');
+    setSetting(db, 'restSeconds', 90);
+    expect(storedKeys(db)).not.toContain('rest_bell');
+
+    ensureSettings(db, 'metric');
+
+    expect(storedKeys(db)).toEqual(SPEC_KEYS);
+    expect(getSettings(db)).toMatchObject({
+      restBell: true,
+      restBellSound: 'bell',
+      lastSnapshotAt: null,
+      theme: 'dark',
+      restSeconds: 90,
+      unit: 'lb',
+    });
+  });
+
+  it('keep what the user chose when ensureSettings runs again', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    setSetting(db, 'restBell', false);
+    setSetting(db, 'restBellSound', 'chime');
+    setSetting(db, 'lastSnapshotAt', 1_791_595_146_459);
+    ensureSettings(db, 'us');
+    expect(getSettings(db)).toMatchObject({
+      restBell: false,
+      restBellSound: 'chime',
+      lastSnapshotAt: 1_791_595_146_459,
+    });
+  });
+
+  it('read back as defaults before ensureSettings has run', () => {
+    const { db } = createTestDb();
+    expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
   });
 });
 

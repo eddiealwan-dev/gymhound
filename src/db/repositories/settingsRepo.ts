@@ -1,4 +1,4 @@
-import type { DistanceUnit, MeasurementSystem, ThemePreference, WeightUnit } from '../../domain/types';
+import type { BellSound, DistanceUnit, MeasurementSystem, ThemePreference, WeightUnit } from '../../domain/types';
 import { defaultUnitFor } from '../../domain/units';
 import { settings } from '../schema';
 import type { Db } from '../types';
@@ -17,6 +17,11 @@ export type Settings = {
   defaultIncrementLb: number;
   defaultIncrementKg: number;
   restSeconds: number;
+  /** Whether the rest timer rings when it ends. */
+  restBell: boolean;
+  restBellSound: BellSound;
+  /** When the last good snapshot was written (epoch ms), or null before the first one. */
+  lastSnapshotAt: number | null;
   activeRoutineId: string | null;
   fuelTargets: null | { training: Macros; rest: Macros };
   proDebugUnlock: boolean;
@@ -36,6 +41,9 @@ const KEYS: Record<keyof Settings, string> = {
   defaultIncrementLb: 'default_increment_lb',
   defaultIncrementKg: 'default_increment_kg',
   restSeconds: 'rest_seconds',
+  restBell: 'rest_bell',
+  restBellSound: 'rest_bell_sound',
+  lastSnapshotAt: 'last_snapshot_at',
   activeRoutineId: 'active_routine_id',
   fuelTargets: 'fuel_targets',
   proDebugUnlock: 'pro_debug_unlock',
@@ -58,6 +66,9 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     defaultIncrementLb: 5,
     defaultIncrementKg: 2.5,
     restSeconds: 120,
+    restBell: true,
+    restBellSound: 'bell',
+    lastSnapshotAt: null,
     activeRoutineId: null,
     fuelTargets: null,
     proDebugUnlock: false,

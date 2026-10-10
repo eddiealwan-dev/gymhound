@@ -24,6 +24,12 @@ it('applies migrations and creates every §6 table', () => {
   );
 });
 
+it('migration 0001 adds workout_exercises.note', () => {
+  const { db } = createTestDb();
+  const cols = db.all<{ name: string }>(sql`pragma table_info(workout_exercises)`).map((c) => c.name);
+  expect(cols).toContain('note');
+});
+
 it('allows only one active workout', () => {
   // Review Focus 3
   const { db } = createTestDb();
