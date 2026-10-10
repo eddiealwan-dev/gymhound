@@ -20,7 +20,8 @@ const TICK_MS = 250;
 /**
  * The running rest, under the set that started it: "Rest 1:45", −15s and Skip. Since Task 26 it is the only countdown
  * while that set is in the workout; the bar at the bottom shows only when no set row can (R41). It shows nothing once
- * the rest has run out.
+ * the rest has run out. Text doesn't shrink, so when large text leaves no room beside the time, −15s and Skip wrap onto
+ * a second line, at the end.
  */
 export function RestInline({ workoutId, endsAt }: Props) {
   const db = useDb();
@@ -39,8 +40,11 @@ export function RestInline({ workoutId, endsAt }: Props) {
     <View
       style={{
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'flex-end',
+        columnGap: 8,
+        rowGap: 4,
         marginVertical: 4,
         paddingLeft: 12,
         paddingRight: 4,
@@ -53,7 +57,8 @@ export function RestInline({ workoutId, endsAt }: Props) {
       <View
         accessibilityRole="timer"
         accessibilityLabel={`Rest ${formatRest(remaining)}`}
-        style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8 }}
+        // It takes the width of its text (not `flex: 1`, whose zero basis never needs room), then grows into what is left.
+        style={{ flexGrow: 1, flexBasis: 'auto', minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: 8 }}
       >
         <Body weight={600} muted>
           Rest
