@@ -1817,6 +1817,20 @@ Spec §18.2 is the requirement. Tasks 18–23 land on `phase-1` before the merge
 - [ ] **Step 4:** targeted tests, `npm test`, `npm run typecheck` → green.
 - [ ] **Step 5: Commit.** `feat(domain): plates, nearest loadable weight, and switching the display unit`
 
+**Amendment (ruling R36, 2026-10-10, after review).** Spec 7.1 now converts a plan when it is used, not at the switch.
+- `switchDisplayUnit(db, to)` only sets the `unit` setting. Routine rows are never rewritten.
+- New domain function in `src/domain/plates.ts`: `planInUnit(weight: number, from: WeightUnit, to: WeightUnit, isBarbell: boolean, bar: number, platesOwned: Record<string, number>): number`.
+  - When the units match, it returns `weight` unchanged.
+  - For a barbell, it converts, then applies `nearestLoadable`. Above the heaviest loadable total, it rounds to `bar + step × round((v − bar) / step)` instead, where `step` = 2 × the smallest owned plate.
+  - Anything else is converted, then `roundToHalf`.
+- `startWorkoutFromDay` snapshots the plan in the display unit:
+  - `plannedWeight = planInUnit(nextWeight, nextWeightUnit ?? unit, unit, …)` and `plannedUnit = unit`.
+  - `ruleIncrement = convertIncrement(...)` and `ruleIncrementUnit = unit`.
+- Tests:
+  - lb → kg → lb round trip: a 135 lb barbell plan starts at 60 kg in kg, at 135 lb back in lb, and the stored row is unchanged.
+  - A non-barbell 15 lb plan becomes 7 kg, not the bar.
+  - A barbell 300 kg plan in lb becomes 660 (step 5 above the 45 bar), not 580.
+
 ### Task 20: Settings units and bar; the plate calculator
 
 **Files:**

@@ -229,7 +229,13 @@ Each rule is a pure function with unit tests written first.
 ### 7.1 Units
 - 1 lb = 0.45359237 kg. All comparisons happen in kg, with two weights treated as equal if they differ by less than 0.01 kg.
 - Logged entries always display in the unit they were logged in. Totals and charts use the display unit.
-- **Switching the display unit** changes nothing in history and nothing in the active workout. Every routine's `next_weight` is converted and rounded once: barbell exercises to the nearest loadable weight with the new unit's bar and plates (7.7), everything else to the nearest 0.5. Every increment is converted by the gym convention, kg = lb ÷ 2 and lb = kg × 2 (5 lb ↔ 2.5 kg).
+- **Switching the display unit** changes nothing in history, nothing in the active workout, and nothing stored on routines. A routine's `next_weight` and increment keep the unit they were written in. (Revised 2026-10-10, ruling R36: converting at the switch made lb → kg → lb drift, for example 135 → 60 → 130.)
+- **Converting a plan when it is used.** A workout started from a routine day snapshots the plan in the display unit.
+  - **Same unit:** the stored value is used as it is.
+  - **Different unit, barbell exercises:** converted, then rounded to the nearest loadable weight with the display unit's bar and plates (7.7). Above the heaviest loadable total, it rounds instead to the nearest step of twice the smallest owned plate above the bar, so a heavy target is never cut down to what the plates can load.
+  - **Different unit, everything else:** converted, then rounded to the nearest 0.5.
+  - **Increments:** converted by the gym convention, kg = lb ÷ 2 and lb = kg × 2 (5 lb ↔ 2.5 kg).
+  - Up next and the routine editor show plans through the same conversion.
 
 ### 7.2 Day marks
 Normal, Rough sleep, Short on food, Pain, Cutting. Normal is the default. The mark can change any time before finishing, and later from History.
