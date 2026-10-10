@@ -1985,3 +1985,58 @@ Spec §18.2 is the requirement. Tasks 18–23 land on `phase-1` before the merge
   - The music buttons open Apple Music, Spotify and Audible.
   - The Task 17 Step 3 list.
 - [ ] **Step 4:** Report to the owner. The merge waits for their OK.
+
+## Owner device check fixes (2026-10-10)
+
+The owner's iPhone check gave 33 pass, 2 fail and 4 skipped. The fails were "keyboard stays up unless you tap a blank spot; need an option to close the keyboard", and "Snapshot after a finish: no share option". The second is diagnosed separately before its fix.
+
+### Task 24: Closing the keyboard
+
+**Root cause.**
+- iOS `decimal-pad` and `number-pad` have no return key.
+- The session ScrollView uses `keyboardShouldPersistTaps="handled"`, so tapping a control (tick, set number, ⋯) leaves the keyboard up.
+- Only a tap on a blank spot closes it.
+- The Sheet's dismiss-on-open effect (F1) is the only programmatic dismiss.
+
+**Files:**
+- Create: `src/ui/KeyboardDoneBar.tsx` (+ test).
+- Modify:
+  - `src/ui/session/SetRow.tsx`;
+  - `src/ui/session/ExerciseBlock.tsx`;
+  - `app/session.tsx`;
+  - `src/ui/session/PlateSheet.tsx`;
+  - `src/ui/BarPicker.tsx`;
+  - the ⋯ and music openers;
+  - `src/state/sessionActions.ts` only if tick needs it.
+
+**Interfaces:**
+- `KEYBOARD_DONE_ID = 'gymhound-keyboard-done'`.
+- `<KeyboardDoneBar />` renders, on iOS only, an `InputAccessoryView` with that `nativeID`. It holds one right-aligned **Done** button (`accessibilityLabel="Close keyboard"`) that calls `Keyboard.dismiss()`. Elsewhere it renders null.
+- Every numeric `TextInput` sets `inputAccessoryViewID={KEYBOARD_DONE_ID}` and `returnKeyType="done"`:
+  - set weight, reps, RPE, duration and distance;
+  - the plate calculator's weight;
+  - the custom bar.
+
+  Android gets its own Done key from `returnKeyType`, and submit blurs.
+- The session ScrollView sets `keyboardDismissMode="on-drag"`.
+
+**Behaviour.**
+- **Ticking a set closes the keyboard:** after the row reads its typed values (owner note: "keyboard should disappear after selecting the checkmark"). The value typed in that field is kept.
+- **Controls that open a sheet close the keyboard first:**
+  - tapping a set number;
+  - long-pressing a set;
+  - the ⋯ button;
+  - the Music button;
+  - Add exercise.
+
+  They call `Keyboard.dismiss()` before opening, in addition to the Sheet's own effect. The draft commits on blur as now.
+- **Done:** tapping Done keeps the typed value (blur commit) and the keyboard goes away.
+
+**Tests.**
+- KeyboardDoneBar renders an InputAccessoryView with the id on iOS, and null on Android and web. Its button calls `Keyboard.dismiss`.
+- The SetRow numeric inputs carry the id and `returnKeyType="done"`.
+- Tick calls `Keyboard.dismiss`, and the typed weight is the one stored.
+- The set-number and ⋯ handlers call `Keyboard.dismiss` before opening.
+- The session ScrollView has `keyboardDismissMode="on-drag"`.
+
+**Commit.** `fix(session): a Done key above the number pad; tick, scroll and sheet openers close the keyboard`
