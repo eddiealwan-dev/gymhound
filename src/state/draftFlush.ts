@@ -36,6 +36,16 @@ export function flushAll(): void {
 }
 
 /**
+ * The browser's back and forward buttons (web). They do not remove a screen: expo-router resets the navigator to the
+ * history entry, which sends no `beforeRemove`, and the screen is gone by the time a listener added later runs. So this
+ * listens from the moment the module loads, at app start, which is before the router adds its own `popstate` listener,
+ * and listeners run in the order they were added.
+ */
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('popstate', () => flushAll(), true);
+}
+
+/**
  * Registers `flush` for as long as the component is mounted. It always runs the latest `flush` from the latest
  * render, so it sees the current draft without re-registering on every keystroke.
  */

@@ -45,8 +45,10 @@ export async function playBell(sound: BellSound): Promise<void> {
   try {
     await audioModeReady();
     const player = playerFor(sound);
-    // A bell that has played to its end sits at its end until it is wound back.
-    await player.seekTo(0);
+    // A bell that has played to its end sits at its end until it is wound back. A player that has not played is already
+    // at the start, and must not be seeked: on iOS a seek before its item is ready (the first ring, while the asset is
+    // still loading) raises an Objective-C exception that JS cannot catch. `currentTime` is above 0 only once it has played.
+    if (player.currentTime > 0) await player.seekTo(0);
     player.play();
   } catch (e) {
     console.warn('GymHound: the bell could not play.', e);

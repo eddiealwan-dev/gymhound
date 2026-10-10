@@ -22,6 +22,8 @@ import { formatDateTime } from '../src/domain/dates';
 import { fileExists, getSnapshotFiles, setAsidePath } from '../src/platform/snapshots';
 import { runSeed } from '../src/seed/seed';
 import { latestSnapshotPath, recordRestoredSnapshot, shareFile } from '../src/state/backup';
+// Loaded here, with the root layout, so its browser-history listener is added before the router's (see the module).
+import '../src/state/draftFlush';
 import { Button } from '../src/ui/Button';
 import { RestWatcher } from '../src/ui/session/RestWatcher';
 import { Sheet } from '../src/ui/Sheet';

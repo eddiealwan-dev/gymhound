@@ -1,11 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import { getActiveRest } from '../../db/repositories/workoutsRepo';
 import type { Db } from '../../db/types';
-import { restPhase } from '../../domain/rest';
+import { restPhase, wasAwayAt, type AwaySpan } from '../../domain/rest';
 import { playBell } from '../../platform/restTimer/bell';
 import { useDbQuery } from '../../state/dataVersion';
 import { restEnded } from '../../state/sessionActions';
@@ -35,7 +35,8 @@ function endHaptic(): void {
  *
  * When the time runs out while it is watching: a haptic (native), then the bell if Settings has it on (the bell ducks
  * any music), then it clears the rest (`restEnded`, which leaves the notification alone: it fires on its own). Once per
- * rest end. A rest that ended while the app was away or closed is cleared quietly (see `restPhase`).
+ * rest end. A rest that ended while the app was away or closed is cleared quietly (see `restPhase`): on the phone the
+ * notification already rang, and ringing again on return would double it. The web has no notification, so it rings.
  */
 export function RestWatcher(): null {
   const db = useDb();
@@ -48,6 +49,22 @@ export function RestWatcher(): null {
   const wasRunning = useRef(false);
   /** The end time already dealt with, so a slow read-back cannot ring it twice. */
   const handled = useRef<number | null>(null);
+  /** The latest stretch the app was not in the foreground. A rest that ended inside it was rung by the notification. */
+  const away = useRef<AwaySpan | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (AppState.currentState !== 'active') away.current = { from: Date.now(), to: null };
+    const subscription = AppState.addEventListener('change', (state) => {
+      const t = Date.now();
+      if (state !== 'active') {
+        if (away.current === null || away.current.to !== null) away.current = { from: t, to: null };
+      } else if (away.current !== null && away.current.to === null) {
+        away.current = { ...away.current, to: t };
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (!running) return;
@@ -61,7 +78,7 @@ export function RestWatcher(): null {
       wasRunning.current = false;
       return;
     }
-    const phase = restPhase(endsAt, now, wasRunning.current);
+    const phase = restPhase(endsAt, now, wasRunning.current, wasAwayAt(away.current, endsAt));
     wasRunning.current = phase === 'running';
     if (phase === 'running' || handled.current === endsAt) return;
     handled.current = endsAt;
@@ -69,7 +86,7 @@ export function RestWatcher(): null {
       endHaptic();
       if (bell) void playBell(sound);
     }
-    restEnded(db, workoutId);
+    restEnded(db, workoutId, endsAt);
   }, [db, workoutId, endsAt, now, bell, sound]);
 
   return null;

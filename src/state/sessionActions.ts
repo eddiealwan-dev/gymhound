@@ -14,6 +14,7 @@ import {
 } from '../db/repositories/workoutEditRepo';
 import { getActiveWorkoutView, type SetView, type WorkoutExerciseView } from '../db/repositories/workoutViewsRepo';
 import {
+  clearRestEndsAtIf,
   getActiveWorkoutId,
   setRestEndsAt,
   startEmptyWorkout,
@@ -119,9 +120,13 @@ export function restSkip(db: Db, workoutId: string): void {
   bumpData();
 }
 
-/** The rest ran out while the app was open. The bar rang; the notification already fired, so it is left alone. */
-export function restEnded(db: Db, workoutId: string): void {
-  setRestEndsAt(db, workoutId, null);
+/**
+ * The rest that ended at `endsAt` has been dealt with: it rang, or it ran out while the app was away. Clears the stored
+ * end only if it is still that one, so a tick that started a new rest in the meantime keeps its own. The notification
+ * already fired, so it is left alone.
+ */
+export function restEnded(db: Db, workoutId: string, endsAt: number): void {
+  clearRestEndsAtIf(db, workoutId, endsAt);
   bumpData();
 }
 

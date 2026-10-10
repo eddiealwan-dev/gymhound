@@ -1,11 +1,12 @@
 import type { BellSound } from '../../domain/types';
 
 // expo-audio is native. These tests drive the bell against a stand-in player and read the calls it makes.
-const mockPlayers: { source: unknown; seekTo: jest.Mock; play: jest.Mock }[] = [];
+// A player starts at 0 seconds and has no item ready yet; a test sets `currentTime` to say it has played.
+const mockPlayers: { source: unknown; currentTime: number; seekTo: jest.Mock; play: jest.Mock }[] = [];
 const mockAudio = {
   setAudioModeAsync: jest.fn(),
   createAudioPlayer: jest.fn((source: unknown) => {
-    const player = { source, seekTo: jest.fn(() => Promise.resolve()), play: jest.fn() };
+    const player = { source, currentTime: 0, seekTo: jest.fn(() => Promise.resolve()), play: jest.fn() };
     mockPlayers.push(player);
     return player;
   }),
@@ -56,7 +57,7 @@ describe('playBell (Task 15 Step 4)', () => {
     expect(mockPlayers[0].play).toHaveBeenCalledTimes(1);
   });
 
-  it('plays the chosen sound from the start, each sound its own file', async () => {
+  it('plays the chosen sound, each sound its own file', async () => {
     const playBell = load();
 
     await playBell('bell');
@@ -64,22 +65,40 @@ describe('playBell (Task 15 Step 4)', () => {
     await playBell('ding');
 
     expect(mockPlayers.map((p) => p.source)).toEqual(['bell.wav', 'chime.wav', 'ding.wav']);
-    mockPlayers.forEach((p) => {
-      expect(p.seekTo).toHaveBeenCalledWith(0);
-      expect(p.play).toHaveBeenCalledTimes(1);
-      expect(p.seekTo.mock.invocationCallOrder[0]).toBeLessThan(p.play.mock.invocationCallOrder[0]);
-    });
+    mockPlayers.forEach((p) => expect(p.play).toHaveBeenCalledTimes(1));
   });
 
-  it('sets the audio mode once and keeps a sound\'s player, winding it back for the next ring', async () => {
+  it('plays a fresh player without any seek: its item may not be ready, and iOS cannot seek one that is not', async () => {
     const playBell = load();
 
     await playBell('bell');
+
+    expect(mockPlayers[0].seekTo).not.toHaveBeenCalled();
+    expect(mockPlayers[0].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets the audio mode once and keeps a sound\'s player, winding back one that has played before the next ring', async () => {
+    const playBell = load();
+
+    await playBell('bell');
+    mockPlayers[0].currentTime = 1; // it played to its end
     await playBell('bell');
 
     expect(mockAudio.setAudioModeAsync).toHaveBeenCalledTimes(1);
     expect(mockAudio.createAudioPlayer).toHaveBeenCalledTimes(1);
-    expect(mockPlayers[0].seekTo).toHaveBeenCalledTimes(2);
+    expect(mockPlayers[0].seekTo).toHaveBeenCalledTimes(1);
+    expect(mockPlayers[0].seekTo).toHaveBeenCalledWith(0);
+    expect(mockPlayers[0].play).toHaveBeenCalledTimes(2);
+    expect(mockPlayers[0].seekTo.mock.invocationCallOrder[0]).toBeLessThan(mockPlayers[0].play.mock.invocationCallOrder[1]);
+  });
+
+  it('does not seek a player that has not played yet, even when it is rung again at once', async () => {
+    const playBell = load();
+
+    await playBell('bell');
+    await playBell('bell'); // still at 0: nothing has played, so there is nothing to wind back
+
+    expect(mockPlayers[0].seekTo).not.toHaveBeenCalled();
     expect(mockPlayers[0].play).toHaveBeenCalledTimes(2);
   });
 

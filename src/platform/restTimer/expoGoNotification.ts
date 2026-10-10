@@ -29,30 +29,45 @@ Notifications.setNotificationHandler({
 const REST_NOTIFICATION_ID = 'gymhound-rest';
 
 /**
- * Android 8 and later play a notification's sound and vibration from its channel, not from the notification. The rest
- * notification gets its own, loud enough to sound on a locked phone: high importance, the default sound, vibration on.
- * The phone's own settings can still turn it down. There are no channels on iOS or web.
+ * Android 8 and later play a notification's sound and vibration from its channel, not from the notification, and a
+ * channel's sound cannot be changed per notification. So there are two, both high importance with vibration on:
+ * - `rest`: the default sound (none is named; a new channel already has it, and naming 'default' would be looked up as a
+ *   raw resource and logged as an error).
+ * - `rest-quiet`: no sound. It is used when the bell is off, so the lock screen still buzzes without ringing.
+ * The phone's own settings can still turn either down. There are no channels on iOS or web. On iOS in Expo Go a silent
+ * notification cannot vibrate, so with the bell off the iOS notification is silent.
  */
 const REST_CHANNEL_ID = 'rest';
+const QUIET_CHANNEL_ID = 'rest-quiet';
 const onAndroid = Platform.OS === 'android';
 
-async function createRestChannel(): Promise<void> {
-  if (!onAndroid) return;
+/**
+ * With `sound: false` and no vibration pattern, expo-notifications marks the Android notification silent whatever its
+ * channel (it vibrates only when the request has a pattern). The pattern keeps the quiet notification from being marked
+ * silent; on Android 8 and later the channel's own vibration is what is felt.
+ */
+const QUIET_VIBRATION = [0, 250, 250, 250];
+
+async function makeChannel(id: string, options: Notifications.NotificationChannelInput): Promise<void> {
   try {
-    await Notifications.setNotificationChannelAsync(REST_CHANNEL_ID, {
-      name: 'Rest timer',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-      enableVibrate: true,
-    });
+    await Notifications.setNotificationChannelAsync(id, options);
   } catch (e) {
     // The notification still goes out, on the phone's fallback channel.
-    console.warn('GymHound: the rest notification channel could not be created.', e);
+    console.warn(`GymHound: the rest notification channel '${id}' could not be created.`, e);
   }
 }
 
+async function makeRestChannels(): Promise<void> {
+  if (!onAndroid) return;
+  const importance = Notifications.AndroidImportance.HIGH;
+  await Promise.all([
+    makeChannel(REST_CHANNEL_ID, { name: 'Rest timer', importance, enableVibrate: true }),
+    makeChannel(QUIET_CHANNEL_ID, { name: 'Rest timer (no sound)', importance, sound: null, enableVibrate: true }),
+  ]);
+}
+
 /** Made at load. It never rejects, and a notification is scheduled only once it has settled. */
-const restChannelReady = createRestChannel();
+const restChannelsReady = makeRestChannels();
 
 /** Whether notifications are allowed. Asks once, the first time a timer starts (not at launch), if the phone lets us. */
 async function allowed(): Promise<boolean> {
@@ -63,26 +78,42 @@ async function allowed(): Promise<boolean> {
   return permission.granted;
 }
 
-async function start(endsAt: number, withSound: boolean): Promise<void> {
+async function schedule(endsAt: number, withSound: boolean): Promise<void> {
   // A timer started again replaces the one running, so there is never more than one notification.
   await Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID);
   if (!(await allowed())) return;
   // The permission question can take a while to answer. An end that has gone by is nothing to wake the phone for.
   if (endsAt <= Date.now()) return;
-  await restChannelReady;
+  await restChannelsReady;
+  const quiet = onAndroid && !withSound;
   await Notifications.scheduleNotificationAsync({
     identifier: REST_NOTIFICATION_ID,
-    content: { title: "Rest's up.", sound: withSound },
+    content: quiet
+      ? { title: "Rest's up.", sound: false, vibrate: QUIET_VIBRATION }
+      : { title: "Rest's up.", sound: withSound },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
       date: endsAt,
-      ...(onAndroid ? { channelId: REST_CHANNEL_ID } : null),
+      ...(onAndroid ? { channelId: withSound ? REST_CHANNEL_ID : QUIET_CHANNEL_ID } : null),
     },
   });
 }
 
+/**
+ * Every operation waits for the one before it. A start can wait on the permission question for a long time, and a Skip
+ * or a −15s down to zero that landed meanwhile must act after it, or the skipped rest's notification would be scheduled
+ * behind the cancel and ring. A failed operation reports to its own caller and never holds up the next.
+ */
+let queue: Promise<void> = Promise.resolve();
+
+function inTurn(operation: () => Promise<void>): Promise<void> {
+  const run = queue.then(operation);
+  queue = run.catch(() => {});
+  return run;
+}
+
 export const expoGoNotification: RestTimerSurface = {
-  start,
-  update: (endsAt, withSound) => start(endsAt, withSound),
-  cancel: () => Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID),
+  start: (endsAt, withSound) => inTurn(() => schedule(endsAt, withSound)),
+  update: (endsAt, withSound) => inTurn(() => schedule(endsAt, withSound)),
+  cancel: () => inTurn(() => Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID)),
 };

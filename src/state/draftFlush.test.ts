@@ -77,3 +77,45 @@ describe('draft flush (R29)', () => {
     expect(later).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('browser history (R31)', () => {
+  type Listener = { type: string; handler: () => void; capture: unknown };
+  const globals = globalThis as { window?: unknown };
+  const realWindow = globals.window;
+
+  afterEach(() => {
+    globals.window = realWindow;
+  });
+
+  /** A fresh copy of the module, loaded while `window` is `fakeWindow`, as at app start. */
+  function loadWith(fakeWindow: unknown): typeof import('./draftFlush') {
+    globals.window = fakeWindow;
+    let loaded!: typeof import('./draftFlush');
+    jest.isolateModules(() => {
+      loaded = require('./draftFlush') as typeof import('./draftFlush');
+    });
+    return loaded;
+  }
+
+  it('flushes on a browser back or forward: it listens for popstate from the moment it loads, ahead of the router', () => {
+    const added: Listener[] = [];
+    const { registerDraftFlush } = loadWith({
+      addEventListener: (type: string, handler: () => void, capture: unknown) => added.push({ type, handler, capture }),
+    });
+    const flush = jest.fn();
+    registerDraftFlush(flush);
+
+    // The router resets the navigator on popstate, and the screen is gone by the time a listener added later runs.
+    // This one is added at load, before the router's, so it runs first.
+    const popstate = added.filter((l) => l.type === 'popstate');
+    expect(popstate).toHaveLength(1);
+    popstate[0].handler();
+
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds nothing where there is no window to listen on', () => {
+    expect(() => loadWith(undefined)).not.toThrow();
+    expect(() => loadWith({})).not.toThrow();
+  });
+});

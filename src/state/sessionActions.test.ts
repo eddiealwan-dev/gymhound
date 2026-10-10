@@ -474,11 +474,23 @@ describe('restEnded', () => {
     tickSetOf(0, 0);
     const before = version();
 
-    restEnded(db, workoutId());
+    restEnded(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBeNull();
     expect(mockSurface.cancel).not.toHaveBeenCalled();
     expect(version()).toBe(before + 1);
+  });
+
+  it('leaves a newer rest alone: a tick that landed before the old end was cleared keeps its own end (R31)', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0); // ends at NOW + 120 s
+    jest.setSystemTime(NOW + 120_500);
+    tickSetOf(0, 1); // a new rest starts, ending at NOW + 240.5 s, just as the first one is being cleared
+
+    restEnded(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 240_500);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
   });
 });
 

@@ -56,17 +56,26 @@ export function restAfterMinus15(endsAt: number, now: number): RestChange {
   return shortened === null ? { kind: 'skip' } : { kind: 'shorten', endsAt: shortened };
 }
 
-/** How long after the end the bar still rings. Later than this, the app was away and the notification already rang. */
+/** How long after the end the watcher still rings. Later than this, the app was away and the notification already rang. */
 export const RING_WINDOW_MS = 3000;
 
+/** A stretch of time the app was not in the foreground (in the background or inactive). `to` is null while it is still away. */
+export type AwaySpan = { from: number; to: number | null };
+
+/** Whether `span` covers the moment `t`, ends included. */
+export function wasAwayAt(span: AwaySpan | null, t: number): boolean {
+  return span !== null && t >= span.from && (span.to === null || t <= span.to);
+}
+
 /**
- * What the rest bar does at a tick of its clock, for a timer that ends at `endsAt`:
- * - `running`: time is left; show it.
+ * What the rest watcher does at a tick of its clock, for a timer that ends at `endsAt`:
+ * - `running`: time is left.
  * - `ring`: it just ran out in front of the user; haptic, bell, then clear.
- * - `clear`: it ran out unwatched (`wasRunning` is false: the bar opened on an expired timer) or long ago (the app was
- *   in the background or the phone locked, so the notification carried the sound); clear it quietly.
+ * - `clear`: it ran out unwatched (`wasRunning` is false: it opened on an expired timer), long ago, or while the app
+ *   was away (`awayAtEnd`: the notification carried the sound and the buzz, so ringing again on return would double
+ *   it); clear it quietly.
  */
-export function restPhase(endsAt: number, now: number, wasRunning: boolean): 'running' | 'ring' | 'clear' {
+export function restPhase(endsAt: number, now: number, wasRunning: boolean, awayAtEnd = false): 'running' | 'ring' | 'clear' {
   if (restRemainingSeconds(endsAt, now) !== null) return 'running';
-  return wasRunning && now - endsAt <= RING_WINDOW_MS ? 'ring' : 'clear';
+  return wasRunning && !awayAtEnd && now - endsAt <= RING_WINDOW_MS ? 'ring' : 'clear';
 }

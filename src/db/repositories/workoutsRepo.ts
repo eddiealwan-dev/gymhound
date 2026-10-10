@@ -231,6 +231,17 @@ export function setRestEndsAt(db: Db, workoutId: string, endsAt: number | null):
 }
 
 /**
+ * Clears the rest end only if it is still `endsAt`, the end that was just dealt with. A tick that started a new rest in
+ * the meantime keeps its end.
+ */
+export function clearRestEndsAtIf(db: Db, workoutId: string, endsAt: number): void {
+  db.update(workouts)
+    .set({ restEndsAt: null })
+    .where(and(eq(workouts.id, workoutId), eq(workouts.restEndsAt, endsAt)))
+    .run();
+}
+
+/**
  * Ticks a set with the values `resolveTick` produced. `weight_unit` and `distance_unit` are the units the
  * weight and the distance were logged in, and stay null when the set has no weight or no distance.
  */

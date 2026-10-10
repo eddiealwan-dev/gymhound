@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, View } from 'react-native';
+import { router, useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSettings } from '../src/db/repositories/settingsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
@@ -53,11 +53,7 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
           accessibilityRole="button"
           accessibilityLabel="Back to Train"
           hitSlop={4}
-          onPress={() => {
-            // Save what is typed first: the screen can go before the input is left (R29).
-            flushAll();
-            leave();
-          }}
+          onPress={leave}
           style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
         >
           <Ionicons name="chevron-back" size={28} color={colors.text} />
@@ -83,16 +79,11 @@ export default function Session() {
   /** How tall the rest bar is while it shows, so the content can scroll clear of it. */
   const [restBarHeight, setRestBarHeight] = useState(0);
 
-  // The system back button (Android) leaves the screen the same way the chevron does, so it saves what is typed first.
-  useFocusEffect(
-    useCallback(() => {
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        flushAll();
-        return false;
-      });
-      return () => subscription.remove();
-    }, []),
-  );
+  // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
+  // what is typed first (R29, R31). The browser's back button does not remove it (expo-router resets the navigator, which
+  // sends no `beforeRemove`); `draftFlush` listens for that itself.
+  const navigation = useNavigation();
+  useEffect(() => navigation.addListener('beforeRemove', () => flushAll()), [navigation]);
 
   if (workout === null) {
     return (

@@ -24,6 +24,7 @@ import { ensureSettings } from './settingsRepo';
 import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
+  clearRestEndsAtIf,
   countUntickedWithValues,
   discardWorkout,
   finishWorkout,
@@ -646,6 +647,41 @@ describe('setRestEndsAt', () => {
     expect(getActiveWorkoutView(db)!.restEndsAt).toBe(NOW + 120_000);
     setRestEndsAt(db, id, null);
     expect(getActiveWorkoutView(db)!.restEndsAt).toBeNull();
+  });
+});
+
+describe('clearRestEndsAtIf (R31)', () => {
+  it('clears the rest end when it is still the one given', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setRestEndsAt(db, id, NOW + 120_000);
+
+    clearRestEndsAtIf(db, id, NOW + 120_000);
+
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: null });
+  });
+
+  it('leaves a newer rest end alone: a new tick that landed meanwhile keeps its rest', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setRestEndsAt(db, id, NOW + 120_000);
+    setRestEndsAt(db, id, NOW + 200_000); // ticked again before the first end was cleared
+
+    clearRestEndsAtIf(db, id, NOW + 120_000);
+
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: NOW + 200_000 });
+  });
+
+  it('does nothing when no rest is stored, or for another workout', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+
+    clearRestEndsAtIf(db, id, NOW + 120_000);
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: null });
+
+    setRestEndsAt(db, id, NOW + 120_000);
+    clearRestEndsAtIf(db, 'some-other-workout', NOW + 120_000);
+    expect(getActiveRest(db)).toEqual({ workoutId: id, restEndsAt: NOW + 120_000 });
   });
 });
 

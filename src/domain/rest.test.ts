@@ -1,4 +1,13 @@
-import { minus15, restAfterMinus15, restAfterTick, restPhase, restRemainingSeconds, RING_WINDOW_MS, shouldStartRestAfterTick } from './rest';
+import {
+  minus15,
+  restAfterMinus15,
+  restAfterTick,
+  restPhase,
+  restRemainingSeconds,
+  RING_WINDOW_MS,
+  shouldStartRestAfterTick,
+  wasAwayAt,
+} from './rest';
 
 const now = 1_000_000;
 
@@ -119,5 +128,45 @@ describe('restPhase: what the rest bar does at each tick', () => {
     // The phone was locked or the app backgrounded; the notification carried the sound.
     expect(restPhase(endsAt, endsAt + RING_WINDOW_MS + 1, true)).toBe('clear');
     expect(restPhase(endsAt, endsAt + 600_000, true)).toBe('clear');
+  });
+});
+
+describe('wasAwayAt: whether the app was away (in the background or inactive) at a moment (R31)', () => {
+  it('is false when the app has not been away', () => {
+    expect(wasAwayAt(null, now)).toBe(false);
+  });
+
+  it('is true inside a span that is still open, from its start on', () => {
+    expect(wasAwayAt({ from: now, to: null }, now)).toBe(true);
+    expect(wasAwayAt({ from: now, to: null }, now + 60_000)).toBe(true);
+    expect(wasAwayAt({ from: now, to: null }, now - 1)).toBe(false);
+  });
+
+  it('is true inside a closed span, ends included, and false outside it', () => {
+    const span = { from: now, to: now + 10_000 };
+    expect(wasAwayAt(span, now)).toBe(true);
+    expect(wasAwayAt(span, now + 5_000)).toBe(true);
+    expect(wasAwayAt(span, now + 10_000)).toBe(true);
+    expect(wasAwayAt(span, now - 1)).toBe(false);
+    expect(wasAwayAt(span, now + 10_001)).toBe(false);
+  });
+});
+
+describe('restPhase when the app was away as the rest ended (R31)', () => {
+  const endsAt = now + 10_000;
+
+  it('does not ring in the app on return: the notification already rang, so it clears quietly', () => {
+    // Backgrounded before the end, back within the ring window: without this it would ring a second time.
+    expect(restPhase(endsAt, endsAt + 500, true, true)).toBe('clear');
+    expect(restPhase(endsAt, endsAt + RING_WINDOW_MS, true, true)).toBe('clear');
+  });
+
+  it('still rings when the app was active at the end, as before', () => {
+    expect(restPhase(endsAt, endsAt + 500, true, false)).toBe('ring');
+    expect(restPhase(endsAt, endsAt + 500, true)).toBe('ring');
+  });
+
+  it('is still running while time is left, away or not', () => {
+    expect(restPhase(endsAt, now, true, true)).toBe('running');
   });
 });
