@@ -310,6 +310,17 @@ describe('valueText and hintText', () => {
     expect(valueText(stored, 'weight', 'lb')).toBe('140');
   });
 
+  it('never shows an unsaved target on a done row (R29)', () => {
+    // A done set with no stored weight (it was cleared after the tick) must not borrow today's target.
+    const plan = { plannedWeight: 135, plannedUnit: 'lb' as const };
+    const [done] = buildRows(exercise({ sets: [set('working', { done: true, reps: 8 })], ...plan }), 'lb');
+    expect(valueText(done, 'weight', 'lb')).toBe('');
+    const [open] = buildRows(exercise({ sets: [set('working', { reps: 8 })], ...plan }), 'lb');
+    expect(valueText(open, 'weight', 'lb')).toBe('135');
+    const [stored] = buildRows(exercise({ sets: [set('working', { done: true, weight: 140, weightUnit: 'lb', reps: 8 })], ...plan }), 'lb');
+    expect(valueText(stored, 'weight', 'lb')).toBe('140');
+  });
+
   it('is empty for a field with no value and no target', () => {
     const [row] = buildRows(exercise({ sets: [set('working')] }), 'lb');
     expect(valueText(row, 'weight', 'lb')).toBe('');

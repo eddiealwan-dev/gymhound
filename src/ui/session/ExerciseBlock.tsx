@@ -5,6 +5,7 @@ import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { buildRows, tableColumns } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
+import { useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
@@ -20,10 +21,23 @@ const SET_TYPES: { type: SetType; label: string }[] = [
   { type: 'failure', label: 'Failure' },
 ];
 
-type Props = { ex: WorkoutExerciseView; unit: WeightUnit; distanceUnit: DistanceUnit };
+type Props = {
+  ex: WorkoutExerciseView;
+  unit: WeightUnit;
+  distanceUnit: DistanceUnit;
+  /** Opens this exercise's ⋯ menu. */
+  onOpenMenu: () => void;
+  /** Whether the exercise is in a superset: it then shows a bar on its left edge. */
+  inSuperset: boolean;
+  /** Whether the next exercise is in the same superset: the bar then runs on through the gap between them. */
+  joinsNext: boolean;
+};
 
-/** One exercise: its name, its note, the set table with each set's last result beside the inputs, and Add set. */
-export function ExerciseBlock({ ex, unit, distanceUnit }: Props) {
+/** Space below a block. A superset's bar crosses it to join the members. */
+const BLOCK_GAP = 28;
+
+/** One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and Add set. */
+export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, joinsNext }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
@@ -43,17 +57,26 @@ export function ExerciseBlock({ ex, unit, distanceUnit }: Props) {
     if (text !== (ex.note ?? '')) saveNote(db, ex.exerciseId, text);
     setNoteDraft(null);
   };
+  // Back, the ⋯ menu and the picker save a note that is typed but not yet left; the screen may unmount before a blur (R29).
+  useDraftFlush(saveNoteOnBlur);
 
   return (
-    <View style={{ marginBottom: 28 }}>
+    <View style={{ marginBottom: BLOCK_GAP }}>
+      {inSuperset ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{ position: 'absolute', left: -11, width: 3, top: 0, bottom: joinsNext ? -BLOCK_GAP : 0, backgroundColor: colors.text }}
+        />
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Display weight={700} style={{ flex: 1, minWidth: 0, fontSize: 22 }}>
           {ex.name}
         </Display>
-        {/* The menu arrives with the exercise menu (Task 15). */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Options for ${ex.name}`}
+          onPress={onOpenMenu}
           hitSlop={4}
           style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
         >

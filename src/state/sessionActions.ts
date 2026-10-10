@@ -1,11 +1,31 @@
 import { setExerciseNote } from '../db/repositories/exercisesRepo';
 import { getSettings } from '../db/repositories/settingsRepo';
-import { addSet, removeSet, updateSet, type SetPatch } from '../db/repositories/workoutEditRepo';
-import type { SetView, WorkoutExerciseView } from '../db/repositories/workoutViewsRepo';
-import { startEmptyWorkout, startWorkoutFromDay, tickSet, untickSet } from '../db/repositories/workoutsRepo';
+import {
+  addExerciseToWorkout,
+  addSet,
+  moveExercise,
+  removeExercise,
+  removeSet,
+  replaceExercise,
+  setShowRpe,
+  toggleSupersetWithNext,
+  updateSet,
+  type SetPatch,
+} from '../db/repositories/workoutEditRepo';
+import { getActiveWorkoutView, type SetView, type WorkoutExerciseView } from '../db/repositories/workoutViewsRepo';
+import {
+  getActiveWorkoutId,
+  setRestEndsAt,
+  startEmptyWorkout,
+  startWorkoutFromDay,
+  tickSet,
+  untickSet,
+} from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
+import { restAfterMinus15, restAfterTick, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
+import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { bumpData } from './dataVersion';
 
 /**
@@ -35,16 +55,114 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * Ticks a set. `entered` is what the user typed or had stored (null for a field left empty); today's target and the
  * placeholders fill the gaps (spec 8.4). Returns false, changing nothing, when a field the logging type needs still
  * has no value. The weight is recorded in the unit in Settings, which is the unit the target and placeholders are in.
+ * A tick starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
  */
 export function tick(db: Db, ex: WorkoutExerciseView, set: SetView, entered: TickValues): boolean {
-  const { unit, distanceUnit } = getSettings(db);
+  const settings = getSettings(db);
+  const { unit, distanceUnit } = settings;
   const row = buildRows(ex, unit).find((r) => r.set.id === set.id);
   if (!row) return false;
   const values = resolveTick({ loggingType: ex.loggingType, entered, target: row.target, placeholders: row.placeholders });
   if (values === null) return false;
-  tickSet(db, set.id, values, unit, Date.now(), distanceUnit);
+  const now = Date.now();
+  tickSet(db, set.id, values, unit, now, distanceUnit);
+  const view = getActiveWorkoutView(db);
+  if (view) applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, settings.restSeconds), settings.restBell);
   bumpData();
   return true;
+}
+
+// ---- the rest timer ----
+
+function warnRest(e: unknown): void {
+  console.warn('GymHound: the rest notification could not be updated.', e);
+}
+
+/** Runs a call on the rest surface without waiting for it. The rest bar is the truth; a notification that fails never fails the action. */
+function onSurface(call: (surface: RestTimerSurface) => Promise<void>): void {
+  try {
+    call(getRestTimerSurface()).catch(warnRest);
+  } catch (e) {
+    warnRest(e);
+  }
+}
+
+/** Writes the rest change to the workout and tells the surface. Does not bump: the caller does, once. */
+function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boolean): void {
+  switch (change.kind) {
+    case 'start':
+      setRestEndsAt(db, workoutId, change.endsAt);
+      onSurface((surface) => surface.start(change.endsAt, withSound));
+      break;
+    case 'shorten':
+      setRestEndsAt(db, workoutId, change.endsAt);
+      onSurface((surface) => surface.update(change.endsAt, withSound));
+      break;
+    case 'skip':
+      setRestEndsAt(db, workoutId, null);
+      onSurface((surface) => surface.cancel());
+      break;
+    case 'none':
+      break;
+  }
+}
+
+/** The -15s button: the running rest ends 15 seconds sooner, or is skipped when that would end it. */
+export function restMinus15(db: Db, workoutId: string, endsAt: number): void {
+  applyRest(db, workoutId, restAfterMinus15(endsAt, Date.now()), getSettings(db).restBell);
+  bumpData();
+}
+
+/** The Skip button: ends the rest now and cancels its notification. */
+export function restSkip(db: Db, workoutId: string): void {
+  applyRest(db, workoutId, { kind: 'skip' }, false);
+  bumpData();
+}
+
+/** The rest ran out while the app was open. The bar rang; the notification already fired, so it is left alone. */
+export function restEnded(db: Db, workoutId: string): void {
+  setRestEndsAt(db, workoutId, null);
+  bumpData();
+}
+
+// ---- exercises ----
+
+/** Appends the exercise to the workout in progress with one empty working set. Throws when there is none. */
+export function addExercise(db: Db, exerciseId: string): void {
+  const workoutId = getActiveWorkoutId(db);
+  if (workoutId === null) throw new Error('No workout in progress.');
+  addExerciseToWorkout(db, workoutId, exerciseId);
+  bumpData();
+}
+
+/** Swaps the exercise for another in place. The new exercise brings its own note. */
+export function replaceWith(db: Db, workoutExerciseId: string, exerciseId: string): void {
+  replaceExercise(db, workoutExerciseId, exerciseId);
+  bumpData();
+}
+
+/** Deletes the exercise and its sets from the workout. */
+export function removeFromWorkout(db: Db, workoutExerciseId: string): void {
+  removeExercise(db, workoutExerciseId);
+  bumpData();
+}
+
+/** Moves the exercise's block one place. A superset moves as one block. */
+export function moveBlock(db: Db, workoutExerciseId: string, dir: 'up' | 'down'): void {
+  moveExercise(db, workoutExerciseId, dir);
+  bumpData();
+}
+
+/** Links the exercise with the next one into a superset, or breaks that link. */
+export function toggleSuperset(db: Db, workoutExerciseId: string): void {
+  toggleSupersetWithNext(db, workoutExerciseId);
+  bumpData();
+}
+
+/** Turns the RPE column on or off for the exercise. */
+export function setRpeShown(db: Db, workoutExerciseId: string, show: boolean): void {
+  setShowRpe(db, workoutExerciseId, show);
+  bumpData();
 }
 
 /** Un-ticks a set. Its values stay. */

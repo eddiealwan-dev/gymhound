@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, Switch, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import type { Db } from '../../src/db/types';
 import { formatDateTime } from '../../src/domain/dates';
-import type { ThemePreference } from '../../src/domain/types';
+import type { BellSound, ThemePreference } from '../../src/domain/types';
+import { playBell } from '../../src/platform/restTimer/bell';
 import { latestSnapshotPath, shareFile } from '../../src/state/backup';
 import { bumpData, useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
@@ -18,28 +19,39 @@ const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
 ];
 
-/** Light, Dark or System. The choice is stored, and the theme provider re-reads it. */
-function AppearanceControl() {
+const BELL_OPTIONS: { value: BellSound; label: string }[] = [
+  { value: 'bell', label: 'Bell' },
+  { value: 'chime', label: 'Chime' },
+  { value: 'ding', label: 'Ding' },
+];
+
+/** Two or three choices in one pill; the chosen one is filled with `text`. */
+function SegmentedControl<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
   const { colors } = useTheme();
-  const db = useDb();
-  const current = useDbQuery(getSettings).theme;
   return (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel="Appearance"
+      accessibilityLabel={label}
       style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}
     >
-      {OPTIONS.map((option) => {
-        const selected = option.value === current;
+      {options.map((option) => {
+        const selected = option.value === value;
         return (
           <Pressable
             key={option.value}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
-            onPress={() => {
-              setSetting(db, 'theme', option.value);
-              bumpData();
-            }}
+            onPress={() => onChange(option.value)}
             style={{
               flex: 1,
               minHeight: 44,
@@ -55,6 +67,64 @@ function AppearanceControl() {
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/** Light, Dark or System. The choice is stored, and the theme provider re-reads it. */
+function AppearanceControl() {
+  const db = useDb();
+  const current = useDbQuery(getSettings).theme;
+  return (
+    <SegmentedControl
+      label="Appearance"
+      options={OPTIONS}
+      value={current}
+      onChange={(value) => {
+        setSetting(db, 'theme', value);
+        bumpData();
+      }}
+    />
+  );
+}
+
+/** Whether the rest timer rings when it ends, and which sound it makes. Choosing a sound plays it once. */
+function RestTimerSection() {
+  const { colors } = useTheme();
+  const db = useDb();
+  const { restBell, restBellSound } = useDbQuery(getSettings);
+  return (
+    <View style={{ gap: 8, marginTop: 24 }}>
+      <Body weight={600} muted>
+        Rest timer
+      </Body>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
+        <Body>Bell at the end</Body>
+        <Switch
+          accessibilityLabel="Bell at the end"
+          value={restBell}
+          onValueChange={(value) => {
+            setSetting(db, 'restBell', value);
+            bumpData();
+          }}
+          trackColor={{ false: colors.border, true: colors.text }}
+          thumbColor={colors.bg}
+          // react-native-web colours the thumb of a switch that is on from `activeThumbColor` (React Native has only
+          // `thumbColor`) and would leave it teal. The phone ignores the extra prop.
+          {...({ activeThumbColor: colors.bg } as object)}
+        />
+      </View>
+      <Body>Bell sound</Body>
+      <SegmentedControl
+        label="Bell sound"
+        options={BELL_OPTIONS}
+        value={restBellSound}
+        onChange={(value) => {
+          setSetting(db, 'restBellSound', value);
+          bumpData();
+          void playBell(value);
+        }}
+      />
     </View>
   );
 }
@@ -93,7 +163,7 @@ function BackupsSection() {
   );
 }
 
-/** Settings so far: Appearance and Backups. The rest arrive in later tasks. */
+/** Settings so far: Appearance, Rest timer and Backups. The rest arrive in later tasks. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -104,6 +174,7 @@ export default function Settings() {
         </Body>
         <AppearanceControl />
       </View>
+      <RestTimerSection />
       <BackupsSection />
     </Screen>
   );

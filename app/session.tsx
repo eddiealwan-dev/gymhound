@@ -1,15 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { Pressable, ScrollView, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { BackHandler, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSettings } from '../src/db/repositories/settingsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { joinsNextInSuperset } from '../src/domain/sessionMenu';
+import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
+import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
+import { RestBar } from '../src/ui/session/RestBar';
 import { Body, Display, Num } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
@@ -21,8 +26,8 @@ function leave() {
 
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
-  const { unit, distanceUnit } = getSettings(db);
-  return { workout: getActiveWorkoutView(db), unit, distanceUnit };
+  const { unit, distanceUnit, restBell, restBellSound } = getSettings(db);
+  return { workout: getActiveWorkoutView(db), unit, distanceUnit, restBell, restBellSound };
 }
 
 /** The back chevron, the workout name and the running clock. There is no app header and no dock here. */
@@ -48,7 +53,11 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
           accessibilityRole="button"
           accessibilityLabel="Back to Train"
           hitSlop={4}
-          onPress={leave}
+          onPress={() => {
+            // Save what is typed first: the screen can go before the input is left (R29).
+            flushAll();
+            leave();
+          }}
           style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
         >
           <Ionicons name="chevron-back" size={28} color={colors.text} />
@@ -64,11 +73,26 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
   );
 }
 
-/** The workout in progress: its exercises, each with a set table. Finishing, adding exercises and the rest timer come in later tasks. */
+/** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, and the rest timer. Finishing comes in a later task. */
 export default function Session() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, distanceUnit } = useDbQuery(readSession);
+  const { workout, unit, distanceUnit, restBell, restBellSound } = useDbQuery(readSession);
+  /** The exercise whose ⋯ menu is open. */
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  /** How tall the rest bar is while it shows, so the content can scroll clear of it. */
+  const [restBarHeight, setRestBarHeight] = useState(0);
+
+  // The system back button (Android) leaves the screen the same way the chevron does, so it saves what is typed first.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        flushAll();
+        return false;
+      });
+      return () => subscription.remove();
+    }, []),
+  );
 
   if (workout === null) {
     return (
@@ -81,6 +105,8 @@ export default function Session() {
     );
   }
 
+  const { restEndsAt } = workout;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SessionHeader name={workout.name} startedAt={workout.startedAt} />
@@ -91,12 +117,46 @@ export default function Session() {
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets
       >
-        <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 + insets.bottom }}>
+        <View
+          style={{
+            width: '100%',
+            maxWidth: 512,
+            alignSelf: 'center',
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            // The rest bar sits over the bottom of the page and already clears the safe area, so the content ends above it.
+            paddingBottom: 16 + (restEndsAt !== null ? restBarHeight : insets.bottom),
+          }}
+        >
           {workout.exercises.map((ex) => (
-            <ExerciseBlock key={ex.id} ex={ex} unit={unit} distanceUnit={distanceUnit} />
+            <ExerciseBlock
+              // A replaced exercise keeps its row but is a new exercise: start its block fresh.
+              key={`${ex.id}:${ex.exerciseId}`}
+              ex={ex}
+              unit={unit}
+              distanceUnit={distanceUnit}
+              inSuperset={ex.supersetGroup !== null}
+              joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
+              onOpenMenu={() => {
+                flushAll();
+                setMenuFor(ex.id);
+              }}
+            />
           ))}
+          <Button
+            label="Add exercise"
+            variant="secondary"
+            onPress={() => {
+              flushAll();
+              router.push({ pathname: '/pick-exercise', params: { mode: 'add' } });
+            }}
+          />
         </View>
       </ScrollView>
+      <ExerciseMenu exercises={workout.exercises} exerciseId={menuFor} onClose={() => setMenuFor(null)} />
+      {restEndsAt !== null ? (
+        <RestBar workoutId={workout.id} endsAt={restEndsAt} bell={restBell} sound={restBellSound} onHeight={setRestBarHeight} />
+      ) : null}
     </View>
   );
 }

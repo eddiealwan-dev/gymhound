@@ -19,6 +19,7 @@ import {
   type RowModel,
 } from '../../domain/setTable';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
+import { useDraftFlush } from '../../state/draftFlush';
 import { commitSetField, tick, untick } from '../../state/sessionActions';
 import { Body, Num } from '../Text';
 import { fonts } from '../theme';
@@ -113,6 +114,9 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     });
     setLeft((l) => l.filter((k) => k !== key));
   };
+
+  // Back, the ⋯ menu and the picker commit a half-typed entry as leaving the input would; the screen may unmount before a blur (R29).
+  useDraftFlush(() => (Object.keys(drafts) as InputKey[]).forEach(leave));
 
   const toggle = () => {
     if (set.done) {

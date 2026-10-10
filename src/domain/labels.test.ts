@@ -1,4 +1,4 @@
-import { DAY_MARK_LABELS, formatRepScheme } from './labels';
+import { DAY_MARK_LABELS, equipmentLabel, formatRepScheme } from './labels';
 
 describe('DAY_MARK_LABELS', () => {
   it('names every day mark', () => {
@@ -31,5 +31,16 @@ describe('formatRepScheme', () => {
   it('adds no s to the other types', () => {
     expect(formatRepScheme(3, 8, 12, 'assisted')).toBe('3×8–12');
     expect(formatRepScheme(1, 10, 10, 'distance_time')).toBe('1×10');
+  });
+});
+
+describe('equipmentLabel', () => {
+  it('names each kind of equipment for the picker', () => {
+    expect(equipmentLabel('barbell')).toBe('Barbell');
+    expect(equipmentLabel('dumbbell')).toBe('Dumbbell');
+    expect(equipmentLabel('cable')).toBe('Cable');
+    expect(equipmentLabel('machine')).toBe('Machine');
+    expect(equipmentLabel('kettlebell')).toBe('Kettlebell');
+    expect(equipmentLabel('bodyweight')).toBe('Bodyweight');
   });
 });

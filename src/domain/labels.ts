@@ -1,4 +1,4 @@
-import type { DayMark, LoggingType } from './types';
+import type { DayMark, Equipment, LoggingType } from './types';
 
 /** How each day mark reads on screen. */
 export const DAY_MARK_LABELS: Record<DayMark, string> = {
@@ -16,4 +16,9 @@ const COUNTED_IN_SECONDS: LoggingType[] = ['timed', 'weighted_time'];
 export function formatRepScheme(setCount: number, repMin: number, repMax: number, loggingType: LoggingType): string {
   const reps = repMin === repMax ? `${repMin}` : `${repMin}–${repMax}`;
   return `${setCount}×${reps}${COUNTED_IN_SECONDS.includes(loggingType) ? 's' : ''}`;
+}
+
+/** How an exercise's equipment reads in the picker: "Barbell", "Bodyweight". */
+export function equipmentLabel(equipment: Equipment): string {
+  return equipment.charAt(0).toUpperCase() + equipment.slice(1);
 }

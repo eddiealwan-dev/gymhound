@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
-import { getExerciseNote } from '../db/repositories/exercisesRepo';
+import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
 import { setSetting } from '../db/repositories/settingsRepo';
 import {
   ActiveWorkoutExistsError,
@@ -15,18 +15,35 @@ import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useDataVersion } from './dataVersion';
 import {
+  addExercise,
   addSetTo,
   commitSetField,
+  moveBlock,
+  removeFromWorkout,
   removeSetFrom,
+  replaceWith,
+  restEnded,
+  restMinus15,
+  restSkip,
   saveNote,
+  setRpeShown,
   startEmpty,
   startFromDay,
   tick,
+  toggleSuperset,
   untick,
 } from './sessionActions';
 
 // dataVersion pulls in the router only for `useDbQuery`; these tests use the store alone.
 jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+
+// The rest surface is the lock-screen notification. Tests watch the calls and never touch expo-notifications.
+const mockSurface = {
+  start: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
+  update: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
+  cancel: jest.fn(() => Promise.resolve()),
+};
+jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const PUSH_A = 'premade-ppl-6:push-a';
@@ -36,6 +53,9 @@ let db: Db;
 beforeEach(() => {
   jest.useFakeTimers().setSystemTime(NOW);
   db = seededDb();
+  mockSurface.start.mockClear();
+  mockSurface.update.mockClear();
+  mockSurface.cancel.mockClear();
 });
 
 afterEach(() => {
@@ -293,5 +313,290 @@ describe('saveNote', () => {
     saveNote(db, BENCH, '   ');
 
     expect(bench().note).toBeNull();
+  });
+});
+
+// ---- the rest timer (Task 15 Step 6) ----
+
+const VALUES = { weight: 135, reps: 8, durationS: null, distance: null };
+const workoutId = () => getActiveWorkoutId(db)!;
+const restEndsAt = () => activeView().restEndsAt;
+
+/** Ticks working set `i` of exercise `e` of the active workout (the bench press is 0, the overhead press 1). */
+function tickSetOf(e: number, i: number): boolean {
+  const ex = activeView().exercises[e];
+  return tick(db, ex, ex.sets[i], VALUES);
+}
+
+describe('tick starts the rest timer', () => {
+  it('stores the end time (the Settings length from now) and starts the surface with the bell setting', () => {
+    startFromDay(db, PUSH_A);
+
+    expect(tickSetOf(0, 0)).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(mockSurface.start).toHaveBeenCalledTimes(1);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+  });
+
+  it('bumps the data version once', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    tickSetOf(0, 0);
+
+    expect(version()).toBe(before + 1);
+  });
+
+  it('follows the rest length and the bell setting', () => {
+    setSetting(db, 'restSeconds', 90);
+    setSetting(db, 'restBell', false);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(restEndsAt()).toBe(NOW + 90_000);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, false);
+  });
+
+  it('restarts the rest from now when a later set is ticked', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 30_000);
+
+    tickSetOf(0, 1);
+
+    expect(restEndsAt()).toBe(NOW + 150_000);
+    expect(mockSurface.start).toHaveBeenLastCalledWith(NOW + 150_000, true);
+  });
+
+  it('starts nothing in a superset until the last member of the round (bench with overhead press)', () => {
+    startFromDay(db, PUSH_A);
+    toggleSuperset(db, activeView().exercises[0].id);
+    mockSurface.start.mockClear();
+
+    expect(tickSetOf(0, 0)).toBe(true);
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.start).not.toHaveBeenCalled();
+
+    expect(tickSetOf(1, 0)).toBe(true);
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+  });
+
+  it('starts nothing when the tick is refused', () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+
+    // No target and no history: the weight has nothing to fall back on.
+    expect(tick(db, ex, ex.sets[0], { weight: null, reps: 8, durationS: null, distance: null })).toBe(false);
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.start).not.toHaveBeenCalled();
+  });
+
+  it('is never failed by the surface: a rejection or a throw is logged and the tick stands', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    startFromDay(db, PUSH_A);
+    mockSurface.start.mockRejectedValueOnce(new Error('notifications are off'));
+
+    expect(tickSetOf(0, 0)).toBe(true);
+    await Promise.resolve();
+
+    expect(reread(bench().sets[0].id).done).toBe(true);
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    mockSurface.start.mockImplementationOnce(() => {
+      throw new Error('no native module');
+    });
+    expect(tickSetOf(0, 1)).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+});
+
+describe('restMinus15', () => {
+  it('moves the end 15 seconds earlier, then updates the surface and bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 10_000);
+    const before = version();
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 105_000);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, true);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before + 1);
+  });
+
+  it('passes the bell setting on to the surface', () => {
+    setSetting(db, 'restBell', false);
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, false);
+  });
+
+  it('skips when 15 seconds or less are left', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 110_000);
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
+    expect(mockSurface.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('restSkip', () => {
+  it('clears the end time and cancels the surface, then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    const before = version();
+
+    restSkip(db, workoutId());
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
+    expect(version()).toBe(before + 1);
+  });
+});
+
+describe('restEnded', () => {
+  it('clears the end time without cancelling the surface (the notification already fired), then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    const before = version();
+
+    restEnded(db, workoutId());
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before + 1);
+  });
+});
+
+// ---- the exercise menu and the picker (Task 15 Steps 1-2) ----
+
+const RDL = 'barbell-romanian-deadlift';
+const OHP = 'barbell-overhead-press';
+
+describe('addExercise', () => {
+  it('appends the exercise to the active workout with one empty working set, then bumps the data version', () => {
+    startEmpty(db);
+    const before = version();
+
+    addExercise(db, RDL);
+    addExercise(db, BENCH);
+
+    const exercises = activeView().exercises;
+    expect(exercises.map((e) => [e.exerciseId, e.position])).toEqual([
+      [RDL, 0],
+      [BENCH, 1],
+    ]);
+    expect(exercises[0].name).toBe('Romanian deadlift');
+    expect(exercises[0].sets).toHaveLength(1);
+    expect(exercises[0].sets[0]).toMatchObject({ setType: 'working', done: false, weight: null, reps: null });
+    expect(version()).toBe(before + 2);
+  });
+
+  it('throws when there is no workout in progress, leaving the version alone', () => {
+    const before = version();
+
+    expect(() => addExercise(db, RDL)).toThrow('No workout in progress.');
+
+    expect(version()).toBe(before);
+  });
+});
+
+describe('replaceWith', () => {
+  it("swaps the exercise in place and shows the new exercise's own note, while the old note stays with the old exercise", () => {
+    startFromDay(db, PUSH_A);
+    setExerciseNote(db, BENCH, 'Pause on the chest', NOW);
+    setExerciseNote(db, RDL, 'Hips back', NOW);
+    const ex = bench();
+    expect(ex.note).toBe('Pause on the chest');
+    tick(db, ex, ex.sets[0], VALUES);
+    const before = version();
+
+    replaceWith(db, ex.id, RDL);
+
+    const replaced = activeView().exercises[0];
+    expect(replaced).toMatchObject({ id: ex.id, exerciseId: RDL, name: 'Romanian deadlift', position: 0, note: 'Hips back' });
+    expect(replaced.sets).toHaveLength(4);
+    expect(replaced.sets.every((s) => !s.done && s.weight === null && s.reps === null)).toBe(true);
+    expect(getExerciseNote(db, BENCH)).toBe('Pause on the chest');
+    expect(version()).toBe(before + 1);
+  });
+});
+
+describe('removeFromWorkout', () => {
+  it('deletes the exercise and renumbers the rest, then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    removeFromWorkout(db, bench().id);
+
+    const exercises = activeView().exercises;
+    expect(exercises).toHaveLength(4);
+    expect(exercises.map((e) => e.position)).toEqual([0, 1, 2, 3]);
+    expect(exercises[0].exerciseId).toBe(OHP);
+    expect(version()).toBe(before + 1);
+  });
+});
+
+describe('moveBlock', () => {
+  it('moves the exercise one place, then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    moveBlock(db, bench().id, 'down');
+
+    expect(activeView().exercises.slice(0, 2).map((e) => e.exerciseId)).toEqual([OHP, BENCH]);
+    expect(version()).toBe(before + 1);
+  });
+
+  it('moves a superset as one block', () => {
+    startFromDay(db, PUSH_A);
+    toggleSuperset(db, bench().id);
+
+    moveBlock(db, bench().id, 'down');
+
+    expect(activeView().exercises.slice(0, 3).map((e) => e.exerciseId)).toEqual(['incline-dumbbell-press', BENCH, OHP]);
+  });
+});
+
+describe('toggleSuperset', () => {
+  it('links the exercise with the next, and a second call breaks the link', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    toggleSuperset(db, bench().id);
+    expect(activeView().exercises.slice(0, 3).map((e) => e.supersetGroup)).toEqual([1, 1, null]);
+
+    toggleSuperset(db, bench().id);
+    expect(activeView().exercises.slice(0, 3).map((e) => e.supersetGroup)).toEqual([null, null, null]);
+    expect(version()).toBe(before + 2);
+  });
+});
+
+describe('setRpeShown', () => {
+  it('shows and hides the RPE column for the exercise, then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    setRpeShown(db, bench().id, true);
+    expect(bench().showRpe).toBe(true);
+    expect(activeView().exercises[1].showRpe).toBe(false);
+
+    setRpeShown(db, bench().id, false);
+    expect(bench().showRpe).toBe(false);
+    expect(version()).toBe(before + 2);
   });
 });

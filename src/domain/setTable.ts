@@ -203,10 +203,13 @@ function storedValue(set: SetInput, key: InputKey, unit: WeightUnit): number | n
   }
 }
 
-/** What an input holds when nothing is being typed: the stored value (the load falls back to today's target), else empty. */
+/**
+ * What an input holds when nothing is being typed: the stored value, else empty. An open row's load falls back to
+ * today's target; a done row never does, so it cannot show a weight that was not saved.
+ */
 export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): string {
   const stored = storedValue(row.set, key, unit);
-  const value = key === 'weight' ? (stored ?? row.target) : stored;
+  const value = key === 'weight' && !row.set.done ? (stored ?? row.target) : stored;
   if (value === null) return '';
   return key === 'durationS' ? durationText(value) : numberText(value);
 }

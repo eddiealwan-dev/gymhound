@@ -28,3 +28,45 @@ export function shouldStartRestAfterTick(
   if (!ticked || ticked.supersetGroup === null) return true;
   return exercises.every((e) => e.supersetGroup !== ticked.supersetGroup || e.position <= ticked.position);
 }
+
+/** What a tick, -15s or Skip does to the rest timer. The caller writes `rest_ends_at` and calls the rest surface to match. */
+export type RestChange =
+  /** Start a rest that ends at `endsAt`. */
+  | { kind: 'start'; endsAt: number }
+  /** The running rest now ends earlier, at `endsAt`. */
+  | { kind: 'shorten'; endsAt: number }
+  /** End the rest now, without ringing. */
+  | { kind: 'skip' }
+  | { kind: 'none' };
+
+/** The rest a ticked set starts: `restSeconds` from `now`, or nothing mid-superset (`shouldStartRestAfterTick`). */
+export function restAfterTick(
+  exercises: { id: string; position: number; supersetGroup: number | null }[],
+  workoutExerciseId: string,
+  now: number,
+  restSeconds: number,
+): RestChange {
+  if (restSeconds <= 0 || !shouldStartRestAfterTick(exercises, workoutExerciseId)) return { kind: 'none' };
+  return { kind: 'start', endsAt: now + restSeconds * 1000 };
+}
+
+/** Tapping -15s: the shortened end, or a skip when that would end the timer. */
+export function restAfterMinus15(endsAt: number, now: number): RestChange {
+  const shortened = minus15(endsAt, now);
+  return shortened === null ? { kind: 'skip' } : { kind: 'shorten', endsAt: shortened };
+}
+
+/** How long after the end the bar still rings. Later than this, the app was away and the notification already rang. */
+export const RING_WINDOW_MS = 3000;
+
+/**
+ * What the rest bar does at a tick of its clock, for a timer that ends at `endsAt`:
+ * - `running`: time is left; show it.
+ * - `ring`: it just ran out in front of the user; haptic, bell, then clear.
+ * - `clear`: it ran out unwatched (`wasRunning` is false: the bar opened on an expired timer) or long ago (the app was
+ *   in the background or the phone locked, so the notification carried the sound); clear it quietly.
+ */
+export function restPhase(endsAt: number, now: number, wasRunning: boolean): 'running' | 'ring' | 'clear' {
+  if (restRemainingSeconds(endsAt, now) !== null) return 'running';
+  return wasRunning && now - endsAt <= RING_WINDOW_MS ? 'ring' : 'clear';
+}
