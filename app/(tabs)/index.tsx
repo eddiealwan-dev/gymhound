@@ -3,7 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getUpNext } from '../../src/db/repositories/routinesRepo';
 import type { UpNext } from '../../src/db/repositories/routinesRepo';
@@ -91,8 +91,11 @@ function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: nu
   );
 }
 
-/** The big number's size: 44, and smaller in proportion once it is longer than the 5 characters that fit a card at 320 wide. The web build cannot shrink text to fit, so this does it. */
-const statFontSize = (value: string) => Math.min(44, Math.floor((44 * 5) / value.length));
+/**
+ * The big number's size. On the phone it is always 44 and `adjustsFontSizeToFit` shrinks it only when it must.
+ * The web build cannot shrink text to fit, so there it steps down in proportion once the number is longer than the 5 characters that fit a card at 320 wide.
+ */
+const statFontSize = (value: string) => (Platform.OS === 'web' ? Math.min(44, Math.floor((44 * 5) / value.length)) : 44);
 
 /** A label, one big number and a small line under it. Two of these sit side by side at equal width. */
 function StatCard({ label, value, caption }: { label: string; value: string; caption: string }) {
@@ -105,7 +108,7 @@ function StatCard({ label, value, caption }: { label: string; value: string; cap
       </Body>
       {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's text size is turned up. */}
       <View style={{ minHeight: 52, justifyContent: 'center' }}>
-        <Num adjustsFontSizeToFit numberOfLines={1} style={{ fontSize, lineHeight: Math.round(fontSize * 1.18) }}>
+        <Num adjustsFontSizeToFit minimumFontScale={0.5} numberOfLines={1} style={{ fontSize, lineHeight: Math.round(fontSize * 1.18) }}>
           {value}
         </Num>
       </View>
