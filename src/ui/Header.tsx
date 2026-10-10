@@ -9,7 +9,7 @@ import { useTheme } from './ThemeProvider';
 /** Below this window width the wordmark sits under the mark instead of beside it. */
 const NARROW = 360;
 
-/** Closes Settings. With no history to go back to (Settings opened by address), it lands on Train. */
+/** Closes Settings by going back to the tab it was opened from. With nothing to go back to (Settings opened by address, or after a reload), it lands on Train. */
 function closeSettings() {
   if (router.canGoBack()) router.back();
   else router.replace('/');
