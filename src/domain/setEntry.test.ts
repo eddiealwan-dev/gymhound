@@ -388,8 +388,21 @@ describe('formatPrevious (spec 8.4)', () => {
     expect(formatPrevious(P(1, 'working', 185, 5), 'weighted', 'lb')).toBe('185 × 5');
   });
 
-  it('prefixes added weight with a plus', () => {
-    expect(formatPrevious(P(1, 'working', 25, 8), 'bodyweight_plus', 'lb')).toBe('+25 × 8');
+  describe('bodyweight plus', () => {
+    it('prefixes added weight with a plus', () => {
+      expect(formatPrevious(P(1, 'working', 25, 8), 'bodyweight_plus', 'lb')).toBe('+25 × 8');
+    });
+
+    it('reads BW when no weight was added', () => {
+      expect(formatPrevious(P(1, 'working', 0, 8), 'bodyweight_plus', 'lb')).toBe('BW × 8');
+      expect(formatPrevious(P(1, 'working', null, 8), 'bodyweight_plus', 'lb')).toBe('BW × 8');
+    });
+
+    it('is empty when the reps are missing, with or without added weight', () => {
+      expect(formatPrevious(P(1, 'working', 25, null), 'bodyweight_plus', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', 0, null), 'bodyweight_plus', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', null, null), 'bodyweight_plus', 'lb')).toBe('');
+    });
   });
 
   it('prefixes assistance with the true minus sign', () => {
@@ -460,7 +473,7 @@ describe('formatPrevious (spec 8.4)', () => {
     it('is empty, never an invented number, when the set lacks what its type needs', () => {
       expect(formatPrevious(P(1, 'working', null, null), 'weighted', 'lb')).toBe('');
       expect(formatPrevious(P(1, 'working', 185, null), 'weighted', 'lb')).toBe('');
-      expect(formatPrevious(P(1, 'working', null, 8), 'bodyweight_plus', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', null, 8), 'assisted', 'lb')).toBe('');
       expect(formatPrevious(P(1, 'working', 40, null), 'assisted', 'lb')).toBe('');
     });
 

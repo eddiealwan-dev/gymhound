@@ -40,6 +40,7 @@ export type TickValues = SetFields;
 
 const MINUS = '−';
 const TIMES = '×';
+const BODYWEIGHT = 'BW';
 
 const OTHER_SET_LABELS: Record<Exclude<SetType, 'working'>, string> = {
   warmup: 'W',
@@ -159,9 +160,10 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * The Previous column (spec 8.4): "185 × 5", "+25 × 8", "−40 × 8", "70 lb × 40s", "40s" or "1:30",
- * "2 km · 12:30". Weight-and-time always shows its unit; the other weights show it only when it
- * differs from `displayUnit` ("84 kg × 12").
+ * The Previous column (spec 8.4): "185 × 5", "+25 × 8", "BW × 8", "−40 × 8", "70 lb × 40s", "40s"
+ * or "1:30", "2 km · 12:30". Weight-and-time always shows its unit; the other weights show it only
+ * when it differs from `displayUnit` ("84 kg × 12"). Bodyweight plus with no added weight (0 or
+ * none) reads "BW × 8", not "+0 × 8".
  *
  * Empty for no previous set or a set that lacks a value its type needs. A number is never invented.
  */
@@ -171,6 +173,8 @@ export function formatPrevious(p: PrevSet | null, loggingType: LoggingType, disp
     case 'weighted':
       return formatLoaded(p, '', displayUnit);
     case 'bodyweight_plus':
+      if (p.reps === null) return '';
+      if (p.weight === null || p.weight === 0) return `${BODYWEIGHT} ${TIMES} ${p.reps}`;
       return formatLoaded(p, '+', displayUnit);
     case 'assisted':
       return formatLoaded(p, MINUS, displayUnit);
