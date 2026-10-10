@@ -3,10 +3,14 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
+import { getSettings } from '../../db/repositories/settingsRepo';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
+import { formatRest } from '../../domain/dates';
+import { REST_CHOICES } from '../../domain/rest';
 import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
 import { flushAll } from '../../state/draftFlush';
-import { moveBlock, removeFromWorkout, setRpeShown, toggleSuperset } from '../../state/sessionActions';
+import { useDbQuery } from '../../state/dataVersion';
+import { moveBlock, removeFromWorkout, setExerciseRest, setRpeShown, toggleSuperset } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
@@ -22,10 +26,10 @@ type Props = {
 };
 
 /**
- * What is showing for the open exercise: its menu, the Reorder list (both in one sheet), the remove or replace check,
- * the plate calculator, or nothing between sheets.
+ * What is showing for the open exercise: its menu, the Reorder list or the rest choices (all three in one sheet), the
+ * remove or replace check, the plate calculator, or nothing between sheets.
  */
-type Panel = 'menu' | 'reorder' | 'confirmRemove' | 'confirmReplace' | 'plates' | 'none';
+type Panel = 'menu' | 'reorder' | 'rest' | 'confirmRemove' | 'confirmReplace' | 'plates' | 'none';
 
 /**
  * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
@@ -35,9 +39,15 @@ function afterSheetCloses(go: () => void): void {
   setTimeout(go, Platform.OS === 'ios' ? 400 : 0);
 }
 
+/** A rest length as the menu shows it: "Off" for 0, else m:ss. */
+function restLabel(seconds: number): string {
+  return seconds === 0 ? 'Off' : formatRest(seconds);
+}
+
 /**
- * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, the check before removing or replacing an
- * exercise that has ticked sets, and the plate calculator on a barbell exercise. One instance serves the whole session screen.
+ * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, the rest time of the exercise, the check before
+ * removing or replacing an exercise that has ticked sets, and the plate calculator on a barbell exercise. One instance
+ * serves the whole session screen.
  */
 export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
   const db = useDb();
@@ -45,10 +55,19 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
   const [panel, setPanel] = useState<Panel>('menu');
   const ex = exercises.find((e) => e.id === exerciseId) ?? null;
   const superset = ex ? supersetAction(exercises, ex.id) : 'hidden';
+  const settingsRest = useDbQuery(getSettings).restSeconds;
+  const defaultLabel = `Default (${restLabel(settingsRest)})`;
+  const currentRest = ex === null || ex.restSeconds === null ? defaultLabel : restLabel(ex.restSeconds);
 
   const close = () => {
     setPanel('menu');
     onClose();
+  };
+
+  /** Saves the exercise's own rest (null for Default). A rest already running keeps its end. */
+  const chooseRest = (seconds: number | null) => {
+    if (ex) setExerciseRest(db, ex.exerciseId, seconds);
+    close();
   };
 
   const openReplacePicker = () => {
@@ -87,7 +106,7 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
 
   return (
     <>
-      <Sheet visible={ex !== null && (panel === 'menu' || panel === 'reorder')} onClose={close}>
+      <Sheet visible={ex !== null && (panel === 'menu' || panel === 'reorder' || panel === 'rest')} onClose={close}>
         {panel === 'reorder' ? (
           <>
             <Display weight={700} style={{ marginBottom: 12 }}>
@@ -129,6 +148,26 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
               <Button label="Done" onPress={close} />
             </View>
           </>
+        ) : panel === 'rest' ? (
+          <>
+            <Display weight={700} numberOfLines={1}>
+              Rest time
+            </Display>
+            <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+              {ex?.name ?? ''}
+            </Body>
+            <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ gap: 8 }}>
+              <Button label={defaultLabel} variant={ex?.restSeconds === null ? 'primary' : 'secondary'} onPress={() => chooseRest(null)} />
+              {REST_CHOICES.map((seconds) => (
+                <Button
+                  key={seconds}
+                  label={restLabel(seconds)}
+                  variant={ex?.restSeconds === seconds ? 'primary' : 'secondary'}
+                  onPress={() => chooseRest(seconds)}
+                />
+              ))}
+            </ScrollView>
+          </>
         ) : (
           <>
             <Display weight={700} numberOfLines={1} style={{ marginBottom: 12 }}>
@@ -136,6 +175,7 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
             </Display>
             <View style={{ gap: 8 }}>
               {ex?.equipment === 'barbell' ? <Button label="Plate calculator" variant="secondary" onPress={openPlates} /> : null}
+              <Button label={`Rest time · ${currentRest}`} variant="secondary" onPress={() => setPanel('rest')} />
               <Button
                 label={ex?.showRpe ? 'Hide RPE' : 'Show RPE'}
                 variant="secondary"

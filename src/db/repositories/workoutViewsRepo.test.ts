@@ -2,6 +2,7 @@
 import { totalVolume } from '../../domain/volume';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
+import { setRestSeconds } from './exercisePrefsRepo';
 import { addExerciseToWorkout, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
@@ -159,5 +160,28 @@ describe('getFinishSummary', () => {
     const db = seededDb();
     const { active } = buildHistory(db);
     expect(() => getFinishSummary(db, active, 'lb')).toThrow(`No finished workout with id ${active}.`);
+  });
+});
+
+describe('getActiveWorkoutView: rest per exercise and tick times (Task 21)', () => {
+  it("carries each exercise's rest pref (null with none) and each set's completedAt (null until ticked)", () => {
+    const db = seededDb();
+    setRestSeconds(db, 'barbell-bench-press', 90, OCT_9);
+    startWorkoutFromDay(db, PUSH_A, OCT_9);
+    const [first] = setIds(db);
+    tick(db, first, 135, 5, OCT_9 + MINUTE);
+
+    const [bench, second] = getActiveWorkoutView(db)!.exercises;
+    expect(bench.exerciseId).toBe('barbell-bench-press');
+    expect(bench.restSeconds).toBe(90);
+    expect(second.restSeconds).toBeNull();
+    expect(bench.sets.map((s) => s.completedAt)).toEqual([OCT_9 + MINUTE, null, null, null]);
+  });
+
+  it('carries Off as 0, not as null', () => {
+    const db = seededDb();
+    setRestSeconds(db, 'barbell-bench-press', 0, OCT_9);
+    startWorkoutFromDay(db, PUSH_A, OCT_9);
+    expect(getActiveWorkoutView(db)!.exercises[0].restSeconds).toBe(0);
   });
 });

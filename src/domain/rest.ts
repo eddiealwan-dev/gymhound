@@ -82,3 +82,26 @@ export function restPhase(endsAt: number, now: number, wasRunning: boolean, away
   if (restRemainingSeconds(endsAt, now) !== null) return 'running';
   return wasRunning && !awayAtEnd && now - endsAt <= RING_WINDOW_MS ? 'ring' : 'clear';
 }
+
+/** The rest lengths an exercise can have of its own, in seconds (Task 21). 0 is Off. */
+export const REST_CHOICES = [0, 30, 45, 60, 90, 120, 150, 180, 240, 300];
+
+/** How long a tick of this exercise rests: its own rest when it has one (0 is Off, no rest), else the rest in Settings. */
+export function restLengthFor(exerciseRest: number | null, settingsRest: number): number {
+  return exerciseRest ?? settingsRest;
+}
+
+/**
+ * The set the rest countdown shows under: the done set ticked last. Exercises and their sets come in workout order,
+ * and a tie goes to the later set. Null when nothing is done.
+ */
+export function restAnchorSetId(exercises: { sets: { id: string; done: boolean; completedAt: number | null }[] }[]): string | null {
+  let anchor: { id: string; at: number } | null = null;
+  for (const ex of exercises) {
+    for (const set of ex.sets) {
+      if (!set.done || set.completedAt === null) continue;
+      if (anchor === null || set.completedAt >= anchor.at) anchor = { id: set.id, at: set.completedAt };
+    }
+  }
+  return anchor?.id ?? null;
+}

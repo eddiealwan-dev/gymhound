@@ -39,6 +39,16 @@ export const exerciseNotes = sqliteTable('exercise_notes', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+// Per-exercise preferences that follow the exercise into every routine and workout.
+export const exercisePrefs = sqliteTable('exercise_prefs', {
+  exerciseId: text('exercise_id')
+    .primaryKey()
+    .references(() => exercises.id),
+  // Rest after a set, in seconds. Null (or no row) means the rest in Settings; 0 means Off.
+  restSeconds: integer('rest_seconds'),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export const routines = sqliteTable('routines', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

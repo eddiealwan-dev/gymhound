@@ -9,6 +9,7 @@ import { countUntickedWithValues } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { restAnchorSetId } from '../src/domain/rest';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -113,6 +114,8 @@ export default function Session() {
   }
 
   const { restEndsAt } = workout;
+  // The running rest also shows under the set that started it: the one ticked last.
+  const anchorSetId = restEndsAt === null ? null : restAnchorSetId(workout.exercises);
 
   /**
    * Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a
@@ -187,11 +190,14 @@ export default function Session() {
             <ExerciseBlock
               // A replaced exercise keeps its row but is a new exercise: start its block fresh.
               key={`${ex.id}:${ex.exerciseId}`}
+              workoutId={workout.id}
               ex={ex}
               unit={unit}
               distanceUnit={distanceUnit}
               inSuperset={ex.supersetGroup !== null}
               joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
+              restEndsAt={restEndsAt}
+              restAnchorSetId={anchorSetId}
               onOpenMenu={() => {
                 flushAll();
                 setMenuFor(ex.id);

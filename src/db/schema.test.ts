@@ -30,6 +30,20 @@ it('migration 0001 adds workout_exercises.note', () => {
   expect(cols).toContain('note');
 });
 
+it('migration 0002 adds the exercise_prefs table', () => {
+  const { db } = createTestDb();
+  const cols = db
+    .all<{ name: string; type: string; notnull: number; pk: number }>(sql`pragma table_info(exercise_prefs)`)
+    .map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, pk: c.pk }));
+  expect(cols).toEqual([
+    { name: 'exercise_id', type: 'TEXT', notnull: 1, pk: 1 },
+    { name: 'rest_seconds', type: 'INTEGER', notnull: 0, pk: 0 },
+    { name: 'updated_at', type: 'INTEGER', notnull: 1, pk: 0 },
+  ]);
+  const fks = db.all<{ table: string; from: string; to: string }>(sql`pragma foreign_key_list(exercise_prefs)`);
+  expect(fks).toEqual([expect.objectContaining({ table: 'exercises', from: 'exercise_id', to: 'id' })]);
+});
+
 it('allows only one active workout', () => {
   // Review Focus 3
   const { db } = createTestDb();

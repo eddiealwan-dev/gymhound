@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -12,6 +12,7 @@ import { Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
+import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow } from './SetRow';
 
 const SET_TYPES: { type: SetType; label: string }[] = [
@@ -22,6 +23,7 @@ const SET_TYPES: { type: SetType; label: string }[] = [
 ];
 
 type Props = {
+  workoutId: string;
   ex: WorkoutExerciseView;
   unit: WeightUnit;
   distanceUnit: DistanceUnit;
@@ -31,6 +33,10 @@ type Props = {
   inSuperset: boolean;
   /** Whether the next exercise is in the same superset: the bar then runs on through the gap between them. */
   joinsNext: boolean;
+  /** When the running rest ends (`rest_ends_at`), or null when none is running. */
+  restEndsAt: number | null;
+  /** The set the rest countdown shows under (`restAnchorSetId`). It shows here only when that set is in this block. */
+  restAnchorSetId: string | null;
 };
 
 /** Space below a block. A superset's bar crosses it to join the members. */
@@ -39,9 +45,19 @@ const BLOCK_GAP = 28;
 /**
  * One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and the
  * Add warmup and Add set buttons. Tapping a set number opens the set-type sheet, which also removes the set;
- * pressing and holding the row opens a sheet that removes it too.
+ * pressing and holding the row opens a sheet that removes it too. The running rest shows under the set that started it.
  */
-export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, joinsNext }: Props) {
+export function ExerciseBlock({
+  workoutId,
+  ex,
+  unit,
+  distanceUnit,
+  onOpenMenu,
+  inSuperset,
+  joinsNext,
+  restEndsAt,
+  restAnchorSetId,
+}: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
@@ -129,16 +145,18 @@ export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, 
 
       <View style={{ gap: 2 }}>
         {rows.map((row) => (
-          <SetRow
-            key={row.set.id}
-            ex={ex}
-            row={row}
-            columns={columns}
-            unit={unit}
-            distanceUnit={distanceUnit}
-            onChangeType={() => setTypeFor(row.set.id)}
-            onLongPress={() => setRemoveFor(row.set.id)}
-          />
+          <Fragment key={row.set.id}>
+            <SetRow
+              ex={ex}
+              row={row}
+              columns={columns}
+              unit={unit}
+              distanceUnit={distanceUnit}
+              onChangeType={() => setTypeFor(row.set.id)}
+              onLongPress={() => setRemoveFor(row.set.id)}
+            />
+            {restEndsAt !== null && row.set.id === restAnchorSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
+          </Fragment>
         ))}
       </View>
 

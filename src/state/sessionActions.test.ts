@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
+import { getRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
 import { getUpNext, setActiveRoutine } from '../db/repositories/routinesRepo';
 import { setSetting } from '../db/repositories/settingsRepo';
@@ -30,6 +31,7 @@ import {
   restMinus15,
   restSkip,
   saveNote,
+  setExerciseRest,
   setRpeShown,
   startEmpty,
   startFromDay,
@@ -436,6 +438,114 @@ describe('tick starts the rest timer', () => {
     expect(tickSetOf(0, 1)).toBe(true);
     expect(warn).toHaveBeenCalledTimes(2);
     warn.mockRestore();
+  });
+});
+
+// ---- rest per exercise (Task 21) ----
+
+const UPPER_A = 'premade-upperlower-4:upper-a';
+
+describe('setExerciseRest', () => {
+  it("saves the exercise's rest, which the workout then shows, and bumps the data version", () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    setExerciseRest(db, BENCH, 90);
+
+    expect(getRestSeconds(db, BENCH)).toBe(90);
+    expect(bench().restSeconds).toBe(90);
+    expect(version()).toBe(before + 1);
+  });
+
+  it('goes back to the Settings rest with null', () => {
+    setExerciseRest(db, BENCH, 90);
+    setExerciseRest(db, BENCH, null);
+    expect(getRestSeconds(db, BENCH)).toBeNull();
+  });
+
+  it('leaves a running rest as it is', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    mockSurface.start.mockClear();
+
+    setExerciseRest(db, BENCH, 30);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(mockSurface.start).not.toHaveBeenCalled();
+    expect(mockSurface.update).not.toHaveBeenCalled();
+  });
+
+  it('follows the exercise: set on Push A, it is there on Upper A too', () => {
+    startFromDay(db, PUSH_A);
+    setExerciseRest(db, BENCH, 90);
+    discard(db, workoutId());
+
+    startFromDay(db, UPPER_A);
+
+    const view = activeView();
+    expect(view.name).toBe('Upper A');
+    expect(view.exercises.find((e) => e.exerciseId === BENCH)!.restSeconds).toBe(90);
+  });
+});
+
+describe('tick uses the rest of the exercise ticked', () => {
+  it("starts the exercise's own rest: bench at 90 rests 90 seconds", () => {
+    setExerciseRest(db, BENCH, 90);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(restEndsAt()).toBe(NOW + 90_000);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, true);
+  });
+
+  it('starts no rest when the exercise is set to Off (0)', () => {
+    setExerciseRest(db, BENCH, 0);
+    startFromDay(db, PUSH_A);
+
+    expect(tickSetOf(0, 0)).toBe(true);
+
+    expect(reread(bench().sets[0].id).done).toBe(true);
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.start).not.toHaveBeenCalled();
+  });
+
+  it('uses the Settings rest for an exercise with no pref of its own', () => {
+    setSetting(db, 'restSeconds', 150);
+    setExerciseRest(db, BENCH, 90);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(1, 0);
+
+    expect(activeView().exercises[1].restSeconds).toBeNull();
+    expect(restEndsAt()).toBe(NOW + 150_000);
+  });
+
+  it("uses the last member's own rest after a superset round (bench Off, overhead press 60)", () => {
+    startFromDay(db, PUSH_A);
+    toggleSuperset(db, activeView().exercises[0].id);
+    const ohp = activeView().exercises[1].exerciseId;
+    setExerciseRest(db, BENCH, 0);
+    setExerciseRest(db, ohp, 60);
+
+    tickSetOf(0, 0);
+    expect(restEndsAt()).toBeNull();
+
+    tickSetOf(1, 0);
+    expect(restEndsAt()).toBe(NOW + 60_000);
+  });
+
+  it('starts nothing after a superset round whose last member is Off, whatever the first member says', () => {
+    startFromDay(db, PUSH_A);
+    toggleSuperset(db, activeView().exercises[0].id);
+    setExerciseRest(db, BENCH, 90);
+    setExerciseRest(db, activeView().exercises[1].exerciseId, 0);
+
+    tickSetOf(0, 0);
+    tickSetOf(1, 0);
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockSurface.start).not.toHaveBeenCalled();
   });
 });
 

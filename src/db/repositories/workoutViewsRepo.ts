@@ -2,10 +2,16 @@ import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
 import type { PrevSet } from '../../domain/setEntry';
 import type { DayMark, Equipment, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
-import { exerciseNotes, exercises, sets, workoutExercises, workouts } from '../schema';
+import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 
-export type SetView = PrevSet & { id: string; rpe: number | null; done: boolean };
+export type SetView = PrevSet & {
+  id: string;
+  rpe: number | null;
+  done: boolean;
+  /** When the set was ticked (epoch ms), or null while it is not. */
+  completedAt: number | null;
+};
 
 export type WorkoutExerciseView = {
   id: string;
@@ -18,6 +24,8 @@ export type WorkoutExerciseView = {
   showRpe: boolean;
   /** The exercise's sticky note, if it has one. */
   note: string | null;
+  /** The exercise's own rest in seconds: null uses the rest in Settings, 0 is Off. */
+  restSeconds: number | null;
   /** The rule as it was when the workout started. Null if the exercise has none. */
   rule: { setCount: number; repMin: number; repMax: number; increment: number; incrementUnit: WeightUnit } | null;
   plannedWeight: number | null;
@@ -89,16 +97,17 @@ export function getPreviousSets(db: Db, exerciseId: string, excludeWorkoutId: st
     .all();
 }
 
-/** The active workout with its exercises, sets, sticky notes and previous sets. Null when none is active. */
+/** The active workout with its exercises, sets, sticky notes, rest prefs and previous sets. Null when none is active. */
 export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
   const workout = db.select().from(workouts).where(eq(workouts.status, 'active')).get();
   if (!workout) return null;
 
   const rows = db
-    .select({ we: workoutExercises, exercise: exercises, note: exerciseNotes.text })
+    .select({ we: workoutExercises, exercise: exercises, note: exerciseNotes.text, restSeconds: exercisePrefs.restSeconds })
     .from(workoutExercises)
     .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
     .leftJoin(exerciseNotes, eq(exerciseNotes.exerciseId, workoutExercises.exerciseId))
+    .leftJoin(exercisePrefs, eq(exercisePrefs.exerciseId, workoutExercises.exerciseId))
     .where(eq(workoutExercises.workoutId, workout.id))
     .orderBy(asc(workoutExercises.position))
     .all();
@@ -128,6 +137,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       distance: s.distance,
       distanceUnit: s.distanceUnit,
       done: s.done,
+      completedAt: s.completedAt,
     };
     const list = setsByExercise.get(s.workoutExerciseId);
     if (list) list.push(view);
@@ -140,7 +150,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     startedAt: workout.startedAt,
     dayMark: workout.dayMark,
     restEndsAt: workout.restEndsAt,
-    exercises: rows.map(({ we, exercise, note }) => ({
+    exercises: rows.map(({ we, exercise, note, restSeconds }) => ({
       id: we.id,
       exerciseId: we.exerciseId,
       name: exercise.name,
@@ -150,6 +160,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       supersetGroup: we.supersetGroup,
       showRpe: we.showRpe,
       note,
+      restSeconds,
       rule:
         we.ruleSetCount !== null &&
         we.ruleRepMin !== null &&

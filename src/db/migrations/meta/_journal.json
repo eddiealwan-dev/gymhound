@@ -15,6 +15,13 @@
       "when": 1791608721943,
       "tag": "0001_green_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791645682320,
+      "tag": "0002_nappy_spitfire",
+      "breakpoints": true
     }
   ]
 }

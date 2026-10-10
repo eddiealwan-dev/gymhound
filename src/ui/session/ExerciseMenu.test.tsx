@@ -4,6 +4,7 @@ import { TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { Button } from '../Button';
+import { setExerciseRest } from '../../state/sessionActions';
 import { ExerciseMenu } from './ExerciseMenu';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -15,12 +16,14 @@ jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../state/sessionActions', () => ({
   moveBlock: jest.fn(),
   removeFromWorkout: jest.fn(),
+  setExerciseRest: jest.fn(),
   setRpeShown: jest.fn(),
   toggleSuperset: jest.fn(),
 }));
 jest.mock('../../db/repositories/settingsRepo', () => ({
   getSettings: () => ({
     unit: 'lb',
+    restSeconds: 120,
     barLb: 45,
     barKg: 20,
     platesLb: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 },
@@ -198,5 +201,82 @@ describe('ExerciseMenu: the plate calculator (Task 20)', () => {
 
     act(() => field().props.onChangeText('30'));
     expect(shownText(tree)).toContain('Below the bar: just the bar.');
+  });
+});
+
+/** Bench press with its own rest (null: use Settings, which is 2:00 here). */
+const withRest = (restSeconds: number | null): WorkoutExerciseView =>
+  ({
+    id: 'we1',
+    exerciseId: 'barbell-bench-press',
+    name: 'Bench Press',
+    equipment: 'barbell',
+    supersetGroup: null,
+    showRpe: false,
+    restSeconds,
+    sets: [],
+  }) as unknown as WorkoutExerciseView;
+
+const labels = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Button).map((b) => b.props.label as string);
+
+describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
+  beforeEach(() => jest.mocked(setExerciseRest).mockClear());
+
+  it('reads "Rest time · Default (2:00)", "Off" or "1:30"', () => {
+    expect(labels(mount(withRest(null)))).toContain('Rest time · Default (2:00)');
+    expect(labels(mount(withRest(0)))).toContain('Rest time · Off');
+    expect(labels(mount(withRest(90)))).toContain('Rest time · 1:30');
+  });
+
+  it('lists Default, then Off and every choice in m:ss, with the current one highlighted', () => {
+    const tree = mount(withRest(90));
+    press(tree, 'Rest time · 1:30');
+
+    const buttons = tree.root.findAllByType(Button);
+    expect(buttons.map((b) => b.props.label)).toEqual([
+      'Default (2:00)',
+      'Off',
+      '0:30',
+      '0:45',
+      '1:00',
+      '1:30',
+      '2:00',
+      '2:30',
+      '3:00',
+      '4:00',
+      '5:00',
+    ]);
+    expect(buttons.filter((b) => b.props.variant === 'primary').map((b) => b.props.label)).toEqual(['1:30']);
+  });
+
+  it('highlights Default when the exercise has no rest of its own', () => {
+    const tree = mount(withRest(null));
+    press(tree, 'Rest time · Default (2:00)');
+    expect(
+      tree.root
+        .findAllByType(Button)
+        .filter((b) => b.props.variant === 'primary')
+        .map((b) => b.props.label),
+    ).toEqual(['Default (2:00)']);
+  });
+
+  it('saves the choice on the exercise (not the workout row) and closes', () => {
+    const tree = mount(withRest(null));
+    press(tree, 'Rest time · Default (2:00)');
+
+    press(tree, 'Off');
+
+    expect(setExerciseRest).toHaveBeenCalledWith('db', 'barbell-bench-press', 0);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('goes back to the Settings rest with Default', () => {
+    const tree = mount(withRest(90));
+    press(tree, 'Rest time · 1:30');
+
+    press(tree, 'Default (2:00)');
+
+    expect(setExerciseRest).toHaveBeenCalledWith('db', 'barbell-bench-press', null);
   });
 });

@@ -1,3 +1,4 @@
+import { setRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { setExerciseNote } from '../db/repositories/exercisesRepo';
 import { getSettings } from '../db/repositories/settingsRepo';
 import {
@@ -27,7 +28,7 @@ import {
   untickSet,
 } from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
-import { restAfterMinus15, restAfterTick, type RestChange } from '../domain/rest';
+import { restAfterMinus15, restAfterTick, restLengthFor, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
@@ -61,9 +62,10 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * Ticks a set. `entered` is what the user typed or had stored (null for a field left empty); today's target and the
  * placeholders fill the gaps (spec 8.4). Returns false, changing nothing, when a field the logging type needs still
  * has no value. The weight is recorded in the unit in Settings, which is the unit the target and placeholders are in.
- * A tick starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
+ * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
+ * or the exercise is in a superset and is not the last member of its round.
  */
-export function tick(db: Db, ex: WorkoutExerciseView, set: SetView, entered: TickValues): boolean {
+export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues): boolean {
   const settings = getSettings(db);
   const { unit, distanceUnit } = settings;
   const row = buildRows(ex, unit).find((r) => r.set.id === set.id);
@@ -73,7 +75,10 @@ export function tick(db: Db, ex: WorkoutExerciseView, set: SetView, entered: Tic
   const now = Date.now();
   tickSet(db, set.id, values, unit, now, distanceUnit);
   const view = getActiveWorkoutView(db);
-  if (view) applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, settings.restSeconds), settings.restBell);
+  if (view) {
+    const length = restLengthFor(ex.restSeconds, settings.restSeconds);
+    applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, length), settings.restBell);
+  }
   bumpData();
   return true;
 }
@@ -231,5 +236,14 @@ export function removeSetFrom(db: Db, setId: string): void {
 /** Saves the exercise's note. It lives on the exercise (not the workout), so it follows the exercise everywhere. Blank clears it. */
 export function saveNote(db: Db, exerciseId: string, text: string): void {
   setExerciseNote(db, exerciseId, text, Date.now());
+  bumpData();
+}
+
+/**
+ * Saves the exercise's own rest: seconds, 0 for Off, or null for the rest in Settings. It lives on the exercise, so it
+ * follows the exercise into every routine and workout. A rest already running keeps its end.
+ */
+export function setExerciseRest(db: Db, exerciseId: string, seconds: number | null): void {
+  setRestSeconds(db, exerciseId, seconds, Date.now());
   bumpData();
 }
