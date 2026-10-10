@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Location:** the project root is `C:\Users\eddie\OneDrive\Documents\GymHound`. `node_modules` is a junction to `%LOCALAPPDATA%\GymHound\node_modules`.
+- **Location:** the project root is `C:\Users\eddie\OneDrive\Documents\GymHound`. `node_modules` is a junction to `C:\Users\eddie\.gymhound\node_modules`. Never run `npm install` in the project itself, because npm 11 deletes the junction. Install in `C:\Users\eddie\.gymhound` and copy `package.json` and `package-lock.json` back.
 - **Platform:** Phase 1 runs in Expo Go and the web build. No native module outside Expo Go, and no `expo-dev-client`.
 - **Network:** no network calls anywhere in the app. No accounts.
 - **IDs:** text. Bundled rows use stable slugs. User rows use `randomUUID()` from `expo-crypto`.
@@ -140,8 +140,8 @@ assets/brand/mark-dark{,@2x,@3x}.png  same, with the #2f8cff outline for dark (e
 - [ ] **Step 2: Create the junction before any install (PowerShell, in the project root).**
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GymHound\node_modules" | Out-Null
-New-Item -ItemType Junction -Path node_modules -Target "$env:LOCALAPPDATA\GymHound\node_modules"
+New-Item -ItemType Directory -Force "C:\Users\eddie\.gymhound\node_modules" | Out-Null
+New-Item -ItemType Junction -Path node_modules -Target "C:\Users\eddie\.gymhound\node_modules"
 ```
 
 Expected: `node_modules` is listed with Mode `l`.

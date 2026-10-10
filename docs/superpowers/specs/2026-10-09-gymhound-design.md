@@ -55,7 +55,7 @@ Non-goals for v1
 - **Phases 1–6** run in Expo Go on the owner's iPhone. The PC and phone share Wi-Fi, with `--tunnel` as a fallback.
 - **Phase 7** runs once the Apple Developer account exists: EAS development builds, the Live Activity, the Android ongoing notification, and live RevenueCat products.
 - **Web build:** used only so Claude can check layout and themes in the browser pane. It is not a shipped target. `expo-sqlite` on web needs WASM and the COOP/COEP headers, which are set in `metro.config.js`.
-- **OneDrive:** the project lives in `Documents\GymHound` inside OneDrive. `node_modules` is a junction to `%LOCALAPPDATA%\GymHound\node_modules`, so installed packages do not sync. `.expo`, `dist`, `web-build`, `ios` and `android` are git-ignored, and none of them is committed.
+- **OneDrive:** the project lives in `Documents\GymHound` inside OneDrive. `node_modules` is a junction to `C:\Users\eddie\.gymhound\node_modules`, so installed packages do not sync. That folder is outside AppData because the Claude app redirects new AppData folders into its own private copy. npm 11 deletes a junctioned `node_modules`, so packages are installed in `C:\Users\eddie\.gymhound` (a copy of `package.json`) and the manifest files are copied back. `.expo`, `dist`, `web-build`, `ios` and `android` are git-ignored, and none of them is committed.
 
 ## 5. Architecture
 
