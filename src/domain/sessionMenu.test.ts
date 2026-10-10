@@ -1,4 +1,5 @@
-import { canMoveBlock, hasDoneSets, joinsNextInSuperset, replaceNeedsConfirm, supersetAction } from './sessionMenu';
+import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, supersetAction } from './sessionMenu';
+import type { SetType, WeightUnit } from './types';
 
 const ex = (id: string, supersetGroup: number | null = null) => ({ id, supersetGroup });
 
@@ -92,5 +93,68 @@ describe('replaceNeedsConfirm: whether Replace asks before opening the picker (R
     for (const sets of [[], [{ done: false }], [{ done: true }], [{ done: false }, { done: true }]]) {
       expect(replaceNeedsConfirm({ sets })).toBe(hasDoneSets({ sets }));
     }
+  });
+});
+
+describe('plateTarget: the weight the plate calculator starts from (Task 20, R35)', () => {
+  type Set = { position: number; setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null };
+  const set = (position: number, done: boolean, weight: number | null, weightUnit: WeightUnit | null = 'lb', setType: SetType = 'working'): Set => ({
+    position,
+    setType,
+    done,
+    weight,
+    weightUnit,
+  });
+  const plan = (p: Partial<{ overrideWeight: number; overrideUnit: WeightUnit; plannedWeight: number; plannedUnit: WeightUnit }> = {}) => ({
+    overrideWeight: p.overrideWeight ?? null,
+    overrideUnit: p.overrideUnit ?? null,
+    plannedWeight: p.plannedWeight ?? null,
+    plannedUnit: p.plannedUnit ?? null,
+  });
+  const exercise = (sets: Set[], p = plan()) => ({ ...p, sets });
+
+  it("takes the first undone working set's own value, ahead of the override and the plan", () => {
+    const ex = exercise([set(0, true, 185), set(1, false, 205), set(2, false, 225)], plan({ overrideWeight: 195, overrideUnit: 'lb', plannedWeight: 175, plannedUnit: 'lb' }));
+    expect(plateTarget(ex, 'lb')).toBe(205);
+  });
+
+  it('skips warmups and done sets when looking for the first undone working set', () => {
+    const ex = exercise([set(0, false, 95, 'lb', 'warmup'), set(1, true, 185), set(2, false, 190)]);
+    expect(plateTarget(ex, 'lb')).toBe(190);
+  });
+
+  it('falls back to the override when the first undone working set has no value', () => {
+    const ex = exercise([set(0, false, null, null), set(1, false, 250)], plan({ overrideWeight: 195, overrideUnit: 'lb', plannedWeight: 175, plannedUnit: 'lb' }));
+    expect(plateTarget(ex, 'lb')).toBe(195);
+  });
+
+  it('falls back to the planned weight when there is no override', () => {
+    const ex = exercise([set(0, false, null, null)], plan({ plannedWeight: 175, plannedUnit: 'lb' }));
+    expect(plateTarget(ex, 'lb')).toBe(175);
+  });
+
+  it('falls back to the newest done working set: the last one in position order', () => {
+    const ex = exercise([set(0, true, 185), set(1, true, 205), set(2, true, 135, 'lb', 'drop'), set(3, false, null, null)]);
+    expect(plateTarget(ex, 'lb')).toBe(205);
+  });
+
+  it('is null with no value anywhere', () => {
+    expect(plateTarget(exercise([]), 'lb')).toBeNull();
+    expect(plateTarget(exercise([set(0, false, null, null), set(1, true, 60, 'lb', 'warmup')]), 'lb')).toBeNull();
+  });
+
+  it('converts kg values to lb, rounded to 2 decimals', () => {
+    expect(plateTarget(exercise([set(0, false, 100, 'kg')]), 'lb')).toBe(220.46);
+    expect(plateTarget(exercise([], plan({ overrideWeight: 60, overrideUnit: 'kg' })), 'lb')).toBe(132.28);
+    expect(plateTarget(exercise([], plan({ plannedWeight: 80, plannedUnit: 'kg' })), 'lb')).toBe(176.37);
+    expect(plateTarget(exercise([set(0, true, 102.5, 'kg')]), 'lb')).toBe(225.97);
+  });
+
+  it('converts lb values to kg', () => {
+    expect(plateTarget(exercise([set(0, false, 225, 'lb')]), 'kg')).toBe(102.06);
+  });
+
+  it('reads a value with no stored unit as the display unit', () => {
+    expect(plateTarget(exercise([set(0, false, 100, null)]), 'kg')).toBe(100);
   });
 });

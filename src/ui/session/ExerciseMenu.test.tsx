@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { Button } from '../Button';
@@ -17,6 +18,17 @@ jest.mock('../../state/sessionActions', () => ({
   setRpeShown: jest.fn(),
   toggleSuperset: jest.fn(),
 }));
+jest.mock('../../db/repositories/settingsRepo', () => ({
+  getSettings: () => ({
+    unit: 'lb',
+    barLb: 45,
+    barKg: 20,
+    platesLb: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 },
+    platesKg: { '25': 4, '20': 1, '15': 1, '10': 1, '5': 1, '2.5': 1, '1.25': 1 },
+  }),
+  setSetting: jest.fn(),
+}));
+jest.mock('../../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -136,5 +148,55 @@ describe('ExerciseMenu: Replace asks first when the exercise has ticked sets (R3
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(router.push).not.toHaveBeenCalled();
     expect(shownText(tree)).toEqual([]);
+  });
+});
+
+/** A barbell or dumbbell exercise whose next set is planned at `weight` lb. */
+const loaded = (equipment: string, weight: number): WorkoutExerciseView =>
+  ({
+    id: 'we1',
+    name: equipment === 'barbell' ? 'Bench Press (Barbell)' : 'Bicep Curl (Dumbbell)',
+    equipment,
+    supersetGroup: null,
+    showRpe: false,
+    overrideWeight: null,
+    overrideUnit: null,
+    plannedWeight: null,
+    plannedUnit: null,
+    sets: [{ id: 's0', position: 0, setType: 'working', done: false, weight, weightUnit: 'lb' }],
+  }) as unknown as WorkoutExerciseView;
+
+describe('ExerciseMenu: the plate calculator (Task 20)', () => {
+  it('offers Plate calculator on a barbell exercise only', () => {
+    const barbell = mount(loaded('barbell', 190));
+    expect(barbell.root.findAllByType(Button).map((b) => b.props.label)).toContain('Plate calculator');
+
+    const dumbbell = mount(loaded('dumbbell', 40));
+    expect(dumbbell.root.findAllByType(Button).map((b) => b.props.label)).not.toContain('Plate calculator');
+  });
+
+  it('opens after the menu closes, with the weight to load and the plates per side', () => {
+    const tree = mount(loaded('barbell', 190));
+    press(tree, 'Plate calculator');
+    expect(shownText(tree)).not.toContain('Plate calculator');
+    afterSheetCloses();
+
+    const text = shownText(tree);
+    expect(tree.root.findByProps({ accessibilityLabel: 'Weight to load, lb' }).props.value).toBe('190');
+    expect(text).toEqual(expect.arrayContaining(['Bar 45 lb', 'Per side: 45 · 25 · 2.5']));
+    expect(text.join(' ')).not.toContain('Loads');
+  });
+
+  it('says what it loads when the plates cannot make the weight, and just the bar below it', () => {
+    const tree = mount(loaded('barbell', 190));
+    press(tree, 'Plate calculator');
+    afterSheetCloses();
+    const field = () => tree.root.findAllByType(TextInput).find((t) => t.props.accessibilityLabel === 'Weight to load, lb')!;
+
+    act(() => field().props.onChangeText('193,5'));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Per side: 45 · 25 · 2.5', 'Loads 190 lb']));
+
+    act(() => field().props.onChangeText('30'));
+    expect(shownText(tree)).toContain('Below the bar: just the bar.');
   });
 });

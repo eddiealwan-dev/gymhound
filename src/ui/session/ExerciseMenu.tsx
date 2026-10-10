@@ -11,6 +11,7 @@ import { Button } from '../Button';
 import { ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
 import { useTheme } from '../ThemeProvider';
+import { PlateSheet } from './PlateSheet';
 
 type Props = {
   /** The workout's exercises in order. */
@@ -20,8 +21,11 @@ type Props = {
   onClose: () => void;
 };
 
-/** What is showing for the open exercise: its menu, the Reorder list (both in one sheet), the remove or replace check, or nothing between sheets. */
-type Panel = 'menu' | 'reorder' | 'confirmRemove' | 'confirmReplace' | 'none';
+/**
+ * What is showing for the open exercise: its menu, the Reorder list (both in one sheet), the remove or replace check,
+ * the plate calculator, or nothing between sheets.
+ */
+type Panel = 'menu' | 'reorder' | 'confirmRemove' | 'confirmReplace' | 'plates' | 'none';
 
 /**
  * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
@@ -32,8 +36,8 @@ function afterSheetCloses(go: () => void): void {
 }
 
 /**
- * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, and the check before removing or replacing an
- * exercise that has ticked sets. One instance serves the whole session screen.
+ * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, the check before removing or replacing an
+ * exercise that has ticked sets, and the plate calculator on a barbell exercise. One instance serves the whole session screen.
  */
 export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
   const db = useDb();
@@ -74,6 +78,11 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
     }
     setPanel('none');
     afterSheetCloses(() => setPanel('confirmRemove'));
+  };
+
+  const openPlates = () => {
+    setPanel('none');
+    afterSheetCloses(() => setPanel('plates'));
   };
 
   return (
@@ -126,6 +135,7 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
               {ex?.name ?? ''}
             </Display>
             <View style={{ gap: 8 }}>
+              {ex?.equipment === 'barbell' ? <Button label="Plate calculator" variant="secondary" onPress={openPlates} /> : null}
               <Button
                 label={ex?.showRpe ? 'Hide RPE' : 'Show RPE'}
                 variant="secondary"
@@ -174,6 +184,8 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
         onConfirm={openReplacePicker}
         onCancel={close}
       />
+
+      <PlateSheet ex={panel === 'plates' ? ex : null} onClose={close} />
     </>
   );
 }

@@ -3,6 +3,9 @@
  * (by position), as `ActiveWorkoutView.exercises` is.
  */
 
+import type { SetType, WeightUnit } from './types';
+import { convertWeight } from './units';
+
 type Linked = { id: string; supersetGroup: number | null };
 
 /**
@@ -48,4 +51,29 @@ export function hasDoneSets(ex: { sets: { done: boolean }[] }): boolean {
 /** Whether Replace asks first. Replacing clears the exercise's sets, so it asks exactly when Remove does: when any set is ticked. */
 export function replaceNeedsConfirm(ex: { sets: { done: boolean }[] }): boolean {
   return hasDoneSets(ex);
+}
+
+/** What `plateTarget` reads from a `WorkoutExerciseView`. Its sets are in position order. */
+type PlateTargetInput = {
+  sets: { setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null }[];
+  overrideWeight: number | null;
+  overrideUnit: WeightUnit | null;
+  plannedWeight: number | null;
+  plannedUnit: WeightUnit | null;
+};
+
+/**
+ * The weight the plate calculator starts from, in `unit` and rounded to 2 decimals: the first undone working set's
+ * own value, else the override, else the planned weight, else the newest done working set's weight (the last done
+ * one in position order, R35), else null. A value with no stored unit is read as `unit`.
+ */
+export function plateTarget(ex: PlateTargetInput, unit: WeightUnit): number | null {
+  const inUnit = (weight: number, from: WeightUnit | null) => Number(convertWeight(weight, from ?? unit, unit).toFixed(2));
+  const working = ex.sets.filter((s) => s.setType === 'working');
+  const next = working.find((s) => !s.done);
+  if (next && next.weight !== null) return inUnit(next.weight, next.weightUnit);
+  if (ex.overrideWeight !== null) return inUnit(ex.overrideWeight, ex.overrideUnit);
+  if (ex.plannedWeight !== null) return inUnit(ex.plannedWeight, ex.plannedUnit);
+  const newest = working.filter((s) => s.done && s.weight !== null).at(-1);
+  return newest && newest.weight !== null ? inUnit(newest.weight, newest.weightUnit) : null;
 }

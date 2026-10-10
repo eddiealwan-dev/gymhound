@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
+import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
 import type { Db } from '../../src/db/types';
 import { formatDateTime } from '../../src/domain/dates';
-import type { BellSound, ThemePreference } from '../../src/domain/types';
+import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { latestSnapshotPath, shareFile } from '../../src/state/backup';
 import { bumpData, useDbQuery } from '../../src/state/dataVersion';
+import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display } from '../../src/ui/Text';
@@ -17,6 +19,16 @@ const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'system', label: 'System' },
+];
+
+const WEIGHT_OPTIONS: { value: WeightUnit; label: string }[] = [
+  { value: 'lb', label: 'lb' },
+  { value: 'kg', label: 'kg' },
+];
+
+const DISTANCE_OPTIONS: { value: DistanceUnit; label: string }[] = [
+  { value: 'mi', label: 'mi' },
+  { value: 'km', label: 'km' },
 ];
 
 const BELL_OPTIONS: { value: BellSound; label: string }[] = [
@@ -85,6 +97,55 @@ function AppearanceControl() {
         bumpData();
       }}
     />
+  );
+}
+
+/**
+ * The display unit for weights (switching follows spec 7.1: only the setting changes, and plans convert when a workout
+ * starts) and the unit for distances.
+ */
+function UnitsSection() {
+  const db = useDb();
+  const { unit, distanceUnit } = useDbQuery(getSettings);
+  return (
+    <View style={{ gap: 8, marginTop: 24 }}>
+      <Body weight={600} muted>
+        Units
+      </Body>
+      <Body>Weight</Body>
+      <SegmentedControl
+        label="Weight"
+        options={WEIGHT_OPTIONS}
+        value={unit}
+        onChange={(value) => {
+          switchDisplayUnit(db, value);
+          bumpData();
+        }}
+      />
+      <Body>Distance</Body>
+      <SegmentedControl
+        label="Distance"
+        options={DISTANCE_OPTIONS}
+        value={distanceUnit}
+        onChange={(value) => {
+          setSetting(db, 'distanceUnit', value);
+          bumpData();
+        }}
+      />
+    </View>
+  );
+}
+
+/** The bar for the display unit. */
+function BarSection() {
+  return (
+    <View style={{ gap: 8, marginTop: 24 }}>
+      <Body weight={600} muted>
+        Bar
+      </Body>
+      <Body>Used by the plate calculator.</Body>
+      <BarPicker />
+    </View>
   );
 }
 
@@ -163,7 +224,7 @@ function BackupsSection() {
   );
 }
 
-/** Settings so far: Appearance, Rest timer and Backups. The rest arrive in later tasks. */
+/** Settings so far: Appearance, Units, Bar, Rest timer and Backups. The rest arrive in later tasks. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -174,6 +235,8 @@ export default function Settings() {
         </Body>
         <AppearanceControl />
       </View>
+      <UnitsSection />
+      <BarSection />
       <RestTimerSection />
       <BackupsSection />
     </Screen>
