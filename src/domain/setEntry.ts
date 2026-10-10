@@ -2,7 +2,10 @@ import { formatRest } from './dates';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
 import { convertWeight, formatWeight } from './units';
 
-/** The set in the same position from the most recent finished workout with this exercise. */
+/**
+ * A set from the most recent finished workout with this exercise. `matchPrevious` picks the one
+ * each current set lines up with.
+ */
 export type PrevSet = {
   position: number;
   setType: SetType;
@@ -35,7 +38,6 @@ export type TickInput = {
 
 export type TickValues = SetFields;
 
-const NO_VALUE = '—';
 const MINUS = '−';
 const TIMES = '×';
 
@@ -52,10 +54,38 @@ export function setLabels(types: SetType[]): string[] {
 }
 
 /**
+ * Matches each current set to the same set last time (spec 8.4): the previous set with the same
+ * type and the same number within that type. Working set 2 gets last time's working set 2, and a
+ * warmup is never the previous result for a working set. A set with nothing to match is null.
+ *
+ * Sets are numbered in position order, so `previous` may arrive in any order and may have gaps
+ * (a set that was never ticked is not saved). The result has the length and order of `current`.
+ */
+export function matchPrevious(
+  current: ReadonlyArray<{ setType: SetType }>,
+  previous: ReadonlyArray<PrevSet>,
+): (PrevSet | null)[] {
+  const byType = new Map<SetType, PrevSet[]>();
+  for (const p of [...previous].sort((a, b) => a.position - b.position)) {
+    const sets = byType.get(p.setType);
+    if (sets) sets.push(p);
+    else byType.set(p.setType, [p]);
+  }
+
+  const seen = new Map<SetType, number>();
+  return current.map(({ setType }) => {
+    const n = seen.get(setType) ?? 0;
+    seen.set(setType, n + 1);
+    return byType.get(setType)?.[n] ?? null;
+  });
+}
+
+/**
  * The greyed-out values a set row shows: the previous set, else the rule's value.
  *
- * `ruleRepMax` is a rep count for the weighted types, seconds for `timed` (it feeds the duration
- * and reps stay empty), and unused for `distance_time`. Without `loggingType` it is treated as reps.
+ * `ruleRepMax` is a rep count for the weighted types, seconds for `timed` and `weighted_time` (it
+ * feeds the duration and reps stay empty), and unused for `distance_time`. Without `loggingType`
+ * it is treated as reps.
  *
  * Pass `unit` (the unit the user is entering in) so a previous weight logged in the other unit is
  * converted and rounded to 2 decimals; otherwise the previous weight is returned as logged.
@@ -73,11 +103,12 @@ export function placeholdersFor(a: {
     weight = Number(convertWeight(weight, previous.weightUnit, a.unit).toFixed(2));
   }
 
-  const ruleReps = loggingType === 'timed' || loggingType === 'distance_time' ? null : a.ruleRepMax;
+  const ruleIsSeconds = loggingType === 'timed' || loggingType === 'weighted_time';
+  const ruleReps = ruleIsSeconds || loggingType === 'distance_time' ? null : a.ruleRepMax;
   return {
     weight,
-    reps: loggingType === 'timed' ? null : (previous?.reps ?? ruleReps),
-    durationS: previous?.durationS ?? (loggingType === 'timed' ? a.ruleRepMax : null),
+    reps: ruleIsSeconds ? null : (previous?.reps ?? ruleReps),
+    durationS: previous?.durationS ?? (ruleIsSeconds ? a.ruleRepMax : null),
     distance: previous?.distance ?? null,
   };
 }
@@ -103,6 +134,8 @@ export function resolveTick(i: TickInput): TickValues | null {
       return reps !== null ? { weight: weight ?? 0, reps, durationS: null, distance: null } : null;
     case 'timed':
       return durationS !== null ? { weight: null, reps: null, durationS, distance: null } : null;
+    case 'weighted_time':
+      return weight !== null && durationS !== null ? { weight, reps: null, durationS, distance: null } : null;
     case 'distance_time':
       return distance !== null && durationS !== null ? { weight: null, reps: null, durationS, distance } : null;
   }
@@ -115,12 +148,25 @@ function weightText(weight: number, unit: WeightUnit, displayUnit: WeightUnit): 
 }
 
 function formatLoaded(p: PrevSet, sign: string, displayUnit: WeightUnit): string {
-  if (p.weight === null || p.reps === null) return NO_VALUE;
-  return `${sign}${weightText(p.weight, p.weightUnit ?? displayUnit, displayUnit)}${TIMES}${p.reps}`;
+  if (p.weight === null || p.reps === null) return '';
+  return `${sign}${weightText(p.weight, p.weightUnit ?? displayUnit, displayUnit)} ${TIMES} ${p.reps}`;
 }
 
-/** The Previous column: "185×12", "+25×8", "−40×8", "45 s" or "2 km · 12:30". "—" if the set lacks the values. */
-export function formatPrevious(p: PrevSet, loggingType: LoggingType, displayUnit: WeightUnit): string {
+/** Seconds as "40s", or "1:30" from 60 seconds up. */
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  return total < 60 ? `${total}s` : formatRest(total);
+}
+
+/**
+ * The Previous column (spec 8.4): "185 × 5", "+25 × 8", "−40 × 8", "70 lb × 40s", "40s" or "1:30",
+ * "2 km · 12:30". Weight-and-time always shows its unit; the other weights show it only when it
+ * differs from `displayUnit` ("84 kg × 12").
+ *
+ * Empty for no previous set or a set that lacks a value its type needs. A number is never invented.
+ */
+export function formatPrevious(p: PrevSet | null, loggingType: LoggingType, displayUnit: WeightUnit): string {
+  if (p === null) return '';
   switch (loggingType) {
     case 'weighted':
       return formatLoaded(p, '', displayUnit);
@@ -129,9 +175,12 @@ export function formatPrevious(p: PrevSet, loggingType: LoggingType, displayUnit
     case 'assisted':
       return formatLoaded(p, MINUS, displayUnit);
     case 'timed':
-      return p.durationS === null ? NO_VALUE : `${p.durationS} s`;
+      return p.durationS === null ? '' : formatDuration(p.durationS);
+    case 'weighted_time':
+      if (p.weight === null || p.durationS === null) return '';
+      return `${formatWeight(p.weight, p.weightUnit ?? displayUnit)} ${TIMES} ${formatDuration(p.durationS)}`;
     case 'distance_time':
-      if (p.distance === null || p.distanceUnit === null || p.durationS === null) return NO_VALUE;
+      if (p.distance === null || p.distanceUnit === null || p.durationS === null) return '';
       return `${p.distance} ${p.distanceUnit} · ${formatRest(p.durationS)}`;
   }
 }

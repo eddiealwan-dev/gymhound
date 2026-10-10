@@ -23,6 +23,12 @@ describe('totalVolume (spec 7.9)', () => {
     expect(totalVolume([s({ loggingType: 'assisted' }), s({ loggingType: 'timed' })], 'kg')).toBe(0);
   });
 
+  it('adds nothing for a weight-and-time set', () => {
+    expect(totalVolume([s({ loggingType: 'weighted_time', reps: null })], 'kg')).toBe(0);
+    // Excluded by its logging type, not merely by having no reps.
+    expect(totalVolume([s({ loggingType: 'weighted_time', reps: 5 })], 'kg')).toBe(0);
+  });
+
   it('counts bodyweight_plus load by reps', () => {
     expect(
       totalVolume([s({ loggingType: 'bodyweight_plus', weight: 20, weightUnit: 'lb', reps: 10 })], 'lb'),
