@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Keyboard, Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
+import { AccessibilityInfo, Animated, Dimensions, Easing, Keyboard, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
 import { setSetting } from '../../db/repositories/settingsRepo';
+import type { MusicAppId } from '../../domain/types';
 import type { MusicApp } from '../../platform/music';
 import { openMusicApp } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
@@ -11,6 +13,9 @@ import { flushAll } from '../../state/draftFlush';
 import { Button } from '../Button';
 import { Body } from '../Text';
 import { useTheme } from '../ThemeProvider';
+
+/** How long the bar takes to slide up from the bottom edge. */
+const SLIDE_MS = 250;
 
 type Props = {
   /** The app picked in the music sheet, already known to exist on this platform (`musicAppOn`). */
@@ -21,18 +26,36 @@ type Props = {
  * The music app picked with the header's Music button, docked at the bottom of the session in every active workout
  * until × clears it (Task 26). Open leaves for the app: the keyboard closes and typed sets are saved first, and again by
  * the flush on the app going to the background (R32). Phase 7's player fills this same bar.
+ *
+ * It slides up from the bottom edge once, when it first appears (spec §18.4), by its own measured height; with Reduce
+ * Motion on it just appears. The slide is a transform, so the dock's measured height, and the content's padding, are
+ * right from the start.
  */
 export function MusicBar({ app }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  /** Whether the last Open found the app missing. */
-  const [missing, setMissing] = useState(false);
+  /** The app the last Open found missing, so a different app picked afterwards starts without the message. */
+  const [missingApp, setMissingApp] = useState<MusicAppId | null>(null);
+  const missing = missingApp === app.id;
+  /** How far below its place the bar is drawn: off the screen until it is measured, then its height, sliding to 0. */
+  const offset = useRef(new Animated.Value(Dimensions.get('screen').height)).current;
+  const slid = useRef(false);
+
+  const slideUp = (e: LayoutChangeEvent) => {
+    if (slid.current) return;
+    slid.current = true;
+    offset.setValue(e.nativeEvent.layout.height);
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (reduced) offset.setValue(0);
+      else Animated.timing(offset, { toValue: 0, duration: SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    });
+  };
 
   const open = async () => {
     Keyboard.dismiss();
     flushAll();
-    setMissing((await openMusicApp(app)) === 'missing');
+    setMissingApp((await openMusicApp(app)) === 'missing' ? app.id : null);
   };
 
   const close = () => {
@@ -41,7 +64,16 @@ export function MusicBar({ app }: Props) {
   };
 
   return (
-    <View style={{ backgroundColor: colors.surfaceRaised, borderTopWidth: 1, borderTopColor: colors.border, paddingBottom: insets.bottom }}>
+    <Animated.View
+      onLayout={slideUp}
+      style={{
+        backgroundColor: colors.surfaceRaised,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        paddingBottom: insets.bottom,
+        transform: [{ translateY: offset }],
+      }}
+    >
       <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Ionicons name="musical-notes" size={24} color={colors.text} />
@@ -63,6 +95,6 @@ export function MusicBar({ app }: Props) {
         </View>
         <Button label={`Open ${app.label}`} variant="secondary" onPress={() => void open()} />
       </View>
-    </View>
+    </Animated.View>
   );
 }

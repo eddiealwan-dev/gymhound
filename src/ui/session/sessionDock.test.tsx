@@ -1,4 +1,4 @@
-import { Keyboard, Linking, Platform, ScrollView, View } from 'react-native';
+import { Keyboard, Linking, Platform, ScrollView, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import Session from '../../../app/session';
@@ -181,6 +181,26 @@ describe('the music bar (Task 26)', () => {
     });
 
     expect(openURL).toHaveBeenCalledWith('spotify://');
+  });
+
+  it('picking Audible after Spotify was missing shows Audible without the missing message', async () => {
+    mockState.musicApp = 'spotify';
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('not installed'));
+    const tree = mount();
+    await act(async () => {
+      tree.root.findAllByType(Button).find((b) => b.props.label === 'Open Spotify')!.props.onPress();
+    });
+    expect(tree.root.findAllByType(Text).map((t) => t.props.children)).toContain("Spotify isn't on this phone.");
+
+    const music = tree.root.findAll((n) => n.props.accessibilityLabel === 'Music' && typeof n.props.onPress === 'function')[0];
+    act(() => music.props.onPress());
+    press(tree, 'Audible');
+    rerender(tree);
+
+    const texts = tree.root.findAllByType(Text).map((t) => t.props.children);
+    expect(buttonLabels(tree)).toContain('Open Audible');
+    expect(texts).not.toContain("Audible isn't on this phone.");
+    expect(texts).toContain('Tap Open to play or skip');
   });
 
   it('× clears it, and the bar goes', () => {

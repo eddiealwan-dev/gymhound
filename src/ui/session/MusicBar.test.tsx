@@ -1,4 +1,4 @@
-import { Keyboard, Linking, Text } from 'react-native';
+import { AccessibilityInfo, Animated, Keyboard, Linking, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { setSetting } from '../../db/repositories/settingsRepo';
@@ -22,6 +22,7 @@ jest.mock('../ThemeProvider', () => {
 });
 
 const spotify = MUSIC_APPS.find((app) => app.id === 'spotify')!;
+const audible = MUSIC_APPS.find((app) => app.id === 'audible')!;
 
 function render(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -30,6 +31,18 @@ function render(): ReactTestRenderer {
   });
   return tree;
 }
+
+/** The bar's own outer view: it reports the bar's height and carries the slide. */
+const barView = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === View && typeof n.props.onLayout === 'function')[0];
+const translateY = (tree: ReactTestRenderer): number => {
+  const style = [barView(tree).props.style].flat(Infinity).reduce((all, s) => ({ ...all, ...s }), {});
+  return style.transform.find((t: { translateY?: number }) => 'translateY' in t).translateY;
+};
+const layoutBar = async (tree: ReactTestRenderer, height: number) => {
+  await act(async () => {
+    barView(tree).props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 390, height } } });
+  });
+};
 
 const texts = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((t) => t.props.children);
 const closeButton = (tree: ReactTestRenderer) =>
@@ -99,5 +112,70 @@ describe('the music bar (Task 26)', () => {
 
     expect(setSetting).toHaveBeenCalledWith('db', 'musicApp', null);
     expect(bumpData).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps no "missing" message for a different app picked after it', async () => {
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('not installed'));
+    const tree = render();
+    await openSpotify(tree);
+    expect(texts(tree)).toContain("Spotify isn't on this phone.");
+
+    act(() => tree.update(<MusicBar app={audible} />));
+
+    expect(texts(tree)).not.toContain("Audible isn't on this phone.");
+    expect(texts(tree)).toContain('Tap Open to play or skip');
+  });
+});
+
+describe('the music bar slides up (Task 26, spec §18.4)', () => {
+  /** Jest has no native animation driver, so the slide is run straight to where it ends; its settings are recorded. */
+  const finishSlides = () =>
+    jest.spyOn(Animated, 'timing').mockImplementation((value, config) => {
+      const run = { start: () => (value as Animated.Value).setValue(config.toValue as number), stop: () => {}, reset: () => {} };
+      return run as unknown as Animated.CompositeAnimation;
+    });
+
+  it('starts below its own height, then slides up to rest on the bottom edge', async () => {
+    const timing = finishSlides();
+    const tree = render();
+    // Before it is measured it is held off the screen.
+    expect(translateY(tree)).toBeGreaterThan(150);
+
+    await layoutBar(tree, 150);
+
+    expect(timing).toHaveBeenCalledTimes(1);
+    expect(timing.mock.calls[0][1]).toMatchObject({ toValue: 0, duration: 250, useNativeDriver: true });
+    expect(translateY(tree)).toBe(0);
+  });
+
+  it('is measured at its height before the slide starts', async () => {
+    jest.spyOn(Animated, 'timing').mockImplementation(() => ({ start: () => {}, stop: () => {}, reset: () => {} }));
+    const tree = render();
+
+    await layoutBar(tree, 150);
+
+    expect(translateY(tree)).toBe(150);
+  });
+
+  it('slides only once, not again when it is measured again', async () => {
+    const timing = finishSlides();
+    const tree = render();
+    await layoutBar(tree, 150);
+
+    await layoutBar(tree, 170);
+
+    expect(timing).toHaveBeenCalledTimes(1);
+    expect(translateY(tree)).toBe(0);
+  });
+
+  it('appears in place, without the slide, with Reduce Motion on', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    const timing = jest.spyOn(Animated, 'timing');
+    const tree = render();
+
+    await layoutBar(tree, 150);
+
+    expect(timing).not.toHaveBeenCalled();
+    expect(translateY(tree)).toBe(0);
   });
 });
