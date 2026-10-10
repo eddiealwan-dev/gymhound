@@ -63,3 +63,26 @@ test('a sync call waits for a worker that takes longer than the old spin budget'
   expect(Date.now() - started).toBeGreaterThanOrEqual(ANSWER_AFTER_MS - 20);
   warn.mockRestore();
 });
+
+test('a sync call still gives up with "Sync operation timeout" once the clock passes the 10 s deadline', () => {
+  // A worker that never answers: the lock stays pending for ever.
+  const silent = { postMessage: () => {} } as unknown as Worker;
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  const START = 1_000_000;
+  let calls = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => {
+    calls += 1;
+    if (calls === 1) return START; // the deadline is set from this reading
+    if (calls <= 4) return START + 9_999; // still within it: the call keeps waiting
+    return START + 10_001 + calls; // past it (and always moving, so the test can never hang)
+  });
+
+  try {
+    expect(() => invokeWorkerSync(silent, 'run', {})).toThrow('Sync operation timeout');
+    // It waited through the readings inside the deadline and gave up at the first one past it.
+    expect(calls).toBe(5);
+  } finally {
+    now.mockRestore();
+    warn.mockRestore();
+  }
+});

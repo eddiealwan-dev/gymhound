@@ -1,14 +1,15 @@
 /** @jest-environment node */
 import Database from 'better-sqlite3';
 import { eq, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runSeed } from '../seed/seed';
 import { ensureSettings } from './repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './repositories/workoutsRepo';
-import { getActiveWorkoutView } from './repositories/workoutViewsRepo';
+import { getActiveWorkoutView, getPreviousSets } from './repositories/workoutViewsRepo';
 import * as schema from './schema';
 import { workouts } from './schema';
 import {
@@ -97,6 +98,41 @@ function liveWithTwoSnapshots(files: SnapshotFiles): { ids: string[]; oldest: st
   const newest = writeSnapshot(db, files, NOW + DAY + 2 * HOUR);
   close();
   return { ids: [first, second].sort(), oldest, newest };
+}
+
+/** The tables in a database, and the columns of one of them. */
+const tableNames = (db: Db) => db.all<{ name: string }>(sql`SELECT name FROM sqlite_master WHERE type = 'table'`).map((r) => r.name);
+const columnNames = (db: Db, table: string) => db.all<{ name: string }>(sql.raw(`PRAGMA table_info(${table})`)).map((r) => r.name);
+const appliedMigrations = (db: Db) => db.all<{ hash: string }>(sql`SELECT hash FROM __drizzle_migrations`).length;
+
+/**
+ * A live database as GymHound left it before migration 0002: migrations 0000 and 0001 only (no `exercise_prefs`, no
+ * `workouts.rest_set_id`), seeded, with one finished Push A holding bench 185 lb x 8. The workout is written with that
+ * schema's own columns, since the code's tables now have more. Returns the open handle.
+ */
+function livePre0002(): { db: Db; close(): void } {
+  const source = path.resolve(__dirname, 'migrations');
+  const folder = path.join(dir, 'migrations-to-0001');
+  fs.mkdirSync(path.join(folder, 'meta'), { recursive: true });
+  const journal = JSON.parse(fs.readFileSync(path.join(source, 'meta', '_journal.json'), 'utf8')) as { entries: { idx: number; tag: string }[] };
+  journal.entries = journal.entries.filter((entry) => entry.idx <= 1);
+  for (const { tag } of journal.entries) fs.copyFileSync(path.join(source, `${tag}.sql`), path.join(folder, `${tag}.sql`));
+  fs.writeFileSync(path.join(folder, 'meta', '_journal.json'), JSON.stringify(journal));
+
+  const handle = track(openFileDb(liveFile));
+  migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
+  ensureSettings(handle.db, 'us');
+  runSeed(handle.db, NOW);
+  handle.db.run(sql`
+    INSERT INTO workouts (id, name, routine_id, routine_day_id, status, day_mark, started_at, finished_at, local_date, rest_ends_at, food_offer_shown)
+    VALUES ('old-workout', 'Push A', 'premade-ppl-6', ${PUSH_A}, 'finished', 'normal', ${NOW}, ${NOW + HOUR}, '2026-10-09', NULL, 0)`);
+  handle.db.run(sql`
+    INSERT INTO workout_exercises (id, workout_id, exercise_id, position, show_rpe, note)
+    VALUES ('old-bench', 'old-workout', 'barbell-bench-press', 0, 0, 'Pause on the chest')`);
+  handle.db.run(sql`
+    INSERT INTO sets (id, workout_exercise_id, position, set_type, weight, weight_unit, reps, done, pr_flags, completed_at)
+    VALUES ('old-set', 'old-bench', 0, 'working', 185, 'lb', 8, 1, 0, ${NOW + 60_000})`);
+  return handle;
 }
 
 /** Startup dependencies over the temp folder. `closed` counts closes so tests can check no handle leaks. */
@@ -435,6 +471,36 @@ describe('startDatabase', () => {
 
     expect(result.restoredFrom).toBe(newest);
     expect(finishedIds(result.db)).toEqual(ids);
+  });
+
+  it('restores a snapshot taken before migrations 0002 and 0003, and migrates it forward with the finished workout intact (F11)', async () => {
+    const { deps, files } = makeDeps();
+    const old = livePre0002();
+    expect(appliedMigrations(old.db)).toBe(2);
+    expect(tableNames(old.db)).not.toContain('exercise_prefs');
+    expect(columnNames(old.db, 'workouts')).not.toContain('rest_set_id');
+    const name = writeSnapshot(old.db, files, NOW + 2 * HOUR);
+    old.close();
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(name);
+    expect(appliedMigrations(result.db)).toBe(4);
+    expect(tableNames(result.db)).toContain('exercise_prefs');
+    expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
+    expect(finishedIds(result.db)).toEqual(['old-workout']);
+    expect(result.db.select().from(workouts).where(eq(workouts.id, 'old-workout')).get()).toMatchObject({
+      name: 'Push A',
+      status: 'finished',
+      startedAt: NOW,
+      finishedAt: NOW + HOUR,
+      restSetId: null,
+    });
+    // The current code reads it: bench's last result is the set logged before the migrations.
+    expect(getPreviousSets(result.db, 'barbell-bench-press', 'none')).toEqual([
+      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null },
+    ]);
   });
 
   it('leaves a healthy live database alone', async () => {
