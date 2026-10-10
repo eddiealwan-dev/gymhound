@@ -1,6 +1,6 @@
-import { AccessibilityInfo, Animated, Keyboard, Linking, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Keyboard, Linking, Platform, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { setSetting } from '../../db/repositories/settingsRepo';
 import { MUSIC_APPS } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
@@ -177,5 +177,71 @@ describe('the music bar slides up (Task 26, spec §18.4)', () => {
 
     expect(timing).not.toHaveBeenCalled();
     expect(translateY(tree)).toBe(0);
+  });
+
+  it('appears in place, as with Reduce Motion, when the Reduce Motion check fails, so its × is never out of reach', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockRejectedValueOnce(new Error('unavailable'));
+    const timing = jest.spyOn(Animated, 'timing');
+    const tree = render();
+
+    await layoutBar(tree, 150);
+
+    expect(timing).not.toHaveBeenCalled();
+    expect(translateY(tree)).toBe(0);
+  });
+});
+
+describe('the music bar with a screen reader (G5)', () => {
+  // React Native's own Jest mock, which `jest.restoreAllMocks` leaves alone: its calls are cleared before each test.
+  const announce = jest.mocked(AccessibilityInfo.announceForAccessibility);
+
+  beforeEach(() => announce.mockClear());
+
+  /** Whether VoiceOver and TalkBack skip this node: it, or a view around it, hides itself and everything inside. */
+  const hiddenFromScreenReaders = (node: ReactTestInstance): boolean => {
+    for (let n: ReactTestInstance | null = node; n; n = n.parent) {
+      if (n.props.accessibilityElementsHidden === true && n.props.importantForAccessibility === 'no-hide-descendants') return true;
+    }
+    return false;
+  };
+
+  it('skips the decorative music icon', () => {
+    const tree = render();
+    const icon = tree.root.find((n) => n.props.name === 'musical-notes');
+
+    expect(hiddenFromScreenReaders(icon)).toBe(true);
+    // The × is still read.
+    expect(hiddenFromScreenReaders(closeButton(tree))).toBe(false);
+  });
+
+  it("says the app isn't on this phone on iOS, where VoiceOver does not read a live region", async () => {
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('not installed'));
+    const tree = render();
+
+    await openSpotify(tree);
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith("Spotify isn't on this phone.");
+  });
+
+  it('says nothing more when the app opens', async () => {
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const tree = render();
+
+    await openSpotify(tree);
+
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("leaves it to the live region on Android, which TalkBack reads, so it isn't said twice", async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('not installed'));
+    const tree = render();
+
+    await openSpotify(tree);
+
+    expect(announce).not.toHaveBeenCalled();
+    const line = tree.root.findAllByType(Text).find((t) => t.props.children === "Spotify isn't on this phone.")!;
+    expect(line.props.accessibilityLiveRegion).toBe('polite');
   });
 });

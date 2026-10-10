@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { AccessibilityInfo, Animated, Dimensions, Easing, Keyboard, Pressable, View } from 'react-native';
+import { AccessibilityInfo, Animated, Dimensions, Easing, Keyboard, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
 import { setSetting } from '../../db/repositories/settingsRepo';
@@ -28,8 +28,8 @@ type Props = {
  * the flush on the app going to the background (R32). Phase 7's player fills this same bar.
  *
  * It slides up from the bottom edge once, when it first appears (spec §18.4), by its own measured height; with Reduce
- * Motion on it just appears. The slide is a transform, so the dock's measured height, and the content's padding, are
- * right from the start.
+ * Motion on, or when the phone can't say whether it is on, it just appears. The slide is a transform, so the dock's
+ * measured height, and the content's padding, are right from the start.
  */
 export function MusicBar({ app }: Props) {
   const db = useDb();
@@ -46,16 +46,23 @@ export function MusicBar({ app }: Props) {
     if (slid.current) return;
     slid.current = true;
     offset.setValue(e.nativeEvent.layout.height);
+    const appear = () => offset.setValue(0);
+    // A check that fails counts as Reduce Motion: the bar must never stay off the screen with its × out of reach.
     void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (reduced) offset.setValue(0);
+      if (reduced) appear();
       else Animated.timing(offset, { toValue: 0, duration: SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    });
+    }, appear);
   };
+
+  const missingLine = `${app.label} isn't on this phone.`;
 
   const open = async () => {
     Keyboard.dismiss();
     flushAll();
-    setMissingApp((await openMusicApp(app)) === 'missing' ? app.id : null);
+    const isMissing = (await openMusicApp(app)) === 'missing';
+    setMissingApp(isMissing ? app.id : null);
+    // TalkBack reads the line's live region; VoiceOver doesn't, so iOS is told.
+    if (isMissing && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(missingLine);
   };
 
   const close = () => {
@@ -76,11 +83,14 @@ export function MusicBar({ app }: Props) {
     >
       <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Ionicons name="musical-notes" size={24} color={colors.text} />
+          {/* Decorative: the app's name beside it says what the bar is. */}
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Ionicons name="musical-notes" size={24} color={colors.text} />
+          </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Body weight={600}>{app.label}</Body>
             <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 14 }}>
-              {missing ? `${app.label} isn't on this phone.` : 'Tap Open to play or skip'}
+              {missing ? missingLine : 'Tap Open to play or skip'}
             </Body>
           </View>
           <Pressable
