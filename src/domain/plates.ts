@@ -9,6 +9,17 @@ import { convertWeight, roundToHalf } from './units';
 
 const toHundredths = (v: number): number => Math.round(v * 100);
 
+/** A bar and the plate pairs owned, both in one unit. */
+export type Gear = { bar: number; plates: Record<string, number> };
+
+/** The bar and plates in Settings for `unit` (Settings keeps a set for each unit). */
+export function gearFor(
+  unit: WeightUnit,
+  settings: { barLb: number; barKg: number; platesLb: Record<string, number>; platesKg: Record<string, number> },
+): Gear {
+  return unit === 'lb' ? { bar: settings.barLb, plates: settings.platesLb } : { bar: settings.barKg, plates: settings.platesKg };
+}
+
 /** One plate of each owned pair, heaviest first, in hundredths. */
 function platesPerSide(platesOwned: Record<string, number>): number[] {
   const plates: number[] = [];

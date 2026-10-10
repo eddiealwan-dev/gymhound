@@ -453,6 +453,9 @@ describe('addWarmupSet', () => {
 });
 
 describe('the previous result after a warmup is added', () => {
+  /** The lb bar and plates Settings starts with. */
+  const LB_GEAR = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } };
+
   it('lines the new warmups up with last time\'s warmups and keeps working set 1 on its own', () => {
     const db = seededDb();
     // Last time: W 60 x 10, W 80 x 5, then set 1 at 100 x 5.
@@ -471,13 +474,13 @@ describe('the previous result after a warmup is added', () => {
     // Today: one working set, then two warmups are added in front of it.
     const todayId = startEmptyWorkout(db, NOW + DAY);
     const bench = addExerciseToWorkout(db, todayId, 'barbell-bench-press');
-    expect(buildRows(view(db).exercises[0], 'lb').map((r) => r.previous)).toEqual(['100 × 5']);
+    expect(buildRows(view(db).exercises[0], 'lb', LB_GEAR).map((r) => r.previous)).toEqual(['100 × 5']);
 
     addWarmupSet(db, bench);
-    expect(buildRows(view(db).exercises[0], 'lb').map((r) => r.previous)).toEqual(['60 × 10', '100 × 5']);
+    expect(buildRows(view(db).exercises[0], 'lb', LB_GEAR).map((r) => r.previous)).toEqual(['60 × 10', '100 × 5']);
 
     addWarmupSet(db, bench);
-    const rows = buildRows(view(db).exercises[0], 'lb');
+    const rows = buildRows(view(db).exercises[0], 'lb', LB_GEAR);
     expect(rows.map((r) => r.label)).toEqual(['W', 'W', '1']);
     expect(rows.map((r) => r.previous)).toEqual(['60 × 10', '80 × 5', '100 × 5']);
   });

@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import { getRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
 import { getUpNext, setActiveRoutine } from '../db/repositories/routinesRepo';
-import { setSetting } from '../db/repositories/settingsRepo';
+import { getSettings, setSetting } from '../db/repositories/settingsRepo';
+import { switchDisplayUnit } from '../db/repositories/unitsRepo';
 import {
   ActiveWorkoutExistsError,
   finishWorkout,
@@ -15,6 +16,8 @@ import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/worko
 import { workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
+import { gearFor } from '../domain/plates';
+import { buildRows, fieldPatch, readRow, valueText } from '../domain/setTable';
 import { useDataVersion } from './dataVersion';
 import {
   addExercise,
@@ -227,15 +230,16 @@ describe('tick', () => {
     expect(version()).toBe(before);
   });
 
-  it("uses today's target for a working set, converted into the entry unit", () => {
+  it("uses today's target for a working set, converted into the entry unit as a workout start does (R36)", () => {
     startFromDay(db, PUSH_A);
     const ex = bench();
     db.update(workoutExercises).set({ plannedWeight: 60, plannedUnit: 'kg' }).where(eq(workoutExercises.id, ex.id)).run();
 
     tick(db, bench(), bench().sets[0], { weight: null, reps: 5, durationS: null, distance: null });
 
-    // 60 kg is 132.28 lb, and it is stored in lb, the unit it was ticked in.
-    expect(reread(ex.sets[0].id)).toMatchObject({ done: true, weight: 132.28, weightUnit: 'lb', reps: 5 });
+    // 60 kg is 132.28 lb; the bench is a barbell, so it rounds to the nearest weight the lb plates load, and it is
+    // stored in lb, the unit it was ticked in.
+    expect(reread(ex.sets[0].id)).toMatchObject({ done: true, weight: 130, weightUnit: 'lb', reps: 5 });
   });
 
   it("prefers today's override to the planned weight", () => {
@@ -261,6 +265,66 @@ describe('tick', () => {
     expect(tick(db, fresh, fresh.sets[0], { weight: null, reps: 8, durationS: null, distance: null })).toBe(false);
     expect(tick(db, fresh, fresh.sets[1], { weight: null, reps: 8, durationS: null, distance: null })).toBe(true);
     expect(reread(fresh.sets[1].id).weight).toBe(225);
+  });
+});
+
+describe('a unit switch mid-workout: logged entries stay in the unit they were logged in (spec 7.1, F4)', () => {
+  /** The set table row for bench set `i` as the session shows it now, in the unit in Settings. */
+  function benchRow(i: number) {
+    const settings = getSettings(db);
+    const ex = bench();
+    return { ex, row: buildRows(ex, settings.unit, gearFor(settings.unit, settings))[i] };
+  }
+
+  it('shows 135 typed in lb and not ticked as "135 lb" after a switch to kg, and ticks it as 135 lb', () => {
+    startFromDay(db, PUSH_A);
+    commitSetField(db, bench().sets[0].id, fieldPatch('weight', 135, 'lb', 'mi'));
+
+    switchDisplayUnit(db, 'kg');
+
+    const { ex, row } = benchRow(0);
+    expect(valueText(row, 'weight', 'kg')).toBe('135 lb');
+    const reading = readRow(row, {}, 'kg');
+    expect(tick(db, ex, row.set, reading.entered, reading.weightUnit)).toBe(true);
+    expect(reread(row.set.id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb' });
+  });
+
+  it('saves a weight typed after the switch in the new unit', () => {
+    startFromDay(db, PUSH_A);
+    commitSetField(db, bench().sets[0].id, fieldPatch('weight', 135, 'lb', 'mi'));
+    switchDisplayUnit(db, 'kg');
+
+    const { ex, row } = benchRow(0);
+    const reading = readRow(row, { weight: '60' }, 'kg');
+    tick(db, ex, row.set, reading.entered, reading.weightUnit);
+
+    expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
+  });
+
+  it('shows a done 100 kg set as "100 kg" after a switch to lb', () => {
+    setSetting(db, 'unit', 'kg');
+    startFromDay(db, PUSH_A);
+    tick(db, bench(), bench().sets[0], { weight: 100, reps: 5, durationS: null, distance: null });
+
+    switchDisplayUnit(db, 'lb');
+
+    const { row } = benchRow(0);
+    expect(row.set).toMatchObject({ done: true, weight: 100, weightUnit: 'kg' });
+    expect(valueText(row, 'weight', 'lb')).toBe('100 kg');
+  });
+
+  it('prefills a 135 lb planned bench as 60 after a switch to kg, not 61.23, and ticks 60 kg', () => {
+    startFromDay(db, PUSH_A);
+    db.update(workoutExercises).set({ plannedWeight: 135, plannedUnit: 'lb' }).where(eq(workoutExercises.id, bench().id)).run();
+
+    switchDisplayUnit(db, 'kg');
+
+    const { ex, row } = benchRow(0);
+    expect(row.target).toBe(60);
+    expect(valueText(row, 'weight', 'kg')).toBe('60');
+    const reading = readRow(row, {}, 'kg');
+    tick(db, ex, row.set, reading.entered, reading.weightUnit);
+    expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
   });
 });
 

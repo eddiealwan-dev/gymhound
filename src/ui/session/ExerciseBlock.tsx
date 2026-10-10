@@ -3,6 +3,7 @@ import { Fragment, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
+import type { Gear } from '../../domain/plates';
 import { buildRows, tableColumns } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { useDraftFlush } from '../../state/draftFlush';
@@ -26,6 +27,8 @@ type Props = {
   workoutId: string;
   ex: WorkoutExerciseView;
   unit: WeightUnit;
+  /** The bar and plates in Settings for `unit`: a barbell target planned in the other unit rounds to what they load. */
+  gear: Gear;
   distanceUnit: DistanceUnit;
   /** Opens this exercise's ⋯ menu. */
   onOpenMenu: () => void;
@@ -54,6 +57,7 @@ export function ExerciseBlock({
   workoutId,
   ex,
   unit,
+  gear,
   distanceUnit,
   onOpenMenu,
   inSuperset,
@@ -65,7 +69,7 @@ export function ExerciseBlock({
   const { colors } = useTheme();
   const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
   // Each row's previous is worked out once for the whole block.
-  const rows = buildRows(ex, unit);
+  const rows = buildRows(ex, unit, gear);
 
   /** The note while it is being typed; null shows the saved one. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);

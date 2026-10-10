@@ -1,5 +1,6 @@
 import { formatRest } from './dates';
 import { parseDecimal, parseDuration, parseReps, parseRpe } from './input';
+import { planInUnit, type Gear } from './plates';
 import {
   formatDuration,
   formatPrevious,
@@ -7,11 +8,11 @@ import {
   placeholdersFor,
   resolveTick,
   setLabels,
+  weightText,
   type PrevSet,
   type TickValues,
 } from './setEntry';
-import type { DistanceUnit, LoggingType, WeightUnit } from './types';
-import { convertWeight } from './units';
+import type { DistanceUnit, Equipment, LoggingType, WeightUnit } from './types';
 
 /**
  * What the session screen shows for an exercise's set table, as plain functions: the columns, the text in each
@@ -125,6 +126,7 @@ export type SetInput = PrevSet & { id: string; rpe: number | null; done: boolean
 /** The parts of a workout exercise the set table reads (`WorkoutExerciseView` fits). */
 export type ExerciseInput = {
   loggingType: LoggingType;
+  equipment: Equipment;
   rule: { repMax: number } | null;
   plannedWeight: number | null;
   plannedUnit: WeightUnit | null;
@@ -143,30 +145,36 @@ export type RowModel = {
   previous: string;
   /** Today's target weight in the entry unit, for a working set of a type with a load. */
   target: number | null;
-  /** The greyed-out values, in the entry unit. */
+  /** The greyed-out values, in the entry unit (a previous weight in the other unit rounds to the nearest 0.5). */
   placeholders: ReturnType<typeof placeholdersFor>;
 };
 
 const round2 = (n: number) => Number(n.toFixed(2));
 
-/** Today's target weight, in the entry unit (`TickInput.target` must be). The override wins over the planned weight. */
-function targetFor(ex: ExerciseInput, unit: WeightUnit): number | null {
+/**
+ * Today's target weight, in the entry unit (`TickInput.target` must be). The override wins over the planned weight.
+ * One in the other unit (the display unit was switched mid-workout) converts as a workout start does (spec 7.1,
+ * `planInUnit`): a barbell to the nearest weight `gear` loads, anything else to the nearest 0.5.
+ */
+function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): number | null {
   if (!HAS_LOAD.includes(ex.loggingType)) return null;
   const overridden = ex.overrideWeight !== null;
   const weight = overridden ? ex.overrideWeight : ex.plannedWeight;
   if (weight === null) return null;
-  return round2(convertWeight(weight, (overridden ? ex.overrideUnit : ex.plannedUnit) ?? unit, unit));
+  const from = (overridden ? ex.overrideUnit : ex.plannedUnit) ?? unit;
+  return planInUnit(weight, from, unit, ex.equipment === 'barbell', gear.bar, gear.plates);
 }
 
 /**
  * One row per set. Each row's previous is the same set from last time: the previous set with the same type and the
  * same number within that type (`matchPrevious`, computed once here), so a warmup is never the previous result for a
  * working set. Only working sets start from today's target (spec 8.4); a warmup starts from its own previous.
+ * `gear` is the bar and plates in Settings for `unit`, which a barbell target in the other unit rounds to.
  */
-export function buildRows(ex: ExerciseInput, unit: WeightUnit): RowModel[] {
+export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear): RowModel[] {
   const matched = matchPrevious(ex.sets, ex.previous);
   const labels = setLabels(ex.sets.map((s) => s.setType));
-  const target = targetFor(ex, unit);
+  const target = targetFor(ex, unit, gear);
   return ex.sets.map((set, i) => ({
     set,
     loggingType: ex.loggingType,
@@ -187,11 +195,11 @@ const numberText = (n: number) => String(round2(n));
 /** A time as typed: "40" under a minute, "1:30" from a minute up. Both read back through `parseDuration`. */
 const durationText = (seconds: number) => (seconds < 60 ? String(seconds) : formatRest(seconds));
 
-/** The stored value of a field, with a weight logged in the other unit shown in the entry unit. */
-function storedValue(set: SetInput, key: InputKey, unit: WeightUnit): number | null {
+/** The stored value of a field, as it was logged: a weight is in its own unit (`set.weightUnit`), which may not be the display unit. */
+function storedValue(set: SetInput, key: InputKey): number | null {
   switch (key) {
     case 'weight':
-      return set.weight === null ? null : round2(convertWeight(set.weight, set.weightUnit ?? unit, unit));
+      return set.weight;
     case 'reps':
       return set.reps;
     case 'durationS':
@@ -204,12 +212,17 @@ function storedValue(set: SetInput, key: InputKey, unit: WeightUnit): number | n
 }
 
 /**
- * What an input holds when nothing is being typed: the stored value, else empty. An open row's load falls back to
- * today's target; a done row never does, so it cannot show a weight that was not saved.
+ * What an input holds when nothing is being typed: the stored value, else empty. A stored weight shows as it was
+ * logged, done or not, with its unit when that is not the display unit ("135 lb" while in kg, spec 7.1). An open row's
+ * load falls back to today's target; a done row never does, so it cannot show a weight that was not saved.
  */
 export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): string {
-  const stored = storedValue(row.set, key, unit);
-  const value = key === 'weight' && !row.set.done ? (stored ?? row.target) : stored;
+  const { set } = row;
+  if (key === 'weight') {
+    if (set.weight !== null) return weightText(set.weight, set.weightUnit ?? unit, unit);
+    return !set.done && row.target !== null ? numberText(row.target) : '';
+  }
+  const value = storedValue(set, key);
   if (value === null) return '';
   return key === 'durationS' ? durationText(value) : numberText(value);
 }
@@ -237,6 +250,11 @@ export type Drafts = Partial<Record<InputKey, string>>;
 export type RowReading = {
   /** What was typed or stored, before the target and placeholders fill in: null for a field with no value. */
   entered: TickValues;
+  /**
+   * The unit `entered.weight` is in: the display unit for a typed weight (or none), else the unit the stored weight
+   * was logged in. A tick keeps it, so a weight logged before a unit switch is never re-saved converted (spec 7.1).
+   */
+  weightUnit: WeightUnit;
   rpe: number | null;
   /** The inputs whose non-blank text does not parse. */
   invalid: InputKey[];
@@ -253,7 +271,7 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowRea
   for (const key of ORDER) {
     const draft = drafts[key];
     if (draft === undefined) {
-      values[key] = storedValue(row.set, key, unit);
+      values[key] = storedValue(row.set, key);
       continue;
     }
     const parsed = parseField(key, draft);
@@ -262,7 +280,8 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowRea
   }
   const entered: TickValues = { weight: values.weight, reps: values.reps, durationS: values.durationS, distance: values.distance };
   const resolved = resolveTick({ loggingType: row.loggingType, entered, target: row.target, placeholders: row.placeholders });
-  return { entered, rpe: values.rpe, invalid, tickable: invalid.length === 0 && resolved !== null };
+  const weightUnit = drafts.weight === undefined ? (row.set.weightUnit ?? unit) : unit;
+  return { entered, weightUnit, rpe: values.rpe, invalid, tickable: invalid.length === 0 && resolved !== null };
 }
 
 /**

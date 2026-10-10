@@ -148,8 +148,13 @@ const set = (setType: SetType, extra: Partial<SetInput> = {}): SetInput => ({
   ...extra,
 });
 
+/** The bar and plates in Settings by default, for each unit. */
+const LB_GEAR = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } };
+const KG_GEAR = { bar: 20, plates: { '25': 4, '20': 1, '15': 1, '10': 1, '5': 1, '2.5': 1, '1.25': 1 } };
+
 const exercise = (extra: Partial<ExerciseInput> = {}): ExerciseInput => ({
   loggingType: 'weighted',
+  equipment: 'barbell',
   rule: { repMax: 8 },
   plannedWeight: null,
   plannedUnit: null,
@@ -162,7 +167,7 @@ const exercise = (extra: Partial<ExerciseInput> = {}): ExerciseInput => ({
 
 describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
   it('is empty on every row when the exercise has no history, and invents nothing', () => {
-    const rows = buildRows(exercise(), 'lb');
+    const rows = buildRows(exercise(), 'lb', LB_GEAR);
     expect(rows.map((r) => r.previous)).toEqual(['', '', '', '']);
     expect(rows.map((r) => r.label)).toEqual(['1', '2', '3', '4']);
     expect(rows[0].placeholders).toEqual({ weight: null, reps: 8, durationS: null, distance: null });
@@ -174,6 +179,7 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
         previous: [prev(0, 'working', 135, 8), prev(1, 'working', 140, 7), prev(2, 'working', 145, 6), prev(3, 'working', 150, 5)],
       }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.previous)).toEqual(['135 × 8', '140 × 7', '145 × 6', '150 × 5']);
   });
@@ -185,6 +191,7 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
         previous: [prev(0, 'warmup', 45, 10), prev(1, 'working', 135, 8)],
       }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.previous)).toEqual(['135 × 8', '']);
   });
@@ -196,6 +203,7 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
         previous: [prev(0, 'warmup', 45, 10), prev(1, 'working', 135, 8), prev(2, 'working', 140, 7)],
       }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.label)).toEqual(['W', '1', '2', '3']);
     expect(rows.map((r) => r.previous)).toEqual(['45 × 10', '135 × 8', '140 × 7', '']);
@@ -205,6 +213,7 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
     const rows = buildRows(
       exercise({ sets: [set('warmup'), set('working')], previous: [prev(0, 'working', 135, 8)] }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.previous)).toEqual(['', '135 × 8']);
   });
@@ -216,6 +225,7 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
         previous: [prev(0, 'working', 135, 8), prev(2, 'working', 145, 6)],
       }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.previous)).toEqual(['135 × 8', '145 × 6', '']);
   });
@@ -224,12 +234,13 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
     const rows = buildRows(
       exercise({ sets: [set('working')], previous: [prev(0, 'working', 84, 12, { weightUnit: 'kg' })] }),
       'lb',
+      LB_GEAR,
     );
     expect(rows[0].previous).toBe('84 kg × 12');
   });
 
   it('follows the logging type: timed, weighted time, distance and time, bodyweight plus, assisted', () => {
-    const one = (loggingType: LoggingType, p: PrevSet) => buildRows(exercise({ loggingType, sets: [set('working')], previous: [p] }), 'lb')[0].previous;
+    const one = (loggingType: LoggingType, p: PrevSet) => buildRows(exercise({ loggingType, sets: [set('working')], previous: [p] }), 'lb', LB_GEAR)[0].previous;
     expect(one('timed', prev(0, 'working', null, null, { durationS: 40 }))).toBe('40s');
     expect(one('timed', prev(0, 'working', null, null, { durationS: 90 }))).toBe('1:30');
     expect(one('weighted_time', prev(0, 'working', 70, null, { durationS: 40 }))).toBe('70 lb × 40s');
@@ -240,8 +251,8 @@ describe('buildRows: the previous result (spec 8.4, Review Focus 7)', () => {
 
   it('follows the row when its type changes', () => {
     const previous = [prev(0, 'warmup', 45, 10), prev(1, 'working', 135, 8)];
-    const before = buildRows(exercise({ sets: [set('working'), set('working')], previous }), 'lb');
-    const after = buildRows(exercise({ sets: [set('warmup'), set('working')], previous }), 'lb');
+    const before = buildRows(exercise({ sets: [set('working'), set('working')], previous }), 'lb', LB_GEAR);
+    const after = buildRows(exercise({ sets: [set('warmup'), set('working')], previous }), 'lb', LB_GEAR);
     expect(before.map((r) => r.previous)).toEqual(['135 × 8', '']);
     expect(after.map((r) => r.previous)).toEqual(['45 × 10', '135 × 8']);
   });
@@ -252,38 +263,51 @@ describe('buildRows: the target and the placeholders', () => {
     const rows = buildRows(
       exercise({ plannedWeight: 130, plannedUnit: 'lb', overrideWeight: 135, overrideUnit: 'lb' }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.target)).toEqual([135, 135, 135, 135]);
   });
 
-  it('converts a target logged in the other unit into the entry unit, to 2 decimals', () => {
-    expect(buildRows(exercise({ plannedWeight: 100, plannedUnit: 'kg' }), 'lb')[0].target).toBe(220.46);
-    expect(buildRows(exercise({ plannedWeight: 225, plannedUnit: 'lb' }), 'kg')[0].target).toBe(102.06);
+  it('converts a target in the other unit as a workout start does (planInUnit, R36): a barbell to a loadable weight', () => {
+    expect(buildRows(exercise({ plannedWeight: 135, plannedUnit: 'lb' }), 'kg', KG_GEAR)[0].target).toBe(60);
+    expect(buildRows(exercise({ plannedWeight: 100, plannedUnit: 'kg' }), 'lb', LB_GEAR)[0].target).toBe(220);
+    expect(buildRows(exercise({ overrideWeight: 225, overrideUnit: 'lb' }), 'kg', KG_GEAR)[0].target).toBe(102.5);
+  });
+
+  it('converts a target in the other unit to the nearest 0.5 for anything but a barbell', () => {
+    expect(buildRows(exercise({ equipment: 'dumbbell', plannedWeight: 100, plannedUnit: 'kg' }), 'lb', LB_GEAR)[0].target).toBe(220.5);
+    expect(buildRows(exercise({ equipment: 'dumbbell', plannedWeight: 225, plannedUnit: 'lb' }), 'kg', KG_GEAR)[0].target).toBe(102);
+  });
+
+  it('prefills a 135 lb barbell target viewed in kg as 60, not 61.23 (F4)', () => {
+    const [row] = buildRows(exercise({ sets: [set('working')], plannedWeight: 135, plannedUnit: 'lb' }), 'kg', KG_GEAR);
+    expect(valueText(row, 'weight', 'kg')).toBe('60');
   });
 
   it('treats a target with no unit as already in the entry unit', () => {
-    expect(buildRows(exercise({ plannedWeight: 100, plannedUnit: null }), 'kg')[0].target).toBe(100);
+    expect(buildRows(exercise({ plannedWeight: 100, plannedUnit: null }), 'kg', KG_GEAR)[0].target).toBe(100);
   });
 
   it('has no target when the exercise has none', () => {
-    expect(buildRows(exercise(), 'lb').map((r) => r.target)).toEqual([null, null, null, null]);
+    expect(buildRows(exercise(), 'lb', LB_GEAR).map((r) => r.target)).toEqual([null, null, null, null]);
   });
 
   it('only working sets start from the target; a warmup does not', () => {
     const rows = buildRows(
       exercise({ sets: [set('warmup'), set('working'), set('drop'), set('failure')], plannedWeight: 225, plannedUnit: 'lb' }),
       'lb',
+      LB_GEAR,
     );
     expect(rows.map((r) => r.target)).toEqual([null, 225, null, null]);
   });
 
   it('has no target for the types that carry no load', () => {
-    expect(buildRows(exercise({ loggingType: 'timed', plannedWeight: 50, plannedUnit: 'lb' }), 'lb')[0].target).toBeNull();
-    expect(buildRows(exercise({ loggingType: 'distance_time', plannedWeight: 50, plannedUnit: 'lb' }), 'lb')[0].target).toBeNull();
-    expect(buildRows(exercise({ loggingType: 'weighted_time', plannedWeight: 50, plannedUnit: 'lb' }), 'lb')[0].target).toBe(50);
+    expect(buildRows(exercise({ loggingType: 'timed', plannedWeight: 50, plannedUnit: 'lb' }), 'lb', LB_GEAR)[0].target).toBeNull();
+    expect(buildRows(exercise({ loggingType: 'distance_time', plannedWeight: 50, plannedUnit: 'lb' }), 'lb', LB_GEAR)[0].target).toBeNull();
+    expect(buildRows(exercise({ loggingType: 'weighted_time', plannedWeight: 50, plannedUnit: 'lb' }), 'lb', LB_GEAR)[0].target).toBe(50);
   });
 
-  it('takes placeholders from the matched previous set, converted into the entry unit, else the rule', () => {
+  it('takes placeholders from the matched previous set, converted into the entry unit to the nearest 0.5, else the rule', () => {
     const rows = buildRows(
       exercise({
         sets: [set('working'), set('working')],
@@ -291,38 +315,39 @@ describe('buildRows: the target and the placeholders', () => {
         rule: { repMax: 12 },
       }),
       'lb',
+      LB_GEAR,
     );
-    expect(rows[0].placeholders).toEqual({ weight: 220.46, reps: 6, durationS: null, distance: null });
+    expect(rows[0].placeholders).toEqual({ weight: 220.5, reps: 6, durationS: null, distance: null });
     expect(rows[1].placeholders).toEqual({ weight: null, reps: 12, durationS: null, distance: null });
   });
 
   it('feeds the rule into the time placeholder for timed sets', () => {
-    const rows = buildRows(exercise({ loggingType: 'timed', sets: [set('working')], rule: { repMax: 45 } }), 'lb');
+    const rows = buildRows(exercise({ loggingType: 'timed', sets: [set('working')], rule: { repMax: 45 } }), 'lb', LB_GEAR);
     expect(rows[0].placeholders).toMatchObject({ reps: null, durationS: 45 });
   });
 });
 
 describe('valueText and hintText', () => {
   it('shows the target as the load until a weight is stored', () => {
-    const [row] = buildRows(exercise({ sets: [set('working')], plannedWeight: 135, plannedUnit: 'lb' }), 'lb');
+    const [row] = buildRows(exercise({ sets: [set('working')], plannedWeight: 135, plannedUnit: 'lb' }), 'lb', LB_GEAR);
     expect(valueText(row, 'weight', 'lb')).toBe('135');
-    const [stored] = buildRows(exercise({ sets: [set('working', { weight: 140, weightUnit: 'lb' })], plannedWeight: 135, plannedUnit: 'lb' }), 'lb');
+    const [stored] = buildRows(exercise({ sets: [set('working', { weight: 140, weightUnit: 'lb' })], plannedWeight: 135, plannedUnit: 'lb' }), 'lb', LB_GEAR);
     expect(valueText(stored, 'weight', 'lb')).toBe('140');
   });
 
   it('never shows an unsaved target on a done row (R29)', () => {
     // A done set with no stored weight (it was cleared after the tick) must not borrow today's target.
     const plan = { plannedWeight: 135, plannedUnit: 'lb' as const };
-    const [done] = buildRows(exercise({ sets: [set('working', { done: true, reps: 8 })], ...plan }), 'lb');
+    const [done] = buildRows(exercise({ sets: [set('working', { done: true, reps: 8 })], ...plan }), 'lb', LB_GEAR);
     expect(valueText(done, 'weight', 'lb')).toBe('');
-    const [open] = buildRows(exercise({ sets: [set('working', { reps: 8 })], ...plan }), 'lb');
+    const [open] = buildRows(exercise({ sets: [set('working', { reps: 8 })], ...plan }), 'lb', LB_GEAR);
     expect(valueText(open, 'weight', 'lb')).toBe('135');
-    const [stored] = buildRows(exercise({ sets: [set('working', { done: true, weight: 140, weightUnit: 'lb', reps: 8 })], ...plan }), 'lb');
+    const [stored] = buildRows(exercise({ sets: [set('working', { done: true, weight: 140, weightUnit: 'lb', reps: 8 })], ...plan }), 'lb', LB_GEAR);
     expect(valueText(stored, 'weight', 'lb')).toBe('140');
   });
 
   it('is empty for a field with no value and no target', () => {
-    const [row] = buildRows(exercise({ sets: [set('working')] }), 'lb');
+    const [row] = buildRows(exercise({ sets: [set('working')] }), 'lb', LB_GEAR);
     expect(valueText(row, 'weight', 'lb')).toBe('');
     expect(valueText(row, 'reps', 'lb')).toBe('');
     expect(valueText(row, 'durationS', 'lb')).toBe('');
@@ -330,22 +355,27 @@ describe('valueText and hintText', () => {
     expect(valueText(row, 'rpe', 'lb')).toBe('');
   });
 
-  it('converts a stored weight logged in the other unit into the unit on the column', () => {
-    const [row] = buildRows(exercise({ sets: [set('working', { weight: 100, weightUnit: 'kg' })] }), 'lb');
-    expect(valueText(row, 'weight', 'lb')).toBe('220.46');
+  it('shows a stored weight as it was logged, with its unit when that is not the display unit (spec 7.1, F4)', () => {
+    const [open] = buildRows(exercise({ sets: [set('working', { weight: 135, weightUnit: 'lb' })] }), 'kg', KG_GEAR);
+    expect(valueText(open, 'weight', 'kg')).toBe('135 lb');
+    const [done] = buildRows(exercise({ sets: [set('working', { done: true, weight: 100, weightUnit: 'kg', reps: 5 })] }), 'lb', LB_GEAR);
+    expect(valueText(done, 'weight', 'lb')).toBe('100 kg');
+    const [same] = buildRows(exercise({ sets: [set('working', { done: true, weight: 100, weightUnit: 'kg', reps: 5 })] }), 'kg', KG_GEAR);
+    expect(valueText(same, 'weight', 'kg')).toBe('100');
   });
 
   it('writes stored values in a form the parsers read back', () => {
     const [row] = buildRows(
       exercise({ sets: [set('working', { weight: 82.5, weightUnit: 'kg', reps: 8, durationS: 90, distance: 2.5, rpe: 8.5 })] }),
       'kg',
+      KG_GEAR,
     );
     expect(valueText(row, 'weight', 'kg')).toBe('82.5');
     expect(valueText(row, 'reps', 'kg')).toBe('8');
     expect(valueText(row, 'durationS', 'kg')).toBe('1:30');
     expect(valueText(row, 'distance', 'kg')).toBe('2.5');
     expect(valueText(row, 'rpe', 'kg')).toBe('8.5');
-    const [short] = buildRows(exercise({ sets: [set('working', { durationS: 40 })] }), 'kg');
+    const [short] = buildRows(exercise({ sets: [set('working', { durationS: 40 })] }), 'kg', KG_GEAR);
     expect(valueText(short, 'durationS', 'kg')).toBe('40');
   });
 
@@ -353,6 +383,7 @@ describe('valueText and hintText', () => {
     const [row] = buildRows(
       exercise({ loggingType: 'weighted_time', sets: [set('working')], previous: [prev(0, 'working', 70, null, { durationS: 40 })] }),
       'lb',
+      LB_GEAR,
     );
     expect(hintText(row, 'weight')).toBe('70');
     expect(hintText(row, 'durationS')).toBe('40s');
@@ -362,16 +393,17 @@ describe('valueText and hintText', () => {
     const [long] = buildRows(
       exercise({ loggingType: 'timed', sets: [set('working')], previous: [prev(0, 'working', null, null, { durationS: 90 })] }),
       'lb',
+      LB_GEAR,
     );
     expect(hintText(long, 'durationS')).toBe('1:30');
-    const [reps] = buildRows(exercise({ sets: [set('working')], rule: { repMax: 12 } }), 'lb');
+    const [reps] = buildRows(exercise({ sets: [set('working')], rule: { repMax: 12 } }), 'lb', LB_GEAR);
     expect(hintText(reps, 'reps')).toBe('12');
   });
 });
 
 describe('readRow: what the row holds while it is being typed into', () => {
   const row = (extra: Partial<ExerciseInput> = {}, ...sets: SetInput[]) =>
-    buildRows(exercise({ sets: sets.length ? sets : [set('working')], ...extra }), 'lb')[0];
+    buildRows(exercise({ sets: sets.length ? sets : [set('working')], ...extra }), 'lb', LB_GEAR)[0];
 
   it('with nothing typed, reads the stored values; with no target, placeholder or value the row cannot tick', () => {
     const r = readRow(row({ rule: null }), {}, 'lb');
@@ -397,9 +429,14 @@ describe('readRow: what the row holds while it is being typed into', () => {
     expect(r.tickable).toBe(true);
   });
 
-  it('reads stored weight in the other unit as the entry unit', () => {
-    const r = readRow(row({}, set('working', { weight: 100, weightUnit: 'kg', reps: 5 })), {}, 'lb');
-    expect(r.entered.weight).toBe(220.46);
+  it('reads a stored weight as it was logged, in its own unit, and a typed one in the display unit (F4)', () => {
+    const stored = readRow(row({}, set('working', { weight: 100, weightUnit: 'kg', reps: 5 })), {}, 'lb');
+    expect(stored.entered.weight).toBe(100);
+    expect(stored.weightUnit).toBe('kg');
+    const typed = readRow(row({}, set('working', { weight: 100, weightUnit: 'kg', reps: 5 })), { weight: '225' }, 'lb');
+    expect(typed.entered.weight).toBe(225);
+    expect(typed.weightUnit).toBe('lb');
+    expect(readRow(row(), {}, 'lb').weightUnit).toBe('lb');
   });
 
   it('treats a cleared input as no value, not as an error', () => {

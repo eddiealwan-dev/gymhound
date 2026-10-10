@@ -29,9 +29,11 @@ import {
   untickSet,
 } from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
+import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterTick, restLengthFor, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
+import type { WeightUnit } from '../domain/types';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
 import { bumpData } from './dataVersion';
@@ -62,19 +64,22 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
 /**
  * Ticks a set. `entered` is what the user typed or had stored (null for a field left empty); today's target and the
  * placeholders fill the gaps (spec 8.4). Returns false, changing nothing, when a field the logging type needs still
- * has no value. The weight is recorded in the unit in Settings, which is the unit the target and placeholders are in.
+ * has no value. `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when
+ * left out: a weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged
+ * (spec 7.1), and a weight from the target or a placeholder is recorded in the unit in Settings, which they are in.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
  * or the exercise is in a superset and is not the last member of its round.
  */
-export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues): boolean {
+export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues, enteredUnit?: WeightUnit): boolean {
   const settings = getSettings(db);
   const { unit, distanceUnit } = settings;
-  const row = buildRows(ex, unit).find((r) => r.set.id === set.id);
+  const row = buildRows(ex, unit, gearFor(unit, settings)).find((r) => r.set.id === set.id);
   if (!row) return false;
   const values = resolveTick({ loggingType: ex.loggingType, entered, target: row.target, placeholders: row.placeholders });
   if (values === null) return false;
   const now = Date.now();
-  tickSet(db, set.id, values, unit, now, distanceUnit);
+  const weightUnit = entered.weight !== null ? (enteredUnit ?? unit) : unit;
+  tickSet(db, set.id, values, weightUnit, now, distanceUnit);
   const view = getActiveWorkoutView(db);
   if (view) {
     const length = restLengthFor(ex.restSeconds, settings.restSeconds);

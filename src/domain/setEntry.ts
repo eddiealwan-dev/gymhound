@@ -1,6 +1,6 @@
 import { formatRest } from './dates';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
-import { convertWeight, formatWeight } from './units';
+import { convertWeight, formatWeight, roundToHalf } from './units';
 
 /**
  * A set from the most recent finished workout with this exercise. `matchPrevious` picks the one
@@ -89,7 +89,8 @@ export function matchPrevious(
  * it is treated as reps.
  *
  * Pass `unit` (the unit the user is entering in) so a previous weight logged in the other unit is
- * converted and rounded to 2 decimals; otherwise the previous weight is returned as logged.
+ * converted and rounded to the nearest 0.5 (84 kg is 185 lb, not 185.19); otherwise the previous weight
+ * is returned as logged.
  */
 export function placeholdersFor(a: {
   previous: PrevSet | null;
@@ -101,7 +102,7 @@ export function placeholdersFor(a: {
 
   let weight = previous?.weight ?? null;
   if (weight !== null && a.unit && previous?.weightUnit && previous.weightUnit !== a.unit) {
-    weight = Number(convertWeight(weight, previous.weightUnit, a.unit).toFixed(2));
+    weight = roundToHalf(convertWeight(weight, previous.weightUnit, a.unit));
   }
 
   const ruleIsSeconds = loggingType === 'timed' || loggingType === 'weighted_time';
@@ -143,7 +144,7 @@ export function resolveTick(i: TickInput): TickValues | null {
 }
 
 /** A weight with its unit only when that differs from the unit the user is viewing in: "185" or "84 kg". */
-function weightText(weight: number, unit: WeightUnit, displayUnit: WeightUnit): string {
+export function weightText(weight: number, unit: WeightUnit, displayUnit: WeightUnit): string {
   const withUnit = formatWeight(weight, unit);
   return unit === displayUnit ? withUnit.slice(0, withUnit.lastIndexOf(' ')) : withUnit;
 }

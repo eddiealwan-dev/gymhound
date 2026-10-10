@@ -9,6 +9,7 @@ import { countUntickedWithValues } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { gearFor } from '../src/domain/plates';
 import { musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
@@ -32,8 +33,9 @@ function leave() {
 
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
-  const { unit, distanceUnit } = getSettings(db);
-  return { workout: getActiveWorkoutView(db), unit, distanceUnit };
+  const settings = getSettings(db);
+  const { unit, distanceUnit } = settings;
+  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit };
 }
 
 /** Whether any set of the workout in progress is ticked, read from the database now (not from what was last rendered). */
@@ -108,7 +110,7 @@ export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, distanceUnit } = useDbQuery(readSession);
+  const { workout, unit, gear, distanceUnit } = useDbQuery(readSession);
   /** The exercise whose ⋯ menu is open. */
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -212,6 +214,7 @@ export default function Session() {
               workoutId={workout.id}
               ex={ex}
               unit={unit}
+              gear={gear}
               distanceUnit={distanceUnit}
               inSuperset={ex.supersetGroup !== null}
               joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}

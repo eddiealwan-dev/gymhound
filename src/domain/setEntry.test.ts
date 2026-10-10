@@ -163,10 +163,10 @@ describe('placeholdersFor', () => {
       });
     });
 
-    it('converts a previous weight-and-time weight into the entry unit', () => {
+    it('converts a previous weight-and-time weight into the entry unit, to the nearest 0.5', () => {
       const logged = P(1, 'working', 32, null, { weightUnit: 'kg', durationS: 75 });
       expect(placeholdersFor({ previous: logged, ruleRepMax: 60, loggingType: 'weighted_time', unit: 'lb' })).toEqual({
-        weight: 70.55,
+        weight: 70.5,
         reps: null,
         durationS: 75,
         distance: null,
@@ -175,14 +175,14 @@ describe('placeholdersFor', () => {
   });
 
   describe('with an entry unit', () => {
-    it('converts a previous weight logged in the other unit (84 kg -> 185.19 lb)', () => {
+    it('converts a previous weight logged in the other unit to the nearest 0.5, with no 2-decimal noise (84 kg -> 185 lb)', () => {
       const logged: PrevSet = { ...prev, weight: 84, weightUnit: 'kg' };
-      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'lb' }).weight).toBe(185.19);
+      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'lb' }).weight).toBe(185);
     });
 
-    it('converts pounds to kilograms the same way (185 lb -> 83.91 kg)', () => {
-      const logged: PrevSet = { ...prev, weight: 185, weightUnit: 'lb' };
-      expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'kg' }).weight).toBe(83.91);
+    it('converts pounds to kilograms the same way (185 lb -> 84 kg, 135 lb -> 61 kg)', () => {
+      expect(placeholdersFor({ previous: { ...prev, weight: 185, weightUnit: 'lb' }, ruleRepMax: null, unit: 'kg' }).weight).toBe(84);
+      expect(placeholdersFor({ previous: { ...prev, weight: 135, weightUnit: 'lb' }, ruleRepMax: null, unit: 'kg' }).weight).toBe(61);
     });
 
     it('leaves a previous weight alone when it is already in the entry unit', () => {

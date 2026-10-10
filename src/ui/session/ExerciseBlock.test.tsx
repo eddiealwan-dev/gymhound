@@ -71,6 +71,7 @@ function mount(ex: WorkoutExerciseView): ReactTestRenderer {
         workoutId="w1"
         ex={ex}
         unit="lb"
+        gear={{ bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } }}
         distanceUnit="mi"
         onOpenMenu={() => {}}
         inSuperset={false}

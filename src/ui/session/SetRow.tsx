@@ -123,7 +123,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       untick(db, set.id);
       return;
     }
-    if (!canTick || !tick(db, ex, set, reading.entered)) return;
+    if (!canTick || !tick(db, ex, set, reading.entered, reading.weightUnit)) return;
     // RPE is not part of a tick; save it if it is still being typed.
     if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
     setDrafts({});
