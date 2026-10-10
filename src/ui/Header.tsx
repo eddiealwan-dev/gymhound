@@ -33,8 +33,8 @@ export function Header() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <HoundMark size={40} />
-          <Display weight={800} upper allowFontScaling={false} style={{ color: colors.red, fontSize: 32, letterSpacing: -0.5 }} numberOfLines={1}>
+          <HoundMark size={48} />
+          <Display weight={800} upper allowFontScaling={false} style={{ color: colors.red, fontSize: 38, letterSpacing: -0.5 }} numberOfLines={1}>
             GYMHOUND
           </Display>
         </View>
