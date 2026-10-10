@@ -245,8 +245,20 @@ describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
       '3:00',
       '4:00',
       '5:00',
+      'Cancel',
     ]);
     expect(buttons.filter((b) => b.props.variant === 'primary').map((b) => b.props.label)).toEqual(['1:30']);
+  });
+
+  it('closes on Cancel and saves nothing, so VoiceOver can leave it (F3)', () => {
+    const tree = mount(withRest(90));
+    press(tree, 'Rest time · 1:30');
+
+    press(tree, 'Cancel');
+
+    expect(setExerciseRest).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
   });
 
   it('highlights Default when the exercise has no rest of its own', () => {

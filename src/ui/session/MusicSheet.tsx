@@ -15,8 +15,9 @@ type Props = {
 };
 
 /**
- * One button per music app. Opening one leaves GymHound, so the sheet closes behind it; an app that is not installed
- * says so here instead. Typed sets are saved before leaving, and again by the flush on the app going to the background (R32).
+ * One button per music app, then Close. Opening one leaves GymHound, so the sheet closes behind it; an app that is not
+ * installed says so here instead. Typed sets are saved before leaving, and again by the flush on the app going to the
+ * background (R32).
  */
 export function MusicSheet({ visible, apps, onClose }: Props) {
   /** The app that would not open, if the last press failed. */
@@ -49,6 +50,9 @@ export function MusicSheet({ visible, apps, onClose }: Props) {
           {`${missing.label} isn't on this phone.`}
         </Body>
       ) : null}
+      <View style={{ marginTop: 8 }}>
+        <Button label="Close" variant="quiet" onPress={close} />
+      </View>
     </Sheet>
   );
 }

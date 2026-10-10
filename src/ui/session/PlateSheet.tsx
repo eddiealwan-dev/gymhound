@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import { loadPlates } from '../../domain/plates';
@@ -40,9 +40,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
       <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
         {ex.name}
       </Body>
-      <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
+      <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             value={text}
@@ -93,7 +91,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
           {`Bar ${formatWeight(bar, unit)}`}
         </Body>
         <BarPicker />
-      </ScrollView>
+      </View>
       <View style={{ marginTop: 12 }}>
         <Button label="Done" onPress={onClose} />
       </View>

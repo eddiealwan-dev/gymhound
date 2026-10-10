@@ -112,7 +112,8 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
             <Display weight={700} style={{ marginBottom: 12 }}>
               Reorder
             </Display>
-            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 4 }}>
+            {/* The sheet scrolls too, so on Android this list must be allowed to scroll inside it. */}
+            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 4 }} nestedScrollEnabled>
               {exercises.map((e) => (
                 <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48 }}>
                   {/* The same bar as on the session screen, so a superset reads as one block here too. */}
@@ -156,7 +157,7 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
             <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
               {ex?.name ?? ''}
             </Body>
-            <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ gap: 8 }}>
+            <View style={{ gap: 8 }}>
               <Button label={defaultLabel} variant={ex?.restSeconds === null ? 'primary' : 'secondary'} onPress={() => chooseRest(null)} />
               {REST_CHOICES.map((seconds) => (
                 <Button
@@ -166,7 +167,10 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
                   onPress={() => chooseRest(seconds)}
                 />
               ))}
-            </ScrollView>
+            </View>
+            <View style={{ marginTop: 12 }}>
+              <Button label="Cancel" variant="quiet" onPress={close} />
+            </View>
           </>
         ) : (
           <>

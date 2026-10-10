@@ -39,8 +39,17 @@ afterEach(() => {
   jest.mocked(flushAll).mockClear();
 });
 
-it('has one button per app', () => {
-  expect(labels(render())).toEqual(['Open Apple Music', 'Open Spotify', 'Open Audible']);
+it('has one button per app, then Close', () => {
+  expect(labels(render())).toEqual(['Open Apple Music', 'Open Spotify', 'Open Audible', 'Close']);
+});
+
+it('closes on Close without opening anything, so VoiceOver can leave it (F3)', async () => {
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  const tree = render();
+  await press(tree, 'Close');
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(openURL).not.toHaveBeenCalled();
+  expect(flushAll).not.toHaveBeenCalled();
 });
 
 it('saves what is typed, opens the app and closes', async () => {
