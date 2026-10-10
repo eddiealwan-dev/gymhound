@@ -43,6 +43,7 @@ jest.mock('../state/backup', () => ({
   snapshotFolderReport: () => mockReport,
   shareFile: jest.fn(),
 }));
+jest.mock('../platform/exportFiles', () => ({ exportWorkoutsCsv: jest.fn() }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
 jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
@@ -59,13 +60,17 @@ function mount(): ReactTestRenderer {
   return tree;
 }
 
-/** Every line of text in the Backups section, from its heading to the end of the screen. */
+/** Every line of text in the Backups section, from its heading to the Export heading after it. */
 function backupLines(tree: ReactTestRenderer): string[] {
   const lines = tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join(''));
-  return lines.slice(lines.indexOf('Backups') + 1);
+  return lines.slice(lines.indexOf('Backups') + 1, lines.indexOf('Export'));
 }
 
-const hasShare = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.props.label === 'Share latest snapshot').length > 0;
+const SAVE = 'Save a backup copy';
+/** The muted line under the button (Task 27). */
+const EXPLAINER = "A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps.";
+
+const hasShare = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.props.label === SAVE).length > 0;
 
 const listing = (value: Partial<ReturnType<typeof snapshotListing>>) =>
   jest.mocked(snapshotListing).mockReturnValue({ path: null, names: [], error: null, ...value });
@@ -96,7 +101,7 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
 
     const tree = mount();
 
-    expect(backupLines(tree)).toEqual([`Last snapshot: ${formatDateTime(SAVED)}`, 'Share latest snapshot']);
+    expect(backupLines(tree)).toEqual([`Last snapshot: ${formatDateTime(SAVED)}`, SAVE, EXPLAINER]);
     expect(hasShare(tree)).toBe(true);
   });
 
@@ -108,7 +113,8 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
     expect(backupLines(mount())).toEqual([
       `Last snapshot: ${formatDateTime(SAVED)}`,
       `The last snapshot failed: disk full (ERR_FILE_SYSTEM) (${formatDateTime(FAILED)}).`,
-      'Share latest snapshot',
+      SAVE,
+      EXPLAINER,
     ]);
   });
 
@@ -123,7 +129,7 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
     mockStored.lastSnapshotError = { at: SAVED, message: 'disk full' };
     listing({ path: `${FOLDER}/x.db`, names: ['x.db'] });
 
-    expect(backupLines(mount())).toEqual([`Last snapshot: ${formatDateTime(FAILED)}`, 'Share latest snapshot']);
+    expect(backupLines(mount())).toEqual([`Last snapshot: ${formatDateTime(FAILED)}`, SAVE, EXPLAINER]);
   });
 
   it("says a saved snapshot's file isn't listed, and in development shows the phone's raw listing of the folder (G2)", () => {

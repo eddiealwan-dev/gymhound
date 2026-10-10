@@ -7,6 +7,7 @@ import type { Db } from '../../src/db/types';
 import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
+import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDbQuery } from '../../src/state/dataVersion';
@@ -297,11 +298,15 @@ const readBackups = (db: Db) => {
   return { lastSnapshotAt, lastSnapshotError, listing: snapshotListing(), folderReport: __DEV__ ? snapshotFolderReport() : null };
 };
 
+/** Shown when the share sheet can't open, for a backup copy or an export. */
+const SHARE_FAILED = "Couldn't open the share sheet.";
+
 /**
- * When the last good snapshot was written, and a way to send the newest one somewhere safe. Snapshots run in the phone app only.
+ * When the last good snapshot was written, and a way to save a copy of the newest one somewhere safe, with a line saying
+ * the copy is for restoring GymHound and opens nowhere else (Task 27). Snapshots run in the phone app only.
  * Below the time, a line says why the last snapshot failed, or that a saved snapshot's file isn't listed (with the
- * listing's error and the phone's raw listing of the folder in development builds), so a missing Share button can be
- * explained.
+ * listing's error and the phone's raw listing of the folder in development builds), so a missing Save a backup copy
+ * button can be explained.
  */
 function BackupsSection() {
   const { lastSnapshotAt, lastSnapshotError, listing, folderReport } = useDbQuery(readBackups);
@@ -332,23 +337,60 @@ function BackupsSection() {
             </>
           ) : null}
           {latestPath !== null ? (
-            <Button
-              label="Share latest snapshot"
-              variant="secondary"
-              onPress={() => {
-                setShareFailed(false);
-                shareFile(latestPath).catch(() => setShareFailed(true));
-              }}
-            />
+            <>
+              <Button
+                label="Save a backup copy"
+                variant="secondary"
+                onPress={() => {
+                  setShareFailed(false);
+                  shareFile(latestPath).catch(() => setShareFailed(true));
+                }}
+              />
+              <Body muted>A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps.</Body>
+            </>
           ) : null}
-          {shareFailed ? <Body muted>Couldn't open the share sheet.</Body> : null}
+          {shareFailed ? <Body muted>{SHARE_FAILED}</Body> : null}
         </>
       )}
     </View>
   );
 }
 
-/** Settings so far: Appearance, Units, Bar, Rest timer and Backups. The rest arrive in later tasks. */
+/**
+ * The finished workouts as a CSV (spec §11) through the share sheet, to open in Numbers or Excel. Phone app only, like
+ * Backups. A muted line says when there is nothing to export or the share sheet couldn't open.
+ */
+function ExportSection() {
+  const db = useDb();
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <View style={{ gap: 8, marginTop: 24 }}>
+      <Body weight={600} muted>
+        Export
+      </Body>
+      {Platform.OS === 'web' ? (
+        <Body>Export runs in the phone app.</Body>
+      ) : (
+        <>
+          <Button
+            label="Export workouts (CSV)"
+            variant="secondary"
+            onPress={() => {
+              setMessage(null);
+              exportWorkoutsCsv(db, Date.now()).then(
+                (result) => setMessage(result === 'empty' ? 'No finished workouts yet.' : result === 'unavailable' ? SHARE_FAILED : null),
+                () => setMessage(SHARE_FAILED),
+              );
+            }}
+          />
+          {message !== null ? <Body muted>{message}</Body> : null}
+        </>
+      )}
+    </View>
+  );
+}
+
+/** Settings so far: Appearance, Units, Bar, Rest timer, Backups and Export. The rest arrive in later tasks. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -363,6 +405,7 @@ export default function Settings() {
       <BarSection />
       <RestTimerSection />
       <BackupsSection />
+      <ExportSection />
     </Screen>
   );
 }

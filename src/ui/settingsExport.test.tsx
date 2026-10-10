@@ -1,0 +1,169 @@
+import { Platform, Text } from 'react-native';
+import { act, create } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
+import Settings from '../../app/(tabs)/settings';
+import { exportWorkoutsCsv } from '../platform/exportFiles';
+import { shareFile } from '../state/backup';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const SAVED = new Date(2026, 9, 9, 9, 0).getTime();
+const SNAPSHOT = '/docs/snapshots/gymhound-20261009-090000-000.db';
+const mockStored = {
+  theme: 'system',
+  unit: 'lb',
+  distanceUnit: 'mi',
+  restSeconds: 120,
+  restBell: true,
+  restBellSound: 'bell',
+  lastSnapshotAt: SAVED,
+  lastSnapshotError: null,
+};
+
+jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
+jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: () => ({ ...mockStored }), setSetting: jest.fn() }));
+jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() }));
+jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
+jest.mock('../platform/exportFiles', () => ({ exportWorkoutsCsv: jest.fn() }));
+jest.mock('../state/backup', () => ({
+  snapshotListing: () => ({ path: '/docs/snapshots/gymhound-20261009-090000-000.db', names: [], error: null }),
+  snapshotFolderReport: () => null,
+  shareFile: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
+jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
+jest.mock('./Footer', () => ({ Footer: () => null }));
+jest.mock('./ThemeProvider', () => {
+  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
+  return { useTheme: () => ({ scheme: 'dark', colors }) };
+});
+
+const EXPORT = 'Export workouts (CSV)';
+const SHARE_FAILED = "Couldn't open the share sheet.";
+
+function mount(): ReactTestRenderer {
+  let tree!: ReactTestRenderer;
+  act(() => {
+    tree = create(<Settings />);
+  });
+  return tree;
+}
+
+const lines = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join(''));
+
+/** Every line of text in the Export section, from its heading to the end of the screen. */
+const exportLines = (tree: ReactTestRenderer) => lines(tree).slice(lines(tree).indexOf('Export') + 1);
+
+const button = (tree: ReactTestRenderer, label: string) => tree.root.find((n) => n.props.label === label && typeof n.props.onPress === 'function');
+
+/** Presses a button and lets the promise it starts settle. */
+async function press(tree: ReactTestRenderer, label: string): Promise<void> {
+  await act(async () => {
+    button(tree, label).props.onPress();
+  });
+}
+
+const originalOS = Platform.OS;
+
+beforeEach(() => {
+  jest.mocked(exportWorkoutsCsv).mockReset();
+  jest.mocked(shareFile).mockClear();
+});
+
+afterEach(() => {
+  Platform.OS = originalOS;
+});
+
+describe('Settings: Backups wording (Task 27)', () => {
+  it('calls the snapshot button Save a backup copy, with a muted line saying what the file is for', () => {
+    const tree = mount();
+    const all = lines(tree);
+    const explainer = "A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps.";
+
+    expect(all).toContain('Save a backup copy');
+    expect(all).not.toContain('Share latest snapshot');
+    expect(all[all.indexOf('Save a backup copy') + 1]).toBe(explainer);
+    expect(tree.root.findAllByType(Text).find((n) => n.props.children === explainer)!.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]),
+    );
+  });
+
+  it('still shares the newest snapshot', async () => {
+    const tree = mount();
+
+    await press(tree, 'Save a backup copy');
+
+    expect(shareFile).toHaveBeenCalledWith(SNAPSHOT);
+  });
+});
+
+describe('Settings: Export (Task 27)', () => {
+  it('comes after Backups, with the Export workouts (CSV) button', () => {
+    const all = lines(mount());
+
+    expect(all.indexOf('Export')).toBeGreaterThan(all.indexOf('Backups'));
+    expect(exportLines(mount())).toEqual([EXPORT]);
+  });
+
+  it('exports with the time it was pressed and says nothing more when the share sheet opens', async () => {
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('shared');
+    const tree = mount();
+    const before = Date.now();
+
+    await press(tree, EXPORT);
+
+    expect(exportWorkoutsCsv).toHaveBeenCalledTimes(1);
+    const [db, now] = jest.mocked(exportWorkoutsCsv).mock.calls[0];
+    expect(db).toBe('db');
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(exportLines(tree)).toEqual([EXPORT]);
+  });
+
+  it('says there is nothing to export before the first finished workout', async () => {
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('empty');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+
+    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.']);
+  });
+
+  it("says the share sheet couldn't open when sharing is unavailable", async () => {
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('unavailable');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+
+    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED]);
+  });
+
+  it("says the share sheet couldn't open when the export throws, and clears the message on the next try", async () => {
+    jest.mocked(exportWorkoutsCsv).mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce('shared');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED]);
+
+    await press(tree, EXPORT);
+    expect(exportLines(tree)).toEqual([EXPORT]);
+  });
+
+  it('shows a muted message, never red', async () => {
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('empty');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+
+    const message = tree.root.findAllByType(Text).find((n) => n.props.children === 'No finished workouts yet.')!;
+    expect(message.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]));
+  });
+
+  it('has no export button on web, only the phone-app line', () => {
+    Platform.OS = 'web';
+
+    const tree = mount();
+
+    expect(exportLines(tree)).toEqual(['Export runs in the phone app.']);
+    expect(tree.root.findAll((n) => n.props.label === EXPORT)).toHaveLength(0);
+  });
+});
