@@ -4,6 +4,9 @@
  * Sums are kept in integer hundredths so 2.5 and 1.25 add exactly.
  */
 
+import type { WeightUnit } from './types';
+import { convertWeight, roundToHalf } from './units';
+
 const toHundredths = (v: number): number => Math.round(v * 100);
 
 /** One plate of each owned pair, heaviest first, in hundredths. */
@@ -79,4 +82,31 @@ export function nearestLoadable(value: number, bar: number, platesOwned: Record<
     }
   }
   return bestTotal / 100;
+}
+
+/**
+ * A routine plan in the display unit, when a workout starts (spec 7.1). The same unit returns `weight` as it is.
+ * A converted barbell plan rounds to the nearest loadable total with `to`'s bar and plates; above the heaviest
+ * loadable total it rounds instead to a step of twice the smallest owned plate above the bar, so a heavy plan
+ * is never cut down to what the plates can load. Anything else converts and rounds to the nearest 0.5.
+ */
+export function planInUnit(
+  weight: number,
+  from: WeightUnit,
+  to: WeightUnit,
+  isBarbell: boolean,
+  bar: number,
+  platesOwned: Record<string, number>,
+): number {
+  if (from === to) return weight;
+  const v = convertWeight(weight, from, to);
+  if (!isBarbell) return roundToHalf(v);
+  const plates = platesPerSide(platesOwned);
+  const barH = toHundredths(bar);
+  const heaviestH = barH + 2 * plates.reduce((sum, p) => sum + p, 0);
+  if (plates.length > 0 && v * 100 > heaviestH) {
+    const stepH = 2 * plates[plates.length - 1];
+    return (barH + stepH * Math.round((v * 100 - barH) / stepH)) / 100;
+  }
+  return nearestLoadable(v, bar, platesOwned);
 }

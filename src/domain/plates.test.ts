@@ -1,4 +1,4 @@
-import { loadPlates, nearestLoadable } from './plates';
+import { loadPlates, nearestLoadable, planInUnit } from './plates';
 
 /** The default plate sets (pairs owned) and bars from settings. */
 const LB_PLATES = { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 };
@@ -60,5 +60,28 @@ describe('nearestLoadable', () => {
 
   it('returns the heaviest loadable total above everything owned', () => {
     expect(nearestLoadable(700, LB_BAR, LB_PLATES)).toBe(580);
+  });
+});
+
+describe('planInUnit', () => {
+  it('returns the weight unchanged in the same unit', () => {
+    expect(planInUnit(137, 'lb', 'lb', true, LB_BAR, LB_PLATES)).toBe(137);
+    expect(planInUnit(61.3, 'kg', 'kg', false, KG_BAR, KG_PLATES)).toBe(61.3);
+  });
+
+  it('rounds a converted barbell plan to the nearest loadable total', () => {
+    expect(planInUnit(135, 'lb', 'kg', true, KG_BAR, KG_PLATES)).toBe(60); // 61.23 kg
+    expect(planInUnit(225, 'lb', 'kg', true, KG_BAR, KG_PLATES)).toBe(102.5); // 102.06 kg
+    // 60 kg is 132.28 lb, nearer 130 than 135: one reason a plan keeps its own unit.
+    expect(planInUnit(60, 'kg', 'lb', true, LB_BAR, LB_PLATES)).toBe(130);
+  });
+
+  it('rounds anything else to 0.5, never to the bar', () => {
+    expect(planInUnit(15, 'lb', 'kg', false, KG_BAR, KG_PLATES)).toBe(7); // 6.80 kg
+  });
+
+  it('rounds above the heaviest loadable total by twice the smallest plate, not down to the plates', () => {
+    // 300 kg is 661.39 lb; the default lb plates load at most 580.
+    expect(planInUnit(300, 'kg', 'lb', true, LB_BAR, LB_PLATES)).toBe(660);
   });
 });

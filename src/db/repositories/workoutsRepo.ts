@@ -1,10 +1,13 @@
 import { and, asc, count, eq, inArray, isNotNull, notInArray, or, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
+import { planInUnit } from '../../domain/plates';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
+import { convertIncrement } from '../../domain/units';
 import { newId } from '../ids';
 import {
   exerciseNotes,
+  exercises,
   routineDays,
   routineExercises,
   routines,
@@ -13,6 +16,7 @@ import {
   workouts,
 } from '../schema';
 import type { Db } from '../types';
+import { getSettings } from './settingsRepo';
 
 /** Raised when a workout is started while another one is still active. */
 export class ActiveWorkoutExistsError extends Error {
@@ -68,8 +72,9 @@ export function startEmptyWorkout(db: Db, now: number): string {
 
 /**
  * Starts a workout from a routine day. Each exercise copies the day's rule as a snapshot, its planned
- * weight, superset group and position, and gets `set_count` empty working sets. Throws
- * `ActiveWorkoutExistsError` if one is active, before inserting anything.
+ * weight, superset group and position, and gets `set_count` empty working sets. The planned weight and the
+ * increment are snapshotted in the display unit (spec 7.1, `planInUnit`); the routine rows are not changed.
+ * Throws `ActiveWorkoutExistsError` if one is active, before inserting anything.
  */
 export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): string {
   return db.transaction((tx) => {
@@ -90,13 +95,17 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
       })
       .run();
 
+    const { unit, barLb, barKg, platesLb, platesKg } = getSettings(tx);
+    const bar = unit === 'lb' ? barLb : barKg;
+    const plates = unit === 'lb' ? platesLb : platesKg;
     const rules = tx
-      .select()
+      .select({ rule: routineExercises, equipment: exercises.equipment })
       .from(routineExercises)
+      .innerJoin(exercises, eq(routineExercises.exerciseId, exercises.id))
       .where(eq(routineExercises.routineDayId, day.id))
       .orderBy(asc(routineExercises.position))
       .all();
-    for (const rule of rules) {
+    for (const { rule, equipment } of rules) {
       const workoutExerciseId = newId();
       tx.insert(workoutExercises)
         .values({
@@ -110,10 +119,13 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
           ruleSetCount: rule.setCount,
           ruleRepMin: rule.repMin,
           ruleRepMax: rule.repMax,
-          ruleIncrement: rule.increment,
-          ruleIncrementUnit: rule.incrementUnit,
-          plannedWeight: rule.nextWeight,
-          plannedUnit: rule.nextWeightUnit,
+          ruleIncrement: convertIncrement(rule.increment, rule.incrementUnit, unit),
+          ruleIncrementUnit: unit,
+          plannedWeight:
+            rule.nextWeight === null
+              ? null
+              : planInUnit(rule.nextWeight, rule.nextWeightUnit ?? unit, unit, equipment === 'barbell', bar, plates),
+          plannedUnit: rule.nextWeight === null ? null : unit,
         })
         .run();
       for (let position = 0; position < rule.setCount; position++) {

@@ -23,7 +23,7 @@ import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
-import { ensureSettings } from './settingsRepo';
+import { ensureSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
@@ -163,6 +163,41 @@ describe('startWorkoutFromDay', () => {
       increment: 5,
       incrementUnit: 'lb',
     });
+  });
+
+  it('snapshots the plan in the display unit and leaves the routine row as stored', () => {
+    const db = seededDb('us');
+    const BENCH = `${PUSH_A}:barbell-bench-press`;
+    db.update(routineExercises).set({ nextWeight: 135, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, BENCH)).run();
+    db.update(routineExercises)
+      .set({ nextWeight: 15, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, `${PUSH_A}:dumbbell-lateral-raise`))
+      .run();
+    const storedBefore = db.select().from(routineExercises).where(eq(routineExercises.id, BENCH)).get()!;
+    expect(storedBefore).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb', increment: 5, incrementUnit: 'lb' });
+
+    setSetting(db, 'unit', 'kg');
+    const inKg = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(rawWorkoutExercise(db, inKg, 'barbell-bench-press')).toMatchObject({
+      plannedWeight: 60,
+      plannedUnit: 'kg',
+      ruleIncrement: 2.5,
+      ruleIncrementUnit: 'kg',
+    });
+    // Not a barbell: 6.80 kg rounds to 0.5, not up to the bar.
+    expect(rawWorkoutExercise(db, inKg, 'dumbbell-lateral-raise')).toMatchObject({ plannedWeight: 7, plannedUnit: 'kg' });
+    discardWorkout(db, inKg);
+
+    setSetting(db, 'unit', 'lb');
+    const inLb = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(rawWorkoutExercise(db, inLb, 'barbell-bench-press')).toMatchObject({
+      plannedWeight: 135,
+      plannedUnit: 'lb',
+      ruleIncrement: 5,
+      ruleIncrementUnit: 'lb',
+    });
+
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, BENCH)).get()).toEqual(storedBefore);
   });
 
   it('refuses an unknown day and creates nothing', () => {

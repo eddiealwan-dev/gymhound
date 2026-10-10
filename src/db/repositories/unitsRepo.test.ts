@@ -12,14 +12,9 @@ const HOUR = 3_600_000;
 const PUSH_A = 'premade-ppl-6:push-a';
 const BENCH = `${PUSH_A}:barbell-bench-press`; // barbell
 const LATERAL = `${PUSH_A}:dumbbell-lateral-raise`; // dumbbell
-const PUSHDOWN = `${PUSH_A}:cable-triceps-pushdown`; // left with no next weight
 
 function setNext(db: Db, id: string, weight: number | null, unit: 'lb' | 'kg' | null): void {
   db.update(routineExercises).set({ nextWeight: weight, nextWeightUnit: unit }).where(eq(routineExercises.id, id)).run();
-}
-
-function rule(db: Db, id: string) {
-  return db.select().from(routineExercises).where(eq(routineExercises.id, id)).get()!;
 }
 
 /** The workout's exercise rows and their sets, straight from the tables, in a stable order. */
@@ -47,40 +42,21 @@ function tickFirstSet(db: Db, workoutId: string, weight: number, at: number): vo
 }
 
 describe('switchDisplayUnit', () => {
-  it('converts next weights, rounding a barbell to a loadable total and anything else to 0.5', () => {
+  it('sets the unit and leaves every routine row as stored', () => {
     const db = seededDb('us');
-    setNext(db, BENCH, 225, 'lb');
+    setNext(db, BENCH, 135, 'lb');
     setNext(db, LATERAL, 50, 'lb');
+    const rulesBefore = db.select().from(routineExercises).all();
 
     switchDisplayUnit(db, 'kg');
 
-    expect(rule(db, BENCH)).toMatchObject({ nextWeight: 102.5, nextWeightUnit: 'kg' });
-    expect(rule(db, LATERAL)).toMatchObject({ nextWeight: 22.5, nextWeightUnit: 'kg' });
-    expect(rule(db, PUSHDOWN)).toMatchObject({ nextWeight: null, nextWeightUnit: null });
-  });
-
-  it('converts increments by the gym convention and sets the unit', () => {
-    const db = seededDb('us');
-    expect(rule(db, BENCH)).toMatchObject({ increment: 5, incrementUnit: 'lb' });
-
-    switchDisplayUnit(db, 'kg');
-
-    expect(rule(db, BENCH)).toMatchObject({ increment: 2.5, incrementUnit: 'kg' });
-    const all = db.select().from(routineExercises).all();
-    expect(all.every((r) => r.incrementUnit === 'kg')).toBe(true);
     expect(getSettings(db).unit).toBe('kg');
-  });
+    expect(db.select().from(routineExercises).all()).toEqual(rulesBefore);
 
-  it('switches back to lb, with increments of 5', () => {
-    const db = seededDb('us');
-    setNext(db, BENCH, 225, 'lb');
-
-    switchDisplayUnit(db, 'kg');
     switchDisplayUnit(db, 'lb');
 
     expect(getSettings(db).unit).toBe('lb');
-    expect(rule(db, BENCH)).toMatchObject({ nextWeight: 225, nextWeightUnit: 'lb', increment: 5, incrementUnit: 'lb' });
-    expect(rule(db, LATERAL)).toMatchObject({ increment: 5, incrementUnit: 'lb' });
+    expect(db.select().from(routineExercises).all()).toEqual(rulesBefore);
   });
 
   it('leaves the active workout and finished history unchanged', () => {
