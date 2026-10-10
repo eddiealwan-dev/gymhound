@@ -59,7 +59,10 @@ export function restAfterMinus15(endsAt: number, now: number): RestChange {
 /** How long after the end the watcher still rings. Later than this, the app was away and the notification already rang. */
 export const RING_WINDOW_MS = 3000;
 
-/** A stretch of time the app was not in the foreground (in the background or inactive). `to` is null while it is still away. */
+/**
+ * A stretch of time the app was in the background, until it was active again. `to` is null while it is still away.
+ * `inactive` alone (iOS Control Center, Notification Center, the app switcher) is not away: the app is still in front.
+ */
 export type AwaySpan = { from: number; to: number | null };
 
 /** Whether `span` covers the moment `t`, ends included. */

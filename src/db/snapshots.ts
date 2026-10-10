@@ -148,7 +148,27 @@ function setAsideQuietly(files: SnapshotFiles, tag: string): void {
 }
 
 /**
+ * The newest snapshot, or null when there is none.
+ *
+ * With a live database that has data, a snapshot folder that cannot be listed is logged and treated as holding no
+ * snapshots: a healthy database must still open, and the snapshots are only a second copy. With the live file missing or
+ * empty the error is thrown instead (the startup error screen): opening now would create an empty database beside
+ * snapshots that might hold the user's workouts.
+ */
+function newestSnapshotOrNull(files: SnapshotFiles, liveIsGone: boolean): string | null {
+  try {
+    return newestSnapshot(files.list());
+  } catch (error) {
+    if (liveIsGone) throw error;
+    console.warn('GymHound could not list its snapshots, so it is starting without them.', error);
+    return null;
+  }
+}
+
+/**
  * Opens and migrates the database. The app never starts empty while a snapshot exists, and the live file is never deleted.
+ * 0. Whether the live file is missing or empty is read first. A snapshot folder that cannot be listed is then an error
+ *    when it is (fail closed), and "no snapshots" when the live file has data (see `newestSnapshotOrNull`).
  * 1. Live file missing or empty, and a snapshot exists: copy the newest snapshot in.
  * 2. Open and migrate. If that works, done.
  * 3. If it fails and there is no snapshot, report the failure and leave the file as it is.
@@ -159,9 +179,10 @@ function setAsideQuietly(files: SnapshotFiles, tag: string): void {
  */
 export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
   const { files, open, close, migrate } = deps;
-  const newest = newestSnapshot(files.list());
+  const liveIsGone = files.liveIsMissingOrEmpty();
+  const newest = newestSnapshotOrNull(files, liveIsGone);
   let restoredFrom: string | null = null;
-  if (newest && files.liveIsMissingOrEmpty()) {
+  if (newest && liveIsGone) {
     try {
       files.copyToLive(newest);
     } catch (error) {

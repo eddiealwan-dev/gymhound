@@ -50,7 +50,7 @@ export default function Routines() {
   const db = useDb();
   const premade = useDbQuery(listRoutines).filter((routine) => routine.isPremade);
   return (
-    <Screen footer>
+    <Screen>
       <Display>Routines</Display>
       <Body weight={600} muted style={{ marginTop: 16, marginBottom: 8 }}>
         Premade

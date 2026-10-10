@@ -750,3 +750,83 @@ describe('startDatabase', () => {
     expect(result.error.message).toBe('plain string');
   });
 });
+
+describe('startDatabase when the snapshot folder cannot be listed (R32)', () => {
+  /** The real files, except that listing throws once `armed.on` is set, so a test can build its data first. */
+  function filesFailingToList(armed: { on: boolean }): SnapshotFiles {
+    const real = nodeSnapshotFiles(dir, liveFile);
+    return {
+      ...real,
+      list: () => {
+        if (armed.on) throw new Error('list exploded');
+        return real.list();
+      },
+    };
+  }
+
+  describe('with a live database that has data', () => {
+    it('logs it, treats it as no snapshots, and opens and migrates the live file as usual', async () => {
+      const armed = { on: false };
+      const files = filesFailingToList(armed);
+      const { deps, count } = makeDeps({ files });
+      const { ids } = liveWithTwoSnapshots(files);
+      const before = fs.readFileSync(liveFile);
+      armed.on = true;
+
+      const result = expectOk(await startDatabase(deps));
+
+      expect(result.restoredFrom).toBeNull();
+      expect(finishedIds(result.db)).toEqual(ids);
+      expect(count).toEqual({ opened: 1, closed: 0 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warnedWithError('list exploded')).toBe(true);
+      expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
+      for (const h of handles) h.close();
+      expect(fs.readFileSync(liveFile).equals(before)).toBe(true);
+    });
+
+    it('fails when the migration then fails: there is no snapshot to restore, and the live file is untouched', async () => {
+      const armed = { on: false };
+      const files = filesFailingToList(armed);
+      const { deps, count } = makeDeps({ files, migrate: migrateAlwaysFailing() });
+      liveWithTwoSnapshots(files);
+      const original = fs.readFileSync(liveFile);
+      const snapshots = nodeSnapshotFiles(dir, liveFile).list();
+      armed.on = true;
+
+      const result = expectFailed(await startDatabase(deps));
+
+      expect(result.error.message).toBe('migration exploded');
+      expect(result.newestSnapshot).toBeNull();
+      expect(result.setAside).toBeNull();
+      expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
+      expect(fs.readFileSync(liveFile).equals(original)).toBe(true);
+      armed.on = false;
+      expect(files.list()).toEqual(snapshots);
+      expect(count.opened).toBe(count.closed);
+      expect(warnedWithError('list exploded')).toBe(true);
+    });
+  });
+
+  describe('with the live file missing or empty', () => {
+    it.each([
+      ['missing', () => fs.rmSync(liveFile)],
+      ['empty', () => fs.writeFileSync(liveFile, '')],
+    ])('fails closed when it is %s: nothing is opened, so the app never starts empty beside a snapshot', async (_name, makeGone) => {
+      const armed = { on: false };
+      const files = filesFailingToList(armed);
+      const { deps, count } = makeDeps({ files });
+      liveWithTwoSnapshots(files);
+      makeGone();
+      armed.on = true;
+
+      await expect(startDatabase(deps)).rejects.toThrow('list exploded');
+
+      expect(count.opened).toBe(0);
+      expect(fs.existsSync(liveFile) ? fs.statSync(liveFile).size : 0).toBe(0);
+      expect(warn).not.toHaveBeenCalled();
+      armed.on = false;
+      expect(files.list()).toHaveLength(2);
+    });
+  });
+});

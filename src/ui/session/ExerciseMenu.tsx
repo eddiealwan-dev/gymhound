@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
-import { canMoveBlock, hasDoneSets, supersetAction } from '../../domain/sessionMenu';
+import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
 import { flushAll } from '../../state/draftFlush';
 import { moveBlock, removeFromWorkout, setRpeShown, toggleSuperset } from '../../state/sessionActions';
 import { Button } from '../Button';
@@ -20,8 +20,8 @@ type Props = {
   onClose: () => void;
 };
 
-/** What is showing for the open exercise: its menu, the Reorder list (both in one sheet), the remove check, or nothing between sheets. */
-type Panel = 'menu' | 'reorder' | 'confirmRemove' | 'none';
+/** What is showing for the open exercise: its menu, the Reorder list (both in one sheet), the remove or replace check, or nothing between sheets. */
+type Panel = 'menu' | 'reorder' | 'confirmRemove' | 'confirmReplace' | 'none';
 
 /**
  * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
@@ -32,8 +32,8 @@ function afterSheetCloses(go: () => void): void {
 }
 
 /**
- * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, and the check before removing an exercise
- * that has ticked sets. One instance serves the whole session screen.
+ * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Reorder, and the check before removing or replacing an
+ * exercise that has ticked sets. One instance serves the whole session screen.
  */
 export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
   const db = useDb();
@@ -47,12 +47,22 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
     onClose();
   };
 
-  const replace = () => {
+  const openReplacePicker = () => {
     if (!ex) return;
     const id = ex.id;
     flushAll();
     close();
     afterSheetCloses(() => router.push({ pathname: '/pick-exercise', params: { mode: 'replace', workoutExerciseId: id } }));
+  };
+
+  const replace = () => {
+    if (!ex) return;
+    if (!replaceNeedsConfirm(ex)) {
+      openReplacePicker();
+      return;
+    }
+    setPanel('none');
+    afterSheetCloses(() => setPanel('confirmReplace'));
   };
 
   const remove = () => {
@@ -152,6 +162,16 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
           if (ex) removeFromWorkout(db, ex.id);
           close();
         }}
+        onCancel={close}
+      />
+
+      <ConfirmSheet
+        visible={ex !== null && panel === 'confirmReplace'}
+        title={`Replace ${ex?.name ?? ''}?`}
+        body="Its ticked sets will be cleared."
+        confirmLabel="Replace"
+        cancelLabel="Keep"
+        onConfirm={openReplacePicker}
         onCancel={close}
       />
     </>

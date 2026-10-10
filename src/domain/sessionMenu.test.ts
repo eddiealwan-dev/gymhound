@@ -1,4 +1,4 @@
-import { canMoveBlock, hasDoneSets, joinsNextInSuperset, supersetAction } from './sessionMenu';
+import { canMoveBlock, hasDoneSets, joinsNextInSuperset, replaceNeedsConfirm, supersetAction } from './sessionMenu';
 
 const ex = (id: string, supersetGroup: number | null = null) => ({ id, supersetGroup });
 
@@ -74,5 +74,23 @@ describe('hasDoneSets: whether Remove asks first', () => {
   it('is false with no sets or none ticked', () => {
     expect(hasDoneSets({ sets: [] })).toBe(false);
     expect(hasDoneSets({ sets: [{ done: false }, { done: false }] })).toBe(false);
+  });
+});
+
+describe('replaceNeedsConfirm: whether Replace asks before opening the picker (R32)', () => {
+  it('asks when any set is ticked, because replacing clears them', () => {
+    expect(replaceNeedsConfirm({ sets: [{ done: false }, { done: true }] })).toBe(true);
+    expect(replaceNeedsConfirm({ sets: [{ done: true }] })).toBe(true);
+  });
+
+  it('goes straight to the picker when no set is ticked, or there are no sets', () => {
+    expect(replaceNeedsConfirm({ sets: [{ done: false }, { done: false }] })).toBe(false);
+    expect(replaceNeedsConfirm({ sets: [] })).toBe(false);
+  });
+
+  it('asks exactly when Remove asks', () => {
+    for (const sets of [[], [{ done: false }], [{ done: true }], [{ done: false }, { done: true }]]) {
+      expect(replaceNeedsConfirm({ sets })).toBe(hasDoneSets({ sets }));
+    }
   });
 });

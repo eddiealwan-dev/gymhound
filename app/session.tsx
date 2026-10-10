@@ -40,7 +40,7 @@ function anySetTicked(db: Db): boolean {
 }
 
 /** The question open over the session, if any. Only one at a time. */
-type Ask = 'nothing_ticked' | 'unticked' | 'discard';
+type Ask = 'nothing_ticked' | 'unticked' | 'discard' | 'finish_failed';
 
 /** The back chevron, the workout name and the running clock. There is no app header and no dock here. */
 function SessionHeader({ name, startedAt }: { name: string; startedAt: number }) {
@@ -114,10 +114,21 @@ export default function Session() {
 
   const { restEndsAt } = workout;
 
-  /** Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a moment ago. */
+  /**
+   * Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a
+   * moment ago. Any other error is logged and told to the user: the workout is still active, and a press handler must not throw.
+   */
   const finishNow = () => {
     setAsk(null);
-    if (finish(db, workout.id) === 'nothing_ticked') {
+    let result: ReturnType<typeof finish>;
+    try {
+      result = finish(db, workout.id);
+    } catch (error) {
+      console.warn('GymHound could not finish the workout.', error);
+      setAsk('finish_failed');
+      return;
+    }
+    if (result === 'nothing_ticked') {
       setAsk('nothing_ticked');
       return;
     }
@@ -212,6 +223,13 @@ export default function Session() {
           {/* Discarding deletes what was typed, so it still asks first. */}
           <Button label="Discard workout" variant="secondary" onPress={() => setAsk('discard')} />
         </View>
+      </Sheet>
+      {/* An error the finish did not expect: nothing was lost, and the workout is still active. */}
+      <Sheet visible={ask === 'finish_failed'} onClose={() => setAsk(null)}>
+        <Display weight={700} style={{ marginBottom: 16 }}>
+          GymHound couldn't finish this workout. It's still here — try again.
+        </Display>
+        <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
       <ConfirmSheet
         visible={ask === 'unticked'}

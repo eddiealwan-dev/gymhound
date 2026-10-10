@@ -37,6 +37,9 @@ function endHaptic(): void {
  * any music), then it clears the rest (`restEnded`, which leaves the notification alone: it fires on its own). Once per
  * rest end. A rest that ended while the app was away or closed is cleared quietly (see `restPhase`): on the phone the
  * notification already rang, and ringing again on return would double it. The web has no notification, so it rings.
+ *
+ * "Away" means `background` only. On iOS, Control Center, Notification Center and the app switcher make the app
+ * `inactive` while it is still in front, and the foreground notification handler is silent, so nothing else would ring.
  */
 export function RestWatcher(): null {
   const db = useDb();
@@ -54,12 +57,13 @@ export function RestWatcher(): null {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    if (AppState.currentState !== 'active') away.current = { from: Date.now(), to: null };
+    if (AppState.currentState === 'background') away.current = { from: Date.now(), to: null };
     const subscription = AppState.addEventListener('change', (state) => {
       const t = Date.now();
-      if (state !== 'active') {
+      if (state === 'background') {
         if (away.current === null || away.current.to !== null) away.current = { from: t, to: null };
-      } else if (away.current !== null && away.current.to === null) {
+      } else if (state === 'active' && away.current !== null && away.current.to === null) {
+        // Coming back from the background passes through `inactive`, which leaves the span open until the app is active.
         away.current = { ...away.current, to: t };
       }
     });

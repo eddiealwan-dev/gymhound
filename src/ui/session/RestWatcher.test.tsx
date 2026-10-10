@@ -212,8 +212,70 @@ describe('RestWatcher: the rest ends with a haptic and a bell wherever the user 
       mount();
       advance(1_000);
 
+      appState('background');
+      advance(5_000);
+
+      expect(mockCalls).toEqual([ended(5_000)]);
+    });
+
+    it('does not ring when the app went inactive, then to the background, before the end (the phone locks)', () => {
+      mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 5_000 };
+      mount();
+      advance(1_000);
+
+      appState('inactive');
+      appState('background');
+      advance(5_000);
+
+      expect(mockCalls).toEqual([ended(5_000)]);
+    });
+
+    // Control Center, Notification Center and the app switcher make the app inactive while it is still in front. The
+    // foreground notification handler is silent, so nothing else rings: the watcher must.
+    it('still rings when the app is only inactive through the end (Control Center, Notification Center)', () => {
+      mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 5_000 };
+      mount();
+      advance(1_000);
+
       appState('inactive');
       advance(5_000);
+
+      expect(mockCalls).toEqual(['haptic success', 'bell chime', ended(5_000)]);
+    });
+
+    it('still rings when the app is inactive, then active again, before the end', () => {
+      mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 5_000 };
+      mount();
+      advance(1_000);
+      appState('inactive');
+      advance(1_000);
+      appState('active');
+
+      advance(3_500);
+
+      expect(mockCalls).toEqual(['haptic success', 'bell chime', ended(5_000)]);
+    });
+
+    it('opened while inactive does not count as away', () => {
+      setCurrentState('inactive');
+      mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 2_000 };
+      mount();
+
+      advance(2_500);
+
+      expect(mockCalls).toEqual(['haptic success', 'bell chime', ended(2_000)]);
+    });
+
+    it('returning from the background through inactive ends the away span only when the app is active', () => {
+      mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 5_000 };
+      mount();
+      advance(1_000);
+
+      appState('background');
+      jest.setSystemTime(NOW + 5_500); // the end passed while away
+      appState('inactive'); // coming back: still not in front
+      appState('active');
+      advance(250);
 
       expect(mockCalls).toEqual([ended(5_000)]);
     });

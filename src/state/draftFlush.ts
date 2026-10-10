@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
 
 /**
  * Typed text is saved when its input is left (blur). Leaving the screen, opening a menu or opening the picker
@@ -43,6 +44,17 @@ export function flushAll(): void {
  */
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('popstate', () => flushAll(), true);
+}
+
+/**
+ * The phone locking or switching apps (native). A value typed but not yet blurred is saved before the app can be
+ * reclaimed, because iOS may end a backgrounded app without warning. Installed once, when the module loads, and kept
+ * for the life of the app.
+ */
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state !== 'active') flushAll();
+  });
 }
 
 /**

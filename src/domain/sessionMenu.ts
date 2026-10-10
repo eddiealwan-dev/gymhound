@@ -44,3 +44,8 @@ export function canMoveBlock(exercises: Linked[], id: string, dir: 'up' | 'down'
 export function hasDoneSets(ex: { sets: { done: boolean }[] }): boolean {
   return ex.sets.some((s) => s.done);
 }
+
+/** Whether Replace asks first. Replacing clears the exercise's sets, so it asks exactly when Remove does: when any set is ticked. */
+export function replaceNeedsConfirm(ex: { sets: { done: boolean }[] }): boolean {
+  return hasDoneSets(ex);
+}
