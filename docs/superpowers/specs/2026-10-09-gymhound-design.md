@@ -861,3 +861,11 @@ The owner's report is kept in the build log. Where this section and an earlier o
   - CSV.
 - **No AI coach:** "smart analytics" means rules and counts.
 - **§2 non-goals lifted:** the calendar view of history (the consistency tracker), and sharing, for a personal-best image only.
+
+### 18.4 After the owner's iPhone check (2026-10-10)
+The check gave 33 pass, 2 fail and 4 skipped. The owner decided the following. Where this section and an earlier one disagree, this section wins.
+- **Keyboard:** a Done bar sits above the iOS number pad. Ticking a set, scrolling the workout, and every control that opens a sheet also close the keyboard (plan Task 24).
+- **Snapshot diagnostics:** Settings → Backups shows why the last snapshot failed, with its time. If a snapshot was recorded but its file can't be listed, it says that and shows what the listing found. Phone builds only (plan Task 25).
+- **Footer on Fuel:** the footer appears on Train, History, Stats, Fuel and Settings. This changes §8.1, §16 and the global constraints.
+- **Bell volume:** the three bundled bells are re-made near full scale. Settings gets **Bell volume**: 25%, 50%, 75% or 100%, default 100%, stored as `rest_bell_volume`. It sets the in-app bell's volume within the phone's own volume. The lock-screen notification in Expo Go still uses the system sound (§8.4).
+- **Rest bar:** the countdown shows only under the set that started the rest. The bottom rest bar is removed, which changes §8.4 and §18.2. When that set no longer exists (removed or replaced), the bottom bar shows as a fallback, so a running rest is never invisible (ruling R41).

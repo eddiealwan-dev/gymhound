@@ -2040,3 +2040,72 @@ The owner's iPhone check gave 33 pass, 2 fail and 4 skipped. The fails were "key
 - The session ScrollView has `keyboardDismissMode="on-drag"`.
 
 **Commit.** `fix(session): a Done key above the number pad; tick, scroll and sheet openers close the keyboard`
+
+### Task 25: Snapshot diagnostics in Settings (evidence for the "no share option" fail)
+
+**Why.**
+- `takeSnapshotSafely` writes the file, then records `lastSnapshotAt`, and only logs a failure.
+- `latestSnapshotPath()` hides any listing error behind null.
+- On the iPhone the Share button never appeared, and the owner didn't notice which line Settings showed.
+- The same listing (`expoSnapshotFiles().list()`) feeds the keep-7 pruning and the startup restore. So the cause must be seen on the device before it is fixed.
+
+**Files:**
+- Modify: `src/db/repositories/settingsRepo.ts`, `src/state/backup.ts`, `app/(tabs)/settings.tsx`.
+- Tests: `src/db/repositories/settingsRepo.test.ts`, `src/state/backup.test.ts`, a Settings render test.
+
+**Interfaces:**
+- `Settings.lastSnapshotError: { at: number; message: string } | null` (key `last_snapshot_error`, default null). `ensureSettings` adds it for existing installs.
+- `takeSnapshotSafely`:
+  - On failure, it also stores `lastSnapshotError = { at: now, message }`, where `message` is the error's message plus its `code` if it has one. That store is wrapped so it can never throw.
+  - On success, it sets `lastSnapshotError` back to null.
+- `snapshotListing(): { path: string | null; names: string[]; error: string | null }`.
+  - It never throws.
+  - `names` is what `list()` returned.
+  - `error` is the listing error's message.
+  - `path` is the newest snapshot's path.
+  - `latestSnapshotPath()` becomes `snapshotListing().path`, so its callers are unchanged.
+- **Settings → Backups** (phone builds only) adds, under the existing line:
+  - When `lastSnapshotError` is newer than `lastSnapshotAt` (or there is no good one): "The last snapshot failed: {message} ({time})."
+  - When `lastSnapshotAt` is set but `path` is null: "A snapshot was saved at {time}, but its file isn't listed." In development builds (`__DEV__`, which includes Expo Go) a second line shows the listing error or "{n} files listed", plus the snapshot folder path, for diagnosis.
+  - These lines read from `useDbQuery`, so they refresh on focus and after a finish.
+
+**Tests.**
+- A failing `writeSnapshot` stores `lastSnapshotError` with its message and leaves `lastSnapshotAt` unchanged.
+- A later success clears `lastSnapshotError`.
+- `snapshotListing` returns `{ path: null, error }` when `list()` throws.
+- It returns the newest path otherwise.
+- Settings shows each diagnostic line in its state.
+
+**Commit.** `feat(backups): say why a snapshot failed or can't be listed`
+
+### Task 26: Owner notes from the iPhone check — footer on Fuel, bell volume, no bottom rest bar
+
+**Files:**
+- `app/(tabs)/fuel.tsx`;
+- `scripts/make-bells.mjs` and the regenerated `assets/sounds/*.wav`;
+- `src/platform/restTimer/bell.ts`;
+- `src/db/repositories/settingsRepo.ts`;
+- `app/(tabs)/settings.tsx`;
+- `app/session.tsx`;
+- `src/ui/session/RestBar.tsx`;
+- the footer tests.
+
+**Changes.**
+- **Footer on Fuel:** Fuel renders the footer like Train. Update the footer test that asserts it is absent on Fuel.
+- **Louder bells:**
+  - Raise the generator's peak amplitude to about −1 dBFS without clipping, and regenerate bell, chime and ding.
+  - `Settings.restBellVolume: number` (key `rest_bell_volume`, default 1).
+  - Settings → Rest timer gains **Bell volume** with choices 25%, 50%, 75% and 100%. Each choice exposes its selected state.
+  - The in-app bell player's `volume` is set from the setting, as is the preview when the sound is picked.
+- **Rest bar:**
+  - The session no longer renders `RestBar` while the set that started the rest (`restSetId`) is still a row in the workout. The countdown shows only in `RestInline`.
+  - When a rest runs and `restSetId` is null or names no row, `RestBar` still shows as the fallback (R41).
+  - The session's bottom padding follows whichever is shown.
+  - RestWatcher (the bell) is unchanged.
+
+**Tests.**
+- The Fuel footer is present.
+- Bell volume: choosing 50% stores 0.5, and the bell player is created with volume 0.5. Mock expo-audio as the existing bell tests do.
+- The session does not render RestBar while the anchor row exists, and renders it when the anchor is missing.
+
+**Commit.** `feat: footer on Fuel; louder bells with a volume setting; the rest countdown lives under its set`
