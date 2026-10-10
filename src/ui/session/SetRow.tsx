@@ -169,7 +169,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Set ${row.label}`}
-            accessibilityHint="Changes the set type"
+            accessibilityHint="Changes the set type or removes the set"
             onPress={onChangeType}
             style={({ pressed }) => ({
               width: 32,

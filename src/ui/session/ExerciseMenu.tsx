@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -12,7 +12,7 @@ import { flushAll } from '../../state/draftFlush';
 import { useDbQuery } from '../../state/dataVersion';
 import { moveBlock, removeFromWorkout, setExerciseRest, setRpeShown, toggleSuperset } from '../../state/sessionActions';
 import { Button } from '../Button';
-import { ConfirmSheet, Sheet } from '../Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { PlateSheet } from './PlateSheet';
@@ -30,14 +30,6 @@ type Props = {
  * remove or replace check, the plate calculator, or nothing between sheets.
  */
 type Panel = 'menu' | 'reorder' | 'rest' | 'confirmRemove' | 'confirmReplace' | 'plates' | 'none';
-
-/**
- * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
- * after the first closes. Elsewhere there is nothing to wait for.
- */
-function afterSheetCloses(go: () => void): void {
-  setTimeout(go, Platform.OS === 'ios' ? 400 : 0);
-}
 
 /** A rest length as the menu shows it: "Off" for 0, else m:ss. */
 function restLabel(seconds: number): string {

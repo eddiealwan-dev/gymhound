@@ -1,4 +1,4 @@
-import { Keyboard, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Keyboard, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useEffect, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from './Button';
@@ -9,6 +9,14 @@ type SheetProps = { visible: boolean; onClose: () => void; children: ReactNode }
 
 /** The backdrop that always stays above a sheet, however tall its content, so a tap outside it can still close it. */
 const BACKDROP_STRIP = 48;
+
+/**
+ * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
+ * after the first closes. Elsewhere there is nothing to wait for.
+ */
+export function afterSheetCloses(go: () => void): void {
+  setTimeout(go, Platform.OS === 'ios' ? 400 : 0);
+}
 
 /**
  * A panel that rises from the bottom over a dimmed page. Tapping outside it, the back gesture or VoiceOver's escape

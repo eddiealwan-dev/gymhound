@@ -4,12 +4,12 @@ import { Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import type { Gear } from '../../domain/plates';
-import { buildRows, tableColumns } from '../../domain/setTable';
+import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
-import { Sheet } from '../Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
@@ -51,7 +51,8 @@ const BLOCK_GAP = 28;
 /**
  * One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and the
  * Add warmup and Add set buttons. Tapping a set number opens the set-type sheet, which also removes the set;
- * pressing and holding the row opens a sheet that removes it too. The running rest shows under the set that started it.
+ * pressing and holding the row opens a sheet that removes it too. A ticked set is removed only after "Remove set n?".
+ * The running rest shows under the set that started it.
  */
 export function ExerciseBlock({
   workoutId,
@@ -77,6 +78,25 @@ export function ExerciseBlock({
   const [removeFor, setRemoveFor] = useState<string | null>(null);
   const typeRow = rows.find((r) => r.set.id === typeFor);
   const removeRow = rows.find((r) => r.set.id === removeFor);
+  /** The ticked set waiting on "Remove set n?". */
+  const [confirmFor, setConfirmFor] = useState<string | null>(null);
+  /** Its label, kept after the question closes so the title does not change while it fades. */
+  const [confirmLabel, setConfirmLabel] = useState('');
+
+  /**
+   * Removes a set chosen in either sheet. One not ticked goes at once. A ticked one holds a logged result, so it asks
+   * first, as removing an exercise with ticked sets does, once the sheet it was chosen in has gone (the caller closes it).
+   */
+  const removeOrAsk = (row: RowModel | undefined) => {
+    if (!row) return;
+    if (!row.set.done) {
+      removeSetFrom(db, row.set.id);
+      return;
+    }
+    const { id } = row.set;
+    setConfirmLabel(row.label);
+    afterSheetCloses(() => setConfirmFor(id));
+  };
 
   const saveNoteOnBlur = () => {
     if (noteDraft === null) return;
@@ -198,7 +218,7 @@ export function ExerciseBlock({
             label="Remove set"
             variant="secondary"
             onPress={() => {
-              if (typeRow) removeSetFrom(db, typeRow.set.id);
+              removeOrAsk(typeRow);
               setTypeFor(null);
             }}
           />
@@ -213,13 +233,26 @@ export function ExerciseBlock({
           <Button
             label="Remove set"
             onPress={() => {
-              if (removeRow) removeSetFrom(db, removeRow.set.id);
+              removeOrAsk(removeRow);
               setRemoveFor(null);
             }}
           />
           <Button label="Cancel" variant="secondary" onPress={() => setRemoveFor(null)} />
         </View>
       </Sheet>
+
+      <ConfirmSheet
+        visible={confirmFor !== null && rows.some((r) => r.set.id === confirmFor)}
+        title={`Remove set ${confirmLabel}?`}
+        body="It's ticked. What it logged will be deleted."
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        onConfirm={() => {
+          if (confirmFor !== null) removeSetFrom(db, confirmFor);
+          setConfirmFor(null);
+        }}
+        onCancel={() => setConfirmFor(null)}
+      />
     </View>
   );
 }
