@@ -3,6 +3,7 @@ import { getSettings } from '../db/repositories/settingsRepo';
 import {
   addExerciseToWorkout,
   addSet,
+  addWarmupSet,
   moveExercise,
   removeExercise,
   removeSet,
@@ -212,6 +213,12 @@ export function untick(db: Db, setId: string): void {
 /** Appends an empty working set to the exercise in this workout. */
 export function addSetTo(db: Db, workoutExerciseId: string): void {
   addSet(db, workoutExerciseId);
+  bumpData();
+}
+
+/** Adds an empty warmup set after the exercise's leading warmups, or at the top when it has none. */
+export function addWarmupTo(db: Db, workoutExerciseId: string): void {
+  addWarmupSet(db, workoutExerciseId);
   bumpData();
 }
 

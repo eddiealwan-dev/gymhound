@@ -6,7 +6,7 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import { buildRows, tableColumns } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { useDraftFlush } from '../../state/draftFlush';
-import { addSetTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
+import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { Body, Display } from '../Text';
@@ -36,7 +36,11 @@ type Props = {
 /** Space below a block. A superset's bar crosses it to join the members. */
 const BLOCK_GAP = 28;
 
-/** One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and Add set. */
+/**
+ * One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and the
+ * Add warmup and Add set buttons. Tapping a set number opens the set-type sheet, which also removes the set;
+ * pressing and holding the row opens a sheet that removes it too.
+ */
 export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, joinsNext }: Props) {
   const db = useDb();
   const { colors } = useTheme();
@@ -138,8 +142,13 @@ export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, 
         ))}
       </View>
 
-      <View style={{ marginTop: 8 }}>
-        <Button label="+ Add set" variant="secondary" onPress={() => addSetTo(db, ex.id)} />
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Button label="+ Add warmup" variant="secondary" onPress={() => addWarmupTo(db, ex.id)} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="+ Add set" variant="secondary" onPress={() => addSetTo(db, ex.id)} />
+        </View>
       </View>
 
       <Sheet visible={typeRow !== undefined} onClose={() => setTypeFor(null)}>
@@ -158,6 +167,16 @@ export function ExerciseBlock({ ex, unit, distanceUnit, onOpenMenu, inSuperset, 
               }}
             />
           ))}
+        </View>
+        <View style={{ marginTop: 16 }}>
+          <Button
+            label="Remove set"
+            variant="secondary"
+            onPress={() => {
+              if (typeRow) removeSetFrom(db, typeRow.set.id);
+              setTypeFor(null);
+            }}
+          />
         </View>
       </Sheet>
 

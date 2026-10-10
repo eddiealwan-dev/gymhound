@@ -3,7 +3,10 @@ import { and, eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { mondayOf, toLocalDate } from '../../domain/dates';
 import { formatPrevious } from '../../domain/setEntry';
+import { computeStreak } from '../../domain/streak';
+import { totalVolume } from '../../domain/volume';
 import { runSeed } from '../../seed/seed';
 import {
   exerciseNotes,
@@ -37,7 +40,7 @@ import {
   tickSet,
   untickSet,
 } from './workoutsRepo';
-import { getActiveWorkoutView, getPreviousSets } from './workoutViewsRepo';
+import { getActiveWorkoutView, getPreviousSets, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const HOUR = 3_600_000;
@@ -213,6 +216,36 @@ describe('starting a workout', () => {
     const second = startEmptyWorkout(db, NOW + DAY);
     discardWorkout(db, second);
     expect(() => startEmptyWorkout(db, NOW + 2 * DAY)).not.toThrow();
+  });
+});
+
+describe('several workouts on one day', () => {
+  it('finishes both, counts both in this week\'s volume and counts the date once in the streak', () => {
+    const db = seededDb();
+    const today = toLocalDate(NOW);
+    const first = runDay(db, PUSH_A, NOW, 135, 8);
+
+    // A second, empty workout the same morning: the first is finished, so starting is allowed.
+    const second = startEmptyWorkout(db, NOW + 2 * HOUR);
+    addExerciseToWorkout(db, second, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 100, 5, NOW + 2 * HOUR + 60_000);
+    finishWorkout(db, second, NOW + 3 * HOUR);
+
+    expect(db.select().from(workouts).all()).toHaveLength(2);
+    for (const id of [first, second]) {
+      expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({
+        status: 'finished',
+        localDate: today,
+      });
+    }
+
+    // This week's volume, read the way the Train screen reads it: 135 x 8 plus 100 x 5.
+    const weekStart = mondayOf(today);
+    expect(totalVolume(getVolumeSetsSince(db, weekStart), 'lb')).toBe(135 * 8 + 100 * 5);
+
+    // The streak counts the date once.
+    expect(getTrainingDates(db)).toEqual([today]);
+    expect(computeStreak(getTrainingDates(db), today)).toBe(1);
   });
 });
 

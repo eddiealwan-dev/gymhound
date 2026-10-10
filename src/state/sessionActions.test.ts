@@ -18,6 +18,7 @@ import { useDataVersion } from './dataVersion';
 import {
   addExercise,
   addSetTo,
+  addWarmupTo,
   commitSetField,
   discard,
   finish,
@@ -275,7 +276,7 @@ describe('untick', () => {
   });
 });
 
-describe('addSetTo and removeSetFrom', () => {
+describe('addSetTo, addWarmupTo and removeSetFrom', () => {
   it('appends an empty working set, then bumps the data version', () => {
     startFromDay(db, PUSH_A);
     const ex = bench();
@@ -286,6 +287,20 @@ describe('addSetTo and removeSetFrom', () => {
     const sets = bench().sets;
     expect(sets).toHaveLength(5);
     expect(sets[4]).toMatchObject({ setType: 'working', weight: null, reps: null, done: false });
+    expect(version()).toBe(before + 1);
+  });
+
+  it('adds a warmup at the top, then bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+    const before = version();
+
+    addWarmupTo(db, ex.id);
+
+    const sets = bench().sets;
+    expect(sets.map((s) => s.setType)).toEqual(['warmup', 'working', 'working', 'working', 'working']);
+    expect(sets.slice(1).map((s) => s.id)).toEqual(ex.sets.map((s) => s.id));
+    expect(sets[0]).toMatchObject({ position: 0, weight: null, reps: null, done: false });
     expect(version()).toBe(before + 1);
   });
 

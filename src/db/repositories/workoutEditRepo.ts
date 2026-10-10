@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, max, ne, sql } from 'drizzle-orm';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { newId } from '../ids';
 import { sets, workoutExercises } from '../schema';
@@ -239,6 +239,32 @@ export function addSet(db: Db, workoutExerciseId: string): string {
     tx.insert(sets)
       .values({ id, workoutExerciseId, position: nextSetPosition(tx, workoutExerciseId), setType: 'working' })
       .run();
+    return id;
+  });
+}
+
+/**
+ * Inserts an empty warmup right after the exercise's last leading warmup: at position 0 when it starts with a
+ * working set (or has no sets), at the end when every set is a warmup. Later sets shift down one place, so
+ * positions stay 0..n-1. Returns the new set's id.
+ */
+export function addWarmupSet(db: Db, workoutExerciseId: string): string {
+  return db.transaction((tx) => {
+    requireWorkoutExercise(tx, workoutExerciseId);
+    const firstAfterWarmups = tx
+      .select({ position: sets.position })
+      .from(sets)
+      .where(and(eq(sets.workoutExerciseId, workoutExerciseId), ne(sets.setType, 'warmup')))
+      .orderBy(asc(sets.position))
+      .limit(1)
+      .get();
+    const position = firstAfterWarmups?.position ?? nextSetPosition(tx, workoutExerciseId);
+    tx.update(sets)
+      .set({ position: sql`${sets.position} + 1` })
+      .where(and(eq(sets.workoutExerciseId, workoutExerciseId), gte(sets.position, position)))
+      .run();
+    const id = newId();
+    tx.insert(sets).values({ id, workoutExerciseId, position, setType: 'warmup' }).run();
     return id;
   });
 }

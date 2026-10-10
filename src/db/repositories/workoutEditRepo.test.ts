@@ -1,11 +1,14 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
+import { buildRows } from '../../domain/setTable';
+import type { SetType } from '../../domain/types';
 import { routineExercises, sets, workoutExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import {
   addExerciseToWorkout,
   addSet,
+  addWarmupSet,
   moveExercise,
   removeExercise,
   removeSet,
@@ -14,10 +17,12 @@ import {
   toggleSupersetWithNext,
   updateSet,
 } from './workoutEditRepo';
-import { startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 const PUSH_A = 'premade-ppl-6:push-a';
 const PUSH_A_ORDER = [
   'barbell-bench-press',
@@ -310,6 +315,171 @@ describe('addSet and removeSet', () => {
     removeSet(db, view(db).exercises[0].sets[0].id);
     expect(view(db).exercises[1].sets.map((s) => s.id)).toEqual(ohpSets);
     expect(setPositions(db, 1)).toEqual([0, 1, 2]);
+  });
+});
+
+/** Replaces the exercise's sets with blank sets of these types, in this order. Returns their ids. */
+function shapeSets(db: Db, workoutExerciseId: string, types: SetType[]): string[] {
+  for (const s of view(db).exercises.find((e) => e.id === workoutExerciseId)!.sets) removeSet(db, s.id);
+  return types.map((setType) => {
+    const id = addSet(db, workoutExerciseId);
+    updateSet(db, id, { setType });
+    return id;
+  });
+}
+
+function setTypes(db: Db, exerciseIndex = 0): SetType[] {
+  return view(db).exercises[exerciseIndex].sets.map((s) => s.setType);
+}
+
+function setIdsOf(db: Db, exerciseIndex = 0): string[] {
+  return view(db).exercises[exerciseIndex].sets.map((s) => s.id);
+}
+
+/** The raw sets rows of a workout exercise in position order. */
+function rawSets(db: Db, workoutExerciseId: string) {
+  return db
+    .select()
+    .from(sets)
+    .where(eq(sets.workoutExerciseId, workoutExerciseId))
+    .all()
+    .sort((a, b) => a.position - b.position);
+}
+
+describe('addWarmupSet', () => {
+  it('goes to the top of an exercise that has only working sets', () => {
+    const { db, ids } = startPushA();
+    const before = shapeSets(db, ids[0], ['working', 'working']);
+    const id = addWarmupSet(db, ids[0]);
+    expect(setTypes(db)).toEqual(['warmup', 'working', 'working']);
+    expect(setIdsOf(db)).toEqual([id, ...before]);
+    expect(setPositions(db)).toEqual([0, 1, 2]);
+  });
+
+  it('goes right after the last leading warmup', () => {
+    const { db, ids } = startPushA();
+    const before = shapeSets(db, ids[0], ['warmup', 'working', 'working']);
+    const id = addWarmupSet(db, ids[0]);
+    expect(setTypes(db)).toEqual(['warmup', 'warmup', 'working', 'working']);
+    expect(setIdsOf(db)).toEqual([before[0], id, before[1], before[2]]);
+    expect(view(db).exercises[0].sets[1]).toMatchObject({ id, position: 1 });
+    expect(setPositions(db)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('goes to the end when every set is a warmup', () => {
+    const { db, ids } = startPushA();
+    const before = shapeSets(db, ids[0], ['warmup']);
+    const id = addWarmupSet(db, ids[0]);
+    expect(setTypes(db)).toEqual(['warmup', 'warmup']);
+    expect(setIdsOf(db)).toEqual([before[0], id]);
+    expect(setPositions(db)).toEqual([0, 1]);
+  });
+
+  it('is the only set of an exercise that has none', () => {
+    const { db, ids } = startPushA();
+    shapeSets(db, ids[0], []);
+    expect(setIdsOf(db)).toEqual([]);
+    const id = addWarmupSet(db, ids[0]);
+    expect(setTypes(db)).toEqual(['warmup']);
+    expect(setIdsOf(db)).toEqual([id]);
+    expect(setPositions(db)).toEqual([0]);
+  });
+
+  it('stops at the first working set, so a warmup further down is not a leading one', () => {
+    const { db, ids } = startPushA();
+    const before = shapeSets(db, ids[0], ['warmup', 'working', 'warmup', 'working']);
+    const id = addWarmupSet(db, ids[0]);
+    expect(setTypes(db)).toEqual(['warmup', 'warmup', 'working', 'warmup', 'working']);
+    expect(setIdsOf(db)).toEqual([before[0], id, before[1], before[2], before[3]]);
+    expect(setPositions(db)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('adds a blank, unticked set', () => {
+    const { db, ids } = startPushA();
+    const id = addWarmupSet(db, ids[0]);
+    expect(rawSets(db, ids[0])[0]).toMatchObject({
+      id,
+      workoutExerciseId: ids[0],
+      position: 0,
+      setType: 'warmup',
+      weight: null,
+      weightUnit: null,
+      reps: null,
+      rpe: null,
+      durationS: null,
+      distance: null,
+      distanceUnit: null,
+      done: false,
+      prFlags: 0,
+      completedAt: null,
+    });
+  });
+
+  it('keeps the values, ticks and times of the sets it shifts down', () => {
+    const { db, ids } = startPushA();
+    const [warm, first, second] = shapeSets(db, ids[0], ['warmup', 'working', 'working']);
+    tickSet(db, warm, { weight: 60, reps: 10, durationS: null, distance: null }, 'lb', NOW + 1_000, 'mi');
+    tickSet(db, first, { weight: 100, reps: 5, durationS: null, distance: null }, 'kg', NOW + 2_000, 'mi');
+    updateSet(db, second, { weight: 105, weightUnit: 'lb', reps: 3, rpe: 8.5 });
+    const before = rawSets(db, ids[0]);
+
+    const id = addWarmupSet(db, ids[0]);
+
+    const after = rawSets(db, ids[0]);
+    const withoutPosition = ({ position, ...rest }: (typeof before)[number]) => rest;
+    expect(after.filter((s) => s.id !== id).map(withoutPosition)).toEqual(before.map(withoutPosition));
+    expect(after.map((s) => [s.id, s.done])).toEqual([
+      [warm, true],
+      [id, false],
+      [first, true],
+      [second, false],
+    ]);
+  });
+
+  it('leaves the other exercises alone', () => {
+    const { db, ids } = startPushA();
+    const ohp = rawSets(db, ids[1]);
+    addWarmupSet(db, ids[0]);
+    expect(rawSets(db, ids[1])).toEqual(ohp);
+    expect(setTypes(db, 1)).toEqual(['working', 'working', 'working']);
+  });
+
+  it('refuses an exercise that is not in a workout, and adds nothing', () => {
+    const { db } = startPushA();
+    const count = db.select().from(sets).all().length;
+    expect(() => addWarmupSet(db, 'no-such-exercise')).toThrow('No workout exercise with id no-such-exercise.');
+    expect(db.select().from(sets).all()).toHaveLength(count);
+  });
+});
+
+describe('the previous result after a warmup is added', () => {
+  it('lines the new warmups up with last time\'s warmups and keeps working set 1 on its own', () => {
+    const db = seededDb();
+    // Last time: W 60 x 10, W 80 x 5, then set 1 at 100 x 5.
+    const lastId = startEmptyWorkout(db, NOW);
+    const lastBench = addExerciseToWorkout(db, lastId, 'barbell-bench-press');
+    const done = shapeSets(db, lastBench, ['warmup', 'warmup', 'working']);
+    [
+      [60, 10],
+      [80, 5],
+      [100, 5],
+    ].forEach(([weight, reps], i) => {
+      tickSet(db, done[i], { weight, reps, durationS: null, distance: null }, 'lb', NOW + (i + 1) * 1_000, 'mi');
+    });
+    finishWorkout(db, lastId, NOW + HOUR);
+
+    // Today: one working set, then two warmups are added in front of it.
+    const todayId = startEmptyWorkout(db, NOW + DAY);
+    const bench = addExerciseToWorkout(db, todayId, 'barbell-bench-press');
+    expect(buildRows(view(db).exercises[0], 'lb').map((r) => r.previous)).toEqual(['100 × 5']);
+
+    addWarmupSet(db, bench);
+    expect(buildRows(view(db).exercises[0], 'lb').map((r) => r.previous)).toEqual(['60 × 10', '100 × 5']);
+
+    addWarmupSet(db, bench);
+    const rows = buildRows(view(db).exercises[0], 'lb');
+    expect(rows.map((r) => r.label)).toEqual(['W', 'W', '1']);
+    expect(rows.map((r) => r.previous)).toEqual(['60 × 10', '80 × 5', '100 × 5']);
   });
 });
 
