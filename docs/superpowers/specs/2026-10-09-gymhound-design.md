@@ -33,7 +33,7 @@ Non-goals for v1
 | Stack | Expo Router, `expo-sqlite` through Drizzle ORM, rules in plain TypeScript (approach A) |
 | First test device | The owner's iPhone, in Expo Go |
 | Apple Developer account | Not yet. Phases 1–6 run in Expo Go. Native features wait for phase 7 |
-| Hound head | Drawn as a flat SVG from the brief and approved by the owner. Swappable if the original art turns up |
+| Hound head | The dog from the GruntHound logo, cut from the owner's logo art. Never redrawn or replaced |
 | Routine | A whole program that holds days. **Up next** is the next day of the active routine |
 | Free routine limit | One user-created or duplicated routine, with any number of days |
 | Progression | Double progression, gated by the day mark (7.3) |
@@ -356,17 +356,18 @@ Settings offers Light, Dark or System, with System the default.
 - **Red** is used only for the GYMHOUND wordmark, the active tab, and PR marks. Primary buttons use the `text` colour filled with `bg`-coloured labels. Ticks use the `text` colour.
 - **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, uppercase, tight tracking (−0.5), one line.
 - **Type:** display and big numbers in Barlow Condensed 600/700/800, body in Inter 400/500/600. Numbers use `fontVariant: ['tabular-nums']`. Both fonts are bundled.
-- **Hound mark:** `src/ui/HoundMark.tsx`, plus `assets/brand/hound-head.svg` for the app icon and splash.
-  - A profile head facing right, flat, without gradients or photographic detail. It must read at 40px.
-  - Colours: navy head #0f1f3d, electric-blue circuit traces #2f8cff with node dots on the skull, a light muzzle #d6dee9, and one bright eye node #7fe3ff.
-  - In dark mode a thin electric-blue outline keeps the navy readable against #100f0c.
-  - The owner approves the mark before phase 1 is done.
+- **Hound mark:** the dog from the GruntHound logo, cut from the owner's logo file with its background removed. It is never redrawn.
+  - **Master:** `assets/brand/hound-head.png`, a 650px transparent square.
+  - **Header exports:** `mark.png`, `mark@2x.png` and `mark@3x.png` (40, 80 and 120px).
+  - **Dark exports:** `mark-dark*.png`, the same sizes with a thin #2f8cff outline baked in, so the navy reads against #100f0c.
+  - `src/ui/HoundMark.tsx` renders the right export for the scheme.
+  - The owner approves how the mark sits in the header, in both themes, before phase 1 is done.
 - **App icon and splash:** the mark on #100f0c.
 - **Not allowed:** quotes, flames, skulls.
 
 ### 8.3 Train
 In order:
-1. **Greeting:** "GOOD MORNING", "GOOD AFTERNOON" or "GOOD EVENING" (05:00–11:59, 12:00–16:59, 17:00–04:59), and below it the date in huge uppercase condensed type, for example "THU 9 OCT". The date is formatted for the device locale.
+1. **Greeting:** "GOOD MORNING", "GOOD AFTERNOON" or "GOOD EVENING" (05:00–11:59, 12:00–16:59, 17:00–04:59), and below it the date in huge uppercase condensed type, for example "FRI 9 OCT". The date is formatted for the device locale.
 2. **Resume:** shown only if a workout is active. It shows the workout name, elapsed time, sets done, and a **Resume** button.
 3. **Streak and This week:** two equal cards.
 4. **Start empty** and **Routines:** full-width buttons.
@@ -599,7 +600,7 @@ src/platform/entitlements/    index.ts, freeOnly.ts, debug.ts, revenuecat.ts
 src/platform/restTimer/       index.ts, expoGoNotification.ts (phase 7: liveActivity.ts, androidOngoing.ts)
 src/state/                    sessionStore.ts
 src/ui/                       theme.ts, fonts.ts, Header.tsx, HoundMark.tsx, Dock.tsx, Footer.tsx, components/
-assets/brand/                 hound-head.svg, icon, splash
+assets/brand/                 hound-head.png (master, from the logo), mark*.png, mark-dark*.png, icon, splash
 ```
 
 ## 15. Phases
