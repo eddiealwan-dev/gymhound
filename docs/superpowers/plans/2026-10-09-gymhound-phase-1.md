@@ -2109,3 +2109,31 @@ The owner's iPhone check gave 33 pass, 2 fail and 4 skipped. The fails were "key
 - The session does not render RestBar while the anchor row exists, and renders it when the anchor is missing.
 
 **Commit.** `feat: footer on Fuel; louder bells with a volume setting; the rest countdown lives under its set`
+
+**Amendment to Task 24 (ruling R43, 2026-10-10, from the implementer's NEEDS_CONTEXT).**
+- Expo Go SDK 57 runs React Native 0.86 on the New Architecture. There, an `InputAccessoryView` attaches to only the first TextInput carrying its `nativeID` (`RCTInputAccessoryComponentView didMoveToWindow`).
+- A number-pad or decimal-pad input with `returnKeyType="done"` and no `inputAccessoryViewID` already gets React Native's own Done toolbar. That button submits, then ends editing, so the draft commits on blur (`RCTTextInputComponentView setDefaultInputAccessoryView` and `handleInputAccessoryDoneButton`).
+- So: drop `KeyboardDoneBar`, `KEYBOARD_DONE_ID` and `inputAccessoryViewID`. Every numeric TextInput sets `returnKeyType="done"` only:
+  - set weight, reps, RPE, duration and distance;
+  - the plate calculator weight;
+  - the custom bar.
+- Tests assert `returnKeyType="done"` and no `inputAccessoryViewID`.
+- The rest of Task 24 stands:
+  - tick dismisses after `readRow`, keeping the typed value;
+  - openers dismiss first;
+  - `keyboardDismissMode="on-drag"` (already present, so it only needs a test).
+- The F1 test's "dismiss called exactly once" becomes "dismiss called before the sheet opens".
+
+**Addition to Task 26 (owner, 2026-10-10): the music bar at the bottom.**
+- **Flow:** the owner picks the app with the header Music button. Picking a platform closes the sheet and slides up a **music bar** docked at the bottom of the session, where the rest bar used to be. It does not leave GymHound.
+  - The bar shows the app's name with a generic music icon, the caption "Tap Open to play or skip", **Open {app}** (calls `openMusicApp`, with "… isn't on this phone." on 'missing'), and a close ×.
+  - It persists as `Settings.musicApp: 'apple-music' | 'spotify' | 'audible' | null` (key `music_app`, default null). The bar shows in every active workout until × clears it.
+  - It is never rendered on web (`musicAppsFor` is empty there).
+- **Fallback rest bar:** when R41's fallback RestBar shows, it stacks above the music bar. The session's bottom padding covers both.
+- **Phase 7 (§17.3):** the song, play/pause, previous/next and ±15s fill this same bar.
+- **Tests:**
+  - Picking Spotify stores `musicApp` and shows the bar with "Open Spotify".
+  - × clears it.
+  - Open calls `Linking.openURL('spotify://')`.
+  - There is no bar on web.
+  - Stacking with the fallback RestBar works.
