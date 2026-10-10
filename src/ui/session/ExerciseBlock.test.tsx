@@ -5,6 +5,7 @@ import type { SetView, WorkoutExerciseView } from '../../db/repositories/workout
 import { commitSetField, removeSetFrom, tick, untick } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
+import { RestInline } from './RestInline';
 import { SetRow } from './SetRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,6 +23,7 @@ jest.mock('../../state/sessionActions', () => ({
   tick: jest.fn(),
   untick: jest.fn(),
 }));
+// It draws nothing here: where it sits, and its props, are what the tests read.
 jest.mock('./RestInline', () => ({ RestInline: () => null }));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
@@ -65,7 +67,9 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
   previous: [],
 });
 
-function mount(ex: WorkoutExerciseView): ReactTestRenderer {
+type Rest = { restEndsAt: number | null; restSetId: string | null };
+
+function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(
@@ -78,8 +82,8 @@ function mount(ex: WorkoutExerciseView): ReactTestRenderer {
         onOpenMenu={() => {}}
         inSuperset={false}
         joinsNext={false}
-        restEndsAt={null}
-        restSetId={null}
+        restEndsAt={rest.restEndsAt}
+        restSetId={rest.restSetId}
       />,
     );
   });
@@ -285,5 +289,37 @@ describe('ExerciseBlock: Remove set asks first when the set is ticked (F5)', () 
 
     expect(removeSetFrom).toHaveBeenCalledTimes(2);
     expect(shownText(tree).join(' ')).not.toContain('Remove set 2?');
+  });
+});
+
+describe('ExerciseBlock: the countdown under its set (Task 26, R41)', () => {
+  const threeSets = () => bench([set('s0', 0), set('s1', 1), set('s2', 2)]);
+
+  /** The set rows (by id) and the countdowns ('rest'), top to bottom. */
+  const rowsAndRests = (tree: ReactTestRenderer) =>
+    tree.root
+      .findAll((n) => n.type === SetRow || n.type === RestInline)
+      .map((n) => (n.type === SetRow ? (n.props.row as { set: SetView }).set.id : 'rest'));
+
+  it('shows exactly one countdown, directly under the set that started the rest, with this workout and that end', () => {
+    const endsAt = Date.now() + 90_000;
+    const tree = mount(threeSets(), { restEndsAt: endsAt, restSetId: 's1' });
+
+    const rests = tree.root.findAllByType(RestInline);
+    expect(rests).toHaveLength(1);
+    expect(rests[0].props).toEqual({ workoutId: 'w1', endsAt });
+    expect(rowsAndRests(tree)).toEqual(['s0', 's1', 'rest', 's2']);
+  });
+
+  it("shows none when the rest was started by another exercise's set", () => {
+    const tree = mount(threeSets(), { restEndsAt: Date.now() + 90_000, restSetId: 'other-exercise-s1' });
+
+    expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+
+  it('shows none when no rest is running', () => {
+    const tree = mount(threeSets(), { restEndsAt: null, restSetId: 's1' });
+
+    expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
   });
 });
