@@ -1,0 +1,163 @@
+/** @jest-environment node */
+import { totalVolume } from '../../domain/volume';
+import { seededDb } from '../testing/fixtures';
+import type { Db } from '../types';
+import { addExerciseToWorkout, updateSet } from './workoutEditRepo';
+import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { getActiveWorkoutView, getFinishSummary, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
+
+const PUSH_A = 'premade-ppl-6:push-a';
+const MINUTE = 60_000;
+const OCT_1 = new Date(2026, 9, 1, 9, 0).getTime();
+const OCT_6 = new Date(2026, 9, 6, 9, 0).getTime();
+const OCT_9 = new Date(2026, 9, 9, 9, 0).getTime();
+
+/** Ticks a set at `weight` x `reps` in lb. */
+function tick(db: Db, setId: string, weight: number, reps: number, at: number): void {
+  tickSet(db, setId, { weight, reps, durationS: null, distance: null }, 'lb', at, 'mi');
+}
+
+/** The ids of the active workout's sets for the exercise at `exerciseIndex` (Push A starts with bench press). */
+function setIds(db: Db, exerciseIndex = 0): string[] {
+  return getActiveWorkoutView(db)!.exercises[exerciseIndex].sets.map((s) => s.id);
+}
+
+/** Starts Push A at `start`, ticks `lifts` on its bench press, and finishes `minutes` later. */
+function runPushA(db: Db, start: number, lifts: [weight: number, reps: number][], minutes = 60): string {
+  const id = startWorkoutFromDay(db, PUSH_A, start);
+  const ids = setIds(db);
+  lifts.forEach(([weight, reps], i) => tick(db, ids[i], weight, reps, start + (i + 1) * MINUTE));
+  finishWorkout(db, id, start + minutes * MINUTE);
+  return id;
+}
+
+/**
+ * Three bench-press workouts:
+ * - Oct 1, finished: two working sets at 100 lb x 5.
+ * - Oct 6, finished 72 minutes later: a working set at 135 lb x 5 and a 45 lb x 10 warm-up.
+ * - Oct 9, active: a working set at 140 lb x 3 and a ticked plank. Every other set is unticked.
+ */
+function buildHistory(db: Db): { oct1: string; oct6: string; active: string } {
+  const oct1 = runPushA(db, OCT_1, [
+    [100, 5],
+    [100, 5],
+  ]);
+
+  const oct6 = startWorkoutFromDay(db, PUSH_A, OCT_6);
+  const [working, warmup] = setIds(db);
+  tick(db, working, 135, 5, OCT_6 + MINUTE);
+  updateSet(db, warmup, { setType: 'warmup' });
+  tick(db, warmup, 45, 10, OCT_6 + 2 * MINUTE);
+  finishWorkout(db, oct6, OCT_6 + 72 * MINUTE);
+
+  const active = startWorkoutFromDay(db, PUSH_A, OCT_9);
+  tick(db, setIds(db)[0], 140, 3, OCT_9 + MINUTE);
+  addExerciseToWorkout(db, active, 'plank');
+  const plank = setIds(db, getActiveWorkoutView(db)!.exercises.length - 1)[0];
+  tickSet(db, plank, { weight: null, reps: null, durationS: 45, distance: null }, 'lb', OCT_9 + 2 * MINUTE, 'mi');
+
+  return { oct1, oct6, active };
+}
+
+describe('getTrainingDates', () => {
+  it('is the distinct local dates of finished workouts, earliest first, without the active workout', () => {
+    const db = seededDb();
+    buildHistory(db);
+    expect(getTrainingDates(db)).toEqual(['2026-10-01', '2026-10-06']);
+  });
+
+  it('lists a date once when several workouts finished on it', () => {
+    const db = seededDb();
+    runPushA(db, new Date(2026, 9, 6, 18, 0).getTime(), [[135, 5]]);
+    runPushA(db, OCT_6, [[135, 5]]);
+    expect(getTrainingDates(db)).toEqual(['2026-10-06']);
+  });
+
+  it('is empty when nothing has finished', () => {
+    const db = seededDb();
+    expect(getTrainingDates(db)).toEqual([]);
+    startEmptyWorkout(db, OCT_9);
+    expect(getTrainingDates(db)).toEqual([]);
+  });
+});
+
+describe('getVolumeSetsSince', () => {
+  it('covers the finished and the active workouts from the date on, and none before it', () => {
+    const db = seededDb();
+    buildHistory(db);
+    const done = getVolumeSetsSince(db, '2026-10-05').filter((s) => s.done);
+    expect(done.map((s) => [s.loggingType, s.setType, s.weight, s.weightUnit, s.reps])).toEqual([
+      ['weighted', 'working', 135, 'lb', 5],
+      ['weighted', 'warmup', 45, 'lb', 10],
+      ['weighted', 'working', 140, 'lb', 3],
+      ['timed', 'working', null, null, null],
+    ]);
+  });
+
+  it('returns every set of those workouts, ticked or not, for totalVolume to filter', () => {
+    const db = seededDb();
+    buildHistory(db);
+    const activeSets = getActiveWorkoutView(db)!.exercises.reduce((n, e) => n + e.sets.length, 0);
+    const result = getVolumeSetsSince(db, '2026-10-05');
+    expect(result).toHaveLength(2 + activeSets);
+    expect(result.filter((s) => !s.done)).toHaveLength(activeSets - 2);
+    expect(result.filter((s) => !s.done).every((s) => s.weight === null && s.reps === null)).toBe(true);
+  });
+
+  it('includes the given date itself', () => {
+    const db = seededDb();
+    buildHistory(db);
+    const doneSince = (from: string) => getVolumeSetsSince(db, from).filter((s) => s.done).length;
+    expect(doneSince('2026-10-01')).toBe(6);
+    expect(doneSince('2026-10-06')).toBe(4);
+    expect(doneSince('2026-10-07')).toBe(2);
+    expect(doneSince('2026-10-09')).toBe(2);
+    expect(doneSince('2026-10-10')).toBe(0);
+  });
+
+  it('feeds totalVolume: warm-ups, unticked sets and timed sets add nothing', () => {
+    const db = seededDb();
+    buildHistory(db);
+    // 135 x 5 (Oct 6) + 140 x 3 (active); the 45 lb warm-up, the unticked sets and the plank are left out.
+    expect(totalVolume(getVolumeSetsSince(db, '2026-10-05'), 'lb')).toBe(1095);
+    expect(totalVolume(getVolumeSetsSince(db, '2026-10-01'), 'lb')).toBe(2095);
+  });
+
+  it('is empty when there are no workouts', () => {
+    expect(getVolumeSetsSince(seededDb(), '2026-10-05')).toEqual([]);
+  });
+});
+
+describe('getFinishSummary', () => {
+  it('has the id, name, duration, volume and the number of done sets', () => {
+    const db = seededDb();
+    const { oct6 } = buildHistory(db);
+    // Volume leaves the warm-up out; the set count does not.
+    expect(getFinishSummary(db, oct6, 'lb')).toEqual({
+      id: oct6,
+      name: 'Push A',
+      durationMs: 72 * MINUTE,
+      volume: 675,
+      setCount: 2,
+    });
+  });
+
+  it('totals the volume in the display unit', () => {
+    const db = seededDb();
+    const { oct1, oct6 } = buildHistory(db);
+    expect(getFinishSummary(db, oct1, 'lb')).toMatchObject({ durationMs: 60 * MINUTE, volume: 1000, setCount: 2 });
+    // 675 lb is 306.17 kg.
+    expect(getFinishSummary(db, oct6, 'kg').volume).toBe(306);
+  });
+
+  it('throws for a workout that does not exist', () => {
+    const db = seededDb();
+    expect(() => getFinishSummary(db, 'missing', 'lb')).toThrow('No finished workout with id missing.');
+  });
+
+  it('throws for a workout that is still active', () => {
+    const db = seededDb();
+    const { active } = buildHistory(db);
+    expect(() => getFinishSummary(db, active, 'lb')).toThrow(`No finished workout with id ${active}.`);
+  });
+});

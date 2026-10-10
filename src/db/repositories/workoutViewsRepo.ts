@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
 import type { PrevSet } from '../../domain/setEntry';
 import type { DayMark, Equipment, LoggingType, WeightUnit } from '../../domain/types';
+import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 
@@ -34,6 +35,16 @@ export type ActiveWorkoutView = {
   dayMark: DayMark;
   restEndsAt: number | null;
   exercises: WorkoutExerciseView[];
+};
+
+export type FinishSummary = {
+  id: string;
+  name: string;
+  durationMs: number;
+  /** Total volume in the display unit, a whole number. */
+  volume: number;
+  /** How many sets were done, warm-ups included. */
+  setCount: number;
 };
 
 const PREV_SET_COLUMNS = {
@@ -160,5 +171,64 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       sets: setsByExercise.get(we.id) ?? [],
       previous: getPreviousSets(db, we.exerciseId, workout.id),
     })),
+  };
+}
+
+const VOLUME_SET_COLUMNS = {
+  loggingType: exercises.loggingType,
+  setType: sets.setType,
+  done: sets.done,
+  weight: sets.weight,
+  weightUnit: sets.weightUnit,
+  reps: sets.reps,
+};
+
+/** Every set, done or not, of the workouts matching `where`, in workout, exercise and set order. */
+function selectVolumeSets(db: Db, where: SQL): VolumeSet[] {
+  return db
+    .select(VOLUME_SET_COLUMNS)
+    .from(sets)
+    .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
+    .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(where)
+    .orderBy(asc(workouts.startedAt), asc(workoutExercises.position), asc(sets.position))
+    .all();
+}
+
+/** The distinct `local_date` values of finished workouts, earliest first (spec 7.8). The active workout is not one. */
+export function getTrainingDates(db: Db): string[] {
+  return db
+    .selectDistinct({ localDate: workouts.localDate })
+    .from(workouts)
+    .where(eq(workouts.status, 'finished'))
+    .orderBy(asc(workouts.localDate))
+    .all()
+    .map((row) => row.localDate);
+}
+
+/**
+ * Every set of the finished and the active workouts with `local_date >= fromLocalDate` (spec 7.9), done or
+ * not and of any type. `totalVolume` does the filtering.
+ */
+export function getVolumeSetsSince(db: Db, fromLocalDate: string): VolumeSet[] {
+  // A workout is either finished or active, so no status filter is needed.
+  return selectVolumeSets(db, gte(workouts.localDate, fromLocalDate));
+}
+
+/** The duration, volume and done-set count of a finished workout. Throws if it does not exist or is not finished. */
+export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightUnit): FinishSummary {
+  const workout = db.select().from(workouts).where(eq(workouts.id, workoutId)).get();
+  if (!workout || workout.status !== 'finished' || workout.finishedAt === null) {
+    throw new Error(`No finished workout with id ${workoutId}.`);
+  }
+
+  const workoutSets = selectVolumeSets(db, eq(workouts.id, workoutId));
+  return {
+    id: workout.id,
+    name: workout.name,
+    durationMs: workout.finishedAt - workout.startedAt,
+    volume: totalVolume(workoutSets, displayUnit),
+    setCount: workoutSets.filter((s) => s.done).length,
   };
 }
