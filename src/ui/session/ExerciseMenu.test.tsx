@@ -219,6 +219,13 @@ const withRest = (restSeconds: number | null): WorkoutExerciseView =>
 
 const labels = (tree: ReturnType<typeof create>) => tree.root.findAllByType(Button).map((b) => b.props.label as string);
 
+/** The buttons whose drawn control reports itself selected to the screen reader. */
+const selectedLabels = (tree: ReturnType<typeof create>) =>
+  tree.root
+    .findAllByType(Button)
+    .filter((b) => b.findAll((n) => typeof n.type === 'string' && n.props.accessibilityState?.selected === true).length > 0)
+    .map((b) => b.props.label as string);
+
 describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
   beforeEach(() => jest.mocked(setExerciseRest).mockClear());
 
@@ -259,6 +266,16 @@ describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
     expect(setExerciseRest).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(shownText(tree)).toEqual([]);
+  });
+
+  it('tells VoiceOver which choice is current: it alone is selected (F10)', () => {
+    const own = mount(withRest(90));
+    press(own, 'Rest time · 1:30');
+    expect(selectedLabels(own)).toEqual(['1:30']);
+
+    const fallback = mount(withRest(null));
+    press(fallback, 'Rest time · Default (2:00)');
+    expect(selectedLabels(fallback)).toEqual(['Default (2:00)']);
   });
 
   it('highlights Default when the exercise has no rest of its own', () => {

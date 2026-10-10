@@ -574,6 +574,17 @@ describe('tick uses the rest of the exercise ticked', () => {
     expect(mockSurface.start).not.toHaveBeenCalled();
   });
 
+  it('rests 90 seconds on Default once 1:30 is chosen in Settings (F7)', () => {
+    // What the Settings choice 1:30 writes.
+    setSetting(db, 'restSeconds', 90);
+    startFromDay(db, PUSH_A);
+    expect(bench().restSeconds).toBeNull();
+
+    tickSetOf(0, 0);
+
+    expect(restEndsAt()).toBe(NOW + 90_000);
+  });
+
   it('uses the Settings rest for an exercise with no pref of its own', () => {
     setSetting(db, 'restSeconds', 150);
     setExerciseRest(db, BENCH, 90);

@@ -4,7 +4,8 @@ import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
 import type { Db } from '../../src/db/types';
-import { formatDateTime } from '../../src/domain/dates';
+import { formatDateTime, formatRest } from '../../src/domain/dates';
+import { REST_CHOICES } from '../../src/domain/rest';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { latestSnapshotPath, shareFile } from '../../src/state/backup';
@@ -36,6 +37,9 @@ const BELL_OPTIONS: { value: BellSound; label: string }[] = [
   { value: 'chime', label: 'Chime' },
   { value: 'ding', label: 'Ding' },
 ];
+
+/** The rest lengths Settings offers. Off is not one: it belongs to an exercise (its ⋯ menu), not to every exercise. */
+const REST_LENGTHS = REST_CHOICES.filter((seconds) => seconds > 0);
 
 /** Two or three choices in one pill; the chosen one is filled with `text`. */
 function SegmentedControl<T extends string>({
@@ -149,16 +153,61 @@ function BarSection() {
   );
 }
 
-/** Whether the rest timer rings when it ends, and which sound it makes. Choosing a sound plays it once. */
+/**
+ * The rest length every exercise on Default uses, as the segmented pill in rows of three: 0:30 to 5:00. The current one
+ * is filled with `text`, and the screen reader says it is selected.
+ */
+function RestLengthControl({ value, onChange }: { value: number; onChange: (seconds: number) => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
+      {REST_LENGTHS.map((seconds) => {
+        const selected = seconds === value;
+        return (
+          <Pressable
+            key={seconds}
+            accessibilityRole="button"
+            accessibilityLabel={formatRest(seconds)}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(seconds)}
+            style={{
+              flexGrow: 1,
+              flexBasis: '30%',
+              minHeight: 44,
+              borderRadius: 9,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: selected ? colors.text : 'transparent',
+            }}
+          >
+            <Body weight={600} style={{ color: selected ? colors.bg : colors.text, fontVariant: ['tabular-nums'] }}>
+              {formatRest(seconds)}
+            </Body>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The rest timer length, whether the timer rings when it ends, and which sound it makes. Choosing a sound plays it once. */
 function RestTimerSection() {
   const { colors } = useTheme();
   const db = useDb();
-  const { restBell, restBellSound } = useDbQuery(getSettings);
+  const { restSeconds, restBell, restBellSound } = useDbQuery(getSettings);
   return (
     <View style={{ gap: 8, marginTop: 24 }}>
       <Body weight={600} muted>
         Rest timer
       </Body>
+      <Body>Length</Body>
+      <RestLengthControl
+        value={restSeconds}
+        onChange={(seconds) => {
+          setSetting(db, 'restSeconds', seconds);
+          bumpData();
+        }}
+      />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body>Bell at the end</Body>
         <Switch

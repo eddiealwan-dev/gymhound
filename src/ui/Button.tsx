@@ -4,10 +4,16 @@ import { useTheme } from './ThemeProvider';
 
 type Variant = 'primary' | 'secondary' | 'quiet';
 
-type Props = { label: string; onPress: () => void; variant?: Variant };
+type Props = {
+  label: string;
+  onPress: () => void;
+  variant?: Variant;
+  /** For one choice among several: whether it is the current one, which the screen reader then says. */
+  selected?: boolean;
+};
 
 /** Primary is filled with `text` and labelled in `bg`. Secondary is outlined. Quiet has no chrome. */
-export function Button({ label, onPress, variant = 'primary' }: Props) {
+export function Button({ label, onPress, variant = 'primary', selected }: Props) {
   const { colors } = useTheme();
   const fill = variant === 'primary' ? colors.text : 'transparent';
   const border = variant === 'secondary' ? colors.border : 'transparent';
@@ -15,6 +21,7 @@ export function Button({ label, onPress, variant = 'primary' }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={selected === undefined ? undefined : { selected }}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 48,

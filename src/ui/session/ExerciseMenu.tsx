@@ -150,12 +150,18 @@ export function ExerciseMenu({ exercises, exerciseId, onClose }: Props) {
               {ex?.name ?? ''}
             </Body>
             <View style={{ gap: 8 }}>
-              <Button label={defaultLabel} variant={ex?.restSeconds === null ? 'primary' : 'secondary'} onPress={() => chooseRest(null)} />
+              <Button
+                label={defaultLabel}
+                variant={ex?.restSeconds === null ? 'primary' : 'secondary'}
+                selected={ex?.restSeconds === null}
+                onPress={() => chooseRest(null)}
+              />
               {REST_CHOICES.map((seconds) => (
                 <Button
                   key={seconds}
                   label={restLabel(seconds)}
                   variant={ex?.restSeconds === seconds ? 'primary' : 'secondary'}
+                  selected={ex?.restSeconds === seconds}
                   onPress={() => chooseRest(seconds)}
                 />
               ))}
