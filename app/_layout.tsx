@@ -21,7 +21,7 @@ import type { Db } from '../src/db/types';
 import { formatDateTime } from '../src/domain/dates';
 import { fileExists, getSnapshotFiles, setAsidePath } from '../src/platform/snapshots';
 import { runSeed } from '../src/seed/seed';
-import { latestSnapshotPath, shareFile } from '../src/state/backup';
+import { latestSnapshotPath, recordRestoredSnapshot, shareFile } from '../src/state/backup';
 import { Button } from '../src/ui/Button';
 import { Sheet } from '../src/ui/Sheet';
 import { Body } from '../src/ui/Text';
@@ -189,11 +189,12 @@ function Boot({ db, restoredFrom }: { db: Db; restoredFrom: string | null }) {
     try {
       ensureSettings(db, getLocales()[0]?.measurementSystem ?? null);
       runSeed(db, Date.now());
+      if (restoredFrom !== null) recordRestoredSnapshot(db, restoredFrom);
       setSeeded(true);
     } catch (e) {
       setSeedError(asError(e));
     }
-  }, [db]);
+  }, [db, restoredFrom]);
 
   // A font that fails to load falls back to the system font; it never blocks the app.
   const ready = seeded && (fontsLoaded || fontError !== null);

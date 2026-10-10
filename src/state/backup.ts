@@ -1,8 +1,9 @@
 import * as Sharing from 'expo-sharing';
-import { setSetting } from '../db/repositories/settingsRepo';
-import { newestSnapshot, writeSnapshot } from '../db/snapshots';
+import { getSettings, setSetting } from '../db/repositories/settingsRepo';
+import { newestSnapshot, snapshotTime, writeSnapshot } from '../db/snapshots';
 import type { Db } from '../db/types';
-import { fileUri, getSnapshotFiles } from '../platform/snapshots';
+import { getSnapshotFiles } from '../platform/snapshots';
+import { fileUri } from '../platform/snapshots/fileUri';
 
 /**
  * Writes a snapshot of the whole database and records the time as `lastSnapshotAt`. Returns true when both worked.
@@ -20,6 +21,21 @@ export function takeSnapshotSafely(db: Db, now: number): boolean {
   } catch (error) {
     console.warn('GymHound could not write a snapshot.', error);
     return false;
+  }
+}
+
+/**
+ * After a restore, makes `lastSnapshotAt` at least the time of the snapshot restored from. The restored database was
+ * saved just before that snapshot's own time was recorded, so without this Settings could show an older time, or
+ * "No snapshot yet.", beside a Share button for a snapshot that exists. A newer stored time is kept. Never throws.
+ */
+export function recordRestoredSnapshot(db: Db, restoredFrom: string): void {
+  try {
+    const restoredAt = snapshotTime(restoredFrom);
+    const stored = getSettings(db).lastSnapshotAt;
+    if (stored === null || stored < restoredAt) setSetting(db, 'lastSnapshotAt', restoredAt);
+  } catch (error) {
+    console.warn('GymHound could not record the restored snapshot time.', error);
   }
 }
 

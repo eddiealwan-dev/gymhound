@@ -23,7 +23,8 @@ export interface SnapshotFiles {
    */
   setAsideLive(tag: string): string;
   /**
-   * Makes the live database a copy of a snapshot. Call it only when no live database exists (missing, empty or just set aside).
+   * Makes the live database a copy of a snapshot. It throws, changing nothing, if a live database with data exists:
+   * it is only for a live file that is missing, empty or just set aside, so a healthy database is never overwritten.
    * It first removes any -wal and -shm files left at the live path: they belong to a database that is gone and would corrupt the copy.
    * Then it copies to a temporary file beside the live one and renames that into place, so the live path never holds half a database.
    */
@@ -137,12 +138,22 @@ function closeQuietly(close: StartupDeps['close'], db: Db): void {
   }
 }
 
+/** Sets the live file aside, leaving it in place if that fails: the caller is already handling a bigger failure. */
+function setAsideQuietly(files: SnapshotFiles, tag: string): void {
+  try {
+    files.setAsideLive(tag);
+  } catch {
+    // Nothing more can be done.
+  }
+}
+
 /**
  * Opens and migrates the database. The app never starts empty while a snapshot exists, and the live file is never deleted.
  * 1. Live file missing or empty, and a snapshot exists: copy the newest snapshot in.
  * 2. Open and migrate. If that works, done.
  * 3. If it fails and there is no snapshot, report the failure and leave the file as it is.
  * 4. If it fails and there is a snapshot: set the failed file aside, copy the newest snapshot in, open and migrate again.
+ * 5. If the restored copy fails too, set it aside as well (under its own name) and report the failure, so the next launch restores again.
  *
  * "Fails" includes a live file too corrupt to open: `open()` throwing is handled like a failed migration.
  */
@@ -174,15 +185,21 @@ export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
 
   let setAside: string | null = null;
   let second: Db | null = null;
+  let restoredCopyInPlace = false;
   try {
     setAside = files.setAsideLive(`failed-${stamp(deps.now)}`);
     files.copyToLive(newest);
+    restoredCopyInPlace = true;
     second = open();
     await migrate(second);
     console.warn('GymHound restored its data from the newest snapshot because the database would not open.', firstError);
     return { kind: 'ok', db: second, restoredFrom: newest };
   } catch (secondError) {
     if (second) closeQuietly(close, second);
+    // A restored copy that will not open either must not stay live: set it aside too, so the next launch finds no live
+    // file, restores again (and says so), while the original failed file stays where the error screen exports it from.
+    if (restoredCopyInPlace) setAsideQuietly(files, `restore-failed-${stamp(deps.now)}`);
+    console.warn('GymHound could not restore its data from the newest snapshot. The database first failed with:', firstError);
     return { kind: 'failed', error: asError(secondError), newestSnapshot: newest, setAside };
   }
 }

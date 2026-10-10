@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import type { SnapshotFiles } from '../../db/snapshots';
 import { expoSnapshotFiles } from './expoSnapshotFiles';
 
-export { fileExists, fileUri, setAsidePath } from './expoSnapshotFiles';
+export { fileExists, setAsidePath } from './expoSnapshotFiles';
 
 /**
  * The phone's snapshot files, or null on web, where snapshots never run.

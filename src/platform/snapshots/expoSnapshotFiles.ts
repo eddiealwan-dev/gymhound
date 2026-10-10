@@ -1,22 +1,10 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { liveDbPath } from '../../db/client';
 import type { SnapshotFiles } from '../../db/snapshots';
+import { fileUri, pathFromUri } from './fileUri';
 
 /** SQLite's write-ahead-log files, which sit beside the database and can hold committed data. */
 const SIDECARS = ['-wal', '-shm'];
-
-/**
- * The `file://` URI for an absolute path. Each segment is percent-encoded, which matters: Expo Go's own
- * document folder has a literal `%40` in its name, so the URI for it reads `%2540`.
- */
-export function fileUri(path: string): string {
-  return `file://${path.split('/').map(encodeURIComponent).join('/')}`;
-}
-
-/** The absolute path a `file://` URI points to, without a trailing slash. The inverse of `fileUri`. */
-function pathFromUri(uri: string): string {
-  return decodeURIComponent(uri.replace(/^file:\/\//, '')).replace(/\/+$/, '');
-}
 
 const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/'));
 const fileAt = (path: string) => new File(fileUri(path));
@@ -56,6 +44,10 @@ export function setAsidePath(name: string): string {
 export function expoSnapshotFiles(): SnapshotFiles {
   const snapshotDir = `${pathFromUri(Paths.document.uri)}/snapshots`;
   const snapshotPath = (name: string) => `${snapshotDir}/${name}`;
+  const liveIsMissingOrEmpty = () => {
+    const live = fileAt(liveDbPath());
+    return !live.exists || live.size === 0;
+  };
 
   return {
     list() {
@@ -72,10 +64,7 @@ export function expoSnapshotFiles(): SnapshotFiles {
     },
     remove: (name) => removeIfThere(snapshotPath(name)),
     rename: (from, to) => fileAt(snapshotPath(from)).moveSync(fileAt(snapshotPath(to)), { overwrite: true }),
-    liveIsMissingOrEmpty() {
-      const live = fileAt(liveDbPath());
-      return !live.exists || live.size === 0;
-    },
+    liveIsMissingOrEmpty,
     setAsideLive(tag) {
       const live = liveDbPath();
       const name = `gymhound.${tag}.db`;
@@ -107,6 +96,8 @@ export function expoSnapshotFiles(): SnapshotFiles {
       return name;
     },
     copyToLive(name) {
+      // Checked before anything is removed: a healthy live database, and the -wal that may hold its newest data, are never touched.
+      if (!liveIsMissingOrEmpty()) throw new Error('The live database has data, so a snapshot will not be copied over it.');
       const live = liveDbPath();
       for (const suffix of SIDECARS) removeIfThere(live + suffix);
       ensureDirectory(dirOf(live));

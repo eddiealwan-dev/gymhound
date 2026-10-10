@@ -13,13 +13,14 @@ const SIDECARS = ['-wal', '-shm'];
 export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles {
   const snapshotDir = path.join(dir, 'snapshots');
   fs.mkdirSync(snapshotDir, { recursive: true });
+  const liveIsMissingOrEmpty = () => !fs.existsSync(liveFile) || fs.statSync(liveFile).size === 0;
 
   return {
     list: () => fs.readdirSync(snapshotDir).filter((name) => fs.statSync(path.join(snapshotDir, name)).size > 0),
     pathFor: (name) => path.join(snapshotDir, name),
     remove: (name) => fs.rmSync(path.join(snapshotDir, name), { force: true }),
     rename: (from, to) => fs.renameSync(path.join(snapshotDir, from), path.join(snapshotDir, to)),
-    liveIsMissingOrEmpty: () => !fs.existsSync(liveFile) || fs.statSync(liveFile).size === 0,
+    liveIsMissingOrEmpty,
     setAsideLive(tag) {
       const name = `gymhound.${tag}.db`;
       const target = path.join(path.dirname(liveFile), name);
@@ -50,6 +51,8 @@ export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles 
       return name;
     },
     copyToLive(name) {
+      // Checked before anything is removed: a healthy live database, and the -wal that may hold its newest data, are never touched.
+      if (!liveIsMissingOrEmpty()) throw new Error('The live database has data, so a snapshot will not be copied over it.');
       for (const suffix of SIDECARS) fs.rmSync(liveFile + suffix, { force: true });
       const temp = `${liveFile}.restoring`;
       try {

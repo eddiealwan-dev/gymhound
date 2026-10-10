@@ -3,17 +3,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as Sharing from 'expo-sharing';
-import { ensureSettings, getSettings } from '../db/repositories/settingsRepo';
+import { ensureSettings, getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { snapshotName, type SnapshotFiles } from '../db/snapshots';
+import type { Db } from '../db/types';
 import { createTestDb } from '../db/testing/createTestDb';
 import { nodeSnapshotFiles } from '../db/testing/nodeSnapshotFiles';
 import { getSnapshotFiles } from '../platform/snapshots';
-import { shareFile, takeSnapshotSafely } from './backup';
+import { recordRestoredSnapshot, shareFile, takeSnapshotSafely } from './backup';
 
-jest.mock('../platform/snapshots', () => ({
-  getSnapshotFiles: jest.fn(),
-  fileUri: (p: string) => `file://${p}`,
-}));
+// Only the files lookup is faked; shareFile runs the real fileUri.
+jest.mock('../platform/snapshots', () => ({ getSnapshotFiles: jest.fn() }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => {}) }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -84,12 +83,59 @@ describe('takeSnapshotSafely', () => {
   });
 });
 
+describe('recordRestoredSnapshot', () => {
+  const restored = snapshotName(NOW);
+
+  it('sets the last snapshot time to the restored snapshot when none is stored', () => {
+    recordRestoredSnapshot(handle.db, restored);
+
+    expect(getSettings(handle.db).lastSnapshotAt).toBe(NOW);
+  });
+
+  it('raises an older stored time to the restored snapshot, so Settings never lags behind the Share button', () => {
+    setSetting(handle.db, 'lastSnapshotAt', NOW - 3_600_000);
+
+    recordRestoredSnapshot(handle.db, restored);
+
+    expect(getSettings(handle.db).lastSnapshotAt).toBe(NOW);
+  });
+
+  it('keeps a stored time that is newer than the restored snapshot', () => {
+    setSetting(handle.db, 'lastSnapshotAt', NOW + 3_600_000);
+
+    recordRestoredSnapshot(handle.db, restored);
+
+    expect(getSettings(handle.db).lastSnapshotAt).toBe(NOW + 3_600_000);
+  });
+
+  it('never throws: a name that is not a snapshot, or a database that fails, is logged', () => {
+    recordRestoredSnapshot(handle.db, 'notes.txt');
+    const broken = {
+      select: () => {
+        throw new Error('database is locked');
+      },
+    } as unknown as Db;
+    recordRestoredSnapshot(broken, restored);
+
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(getSettings(handle.db).lastSnapshotAt).toBeNull();
+  });
+});
+
 describe('shareFile', () => {
   it('opens the share sheet for the file', async () => {
     await shareFile('/data/snapshots/gymhound-20261009-090000-000.db');
 
     expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
     expect(jest.mocked(Sharing.shareAsync).mock.calls[0][0]).toBe('file:///data/snapshots/gymhound-20261009-090000-000.db');
+  });
+
+  it("hands expo-sharing a URI that survives Expo Go's %40 folder name and a space", async () => {
+    await shareFile('/docs/%40anonymous%2Fgymhound-1234/SQLite/gymhound.failed-x y.db');
+
+    expect(jest.mocked(Sharing.shareAsync).mock.calls[0][0]).toBe(
+      'file:///docs/%2540anonymous%252Fgymhound-1234/SQLite/gymhound.failed-x%20y.db',
+    );
   });
 
   it('passes a failure to the caller', async () => {

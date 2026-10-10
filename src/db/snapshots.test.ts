@@ -594,10 +594,110 @@ describe('startDatabase', () => {
     expect(result.newestSnapshot).toBe(newest);
     expect(result.setAside).toMatch(/^gymhound\.failed-.+\.db$/);
     expect(fs.readFileSync(path.join(dir, result.setAside!)).equals(original)).toBe(true);
-    expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', result.setAside, 'snapshots'].sort());
+    // The restored copy that would not migrate either is set aside too, so the next launch restores again.
+    const restoredCopies = fs.readdirSync(dir).filter((n) => /^gymhound\.restore-failed-.+\.db$/.test(n));
+    expect(restoredCopies).toHaveLength(1);
+    expect(fs.readdirSync(dir).sort()).toEqual([result.setAside, restoredCopies[0], 'snapshots'].sort());
     expect(files.list().sort()).toEqual([...snapshotBytes.keys()].sort());
     for (const [name, bytes] of snapshotBytes) expect(fs.readFileSync(files.pathFor(name)).equals(bytes)).toBe(true);
     expect(count.opened).toBe(count.closed);
+    // The first error is logged on the failed-restore branch too.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warnedWithError('migration exploded')).toBe(true);
+  });
+
+  it('sets the restored copy aside when it will not open either, so the next launch restores and shows the notice', async () => {
+    const { deps, files } = makeDeps({ migrate: migrateAlwaysFailing() });
+    const { ids, newest } = liveWithTwoSnapshots(files);
+    const live = track(openFileDb(liveFile));
+    finishOne(live.db, NOW + 2 * DAY);
+    live.close();
+    const original = fs.readFileSync(liveFile);
+
+    const failed = expectFailed(await startDatabase(deps));
+
+    // The original failed file is still there to export, under the name the result reports.
+    expect(fs.readFileSync(path.join(dir, failed.setAside!)).equals(original)).toBe(true);
+    expect(fs.existsSync(liveFile)).toBe(false);
+
+    // The next launch (here, with a migration that works) sees a missing live file, restores, and says so.
+    const next = makeDeps();
+    const again = expectOk(await startDatabase(next.deps));
+
+    expect(again.restoredFrom).toBe(newest);
+    expect(finishedIds(again.db)).toEqual(ids);
+    expect(fs.readFileSync(path.join(dir, failed.setAside!)).equals(original)).toBe(true);
+  });
+
+  it('leaves the live file alone, and does not claim a restore, when setting the failed file aside fails', async () => {
+    const realFiles = nodeSnapshotFiles(dir, liveFile);
+    const setAsideCalls: string[] = [];
+    const files: SnapshotFiles = {
+      ...realFiles,
+      setAsideLive: (tag) => {
+        setAsideCalls.push(tag);
+        throw new Error('cannot move');
+      },
+    };
+    const { deps, count } = makeDeps({ files, migrate: migrateAlwaysFailing() });
+    const { newest } = liveWithTwoSnapshots(realFiles);
+    const original = fs.readFileSync(liveFile);
+
+    const result = expectFailed(await startDatabase(deps));
+
+    expect(result.error.message).toBe('cannot move');
+    expect(result.newestSnapshot).toBe(newest);
+    expect(result.setAside).toBeNull();
+    expect(setAsideCalls).toHaveLength(1); // no second set-aside for a restored copy that was never made
+    expect(fs.readFileSync(liveFile).equals(original)).toBe(true);
+    expect(count.opened).toBe(count.closed);
+  });
+
+  it('opens a healthy live file as it is when committed data is still in its -wal, with no restore', async () => {
+    // A running database whose newest workout is only in the write-ahead log, and a snapshot taken before it.
+    const files = nodeSnapshotFiles(dir, liveFile);
+    const source = path.join(dir, 'running.db');
+    const sqlite = new Database(source);
+    handles.push({ close: () => sqlite.close() });
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('foreign_keys = ON');
+    const running: Db = drizzle(sqlite, { schema });
+    migrateTestDb(running);
+    ensureSettings(running, 'us');
+    runSeed(running, NOW);
+    const first = finishOne(running, NOW);
+    sqlite.pragma('wal_checkpoint(TRUNCATE)'); // schema and the first workout are in the main file
+    sqlite.pragma('wal_autocheckpoint = 0'); // from here on, nothing is moved out of the log
+    writeSnapshot(running, files, NOW + 2 * HOUR);
+    const second = finishOne(running, NOW + DAY);
+    expect(fs.statSync(`${source}-wal`).size).toBeGreaterThan(0);
+    // The app is killed here: its files are left as they are, the newest workout only in the -wal.
+    fs.copyFileSync(source, liveFile);
+    fs.copyFileSync(`${source}-wal`, `${liveFile}-wal`);
+    const walBefore = fs.readFileSync(`${liveFile}-wal`);
+    expect(fs.statSync(liveFile).size).toBeGreaterThan(0);
+    const calls: string[] = [];
+    const spied: SnapshotFiles = {
+      ...files,
+      setAsideLive: (tag) => {
+        calls.push('setAsideLive');
+        return files.setAsideLive(tag);
+      },
+      copyToLive: (name) => {
+        calls.push('copyToLive');
+        files.copyToLive(name);
+      },
+    };
+    const { deps } = makeDeps({ files: spied });
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBeNull();
+    expect(calls).toEqual([]);
+    expect(finishedIds(result.db)).toEqual([first, second].sort()); // the snapshot only has the first
+    expect(fs.readdirSync(dir).filter((n) => n.includes('failed'))).toEqual([]);
+    expect(fs.existsSync(`${liveFile}-wal`)).toBe(true);
+    expect(fs.readFileSync(`${liveFile}-wal`).subarray(0, 32).equals(walBefore.subarray(0, 32))).toBe(true); // same log, same header
   });
 
   it('fails without touching anything when the migration fails and there is no snapshot', async () => {
@@ -648,173 +748,5 @@ describe('startDatabase', () => {
 
     expect(result.error).toBeInstanceOf(Error);
     expect(result.error.message).toBe('plain string');
-  });
-});
-
-describe('nodeSnapshotFiles', () => {
-  it('sets the live file aside under a new name, with its -wal and -shm files, and deletes nothing', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(liveFile, 'main');
-    fs.writeFileSync(`${liveFile}-wal`, 'wal');
-    fs.writeFileSync(`${liveFile}-shm`, 'shm');
-
-    const name = files.setAsideLive('failed-x');
-
-    expect(name).toBe('gymhound.failed-x.db');
-    expect(fs.readdirSync(dir).sort()).toEqual(
-      ['gymhound.failed-x.db', 'gymhound.failed-x.db-shm', 'gymhound.failed-x.db-wal', 'snapshots'].sort(),
-    );
-    expect(fs.readFileSync(path.join(dir, name), 'utf8')).toBe('main');
-    expect(fs.readFileSync(path.join(dir, `${name}-wal`), 'utf8')).toBe('wal');
-    expect(files.liveIsMissingOrEmpty()).toBe(true);
-  });
-
-  it('refuses to set the live file aside over an existing file', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(liveFile, 'live');
-    fs.writeFileSync(path.join(dir, 'gymhound.failed-x.db'), 'earlier failure');
-
-    expect(() => files.setAsideLive('failed-x')).toThrow();
-
-    expect(fs.readFileSync(liveFile, 'utf8')).toBe('live');
-    expect(fs.readFileSync(path.join(dir, 'gymhound.failed-x.db'), 'utf8')).toBe('earlier failure');
-  });
-
-  it('refuses to set the live file aside over an existing -wal file, and moves nothing', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(liveFile, 'live');
-    fs.writeFileSync(`${liveFile}-wal`, 'live wal');
-    fs.writeFileSync(path.join(dir, 'gymhound.failed-x.db-wal'), 'earlier failure');
-
-    expect(() => files.setAsideLive('failed-x')).toThrow();
-
-    expect(fs.readFileSync(liveFile, 'utf8')).toBe('live');
-    expect(fs.readFileSync(`${liveFile}-wal`, 'utf8')).toBe('live wal');
-    expect(fs.existsSync(path.join(dir, 'gymhound.failed-x.db'))).toBe(false);
-    expect(fs.readFileSync(path.join(dir, 'gymhound.failed-x.db-wal'), 'utf8')).toBe('earlier failure');
-  });
-
-  it('rolls back when moving a side file fails part-way, so nothing has moved', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(liveFile, 'main');
-    fs.writeFileSync(`${liveFile}-wal`, 'wal');
-    fs.writeFileSync(`${liveFile}-shm`, 'shm');
-    const realRename = fs.renameSync;
-    let calls = 0;
-    jest.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      calls += 1;
-      if (calls === 2) throw new Error('rename failed'); // the -wal file
-      realRename(from, to);
-    });
-
-    expect(() => files.setAsideLive('failed-x')).toThrow('rename failed');
-
-    jest.restoreAllMocks();
-    expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'gymhound.db-shm', 'gymhound.db-wal', 'snapshots']);
-    expect(fs.readFileSync(liveFile, 'utf8')).toBe('main');
-    expect(fs.readFileSync(`${liveFile}-wal`, 'utf8')).toBe('wal');
-    expect(fs.readFileSync(`${liveFile}-shm`, 'utf8')).toBe('shm');
-  });
-
-  it('throws, moving nothing, when there is no live file to set aside', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-
-    expect(() => files.setAsideLive('failed-x')).toThrow();
-
-    expect(fs.readdirSync(dir)).toEqual(['snapshots']);
-  });
-
-  it('reports a missing or zero-byte live file, and not a populated one', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    expect(files.liveIsMissingOrEmpty()).toBe(true);
-    fs.writeFileSync(liveFile, '');
-    expect(files.liveIsMissingOrEmpty()).toBe(true);
-    fs.writeFileSync(liveFile, 'x');
-    expect(files.liveIsMissingOrEmpty()).toBe(false);
-  });
-
-  it('lists snapshot files but skips zero-byte ones', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    const real = snapshotName(NOW);
-    fs.writeFileSync(files.pathFor(real), 'a snapshot');
-    fs.writeFileSync(files.pathFor(snapshotName(NOW + HOUR)), '');
-    fs.writeFileSync(files.pathFor('notes.txt'), 'note');
-
-    expect(files.list().sort()).toEqual([real, 'notes.txt'].sort());
-  });
-
-  it('removes a file, and a file that is not there is not an error', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(files.pathFor('a.txt'), 'a');
-
-    files.remove('a.txt');
-    expect(() => files.remove('a.txt')).not.toThrow();
-    expect(() => files.remove('never-existed.txt')).not.toThrow();
-
-    expect(files.list()).toEqual([]);
-  });
-
-  it('renames a file in the snapshot folder, replacing an existing target', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    fs.writeFileSync(files.pathFor('a.partial'), 'new');
-    fs.writeFileSync(files.pathFor('a.db'), '');
-
-    files.rename('a.partial', 'a.db');
-
-    expect(files.list()).toEqual(['a.db']);
-    expect(fs.readFileSync(files.pathFor('a.db'), 'utf8')).toBe('new');
-  });
-
-  it('copies a snapshot to the live path, removing stale -wal and -shm files first', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    const snapshot = snapshotName(NOW);
-    fs.writeFileSync(files.pathFor(snapshot), 'snapshot bytes');
-    fs.writeFileSync(`${liveFile}-wal`, 'stale wal');
-    fs.writeFileSync(`${liveFile}-shm`, 'stale shm');
-
-    files.copyToLive(snapshot);
-
-    expect(fs.readFileSync(liveFile, 'utf8')).toBe('snapshot bytes');
-    expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
-    expect(fs.readFileSync(files.pathFor(snapshot), 'utf8')).toBe('snapshot bytes');
-  });
-
-  it('copies through a temporary file and renames it into place', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    const snapshot = snapshotName(NOW);
-    fs.writeFileSync(files.pathFor(snapshot), 'snapshot bytes');
-    const renames: string[][] = [];
-    const realRename = fs.renameSync;
-    jest.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      renames.push([String(from), String(to)]);
-      realRename(from, to);
-    });
-
-    files.copyToLive(snapshot);
-
-    jest.restoreAllMocks();
-    expect(renames).toHaveLength(1);
-    expect(path.dirname(renames[0][0])).toBe(dir); // beside the live file, so the rename is atomic
-    expect(renames[0][0]).not.toBe(liveFile);
-    expect(renames[0][1]).toBe(liveFile);
-  });
-
-  it('leaves no half-written live file and no temporary file when the copy fails', () => {
-    const files = nodeSnapshotFiles(dir, liveFile);
-    const snapshot = snapshotName(NOW);
-    fs.writeFileSync(files.pathFor(snapshot), 'snapshot bytes');
-    fs.writeFileSync(liveFile, ''); // an empty live file, which the restore replaces
-    const realCopy = fs.copyFileSync;
-    jest.spyOn(fs, 'copyFileSync').mockImplementation((from, to) => {
-      realCopy(from, to);
-      fs.truncateSync(to as string, 3); // the copy "dies" half way
-      throw new Error('disk full');
-    });
-
-    expect(() => files.copyToLive(snapshot)).toThrow('disk full');
-
-    jest.restoreAllMocks();
-    expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
-    expect(fs.statSync(liveFile).size).toBe(0);
   });
 });
