@@ -1918,6 +1918,21 @@ Spec §18.2 is the requirement. Tasks 18–23 land on `phase-1` before the merge
   - With Off, ticking starts no rest.
 - [ ] **Step 5: Commit.** `feat(session): rest time per exercise; the countdown shows under the set that started it`
 
+**Amendment (ruling R38, 2026-10-10, after review).** "The latest ticked set" is not "the set that started the rest" (spec §18.2). It breaks in three cases: a tick on an Off exercise, a tick on a superset member that is not last in its round, and an untick.
+- Migration 0003 adds `workouts.rest_set_id` (text, nullable). It is additive, and 0002 is left as it is.
+- `rest_set_id` is written with `rest_ends_at`:
+  - A tick that starts a rest sets it to that set's id.
+  - −15s keeps it.
+  - Skip, `clearRestEndsAtIf` and `finishWorkout` clear it.
+  - A tick whose `RestChange` is `none` leaves both alone.
+- `ActiveWorkoutView.restSetId` carries it, and `RestInline` shows under that set's row.
+- `restAnchorSetId` is removed.
+- Tests:
+  - A tick on an Off exercise while bench's rest runs leaves the anchor on bench.
+  - A tick on a mid-superset member does the same.
+  - Unticking the anchor set keeps the anchor id.
+  - Skip, the end of the rest and finish clear it.
+
 ### Task 22: Back on Routines; music buttons
 
 **Files:**
