@@ -15,7 +15,10 @@ import {
 import { getActiveWorkoutView, type SetView, type WorkoutExerciseView } from '../db/repositories/workoutViewsRepo';
 import {
   clearRestEndsAtIf,
+  discardWorkout,
+  finishWorkout,
   getActiveWorkoutId,
+  NothingTickedError,
   setRestEndsAt,
   startEmptyWorkout,
   startWorkoutFromDay,
@@ -27,6 +30,7 @@ import { restAfterMinus15, restAfterTick, type RestChange } from '../domain/rest
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
+import { takeSnapshotSafely } from './backup';
 import { bumpData } from './dataVersion';
 
 /**
@@ -127,6 +131,35 @@ export function restSkip(db: Db, workoutId: string): void {
  */
 export function restEnded(db: Db, workoutId: string, endsAt: number): void {
   clearRestEndsAtIf(db, workoutId, endsAt);
+  bumpData();
+}
+
+// ---- finishing and discarding ----
+
+/**
+ * Finishes the workout (spec 8.4). The finish is one transaction (`finishWorkout`); after it has committed, in this order:
+ * the rest notification is cancelled, a snapshot is written (the user's finished workout must survive the phone), and the
+ * screens read again. A snapshot that fails never changes the outcome, and nor does the rest surface.
+ * Returns 'nothing_ticked', changing nothing and taking no snapshot, when no set is ticked. Any other error is thrown.
+ * Only a finished routine day moves Up next (that is `finishWorkout`'s own rule), so an empty workout never does.
+ */
+export function finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked' {
+  try {
+    finishWorkout(db, workoutId, Date.now());
+  } catch (e) {
+    if (e instanceof NothingTickedError) return 'nothing_ticked';
+    throw e;
+  }
+  onSurface((surface) => surface.cancel());
+  takeSnapshotSafely(db, Date.now());
+  bumpData();
+  return 'finished';
+}
+
+/** Deletes the workout in progress and cancels its rest notification. It takes no snapshot, and Up next does not move. */
+export function discard(db: Db, workoutId: string): void {
+  discardWorkout(db, workoutId);
+  onSurface((surface) => surface.cancel());
   bumpData();
 }
 

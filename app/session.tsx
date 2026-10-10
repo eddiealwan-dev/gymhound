@@ -3,18 +3,22 @@ import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDb } from '../src/db/DbProvider';
 import { getSettings } from '../src/db/repositories/settingsRepo';
+import { countUntickedWithValues } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
+import { discard, finish } from '../src/state/sessionActions';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
 import { RestBar } from '../src/ui/session/RestBar';
+import { ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display, Num } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
@@ -29,6 +33,14 @@ function readSession(db: Db) {
   const { unit, distanceUnit } = getSettings(db);
   return { workout: getActiveWorkoutView(db), unit, distanceUnit };
 }
+
+/** Whether any set of the workout in progress is ticked, read from the database now (not from what was last rendered). */
+function anySetTicked(db: Db): boolean {
+  return getActiveWorkoutView(db)?.exercises.some((ex) => ex.sets.some((set) => set.done)) ?? false;
+}
+
+/** The question open over the session, if any. Only one at a time. */
+type Ask = 'nothing_ticked' | 'unticked' | 'discard';
 
 /** The back chevron, the workout name and the running clock. There is no app header and no dock here. */
 function SessionHeader({ name, startedAt }: { name: string; startedAt: number }) {
@@ -69,13 +81,17 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
   );
 }
 
-/** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, and the rest timer. Finishing comes in a later task. */
+/** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, and Finish and Discard. */
 export default function Session() {
+  const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { workout, unit, distanceUnit } = useDbQuery(readSession);
   /** The exercise whose ⋯ menu is open. */
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
+  /** How many sets are typed but not ticked, for the question about them. Kept after the question closes so its text does not change while it fades. */
+  const [untickedCount, setUntickedCount] = useState(0);
   /** How tall the rest bar is while it shows, so the content can scroll clear of it. */
   const [restBarHeight, setRestBarHeight] = useState(0);
 
@@ -97,6 +113,43 @@ export default function Session() {
   }
 
   const { restEndsAt } = workout;
+
+  /** Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a moment ago. */
+  const finishNow = () => {
+    setAsk(null);
+    if (finish(db, workout.id) === 'nothing_ticked') {
+      setAsk('nothing_ticked');
+      return;
+    }
+    router.replace(`/finish/${workout.id}`);
+  };
+
+  /** Saves what is typed, then checks the workout in the database: nothing ticked, sets typed but not ticked, or ready. */
+  const onFinish = () => {
+    flushAll();
+    if (!anySetTicked(db)) {
+      setAsk('nothing_ticked');
+      return;
+    }
+    const count = countUntickedWithValues(db, workout.id);
+    if (count > 0) {
+      setUntickedCount(count);
+      setAsk('unticked');
+    } else {
+      finishNow();
+    }
+  };
+
+  const onDiscard = () => {
+    flushAll();
+    setAsk('discard');
+  };
+
+  const discardNow = () => {
+    setAsk(null);
+    discard(db, workout.id);
+    router.replace('/');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -142,9 +195,41 @@ export default function Session() {
               router.push({ pathname: '/pick-exercise', params: { mode: 'add' } });
             }}
           />
+          <View style={{ gap: 8, marginTop: 24 }}>
+            <Button label="Finish" onPress={onFinish} />
+            <Button label="Discard workout" variant="quiet" onPress={onDiscard} />
+          </View>
         </View>
       </ScrollView>
       <ExerciseMenu exercises={workout.exercises} exerciseId={menuFor} onClose={() => setMenuFor(null)} />
+      {/* Nothing ticked: the finish is refused. Keep logging is the safe answer, so it is the primary button. */}
+      <Sheet visible={ask === 'nothing_ticked'} onClose={() => setAsk(null)}>
+        <Display weight={700} style={{ marginBottom: 16 }}>
+          Nothing is ticked yet.
+        </Display>
+        <View style={{ gap: 8 }}>
+          <Button label="Keep logging" onPress={() => setAsk(null)} />
+          {/* Discarding deletes what was typed, so it still asks first. */}
+          <Button label="Discard workout" variant="secondary" onPress={() => setAsk('discard')} />
+        </View>
+      </Sheet>
+      <ConfirmSheet
+        visible={ask === 'unticked'}
+        title={`${untickedCount} sets aren't ticked. They won't count.`}
+        confirmLabel="Finish anyway"
+        cancelLabel="Keep logging"
+        onConfirm={finishNow}
+        onCancel={() => setAsk(null)}
+      />
+      <ConfirmSheet
+        visible={ask === 'discard'}
+        title="Discard this workout?"
+        body="Its sets will be deleted."
+        confirmLabel="Discard"
+        cancelLabel="Keep logging"
+        onConfirm={discardNow}
+        onCancel={() => setAsk(null)}
+      />
       {restEndsAt !== null ? (
         <RestBar workoutId={workout.id} endsAt={restEndsAt} onHeight={setRestBarHeight} />
       ) : null}

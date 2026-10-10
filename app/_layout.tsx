@@ -174,6 +174,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="session" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         {/* The exercise picker rises over the session. */}
         <Stack.Screen name="pick-exercise" options={{ presentation: 'modal' }} />
+        {/* The summary of the workout just finished. Done leaves it. */}
+        <Stack.Screen name="finish/[id]" options={{ presentation: 'fullScreenModal' }} />
       </Stack>
       {/* Rings the end of the rest timer wherever the user is in the app. */}
       <RestWatcher />

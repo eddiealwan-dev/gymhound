@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
 import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
+import { getUpNext, setActiveRoutine } from '../db/repositories/routinesRepo';
 import { setSetting } from '../db/repositories/settingsRepo';
 import {
   ActiveWorkoutExistsError,
@@ -9,7 +10,7 @@ import {
   startWorkoutFromDay,
   tickSet,
 } from '../db/repositories/workoutsRepo';
-import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
+import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/workoutViewsRepo';
 import { workoutExercises } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
@@ -18,6 +19,8 @@ import {
   addExercise,
   addSetTo,
   commitSetField,
+  discard,
+  finish,
   moveBlock,
   removeFromWorkout,
   removeSetFrom,
@@ -45,6 +48,10 @@ const mockSurface = {
 };
 jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
+// The snapshot writes a file on the phone and does nothing on web. Tests watch the calls (its own tests are in backup.test.ts).
+const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
+jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
+
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const PUSH_A = 'premade-ppl-6:push-a';
 
@@ -56,6 +63,7 @@ beforeEach(() => {
   mockSurface.start.mockClear();
   mockSurface.update.mockClear();
   mockSurface.cancel.mockClear();
+  mockSnapshot.mockClear();
 });
 
 afterEach(() => {
@@ -610,5 +618,230 @@ describe('setRpeShown', () => {
     setRpeShown(db, bench().id, false);
     expect(bench().showRpe).toBe(false);
     expect(version()).toBe(before + 2);
+  });
+});
+
+// ---- finish and discard (Task 16) ----
+
+/** Ticks the first `n` bench sets of the active workout, then forgets the rest-timer calls the ticks made. */
+function tickBench(n: number): void {
+  for (let i = 0; i < n; i++) tick(db, bench(), bench().sets[i], VALUES);
+  mockSurface.start.mockClear();
+}
+
+describe('finish and discard', () => {
+  /** What happened, in order, each with whether the workout was still active at that moment. */
+  let order: string[];
+  let stopWatching: () => void;
+  const mark = (step: string) => order.push(`${step} (${getActiveWorkoutId(db) === null ? 'no active workout' : 'workout active'})`);
+
+  beforeEach(() => {
+    order = [];
+    mockSurface.cancel.mockImplementation(() => {
+      mark('cancel');
+      return Promise.resolve();
+    });
+    mockSnapshot.mockImplementation(() => {
+      mark('snapshot');
+      return true;
+    });
+    stopWatching = useDataVersion.subscribe(() => mark('bump'));
+  });
+
+  afterEach(() => {
+    stopWatching();
+    mockSurface.cancel.mockImplementation(() => Promise.resolve());
+    mockSnapshot.mockImplementation(() => true);
+  });
+
+  const FINISHED_ORDER = ['cancel (no active workout)', 'snapshot (no active workout)', 'bump (no active workout)'];
+
+  describe('finish', () => {
+    it('finishes, cancels the rest surface, takes the snapshot, then bumps, in that order, once the finish has committed', () => {
+      startFromDay(db, PUSH_A);
+      tickBench(2);
+      const id = workoutId();
+      order = [];
+      jest.setSystemTime(NOW + 3_600_000);
+
+      expect(finish(db, id)).toBe('finished');
+
+      expect(order).toEqual(FINISHED_ORDER);
+      expect(mockSnapshot).toHaveBeenCalledTimes(1);
+      expect(mockSnapshot).toHaveBeenCalledWith(db, NOW + 3_600_000);
+      expect(getFinishSummary(db, id, 'lb')).toMatchObject({ id, name: 'Push A', durationMs: 3_600_000, setCount: 2, volume: 2 * 135 * 8 });
+    });
+
+    it('is still finished, and still bumps, when the snapshot fails (it returns false)', () => {
+      startFromDay(db, PUSH_A);
+      tickBench(1);
+      const id = workoutId();
+      mockSnapshot.mockImplementation(() => {
+        mark('snapshot');
+        return false;
+      });
+      order = [];
+
+      expect(finish(db, id)).toBe('finished');
+
+      expect(order).toEqual(FINISHED_ORDER);
+      expect(getActiveWorkoutId(db)).toBeNull();
+      expect(getFinishSummary(db, id, 'lb').setCount).toBe(1);
+    });
+
+    it('refuses with nothing ticked: no cancel, no snapshot, no bump, and the typed values stay', () => {
+      startFromDay(db, PUSH_A);
+      commitSetField(db, bench().sets[0].id, { weight: 135, weightUnit: 'lb', reps: 8 });
+      const id = workoutId();
+      order = [];
+      const before = version();
+
+      expect(finish(db, id)).toBe('nothing_ticked');
+
+      expect(order).toEqual([]);
+      expect(mockSurface.cancel).not.toHaveBeenCalled();
+      expect(mockSnapshot).not.toHaveBeenCalled();
+      expect(version()).toBe(before);
+      expect(getActiveWorkoutId(db)).toBe(id);
+      expect(bench().sets[0]).toMatchObject({ weight: 135, reps: 8, done: false });
+    });
+
+    it('lets any other error through, with no cancel, no snapshot and no bump', () => {
+      startFromDay(db, PUSH_A);
+      tickBench(1);
+      const before = version();
+
+      expect(() => finish(db, 'no-such-workout')).toThrow('No active workout');
+
+      expect(mockSurface.cancel).not.toHaveBeenCalled();
+      expect(mockSnapshot).not.toHaveBeenCalled();
+      expect(version()).toBe(before);
+    });
+
+    it('takes no second snapshot for a workout that is already finished', () => {
+      startFromDay(db, PUSH_A);
+      tickBench(1);
+      const id = workoutId();
+      finish(db, id);
+      mockSnapshot.mockClear();
+
+      expect(() => finish(db, id)).toThrow('No active workout');
+
+      expect(mockSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('is never failed by the rest surface: a rejection or a throw is logged, and the snapshot and the bump still happen', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      startFromDay(db, PUSH_A);
+      tickBench(1);
+      mockSurface.cancel.mockRejectedValueOnce(new Error('notifications are off'));
+      const id = workoutId();
+      order = [];
+
+      expect(finish(db, id)).toBe('finished');
+      await Promise.resolve();
+
+      expect(order).toEqual(['snapshot (no active workout)', 'bump (no active workout)']);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      startFromDay(db, PUSH_A);
+      tickBench(1);
+      mockSurface.cancel.mockImplementationOnce(() => {
+        throw new Error('no native module');
+      });
+      order = [];
+
+      expect(finish(db, workoutId())).toBe('finished');
+
+      expect(order).toEqual(['snapshot (no active workout)', 'bump (no active workout)']);
+      expect(warn).toHaveBeenCalledTimes(2);
+      warn.mockRestore();
+    });
+  });
+
+  describe('discard', () => {
+    it('deletes the workout, cancels the rest surface, then bumps, in that order, and takes no snapshot', () => {
+      startFromDay(db, PUSH_A);
+      tickBench(2);
+      const id = workoutId();
+      order = [];
+
+      discard(db, id);
+
+      expect(order).toEqual(['cancel (no active workout)', 'bump (no active workout)']);
+      expect(mockSnapshot).not.toHaveBeenCalled();
+      expect(() => getFinishSummary(db, id, 'lb')).toThrow('No finished workout');
+      expect(getActiveWorkoutView(db)).toBeNull();
+    });
+
+    it('lets an error through, with no cancel and no bump, when the workout is not active', () => {
+      const before = version();
+
+      expect(() => discard(db, 'no-such-workout')).toThrow('No active workout');
+
+      expect(mockSurface.cancel).not.toHaveBeenCalled();
+      expect(version()).toBe(before);
+    });
+
+    it('is never failed by the rest surface', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      startFromDay(db, PUSH_A);
+      mockSurface.cancel.mockImplementationOnce(() => {
+        throw new Error('no native module');
+      });
+      const id = workoutId();
+
+      expect(() => discard(db, id)).not.toThrow();
+
+      expect(getActiveWorkoutId(db)).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+  });
+});
+
+describe('Up next after finish and discard', () => {
+  const upNextDay = () => getUpNext(db)?.dayName;
+
+  beforeEach(() => {
+    setActiveRoutine(db, 'premade-ppl-6');
+  });
+
+  it('advances when the routine day is finished', () => {
+    expect(upNextDay()).toBe('Push A');
+    startFromDay(db, PUSH_A);
+    tickBench(1);
+
+    finish(db, workoutId());
+
+    expect(upNextDay()).toBe('Pull A');
+  });
+
+  it('stays put when the workout is discarded, even with sets ticked', () => {
+    startFromDay(db, PUSH_A);
+    tickBench(2);
+
+    discard(db, workoutId());
+
+    expect(upNextDay()).toBe('Push A');
+  });
+
+  it('stays put when an empty workout is finished', () => {
+    startEmpty(db);
+    addExercise(db, BENCH);
+    const ex = bench();
+    tick(db, ex, ex.sets[0], VALUES);
+
+    expect(finish(db, workoutId())).toBe('finished');
+
+    expect(upNextDay()).toBe('Push A');
+  });
+
+  it('stays put when the finish is refused for nothing ticked', () => {
+    startFromDay(db, PUSH_A);
+
+    expect(finish(db, workoutId())).toBe('nothing_ticked');
+
+    expect(upNextDay()).toBe('Push A');
   });
 });
