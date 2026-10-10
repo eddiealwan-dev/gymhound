@@ -24,7 +24,10 @@ Non-goals for v1
 - Accounts, cloud sync, sharing, a social feed, AI coaching, ads.
 - Barcode scanning (a seam is left for it, see 8.10).
 - Automatic deloads. A stall is a chart label only.
-- Apple Watch, widgets other than the rest timer, a calendar view of history.
+- A watch app. Apple Watch and Wear OS come in a later phase (§17.4). Watches otherwise reach GymHound only through the phone's health store (§17.1).
+- Private cloud logins for Garmin, Whoop or any other watch brand, ever.
+- A music library, search or playlists inside GymHound (§17.3).
+- Widgets other than the rest timer, and a calendar view of history.
 
 ## 3. Decisions made in brainstorming
 
@@ -47,13 +50,24 @@ Non-goals for v1
 | Pro lapses | Nothing is deleted. Extra routines stay visible and runnable. Fuel data is kept and locks again. No new routines until Pro is back |
 | History edits | Editing or deleting a past workout re-runs the rule and the PR check. It never changes a workout that is in progress |
 | Charts | Hand-drawn SVG, no chart library |
+| Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked |
+| Previous result | Every set row shows that same set from last time, beside the input. Matched by set type and number. Empty when there is no history. A warmup is never the previous result for a working set (§8.4) |
+| Up next | Advances only when that routine day is finished. Rest days, discarded sessions and empty workouts never consume it (§8.3) |
+| Notes | A note lives on the exercise and follows it into every routine. A finished workout keeps the note it was saved with (§6, §8.4) |
+| Weight and time | A logging type for carries and sleds: weight and duration, no reps. Hitting the top of the time range on a Normal day raises the weight (§7.3) |
+| Rest bell | A short bell plus a haptic at zero, including on a locked phone. On by default. The sound can be changed (§8.4) |
+| Data safety | The live database plus a snapshot after every finish, with the newest 7 kept. A failed migration restores the newest snapshot and never starts empty (§17.2) |
+| Health and watches | Apple Health on iPhone, Health Connect on Android. Finished workouts write out. Sleep, body weight and heart rate are read only to offer a day mark or fill the body-weight card. The app database stays the source of truth (§17.1) |
+| Music | A small session player that controls what is already playing (§17.3). Phone builds only |
 
 ## 4. Platform and environment
 
 - **Development machine:** Windows 11, Node.js 24 LTS, git. iOS cannot be built locally.
 - **Expo SDK:** the version supported by the App Store build of Expo Go at the time of scaffolding, because Expo Go only runs the current SDK.
 - **Phases 1–6** run in Expo Go on the owner's iPhone. The PC and phone share Wi-Fi, with `--tunnel` as a fallback.
-- **Phase 7** runs once the Apple Developer account exists: EAS development builds, the Live Activity, the Android ongoing notification, and live RevenueCat products.
+- **Phase 7** runs once the Apple Developer account exists: EAS development builds, the Live Activity, the Android ongoing notification, live RevenueCat products, Apple Health and Health Connect (§17.1), the cloud copy of snapshots (§17.2), the music player (§17.3), and the bundled bell sound on the lock screen (§8.4).
+- **Phase 8** adds the watch apps for Apple Watch and Wear OS (§17.4).
+- **Phone-only features** (Health, music, cloud backup, watch apps) are never built or checked in the browser build.
 - **Web build:** used only so Claude can check layout and themes in the browser pane. It is not a shipped target. `expo-sqlite` on web needs WASM and the COOP/COEP headers, which are set in `metro.config.js`.
 - **OneDrive:** the project lives in `Documents\GymHound` inside OneDrive. `node_modules` is a junction to `C:\Users\eddie\.gymhound\node_modules`, so installed packages do not sync. That folder is outside AppData because the Claude app redirects new AppData folders into its own private copy. npm 11 deletes a junctioned `node_modules`, so packages are installed in `C:\Users\eddie\.gymhound` (a copy of `package.json`) and the manifest files are copied back.
 - **Patches to dependencies:** any fix to a dependency's code is a `patch-package` file in `patches/`, re-applied by the `postinstall` script, and never a hand edit inside `node_modules`. `patches/` is copied into `C:\Users\eddie\.gymhound` before installing. `.gitattributes` keeps patch files byte-exact (`patches/*.patch -text`). The only patch so far fixes a sync-result truncation bug in expo-sqlite 57.0.4's browser-only worker channel. It never reaches the iPhone bundle, which was verified with an offline iOS export. `.expo`, `dist`, `web-build`, `ios` and `android` are git-ignored, and none of them is committed.
@@ -79,7 +93,8 @@ src/ui/         Theme tokens, fonts, Header, HoundMark, Dock, Footer, shared com
 Libraries
 - **App:** `expo-router`, `expo-sqlite`, `drizzle-orm`, `zustand`, `react-native-svg`, `@expo-google-fonts/barlow-condensed`, `@expo-google-fonts/inter`, `expo-notifications`, `expo-haptics`, `expo-localization`, `expo-file-system`, `expo-sharing`, `expo-crypto`, `react-native-purchases`.
 - **Development:** `drizzle-kit`, `babel-plugin-inline-import` (SQL migrations), `jest`, `jest-expo`, `better-sqlite3`, `typescript`.
-- **Phase 7:** `expo-dev-client`, `@notifee/react-native`, and a Live Activity module. The phase 7 plan chooses the module from what supports the Expo SDK at that time.
+- **Phase 1 addition:** `expo-audio` for the rest bell (it runs in Expo Go).
+- **Phase 7:** `expo-dev-client`, `@notifee/react-native`, a Live Activity module, a HealthKit module, a Health Connect module, and media-control modules (§17.3). The phase 7 plan chooses each module from what supports the Expo SDK at that time.
 
 ## 6. Data model
 
@@ -95,13 +110,13 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | secondary_muscles | json | |
 | equipment | text | barbell, dumbbell, cable, machine, kettlebell, bodyweight |
 | pattern | text | squat, hinge, lunge, horizontal_push, vertical_push, horizontal_pull, vertical_pull, carry, core, isolation |
-| logging_type | text | weighted, bodyweight_plus, assisted, timed, distance_time |
+| logging_type | text | weighted, bodyweight_plus, assisted, timed, distance_time, weighted_time (weight and duration, no reps: carries and sleds) |
 | is_custom | int | |
 | archived | int | custom exercises used in history are archived, never deleted |
 | created_at | int | |
 
 ### exercise_notes
-`exercise_id` (PK, FK), `text`, `updated_at`. One sticky note per exercise, shown inside that exercise every time it appears.
+`exercise_id` (PK, FK), `text`, `updated_at`. One note per exercise. It is shown inside that exercise every time the exercise appears, in any routine or in an empty workout.
 
 ### routines
 `id`, `name`, `is_premade`, `next_day_index` (int, the rotation pointer), `created_at`.
@@ -118,7 +133,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | position | int | |
 | superset_group | int null | exercises on a day with the same number form a superset |
 | set_count | int | |
-| rep_min, rep_max | int | seconds for `timed` exercises. Unused for `distance_time` |
+| rep_min, rep_max | int | seconds for `timed` and `weighted_time` exercises. Unused for `distance_time` |
 | increment | real | 0 means progression by reps only |
 | increment_unit | text | lb or kg |
 | next_weight | real null | cached result of the rule (7.3). Null until first run |
@@ -136,6 +151,8 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | local_date | text | local date at start. Used for history, streak, and training day |
 | rest_ends_at | int null | absolute end time of the running rest timer |
 | food_offer_shown | int | the Short on food offer appears at most once per workout |
+| health_status | text null | phase 7. Null means not attempted, otherwise `done` or `failed`. Never blocks anything (§17.1) |
+| health_record_id | text null | phase 7. The id of the record GymHound wrote to Apple Health or Health Connect |
 
 ### workout_exercises
 | column | type | notes |
@@ -151,6 +168,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | working_weight, working_unit | null | computed at finish (7.3) |
 | outcome | text null | raised, held, held_marked, no_rule, no_sets. Computed at finish |
 | next_weight, next_unit | null | computed at finish |
+| note | text null | the exercise's note as it was when the workout finished. Copied at finish and never changed by later note edits. History shows this copy |
 
 ### sets
 | column | type | notes |
@@ -159,7 +177,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | workout_exercise_id | FK cascade | |
 | position | int | |
 | set_type | text | working, warmup, drop, failure |
-| weight | real null | the load: weight for `weighted`, added weight for `bodyweight_plus`, assistance for `assisted` |
+| weight | real null | the load: weight for `weighted` and `weighted_time`, added weight for `bodyweight_plus`, assistance for `assisted` |
 | weight_unit | text null | unit as logged |
 | reps | int null | |
 | rpe | real null | 6–10 in steps of 0.5 |
@@ -192,6 +210,9 @@ A key/value table with JSON values.
 | plates_kg | pairs owned: 25×4, 20×1, 15×1, 10×1, 5×1, 2.5×1, 1.25×1 |
 | default_increment_lb, default_increment_kg | 5, 2.5 |
 | rest_seconds | 120 |
+| rest_bell | true |
+| rest_bell_sound | `bell` (one of the bundled bell sounds) |
+| last_snapshot_at | null until the first snapshot (§17.2) |
 | active_routine_id | null |
 | fuel_targets | null until set: `{training:{kcal,protein,carbs,fat}, rest:{…}}` |
 | pro_debug_unlock | false |
@@ -219,14 +240,14 @@ Normal, Rough sleep, Short on food, Pain, Cutting. Normal is the default. The ma
 Input: the rule snapshot (`set_count`, `rep_min`, `rep_max`, `increment`, `increment_unit`), `planned_weight`, the logging type, the equipment, the day mark, the sets, and the owner's bar and plates.
 
 1. **Counted sets** are those of type `working` or `failure` with `done = 1`.
-2. **Working weight** is the easiest load among counted sets: the lowest weight for `weighted` and `bodyweight_plus` (an empty load counts as 0), and the highest assistance for `assisted`. It is null for `timed` and `distance_time`. It is computed even when there is no rule, because the Stats chart uses it.
+2. **Working weight** is the easiest load among counted sets: the lowest weight for `weighted`, `weighted_time` and `bodyweight_plus` (an empty load counts as 0), and the highest assistance for `assisted`. It is null for `timed` and `distance_time`. It is computed even when there is no rule, because the Stats chart uses it.
 3. **No rule** (no `routine_exercise_id`), or the logging type is `timed` or `distance_time`: outcome `no_rule`, with no next weight. Otherwise, if there are no counted sets: outcome `no_sets`, next weight = `planned_weight`.
 4. **All hit** means:
    - the number of counted sets is at least `set_count`, and
-   - every counted set has `reps ≥ rep_max`.
+   - every counted set has `reps ≥ rep_max`, or for `weighted_time` `duration_s ≥ rep_max` (the top of the time range, in seconds).
 5. **Marked day:** outcome `held_marked`. Next weight = `planned_weight`, or the working weight if there was no plan yet. Today's sets still count for history and PRs.
 6. **Normal and all hit, with increment > 0:** outcome `raised`.
-   - `weighted` and `bodyweight_plus`: next = working weight + increment.
+   - `weighted`, `weighted_time` and `bodyweight_plus`: next = working weight + increment.
    - `assisted`: next = max(0, working weight − increment).
    - Barbell exercises then round with 7.7. The next weight becomes the loadable weight nearest to the raised value that is still heavier than the working weight. If nothing heavier can be loaded, it stays at the working weight and the outcome is `held`.
 7. **Normal and not all hit, or increment = 0:** outcome `held`. Next = working weight.
@@ -244,13 +265,14 @@ The rule:
 |---|---|
 | weighted or bodyweight_plus | "If every working set hits {rep_max} on a normal day, add {inc}. A marked day holds the weight." |
 | assisted | "If every working set hits {rep_max} on a normal day, take {inc} of assistance off. A marked day holds it." |
+| weighted_time | "If every working set reaches {rep_max}s on a normal day, add {inc}. A marked day holds the weight." |
 | increment 0 | "No weight to add. Beat last time's reps." |
 | timed | "Last time: {sets} × {s} s. Timed holds don't go up automatically." |
 | distance_time | "Last time: {distance} in {time}." |
 | no rule, logged before | "No rule here. Last time: {sets} × {reps} at {weight}." |
 | no rule, never logged | "First time logging this." |
 
-Today's read, which follows the rule for `weighted`, `bodyweight_plus` and `assisted` with increment > 0:
+Today's read, which follows the rule for `weighted`, `weighted_time`, `bodyweight_plus` and `assisted` with increment > 0. For `weighted_time`, "Hit {rep_max}s" reads "Reach {rep_max}s":
 
 | case | text |
 |---|---|
@@ -282,6 +304,7 @@ Every later session that continues the same run is labelled too.
 |---|---|
 | weighted, bodyweight_plus (load = weight or added weight) | **Heaviest:** load greater than every earlier load.<br>**Reps at weight:** an earlier set exists at the same load, and these reps are more than any of them.<br>**Estimated 1RM:** reps 1–12, e1RM = load if reps = 1, otherwise load × (1 + reps ÷ 30), greater than every earlier e1RM. |
 | timed | **Longest hold:** duration greater than every earlier duration |
+| weighted_time | **Heaviest:** load greater than every earlier load.<br>**Longest hold:** duration greater than every earlier duration |
 | assisted, distance_time | none in v1 |
 
 ### 7.7 Plates
@@ -331,7 +354,7 @@ Saving an edit to a finished workout, or deleting one, runs one transaction:
 
 ### 8.1 Shell
 - **Header** (Train, History, Stats, Fuel, Settings):
-  - The hound mark at 40px, with GYMHOUND in red next to it. If the window is narrower than 360pt, the wordmark sits under the mark.
+  - The hound mark at 40px on the left of the red GYMHOUND, 10px apart, on one line and vertically centred with it. This holds at every phone width, including under 360pt. The wordmark never wraps or drops under the mark.
   - A round Settings icon button on the right.
   - On Settings, the round button closes Settings.
   - The header is hidden on the session screen and the finish summary.
@@ -382,6 +405,7 @@ In order:
      - No weight yet: "pick a weight".
    - One button: **Start this**.
    - If no routine is active, the card reads "Pick a routine to see what's up next." with a button to Routines.
+   - **Up next advances only when that routine day is finished.** A rest day, a discarded session, an empty workout, or a finish refused because nothing was ticked never consumes it. Monday's workout is still Monday's workout on Wednesday. Time passing never moves the pointer.
 6. **Footer.**
 
 **Starting a workout while another is active** is blocked by a sheet: "Finish or discard the workout in progress first." with **Resume**.
@@ -395,14 +419,32 @@ In order:
 - **The Short on food banner** (7.10), when it applies.
 - **Exercise blocks**, in order. Each block has:
   - The name and a ⋯ menu.
-  - The sticky note, which can be edited inline.
+  - The note, which can be edited inline.
+    - It lives on the exercise, so the next time that exercise appears, in any routine or an empty workout, the note is already there.
+    - Replacing an exercise shows the new exercise's own note. The old note stays with the old exercise.
   - The rule line (7.4).
   - The set table.
-- **Set table columns:** set, previous, weight, reps, tick. RPE appears when it is enabled for that exercise. The weight column label changes with the logging type: "+lb" for added weight, "−lb" for assistance. Timed and distance types use time and distance columns.
+- **Set table columns:** set, previous, weight, reps, tick. RPE appears when it is enabled for that exercise.
+  - The weight column label changes with the logging type: "+lb" for added weight, "−lb" for assistance.
+  - Timed and distance types use time and distance columns.
+  - Weight-and-time types use weight and time columns, with no reps.
 - **Set rows:**
   - **Set column:** shows the set number for working sets and W, D or F for the other types. Tapping it changes the type.
-  - **Previous:** the set in the same position from the most recent finished workout with this exercise, shown in its logged unit.
-  - **Prefill:** working sets start with today's target weight. With no target, the previous set's weight is the placeholder. Reps show the previous reps as a placeholder, or `rep_max` if there is no previous.
+  - **Previous:** every set row shows the last result for that same set, in its own column beside the inputs. It is never above the exercise and never behind a tap.
+    - **Which set:** from the most recent finished workout that contains this exercise, take the set with the same type and the same number within that type.
+      - Working set 2 shows what working set 2 was last time, not the best set.
+      - Warmup 1 shows warmup 1. Drop and failure sets match drop and failure sets the same way.
+      - A warmup is never the previous result for a working set.
+    - **No history:** if that workout has no matching set, or the exercise has never been logged, the spot is empty. A number is never invented.
+    - **Format:**
+      - Weight and reps: "185 × 5".
+      - Weight and time: "70 lb × 40s".
+      - Time only: "40s", or "1:30" from 60 seconds up.
+      - Distance and time: "2 km · 12:30".
+      - Bodyweight plus: "+25 × 8".
+      - Assisted: "−40 × 8".
+    - **Units:** weight-and-time always shows its unit. Other weights show their unit only when it differs from the display unit ("84 kg × 12").
+  - **Prefill:** working sets start with today's target weight. With no target, the previous set's weight is the placeholder, converted to the entry unit. Reps show the previous reps as a placeholder, or `rep_max` if there is no previous. For timed and weight-and-time sets, the duration placeholder is the previous duration, or `rep_max` seconds.
   - **Ticking a set with empty fields accepts the placeholders.** If a field is empty and has no placeholder, the tick stays disabled until it has a value.
   - **Ticking** gives a light haptic. It starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
 - **⋯ menu:**
@@ -416,14 +458,30 @@ In order:
 - **Footer of the screen:** Add set (inside each block), Add exercise (library picker), **Finish**, Discard.
 - **Rest timer:**
   - A bar docked just above the bottom safe area, with **−15s**, the clock, and **Skip**.
+  - Ticking a set starts it.
   - It is driven by `rest_ends_at`, so it survives the app being killed.
-  - When it ends: a haptic.
-  - If the app is in the background, a local notification "Rest's up." is scheduled for the end time. It is rescheduled on −15s and cancelled on Skip.
+  - **When it ends:** a short bell and a haptic, including when the phone is locked.
+    - When the app is open, the bell plays in the app.
+    - When the app is in the background or the phone is locked, the scheduled notification "Rest's up." carries the sound and vibration. It is rescheduled on −15s and cancelled on Skip.
+    - The bell ducks any music for a moment and never stops it.
+    - Settings can turn the bell off or change its sound. The default is on.
+    - In Expo Go the lock-screen notification can only use the system sound. The chosen bell sound on the lock screen arrives with the phase 7 build.
   - Notification permission is asked the first time a timer starts, not at launch.
+- **Music player** (phone builds only, phase 7): a small player on the session screen (§17.3).
 - **Finish:**
   - If any sets with values are not ticked, a confirmation reads "{n} sets aren't ticked. They won't count." with **Finish anyway** and **Keep logging**.
   - Un-ticked sets are dropped.
-  - Finishing runs one transaction: status → finished, `computeOutcome` per exercise, PR flags, routine `next_weight`, and the routine's `next_day_index` advanced to the day after the one run.
+  - Finishing runs one transaction:
+    - status → finished
+    - `computeOutcome` per exercise
+    - PR flags
+    - routine `next_weight`
+    - each exercise's current note copied onto its workout row
+    - the routine's `next_day_index` advanced to the day after the one run
+  - **After the transaction commits:**
+    - A snapshot is written (§17.2).
+    - On phone builds, the workout is written to Apple Health or Health Connect (§17.1).
+    - Neither step can fail or undo the finish.
 - **Discard:** confirm, then delete the workout. The rotation pointer does not move.
 
 ### 8.5 Finish summary
@@ -457,7 +515,7 @@ In order:
 ### 8.8 History
 - Finished workouts grouped by month, newest first.
 - **Card:** date, workout name, duration, volume, the mark if not Normal, and the PR count.
-- **Detail:** exercises and sets with PR marks.
+- **Detail:** exercises and sets with PR marks, and each exercise's note as it was saved with that workout.
   - **Edit** allows changing set values, type and done; adding or removing sets; and changing the mark.
   - **Delete** asks for confirmation first.
   - Both run 7.12.
@@ -489,8 +547,10 @@ In order:
 - Units (lb or kg, and distance).
 - Plates (bar and pairs owned for each unit).
 - Progression default increments.
-- Rest timer length.
+- Rest timer length, the rest bell (on or off, default on) and the bell sound.
 - Fuel targets (Pro).
+- Apple Health or Health Connect (phone builds, phase 7): writing workouts, and each read (sleep, body weight, heart rate) switched on separately.
+- Backups: the time of the last snapshot and the export buttons.
 - GymHound Pro (status, Unlock, Restore purchases).
 - Export (workouts CSV, food CSV).
 - Developer, shown only when debug unlock is allowed (9): the Pro debug switch.
@@ -535,6 +595,7 @@ In order:
 - **Patterns:** squat, hinge, lunge, horizontal and vertical push and pull, carry, core, isolation.
 - **Muscles:** chest, front delts, side delts, rear delts, lats, upper back, traps, biceps, triceps, forearms, abs, obliques, lower back, glutes, quads, hamstrings, adductors, calves.
 - **Aliases** include RDL, OHP, lat pulldown, hip thrust, and the common short names.
+- **Weight and time:** farmer's carry, suitcase carry, yoke walk, sled push and sled drag are `weighted_time`. Custom exercises can choose that logging type too. Every other exercise stays as it is.
 
 ### 10.2 Premade routines
 Every exercise has sets, rep range and increment. Increments are 5 lb or 2.5 kg unless noted.
@@ -555,13 +616,22 @@ About 300 common foods with typical serving sizes, taken from USDA FoodData Cent
 
 - **Encoding:** RFC 4180 quoting, UTF-8 with a BOM so Excel reads it correctly.
 - **Sharing:** files are written to the cache directory and opened in the share sheet.
-- **`gymhound-workouts-YYYY-MM-DD.csv`:** one row per done set of finished workouts. Columns: `workout_id, date, started_at, finished_at, workout, routine, routine_day, day_mark, exercise, exercise_id, set_number, set_type, weight, weight_unit, reps, rpe, duration_s, distance, distance_unit, pr`. The `pr` column holds kinds joined by `|`. Times are ISO 8601 with offset.
+- **`gymhound-workouts-YYYY-MM-DD.csv`:** one row per done set of finished workouts. Columns: `workout_id, date, started_at, finished_at, workout, routine, routine_day, day_mark, exercise, exercise_id, set_number, set_type, weight, weight_unit, reps, rpe, duration_s, distance, distance_unit, pr, exercise_note`. `exercise_note` is the note saved with that workout. The `pr` column holds kinds joined by `|`. Times are ISO 8601 with offset.
 - **`gymhound-food-YYYY-MM-DD.csv`:** one row per entry. Columns: `date, logged_at, name, servings, kcal, protein_g, carbs_g, fat_g`.
 
 ## 12. Failure handling
 
 - **Transactions:** finishing a workout, saving a history edit, and deleting a workout are each a single transaction.
-- **Migrations:** they run at startup. If one fails, the app shows "GymHound couldn't update its database." with the error text, and touches nothing. Data is never wiped to recover.
+- **A finished workout cannot disappear.** The live database is one copy and the snapshots are the second (§17.2). Data is never wiped to recover, and the app never starts from an empty database while a snapshot exists.
+- **Migrations:** they run at startup.
+  - If the database is missing or empty while snapshots exist, the newest snapshot is restored first.
+  - If a migration fails (including after a bad app update):
+    1. The failed database file is set aside under a new name and never deleted.
+    2. The newest snapshot is copied in and migrated.
+    3. If that works, a one-time notice says "GymHound restored your data from {date}. A workout that was in progress may be missing."
+    4. If it still fails, the app shows "GymHound couldn't update its database." with the error text, plus **Export my data**. Export shares the newest snapshot and the set-aside file (and the CSV files once phase 6 exists).
+- **Snapshots:** a failed snapshot never fails the finish. It is retried at the next finish, and Settings shows the time of the last good one.
+- **Health:** a failed write to Apple Health or Health Connect never blocks finish and never deletes or changes the workout. It is retried later (§17.1).
 - **Number input:** accepts a comma or a dot as the decimal point. Negatives and non-numbers are rejected inline, and the tick stays disabled.
 - **Network:** RevenueCat failures are ignored and `pro_cached` is used. No screen waits on the network.
 - **Notifications:** if permission is denied, the in-app timer still works and no further prompts appear.
@@ -574,6 +644,10 @@ About 300 common foods with typical serving sizes, taken from USDA FoodData Cent
   - history edit and delete recompute, including the active-workout-untouched case
   - the free routine limit
   - the seed upsert
+  - previous-result matching by set type and number, including warmups and empty history
+  - Up next not advancing on discard, an empty workout, or a refused finish
+  - the note copied at finish staying the same after later note edits
+  - snapshot rotation (newest 7) and restore after a simulated migration failure, never ending with an empty database
 - **Layout:** the web build is checked in the browser pane in light and dark at phone width, against the phase's acceptance list.
 - **iPhone:** the owner checks each phase on their iPhone in Expo Go.
 
@@ -610,21 +684,33 @@ Each phase gets its own implementation plan and ends with its acceptance check.
 
 1. **Header, themes, Train, offline session**
    - Scaffold, OneDrive junction, schema and migrations, seed premade routines plus the exercises they use, theme and fonts, hound mark (owner approval), header, dock, footer, Train.
-   - Session: start empty or from Up next, log sets, previous column, tick, rest timer with the Expo Go notification, finish, discard, resume.
+   - The header keeps the hound and GYMHOUND on one line at every width.
+   - Session: start empty or from Up next, log sets, tick, rest timer with the Expo Go notification, finish, discard, resume.
+   - The previous result on every set row, matched by set type and number (§8.4).
+   - The rest bell and haptic, and the bell settings (§8.4).
+   - The note copied at finish (§6).
+   - Snapshots after every finish, and restore on a failed migration (§17.2).
+   - Up next advancing only on a finished day (§8.3).
+   - The `weighted_time` logging type in entry, tick and the previous column.
    - A basic name search for adding exercises.
 2. **Day marks and the rule**
-   - Mark chip, `computeOutcome`, rule line and today's read, override, finish summary with next weight, Up next showing last time's outcome and today's load.
+   - Mark chip, `computeOutcome` (including `weighted_time`), rule line and today's read, override, finish summary with next weight, Up next showing last time's outcome and today's load.
 3. **Routines and the free limit**
    - Routines screen, detail, set active, duplicate, editor, the `Entitlements` interface with the free-only implementation, and the one-sentence stop on the second user routine.
 4. **Library, custom exercises, plates, bodyweight, PRs**
-   - Full seed (about 250), search with filters, custom exercises, plate settings, calculator and barbell rounding, the bodyweight log, PR flags and finish-summary PRs.
+   - Full seed (about 250, including the carries and sleds as `weighted_time`), search with filters, custom exercises (all logging types, including weight and time), plate settings, calculator and barbell rounding, the bodyweight log, PR flags and finish-summary PRs.
 5. **Pro, paywall, Fuel**
    - Debug and RevenueCat implementations, paywall screen, Fuel (foods seed, log, quick add, custom foods, targets, summary, training-day switch), and the Short on food offer.
 6. **History, Stats, CSV**
-   - History list, detail, edit and delete with recompute, Stats charts with mark and stall labels, records, bodyweight chart, CSV export.
+   - History list, detail (with the saved notes), edit and delete with recompute, Stats charts with mark and stall labels, records, bodyweight chart, CSV export (with `exercise_note`).
 7. **Native build** (when the Apple Developer account exists)
    - EAS development builds, the iOS Live Activity and Android ongoing notification for the rest timer, and live RevenueCat products.
+   - Apple Health and Health Connect: write-out and the three reads (§17.1).
+   - The cloud copy of snapshots: iCloud on iPhone, Android backup (§17.2).
+   - The music player (§17.3).
+   - The chosen bell sound on the lock screen.
    - This phase is outside the acceptance list below.
+8. **Watch apps** (later): Apple Watch and Wear OS only (§17.4).
 
 ## 16. Done when
 
@@ -635,3 +721,66 @@ Each phase gets its own implementation plan and ends with its acceptance check.
 - Pro unlocks more routines and Fuel, and a finished workout uses the training-day targets.
 - "Powered by GruntHound LLC" is at the bottom of Train, History, Stats, and Settings.
 - The app opens with no network and no account.
+
+Added by the owner on 2026-10-09:
+- The hound sits on the left of red GYMHOUND, on one line, at every phone width including under 360pt.
+- Every set row shows that same set's last result beside the input. It is empty with no history, and a warmup is never the previous result for a working set.
+- Up next only advances when that day is finished.
+- A finished workout survives a failed migration, because it is restored from the newest snapshot. The app never starts empty while a snapshot exists.
+- The rest timer ends with a bell and a haptic, including on a locked phone. The bell can be turned off.
+- A note follows its exercise, and a finished workout keeps the note it was saved with.
+
+## 17. Phone integrations and data safety
+
+### 17.1 Apple Health, Health Connect and watches (phase 7)
+- **The sync:** Apple Health on iPhone, Health Connect on Android.
+  - Apple Watch, Garmin, Galaxy Watch, Pixel Watch, Fitbit, Polar, Coros, Suunto and the rest already write to those stores. So GymHound never talks to a watch brand and never asks for a brand's cloud login.
+- **Write-out:**
+  - After a workout finishes and its transaction commits, GymHound writes it as one strength-training session with the start and end times and the workout name.
+    - Apple Health: a traditional strength training workout.
+    - Health Connect: a strength-training exercise session.
+  - The returned id is kept in `workouts.health_record_id`, and `health_status` becomes `done`.
+  - A failure sets `failed`, and the write is retried at the next app start and the next finish.
+  - Deleting a workout in History also removes the record GymHound wrote. This is best effort, and a failure never blocks the delete.
+- **Reads:** each is switched on separately in Settings, and none is ever used as the log.
+  - **Sleep:** if last night's sleep is under 6 hours, the session offers Rough sleep once at start, with the same one-tap, no-nagging rule as the Short on food offer.
+  - **Body weight:** a newer reading than the app's latest fills the body-weight card.
+  - **Heart rate:** a resting heart rate at least 10 bpm above its 28-day average also triggers the Rough sleep offer.
+  - The 6-hour and 10 bpm thresholds are defaults for the owner to confirm when phase 7 is planned.
+- **Never:**
+  - Workouts are never read back from Health.
+  - Health is never the source of truth and never the backup.
+  - A Health failure never blocks finish and never deletes or changes a workout.
+
+### 17.2 Snapshots and backup
+- **Snapshot:** after every successful finish, GymHound writes a complete copy of the database (SQLite `VACUUM INTO`) to `snapshots/gymhound-{timestamp}.db` in the app's documents folder.
+  - It keeps the newest 7 and removes older snapshot files only.
+  - `last_snapshot_at` records the last good one.
+  - The phone builds do this from phase 1. The browser build skips it.
+- **Restore:** the newest snapshot is restored when the database is missing or empty, or when a migration fails (§12). The live file is never deleted.
+- **Export** stays available from Settings, and from the error screen even when the database cannot open.
+- **The copy that survives a dead phone (phase 7, once the developer accounts exist):**
+  - On iPhone, the newest snapshot is copied to iCloud.
+  - On Android, the snapshot folder is included in Android's backup.
+  - Restoring on a new phone uses the newest backed-up snapshot.
+
+### 17.3 Music player (phase 7, phone builds only)
+- **Shown on:** the session screen only, as a small bar above the rest timer.
+- **Controls:**
+  - The current song.
+  - Play / pause.
+  - **Previous** and **next** change the song.
+  - **Skip back** and **skip forward** move 15 seconds inside the song.
+- **What it controls:** whatever is already playing, Apple Music or Spotify, through the phone's media controls.
+  - If nothing is playing, it shows two buttons instead: one opens Apple Music and one opens Spotify.
+  - It has no library, search or playlists.
+- **The bell** ducks the song for a moment and never stops it.
+- **Platform limits** (stated so phase 7 plans around them):
+  - **Android:** any player that publishes a media session (Spotify, Apple Music for Android, others) can be shown and controlled, after the user grants notification access once.
+  - **iPhone, Apple Music:** controlled through Apple's music player, with the song, play/pause, previous/next and seek.
+  - **iPhone, Spotify:** Apple lets an app control another app's playback only for Apple Music. Spotify can be controlled only through Spotify's own App Remote SDK. That needs GymHound registered as a Spotify developer app, plus a one-time "connect" in the Spotify app. No GymHound account is involved. If the owner declines that at phase 7, Spotify on iPhone gets the open-Spotify button only.
+  - **Other players on iPhone** get the open-app buttons only.
+
+### 17.4 Watch apps (phase 8)
+- A watch app that logs each set on the wrist, for Apple Watch and Wear OS only.
+- Garmin, Whoop and other brands cannot run it. They reach GymHound only through Health (§17.1).

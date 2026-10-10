@@ -977,7 +977,7 @@ expect(resolveScheme('system', null)).toBe('light');
   - Do not draw, trace or edit the art.
 - [ ] **Step 2: Build the header.**
   - `HoundMark size={40}` with "GYMHOUND" in `fonts.display800`, 32px, red, `letterSpacing: -0.5`, `numberOfLines={1}`.
-  - When `useWindowDimensions().width < 360`, the wordmark sits under the mark. Otherwise it sits beside it.
+  - The wordmark always sits beside the mark, on one line and vertically centred, at every width including under 360pt. Never stacked (owner, 2026-10-09).
   - On the right is a round 40px button with Ionicons `settings-outline` and `accessibilityLabel="Settings"`, which pushes `/settings`.
   - When the pathname is `/settings`, the icon is `close` with `accessibilityLabel="Close settings"`, and it calls `router.back()`.
 - [ ] **Step 3: Build the dock and footer.**
@@ -1002,7 +1002,7 @@ expect(resolveScheme('system', null)).toBe('light');
   - The footer text is exact on Train, History, Stats and Settings, and absent on Fuel.
   - The Settings button opens Settings, and the close button returns.
   - Switching Appearance to Dark and Light overrides the system scheme.
-  - At width 340 the wordmark stacks under the mark.
+  - At widths 340 and 320 the mark and wordmark stay on one line.
   - Take screenshots.
 - [ ] **Step 7: Owner checkpoint (controller).**
   - Send the owner the light and dark header screenshots with SendUserFile.
