@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { getSettings } from '../src/db/repositories/settingsRepo';
@@ -9,6 +9,7 @@ import { countUntickedWithValues } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -17,6 +18,7 @@ import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
+import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
 import { ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display, Num } from '../src/ui/Text';
@@ -42,11 +44,15 @@ function anySetTicked(db: Db): boolean {
 /** The question open over the session, if any. Only one at a time. */
 type Ask = 'nothing_ticked' | 'unticked' | 'discard' | 'finish_failed';
 
-/** The back chevron, the workout name and the running clock. There is no app header and no dock here. */
+/** The music apps this phone can have. None on web, so the web build shows no music button. */
+const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
+
+/** The back chevron, the workout name, the running clock and, on a phone, the music button. There is no app header and no dock here. */
 function SessionHeader({ name, startedAt }: { name: string; startedAt: number }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const now = useNow(1000);
+  const [musicOpen, setMusicOpen] = useState(false);
   return (
     <View style={{ backgroundColor: colors.bg, paddingTop: insets.top, borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <View
@@ -73,10 +79,26 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
         <Display weight={700} numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 26 }}>
           {name}
         </Display>
-        <Num weight={600} accessibilityLabel={`Workout time ${formatElapsed(now - startedAt)}`} style={{ fontSize: 24, paddingRight: 8 }}>
+        <Num
+          weight={600}
+          accessibilityLabel={`Workout time ${formatElapsed(now - startedAt)}`}
+          style={{ fontSize: 24, paddingRight: MUSIC_APPS_HERE.length > 0 ? 0 : 8 }}
+        >
           {formatElapsed(now - startedAt)}
         </Num>
+        {MUSIC_APPS_HERE.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Music"
+            hitSlop={4}
+            onPress={() => setMusicOpen(true)}
+            style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+          >
+            <Ionicons name="musical-notes" size={24} color={colors.text} />
+          </Pressable>
+        ) : null}
       </View>
+      {MUSIC_APPS_HERE.length > 0 ? <MusicSheet visible={musicOpen} apps={MUSIC_APPS_HERE} onClose={() => setMusicOpen(false)} /> : null}
     </View>
   );
 }

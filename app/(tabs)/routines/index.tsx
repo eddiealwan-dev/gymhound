@@ -1,4 +1,6 @@
-import { View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { Pressable, View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
 import { listRoutines, setActiveRoutine } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineSummary } from '../../../src/db/repositories/routinesRepo';
@@ -7,6 +9,39 @@ import { Button } from '../../../src/ui/Button';
 import { Screen } from '../../../src/ui/Screen';
 import { Body, Display } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
+
+/** Back to where Routines was opened from (Train). With nothing to go back to (opened by address, or reloaded), it lands on Train. */
+function leave() {
+  if (router.canGoBack()) router.back();
+  else router.navigate('/');
+}
+
+/** The chevron and "Train" above the title. Routines is not on the dock, so this is the way back. */
+function BackToTrain() {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back to Train"
+      hitSlop={4}
+      onPress={leave}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        minWidth: 44,
+        minHeight: 44,
+        // The chevron's own whitespace sits in the gutter, so the glyph lines up with the title below.
+        marginLeft: -8,
+        paddingRight: 8,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <Ionicons name="chevron-back" size={28} color={colors.text} />
+      <Body weight={600}>Train</Body>
+    </Pressable>
+  );
+}
 
 /** The marker on the routine in use. Not a button, and not red: red is for the wordmark, the active tab and PRs. */
 function ActiveBadge() {
@@ -51,6 +86,7 @@ export default function Routines() {
   const premade = useDbQuery(listRoutines).filter((routine) => routine.isPremade);
   return (
     <Screen>
+      <BackToTrain />
       <Display>Routines</Display>
       <Body weight={600} muted style={{ marginTop: 16, marginBottom: 8 }}>
         Premade
