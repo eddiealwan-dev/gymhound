@@ -3,8 +3,18 @@ import { eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { formatPrevious } from '../../domain/setEntry';
 import { runSeed } from '../../seed/seed';
-import { exerciseNotes, routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
+import {
+  exerciseNotes,
+  exercises,
+  routineDays,
+  routineExercises,
+  routines,
+  sets,
+  workoutExercises,
+  workouts,
+} from '../schema';
 import { createTestDb } from '../testing/createTestDb';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
@@ -35,7 +45,7 @@ const FIVE_B = 'premade-5x5-3:b';
 
 /** Ticks a set at `weight` x `reps` in lb. */
 function tick(db: Db, setId: string, weight: number, reps: number, at: number): void {
-  tickSet(db, setId, { weight, reps, durationS: null, distance: null }, 'lb', at);
+  tickSet(db, setId, { weight, reps, durationS: null, distance: null }, 'lb', at, 'mi');
 }
 
 /** The ids of the active workout's sets for the exercise at `exerciseIndex`. */
@@ -391,8 +401,8 @@ describe('tickSet and untickSet', () => {
     const db = seededDb();
     startWorkoutFromDay(db, PUSH_A, NOW);
     const [a, b] = setIds(db);
-    tickSet(db, a, { weight: 82.5, reps: 8, durationS: null, distance: null }, 'kg', NOW + 5_000);
-    tickSet(db, b, { weight: 0, reps: 10, durationS: null, distance: null }, 'lb', NOW + 6_000);
+    tickSet(db, a, { weight: 82.5, reps: 8, durationS: null, distance: null }, 'kg', NOW + 5_000, 'mi');
+    tickSet(db, b, { weight: 0, reps: 10, durationS: null, distance: null }, 'lb', NOW + 6_000, 'mi');
     const [rowA, rowB] = db.select().from(sets).all().filter((s) => s.id === a || s.id === b);
     expect(rowA).toMatchObject({ weight: 82.5, weightUnit: 'kg', reps: 8, done: true, completedAt: NOW + 5_000 });
     // A zero added weight is still a weight, logged in the entry unit.
@@ -403,7 +413,7 @@ describe('tickSet and untickSet', () => {
     const db = seededDb();
     startWorkoutFromDay(db, PUSH_A, NOW);
     const [a] = setIds(db);
-    tickSet(db, a, { weight: null, reps: null, durationS: 45, distance: null }, 'kg', NOW);
+    tickSet(db, a, { weight: null, reps: null, durationS: 45, distance: null }, 'kg', NOW, 'mi');
     expect(db.select().from(sets).where(eq(sets.id, a)).get()).toMatchObject({
       weight: null,
       weightUnit: null,
@@ -411,6 +421,59 @@ describe('tickSet and untickSet', () => {
       durationS: 45,
       done: true,
     });
+  });
+
+  it('leaves the distance unit empty on a weighted tick', () => {
+    const db = seededDb();
+    startWorkoutFromDay(db, PUSH_A, NOW);
+    const [a] = setIds(db);
+    tickSet(db, a, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', NOW, 'km');
+    expect(db.select().from(sets).where(eq(sets.id, a)).get()).toMatchObject({
+      weight: 135,
+      weightUnit: 'lb',
+      distance: null,
+      distanceUnit: null,
+    });
+  });
+
+  it('records the unit a distance was logged in, and it shows as the previous set', () => {
+    const db = seededDb();
+    // No bundled exercise logs distance and time, so add a custom one to an empty workout.
+    db.insert(exercises)
+      .values({
+        id: 'custom-run',
+        name: 'Run',
+        aliases: [],
+        primaryMuscles: ['quads'],
+        secondaryMuscles: [],
+        equipment: 'bodyweight',
+        pattern: 'core',
+        loggingType: 'distance_time',
+        isCustom: true,
+        createdAt: NOW,
+      })
+      .run();
+    const workoutId = startEmptyWorkout(db, NOW);
+    db.insert(workoutExercises)
+      .values({ id: 'we-run', workoutId, exerciseId: 'custom-run', position: 0, showRpe: false })
+      .run();
+    db.insert(sets).values({ id: 'set-run', workoutExerciseId: 'we-run', position: 0, setType: 'working' }).run();
+
+    // The weight unit is passed too, but with no weight it is not stored.
+    tickSet(db, 'set-run', { weight: null, reps: null, durationS: 1500, distance: 5 }, 'lb', NOW + 1_000, 'km');
+    expect(db.select().from(sets).where(eq(sets.id, 'set-run')).get()).toMatchObject({
+      weight: null,
+      weightUnit: null,
+      durationS: 1500,
+      distance: 5,
+      distanceUnit: 'km',
+      done: true,
+    });
+
+    finishWorkout(db, workoutId, NOW + HOUR);
+    const [previous] = getPreviousSets(db, 'custom-run', 'x');
+    expect(previous).toMatchObject({ distance: 5, distanceUnit: 'km', durationS: 1500 });
+    expect(formatPrevious(previous, 'distance_time', 'lb')).toBe('5 km · 25:00');
   });
 
   it('ticks only the set it is given', () => {
@@ -540,7 +603,7 @@ describe('previous sets', () => {
   it('keep the unit they were logged in', () => {
     const db = seededDb();
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
-    tickSet(db, setIds(db)[0], { weight: 82.5, reps: 8, durationS: null, distance: null }, 'kg', NOW + 1_000);
+    tickSet(db, setIds(db)[0], { weight: 82.5, reps: 8, durationS: null, distance: null }, 'kg', NOW + 1_000, 'mi');
     finishWorkout(db, id, NOW + HOUR);
     expect(getPreviousSets(db, 'barbell-bench-press', 'x')[0]).toMatchObject({ weight: 82.5, weightUnit: 'kg' });
   });

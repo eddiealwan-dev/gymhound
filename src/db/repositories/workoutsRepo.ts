@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, isNotNull, notInArray, or } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import type { TickValues } from '../../domain/setEntry';
-import type { WeightUnit } from '../../domain/types';
+import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { newId } from '../ids';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -202,10 +202,17 @@ export function setRestEndsAt(db: Db, workoutId: string, endsAt: number | null):
 }
 
 /**
- * Ticks a set with the values `resolveTick` produced. `weight_unit` is the unit the weight was logged in,
- * and stays null when the set has no weight.
+ * Ticks a set with the values `resolveTick` produced. `weight_unit` and `distance_unit` are the units the
+ * weight and the distance were logged in, and stay null when the set has no weight or no distance.
  */
-export function tickSet(db: Db, setId: string, v: TickValues, unit: WeightUnit, now: number): void {
+export function tickSet(
+  db: Db,
+  setId: string,
+  v: TickValues,
+  unit: WeightUnit,
+  now: number,
+  distanceUnit: DistanceUnit,
+): void {
   db.update(sets)
     .set({
       weight: v.weight,
@@ -213,6 +220,7 @@ export function tickSet(db: Db, setId: string, v: TickValues, unit: WeightUnit, 
       reps: v.reps,
       durationS: v.durationS,
       distance: v.distance,
+      distanceUnit: v.distance === null ? null : distanceUnit,
       done: true,
       completedAt: now,
     })
