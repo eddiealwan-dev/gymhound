@@ -50,7 +50,7 @@ Non-goals for v1
 | Pro lapses | Nothing is deleted. Extra routines stay visible and runnable. Fuel data is kept and locks again. No new routines until Pro is back |
 | History edits | Editing or deleting a past workout re-runs the rule and the PR check. It never changes a workout that is in progress |
 | Charts | Hand-drawn SVG, no chart library |
-| Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked |
+| Header layout | The hound sits on the left of red GYMHOUND, on one line and vertically centred, at every width including under 360pt. Never stacked. 40px hound, 10px gap, blue outline in dark mode. GYMHOUND keeps a fixed size when phone text is enlarged; everything else scales |
 | Previous result | Every set row shows that same set from last time, beside the input. Matched by set type and number. Empty when there is no history. A warmup is never the previous result for a working set (§8.4) |
 | Up next | Advances only when that routine day is finished. Rest days, discarded sessions and empty workouts never consume it (§8.3) |
 | Notes | A note lives on the exercise and follows it into every routine. A finished workout keeps the note it was saved with (§6, §8.4) |
@@ -58,7 +58,7 @@ Non-goals for v1
 | Rest bell | A short bell plus a haptic at zero, including on a locked phone. On by default. The sound can be changed (§8.4) |
 | Data safety | The live database plus a snapshot after every finish, with the newest 7 kept. A failed migration restores the newest snapshot and never starts empty (§17.2) |
 | Health and watches | Apple Health on iPhone, Health Connect on Android. Finished workouts write out. Sleep, body weight and heart rate are read only to offer a day mark or fill the body-weight card. The app database stays the source of truth (§17.1) |
-| Music | A small session player that controls what is already playing (§17.3). Phone builds only |
+| Music | A small session player that controls what is already playing (§17.3). Phone builds only. Apple Music always. Spotify on iPhone through Spotify's kit and a one-time connect, falling back to an open-Spotify button |
 
 ## 4. Platform and environment
 
@@ -378,7 +378,7 @@ Settings offers Light, Dark or System, with System the default.
 | red | #E10600 | #E10600 |
 
 - **Red** is used only for the GYMHOUND wordmark, the active tab, and PR marks. Primary buttons use the `text` colour filled with `bg`-coloured labels. Ticks use the `text` colour.
-- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, uppercase, tight tracking (−0.5), one line.
+- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, uppercase, tight tracking (−0.5), one line. It is a logo, so it keeps a fixed size when the phone's text size is turned up. All other text in the app follows the phone's text size.
 - **Type:** display and big numbers in Barlow Condensed 600/700/800, body in Inter 400/500/600. Numbers use `fontVariant: ['tabular-nums']`. Both fonts are bundled.
 - **Hound mark:** the dog from the GruntHound logo, cut from the owner's logo file with its background removed. It is never redrawn.
   - **Master:** `assets/brand/hound-head.png`, a 650px transparent square.
@@ -741,12 +741,14 @@ Added by the owner on 2026-10-09:
     - Health Connect: a strength-training exercise session.
   - The returned id is kept in `workouts.health_record_id`, and `health_status` becomes `done`.
   - A failure sets `failed`, and the write is retried at the next app start and the next finish.
-  - Deleting a workout in History also removes the record GymHound wrote. This is best effort, and a failure never blocks the delete.
+  - Deleting a workout in History also removes the record GymHound wrote. This is best effort: if Health refuses, the workout is still deleted in GymHound.
 - **Reads:** each is switched on separately in Settings, and none is ever used as the log.
-  - **Sleep:** if last night's sleep is under 6 hours, the session offers Rough sleep once at start, with the same one-tap, no-nagging rule as the Short on food offer.
+  - **The Rough sleep offer:** offered when last night's sleep is under 6 hours, or resting heart rate is 10 bpm or more above its 28-day average.
+    - It is one offer, not two, even if both conditions hold.
+    - It is made once per session, at the start, with the same no-nagging rule as the Short on food offer.
+    - The user taps it. GymHound never marks the day by itself.
+    - The owner confirmed these thresholds.
   - **Body weight:** a newer reading than the app's latest fills the body-weight card.
-  - **Heart rate:** a resting heart rate at least 10 bpm above its 28-day average also triggers the Rough sleep offer.
-  - The 6-hour and 10 bpm thresholds are defaults for the owner to confirm when phase 7 is planned.
 - **Never:**
   - Workouts are never read back from Health.
   - Health is never the source of truth and never the backup.
@@ -778,7 +780,10 @@ Added by the owner on 2026-10-09:
 - **Platform limits** (stated so phase 7 plans around them):
   - **Android:** any player that publishes a media session (Spotify, Apple Music for Android, others) can be shown and controlled, after the user grants notification access once.
   - **iPhone, Apple Music:** controlled through Apple's music player, with the song, play/pause, previous/next and seek.
-  - **iPhone, Spotify:** Apple lets an app control another app's playback only for Apple Music. Spotify can be controlled only through Spotify's own App Remote SDK. That needs GymHound registered as a Spotify developer app, plus a one-time "connect" in the Spotify app. No GymHound account is involved. If the owner declines that at phase 7, Spotify on iPhone gets the open-Spotify button only.
+  - **iPhone, Spotify:** Apple lets an app control another app's playback only for Apple Music. Spotify can be controlled only through Spotify's own App Remote SDK. That needs GymHound registered as a Spotify developer app, plus a one-time "connect" in the Spotify app. No GymHound account is involved.
+    - **The owner chose to include it.**
+    - If the Spotify registration is not ready in phase 7, Spotify on iPhone falls back to the open-Spotify button.
+    - Apple Music support is never dropped.
   - **Other players on iPhone** get the open-app buttons only.
 
 ### 17.4 Watch apps (phase 8)

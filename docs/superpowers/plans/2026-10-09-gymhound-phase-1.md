@@ -2,13 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the GymHound shell (header, hound mark, both themes, dock, footer), the Train screen, and a session that logs offline from a premade routine day or from empty, then finishes, discards, or resumes.
+**Goal:** Ship the GymHound shell (header, hound mark, both themes, dock, footer), the Train screen, and a session that logs offline from a premade routine day or from empty, then finishes, discards, or resumes. It also includes the parts of the owner's 2026-10-09 additions that phase 1 owns:
+- a one-line header with a fixed-size wordmark
+- the last result beside every set
+- the rest bell
+- the note saved with each finished workout
+- snapshots with restore
+- weight-and-time entry
+- Up next advancing only on a finished day
+
+**Revision 2026-10-09:**
+- Tasks 1–12 are done (branch `phase-1`, `e0d0a7b..df4ac44`).
+- Tasks 12A–12E are new.
+- Tasks 13–17 are revised.
+- Read "As built" below before any task from 12A on.
 
 **Architecture:** Expo Router app in Expo Go. SQLite (`expo-sqlite`) through Drizzle is the source of truth. Rules live in pure TypeScript under `src/domain`, and repositories under `src/db/repositories`. Both are tested with Jest in Node, with repositories running on `better-sqlite3` against the same migrations. Screens read through `useDbQuery`, which re-runs when a zustand `dataVersion` counter is bumped after each write. Session actions write to SQLite first, then bump. This is how the spec's write-through session store (§5) is realized.
 
-**Tech Stack:** Expo (the SDK that App Store Expo Go runs), Expo Router, expo-sqlite, drizzle-orm / drizzle-kit, zustand, react-native-svg, @expo-google-fonts (Barlow Condensed, Inter), expo-notifications, expo-haptics, expo-localization, expo-crypto, Jest + jest-expo, better-sqlite3.
+**Tech Stack:** Expo (the SDK that App Store Expo Go runs), Expo Router, expo-sqlite, drizzle-orm / drizzle-kit, zustand, react-native-svg, @expo-google-fonts (Barlow Condensed, Inter), expo-notifications, expo-haptics, expo-localization, expo-crypto, Jest + jest-expo, better-sqlite3, patch-package. The revision adds expo-audio, expo-file-system and expo-sharing.
 
-**Spec:** `docs/superpowers/specs/2026-10-09-gymhound-design.md`. Read §5, §6, §7.1, §7.8, §7.9, §8.1–§8.4, §12 and §15 before starting.
+**Spec:** `docs/superpowers/specs/2026-10-09-gymhound-design.md`. Read §5, §6, §7.1, §7.8, §7.9, §8.1–§8.4, §12, §15 and §17.2 before starting.
 
 ## Global Constraints
 
@@ -37,7 +50,20 @@
   | red | #E10600 | #E10600 |
 
 - **Red** is used only for the GYMHOUND wordmark, the active tab and PR marks. Primary buttons are filled with `text` and labelled in `bg`.
-- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, uppercase, letterSpacing −0.5, one line.
+- **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, 32px, red, uppercase, letterSpacing −0.5, one line.
+  - It sits on the right of the 40px hound with a 10px gap, vertically centred, at every width. It is never stacked.
+  - It keeps a fixed size (`allowFontScaling={false}`). Every other text in the app follows the phone's text size.
+- **Previous result** (spec §8.4):
+  - Every set row shows that same set's last result beside the input, matched by set type and number.
+  - The cell is empty with no history, and a number is never invented.
+  - A warmup is never the previous result for a working set.
+  - Formats: "185 × 5", "70 lb × 40s", "40s" or "1:30".
+- **Data safety** (spec §12, §17.2):
+  - Never delete the live database file.
+  - Never start empty while a snapshot exists.
+  - A failed snapshot never fails a finish.
+- **Not in phase 1:** Apple Health, Health Connect, the music player, the cloud copy of snapshots, and watch apps. These are phases 7 and 8, and nothing in phase 1 calls them.
+- **Bell:** it ducks music for a moment and never stops it.
 - **Type:**
   - Display: Barlow Condensed 600, 700 and 800.
   - Body: Inter 400, 500 and 600.
@@ -68,6 +94,45 @@
 5. **Day boundaries.** A workout started at 23:50 belongs to its start date. A streak survives a DST change.
    - Task 2 tests `daysBetween` across DST.
    - Task 8 tests a late-night `local_date`.
+
+### Review Focus — revision 2026-10-09
+
+6. **A failed migration or a missing database file with snapshots present.** The user's finished workouts come back from the newest snapshot. The failed file is kept, and the app never opens empty.
+   - Task 12D tests 5–8.
+7. **The previous column showing the wrong set.** A warmup must not appear as the previous working set. Set n matches set n of the same type, even after unticked sets left gaps. The cell is empty when there is nothing to match.
+   - Task 12B `matchPrevious` tests; Task 14 uses it.
+8. **A note edited after finishing.** The finished workout keeps the note it was saved with. A replaced exercise saves its own note.
+   - Task 12C tests.
+9. **The bell with music playing, or with the ringer on silent.** In the app, the bell plays and ducks the music without stopping it. On a locked phone, the notification follows the phone's own sound settings.
+   - Task 15 Step 4; phone check in Task 17.
+10. **Phone text at its largest.** GYMHOUND stays fixed and on one line beside the hound, while other text grows.
+    - Task 12A; phone check in Task 17.
+
+## As built (Tasks 1–12): read before Task 12A
+
+Where the rulings changed an interface from the original task text, the code is the truth. The changes:
+
+- **Positions** are 0-based everywhere: routine days and exercises, workout exercises, and sets.
+- **Ticking:**
+  - The signature is `tickSet(db, setId, v: TickValues, unit: WeightUnit, now: number, distanceUnit: DistanceUnit)`. It stores `weight_unit` only with a weight, and `distance_unit` only with a distance.
+  - `placeholdersFor({ previous, ruleRepMax, loggingType?, unit? })` converts a previous weight into `unit`. For timed sets, `ruleRepMax` feeds `durationS`.
+  - `resolveTick` returns only the fields its logging type uses.
+  - `TickInput.target` must already be in the entry unit.
+- **Editing a workout:**
+  - `replaceExercise` clears the rule snapshot, the planned and override weights, and the routine link.
+  - `moveExercise` moves a superset as one block.
+  - `finishWorkout` and `discardWorkout` throw a plain `Error` when the workout is missing or not active.
+- **App shell:**
+  - `src/ui/Footer.tsx` was built in Task 11. `app/index.tsx` was deleted in Task 12, and `(tabs)/index.tsx` owns `/`.
+  - Tabs come from `expo-router/js-tabs`, with `backBehavior="history"`. The only hidden tab is `settings` until Task 13 adds `routines/index`.
+  - The root Stack has no explicit screens yet. Each task registers the routes it creates.
+- **Database:**
+  - The app opens the database with `openAppDbAsync()` (a web warm-up, then `openAppDb()`).
+  - On web, sync SQLite calls time out after about 33 ms, and sync results are capped at 1 MiB.
+  - The expo-sqlite web fix is `patches/expo-sqlite+57.0.4.patch`, and `.gitattributes` keeps patches byte-exact.
+- **`useDbQuery(query)`:** pass stable, module-level query functions. It skips the first focus after mount.
+- **Browser checks from subagents:** `preview_start` cannot find `launch.json`. Run `npm run web` in the background, navigate the browser pane to `http://localhost:8081/`, and use one tab per origin.
+- **Commits:** the trailer is `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ---
 
@@ -118,6 +183,16 @@ src/ui/session/ExerciseBlock.tsx, SetRow.tsx, RestBar.tsx, ExerciseMenu.tsx
 assets/brand/hound-head.png        master hound cut from the GruntHound logo (exists)
 assets/brand/mark{,@2x,@3x}.png    40/80/120px header exports (exist)
 assets/brand/mark-dark{,@2x,@3x}.png  same, with the #2f8cff outline for dark (exist)
+
+Added by the 2026-10-09 revision:
+src/db/snapshots.ts                snapshot names, write/prune, startDatabase (restore order)
+src/db/testing/openFileDb.ts       better-sqlite3 file DB without migrating (tests)
+src/db/testing/nodeSnapshotFiles.ts  SnapshotFiles over Node fs (tests)
+src/platform/snapshots/index.ts, expoSnapshotFiles.ts   SnapshotFiles on the phone; null on web
+src/state/backup.ts                takeSnapshotSafely, shareFile
+src/platform/restTimer/bell.ts     playBell (expo-audio, ducks other audio)
+scripts/make-bells.mjs             writes assets/sounds/{bell,chime,ding}.wav
+src/db/migrations/0001_*.sql       workout_exercises.note
 ```
 
 ---
@@ -1011,6 +1086,274 @@ expect(resolveScheme('system', null)).toBe('light');
 
 ---
 
+### Task 12A: GYMHOUND keeps a fixed size
+
+**Files:**
+- Modify: `src/ui/Header.tsx` (the wordmark), and `src/ui/Text.tsx` only if `Display` does not already forward `allowFontScaling`.
+
+**Interfaces:** none new.
+
+- [ ] **Step 1: Pin the wordmark size.** The GYMHOUND `Display` gets `allowFontScaling={false}`. No other text in the app sets `allowFontScaling` or `maxFontSizeMultiplier`, so everything else still follows the phone's text size.
+- [ ] **Step 2: Verify.**
+  - `git grep -n "allowFontScaling" -- src app` shows exactly one hit, on the wordmark.
+  - `npm run typecheck` and `npm test` are green.
+  - The phone check, with system text at its largest, is in Task 17.
+- [ ] **Step 3: Commit.** `git commit -m "fix(ui): GYMHOUND keeps a fixed size when phone text is enlarged"`
+
+---
+
+### Task 12B: Domain — weight and time, and the previous result per set
+
+**Files:**
+- Modify: `src/domain/types.ts`, `src/domain/setEntry.ts`
+- Test: `src/domain/setEntry.test.ts`, `src/domain/volume.test.ts`
+
+**Interfaces:**
+- Consumes: `PrevSet`, `placeholdersFor`, `resolveTick` and `formatPrevious` as built (see "As built"); `convertWeight`.
+- Produces:
+  - `LoggingType` gains `'weighted_time'`.
+  - `type BellSound = 'bell' | 'chime' | 'ding'` in `types.ts` (Task 12C and Task 15 use it).
+  - `matchPrevious(current: ReadonlyArray<{ setType: SetType }>, previous: ReadonlyArray<PrevSet>): (PrevSet | null)[]`
+    - It matches each current set to the previous set with the same type and the same number within that type.
+    - Numbers count in position order.
+    - No match gives `null`.
+  - `formatPrevious(p: PrevSet | null, loggingType: LoggingType, displayUnit: WeightUnit): string`
+    - It now accepts `null`.
+    - It returns `''` when `p` is null or lacks a value its type needs. It never returns "—".
+  - `placeholdersFor` and `resolveTick` handle `weighted_time`: weight and durationS are used, reps and distance are null, and both weight and durationS are required to tick.
+
+- [ ] **Step 1: Write the failing tests.** Add the new tests. Then replace the old `formatPrevious` expectations (`'185×12'`, `'84 kg×12'`, `'+25×8'`, `'−40×8'`, `'45 s'`, and any `'—'`) with the spec §8.4 formats below.
+
+```ts
+const P = (position: number, setType: SetType, weight: number | null, reps: number | null, extra: Partial<PrevSet> = {}): PrevSet =>
+  ({ position, setType, weight, weightUnit: 'lb', reps, durationS: null, distance: null, distanceUnit: null, ...extra });
+const none = { weight: null, reps: null, durationS: null, distance: null };
+
+// matchPrevious — Review Focus 7
+const last = [P(0, 'warmup', 95, 10), P(1, 'working', 185, 5), P(2, 'working', 185, 4), P(3, 'failure', 185, 2)];
+expect(matchPrevious([{ setType: 'warmup' }, { setType: 'working' }, { setType: 'working' }, { setType: 'working' }], last))
+  .toEqual([last[0], last[1], last[2], null]);
+expect(matchPrevious([{ setType: 'working' }, { setType: 'working' }], last)).toEqual([last[1], last[2]]); // a warmup is never the previous working set
+expect(matchPrevious([{ setType: 'failure' }, { setType: 'drop' }], last)).toEqual([last[3], null]);
+expect(matchPrevious([{ setType: 'working' }], [])).toEqual([null]);
+const gaps = [P(2, 'working', 185, 5), P(0, 'working', 180, 6)];               // unsorted, with a gap left by a dropped unticked set
+expect(matchPrevious([{ setType: 'working' }, { setType: 'working' }], gaps)).toEqual([gaps[1], gaps[0]]);
+
+// formatPrevious — spec §8.4
+expect(formatPrevious(P(1, 'working', 185, 5), 'weighted', 'lb')).toBe('185 × 5');
+expect(formatPrevious(P(1, 'working', 84, 12, { weightUnit: 'kg' }), 'weighted', 'lb')).toBe('84 kg × 12');
+expect(formatPrevious(P(1, 'working', 25, 8), 'bodyweight_plus', 'lb')).toBe('+25 × 8');
+expect(formatPrevious(P(1, 'working', 40, 8), 'assisted', 'lb')).toBe('−40 × 8');
+expect(formatPrevious(P(1, 'working', 70, null, { durationS: 40 }), 'weighted_time', 'lb')).toBe('70 lb × 40s');
+expect(formatPrevious(P(1, 'working', 32, null, { weightUnit: 'kg', durationS: 75 }), 'weighted_time', 'lb')).toBe('32 kg × 1:15');
+expect(formatPrevious(P(1, 'working', null, null, { durationS: 40 }), 'timed', 'lb')).toBe('40s');
+expect(formatPrevious(P(1, 'working', null, null, { durationS: 59 }), 'timed', 'lb')).toBe('59s');
+expect(formatPrevious(P(1, 'working', null, null, { durationS: 90 }), 'timed', 'lb')).toBe('1:30');
+expect(formatPrevious(P(1, 'working', null, null, { distance: 2, distanceUnit: 'km', durationS: 750 }), 'distance_time', 'lb')).toBe('2 km · 12:30');
+expect(formatPrevious(null, 'weighted', 'lb')).toBe('');
+expect(formatPrevious(P(1, 'working', null, null), 'weighted', 'lb')).toBe('');          // never invent a number
+
+// weight and time entry
+expect(placeholdersFor({ previous: P(1, 'working', 70, null, { durationS: 40 }), ruleRepMax: 60, loggingType: 'weighted_time', unit: 'lb' }))
+  .toEqual({ weight: 70, reps: null, durationS: 40, distance: null });
+expect(placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'weighted_time', unit: 'lb' }))
+  .toEqual({ weight: null, reps: null, durationS: 60, distance: null });
+expect(resolveTick({ loggingType: 'weighted_time', entered: { ...none, weight: 90 }, target: null, placeholders: { ...none, durationS: 60 } }))
+  .toEqual({ weight: 90, reps: null, durationS: 60, distance: null });
+expect(resolveTick({ loggingType: 'weighted_time', entered: none, target: null, placeholders: { ...none, durationS: 60 } })).toBeNull();
+
+// volume.test.ts: weight-and-time adds nothing
+expect(totalVolume([s({ loggingType: 'weighted_time', reps: null })], 'kg')).toBe(0);
+```
+
+- [ ] **Step 2: Run the tests.** `npx jest src/domain` → FAIL. The new cases fail, and the old format assertions fail once replaced.
+- [ ] **Step 3: Implement.**
+  - **Duration formatting:** under 60 seconds is `{s}s`; from 60 seconds it is `m:ss`.
+  - **Units:** weight-and-time always shows its unit. Other weights show a unit only when it differs from `displayUnit`.
+  - **Separator:** ` × ` is U+00D7 with spaces.
+  - **Exhaustive switches:** every `switch` on `LoggingType` stays exhaustive, so typecheck finds any missed case.
+- [ ] **Step 4: Run the tests.** `npx jest src/domain` → PASS. `npm test` and `npm run typecheck` → green. Also update `src/db/repositories/workoutsRepo.test.ts` if it asserts an old format string.
+- [ ] **Step 5: Commit.** `git commit -m "feat(domain): weight-and-time sets; previous result matched per set"`
+
+---
+
+### Task 12C: Database — the note saved at finish, bell and snapshot settings, Up next guards
+
+**Files:**
+- Modify: `src/db/schema.ts`, `src/db/repositories/workoutsRepo.ts`, `src/db/repositories/settingsRepo.ts`
+- Create: `src/db/migrations/0001_*.sql` and its meta files (generated)
+- Test: `src/db/schema.test.ts`, `src/db/repositories/workoutsRepo.test.ts`, `src/db/repositories/settingsRepo.test.ts`
+
+**Interfaces:**
+- Consumes: `BellSound` (Task 12B); `setExerciseNote`, `getExerciseNote`, `replaceExercise`, `addExerciseToWorkout` (Task 9); `setActiveRoutine`, `getUpNext` (Task 7).
+- Produces:
+  - `workoutExercises.note` (SQL `note`, text, nullable).
+  - `Settings` gains three fields, which `ensureSettings` adds for existing installs without touching other keys:
+    - `restBell: boolean` (key `rest_bell`, default `true`)
+    - `restBellSound: BellSound` (key `rest_bell_sound`, default `'bell'`)
+    - `lastSnapshotAt: number | null` (key `last_snapshot_at`, default `null`)
+  - `finishWorkout` also does two things inside its transaction:
+    - It copies each remaining exercise's current `exercise_notes.text` into `workout_exercises.note` (null when the exercise has no note).
+    - It sets `workouts.rest_ends_at` to null.
+
+- [ ] **Step 1: Write the failing tests.**
+
+```ts
+// schema.test.ts
+it('migration 0001 adds workout_exercises.note', () => {
+  const { db } = createTestDb();
+  const cols = db.all<{ name: string }>(sql`pragma table_info(workout_exercises)`).map((c) => c.name);
+  expect(cols).toContain('note');
+});
+
+// workoutsRepo.test.ts — Review Focus 8
+it('saves the note with the finished workout and keeps it after later edits', () => {
+  // setExerciseNote(bench, 'Elbows in'); start PUSH_A; tick bench set 0; finish
+  // setExerciseNote(bench, 'Wrists straight')
+  // raw finished workout_exercises row for bench: note === 'Elbows in'
+  // getExerciseNote(db, 'barbell-bench-press') === 'Wrists straight'
+});
+it('saves null for an exercise with no note');
+it('a replaced exercise saves its own note, not the old one', () => {
+  // note on barbell-bench-press 'Elbows in', note on dumbbell-bench-press 'Neutral grip'
+  // start PUSH_A; replaceExercise(bench row → 'dumbbell-bench-press'); tick; finish → that row's note === 'Neutral grip'
+});
+it('clears rest_ends_at on finish');
+it('an empty workout never moves Up next', () => {
+  // setActiveRoutine('premade-ppl-6'); startEmptyWorkout; addExerciseToWorkout('barbell-bench-press'); tick; finish
+  // getUpNext(db)!.dayName === 'Push A' and next_day_index === 0
+});
+// The discard and refused-finish guards already exist from Task 8. Keep them, and group all three under describe('Up next only advances on a finished day').
+
+// settingsRepo.test.ts
+expect(getSettings(db)).toMatchObject({ restBell: true, restBellSound: 'bell', lastSnapshotAt: null });
+// A DB whose settings rows predate these keys gets them from ensureSettings, and its stored theme is unchanged.
+```
+
+- [ ] **Step 2: Run the tests.** `npx jest src/db` → FAIL.
+- [ ] **Step 3: Implement.**
+  - Add the column to `schema.ts`, then run `npm run db:generate`. Expected output: `0001_*.sql` containing `ALTER TABLE \`workout_exercises\` ADD \`note\` text;` plus the meta and `migrations.js` updates.
+  - Extend `finishWorkout` and `settingsRepo` to the interfaces above.
+- [ ] **Step 4: Run the tests.** `npx jest src/db` → PASS. `npm test` and `npm run typecheck` → green.
+- [ ] **Step 5: Commit.** `git commit -m "feat(db): save the note with each finished workout; bell and snapshot settings"`
+
+---
+
+### Task 12D: Snapshots and restore — the core
+
+**Files:**
+- Create: `src/db/snapshots.ts`, `src/db/testing/nodeSnapshotFiles.ts`, `src/db/testing/openFileDb.ts`
+- Test: `src/db/snapshots.test.ts`
+
+**Interfaces:**
+- Consumes: `Db`, `createTestDb` (Task 5); `startWorkoutFromDay`, `tickSet`, `finishWorkout` (Task 8); `seededDb`-style setup on a file database.
+- Produces (all in `src/db/snapshots.ts`):
+
+```ts
+export interface SnapshotFiles {
+  list(): string[];                  // file names in the snapshot folder
+  pathFor(name: string): string;     // absolute path, no file:// prefix (used by VACUUM INTO)
+  remove(name: string): void;
+  liveIsMissingOrEmpty(): boolean;   // live DB file absent or 0 bytes
+  setAsideLive(tag: string): string; // renames the live file to `gymhound.${tag}.db`, returns that name; never deletes
+  copyToLive(name: string): void;    // copies a snapshot over the live DB path
+}
+export const KEEP_SNAPSHOTS = 7;
+export function snapshotName(now: number): string;      // `gymhound-YYYYMMDD-HHmmss-SSS.db`, UTC
+export function snapshotTime(name: string): number;     // inverse of snapshotName (epoch ms)
+export function newestSnapshot(names: string[]): string | null;
+export function snapshotsToPrune(names: string[], keep?: number): string[];
+export function writeSnapshot(db: Db, files: SnapshotFiles, now: number): string; // VACUUM INTO, then prune; returns the name
+export type StartupDeps = {
+  files: SnapshotFiles;
+  open(): Db;
+  close(db: Db): void;
+  migrate(db: Db): Promise<void> | void;
+  now: number;
+};
+export type StartupResult =
+  | { kind: 'ok'; db: Db; restoredFrom: string | null }
+  | { kind: 'failed'; error: Error; newestSnapshot: string | null; setAside: string | null };
+export function startDatabase(deps: StartupDeps): Promise<StartupResult>;
+```
+
+- Only names matching `/^gymhound-\d{8}-\d{6}-\d{3}\.db$/` count as snapshots. Other files are never listed, pruned or restored.
+- `src/db/testing/openFileDb.ts` exports `openFileDb(file: string): { db: Db; close(): void }`. It opens better-sqlite3 with `foreign_keys = ON` and does not migrate.
+- `src/db/testing/nodeSnapshotFiles.ts` exports `nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles`, backed by Node `fs`, with snapshots kept in `${dir}/snapshots`.
+
+- [ ] **Step 1: Write the failing tests** (`/** @jest-environment node */`, each in a fresh temp dir that is removed afterwards). Review Focus 6:
+  1. `writeSnapshot` writes a file that opens with `openFileDb` and contains the one finished workout.
+  2. Nine snapshots at increasing `now` leave 7: the newest 7, by name.
+  3. `snapshotName(t1) < snapshotName(t2)` for `t1 < t2`. `snapshotTime(snapshotName(t)) === t`. `newestSnapshot` ignores `gymhound.failed-x.db` and `notes.txt`.
+  4. **Fresh install** (no live file, no snapshots): `ok`, with `restoredFrom` null.
+  5. **Live file missing, snapshot present:** `ok`, with `restoredFrom` set to the newest, and the finished workout is present. The app never starts empty.
+  6. **Migration fails once, with a snapshot:**
+     - The result is `ok`, with `restoredFrom` set to the newest, and the finished workout is present.
+     - The set-aside file `gymhound.failed-*.db` exists with the original bytes.
+  7. **Migration always fails, with a snapshot:**
+     - The result is `failed`, with both `newestSnapshot` and `setAside` set.
+     - The set-aside file still exists, and no file was deleted.
+  8. **Migration fails with no snapshot:** `failed`, with `setAside` null. The live file is byte-identical to before.
+- [ ] **Step 2: Run the tests.** `npx jest src/db/snapshots` → FAIL.
+- [ ] **Step 3: Implement.**
+  - **`writeSnapshot`** runs `VACUUM INTO '<path>'`, with single quotes doubled, outside any transaction. It then removes `snapshotsToPrune(list())`.
+  - **`startDatabase`** follows exactly this order:
+
+```
+newest = newestSnapshot(files.list()); restoredFrom = null
+if files.liveIsMissingOrEmpty() and newest: files.copyToLive(newest); restoredFrom = newest
+db = open(); try { await migrate(db); return ok(db, restoredFrom) }
+catch first: close(db)
+  if !newest: return failed(first, null, null)
+  setAside = files.setAsideLive(`failed-${stamp(now)}`); files.copyToLive(newest); db = open()
+  try { await migrate(db); return ok(db, newest) } catch second: close(db); return failed(second, newest, setAside)
+```
+
+- [ ] **Step 4: Run the tests.** `npx jest src/db/snapshots` → PASS. `npm test` and `npm run typecheck` → green.
+- [ ] **Step 5: Commit.** `git commit -m "feat(db): snapshots after finish and restore on a failed migration"`
+
+---
+
+### Task 12E: The app uses snapshots — startup restore, export, Backups row
+
+**Files:**
+- Create: `src/platform/snapshots/index.ts`, `src/platform/snapshots/expoSnapshotFiles.ts`, `src/state/backup.ts`
+- Modify: `app/_layout.tsx`, `src/db/client.ts`, `app/(tabs)/settings.tsx`, `package.json` / `package-lock.json` (new dependencies)
+
+**Interfaces:**
+- Consumes: everything in Task 12D; `getSettings` / `setSetting` (`lastSnapshotAt`); `ConfirmSheet` / `Sheet` / `Button`.
+- Produces:
+  - `getSnapshotFiles(): SnapshotFiles | null`. It returns null on web, where snapshots never run.
+  - `expoSnapshotFiles(): SnapshotFiles`:
+    - the live file is `gymhound.db` in expo-sqlite's `defaultDatabaseDirectory`;
+    - snapshots live in a `snapshots` folder in the app's documents directory;
+    - paths carry no `file://`.
+  - `closeAppDb(): void` and `liveDbPath(): string` in `client.ts`. `openAppDb()` stays a singleton that can be reopened after `closeAppDb()`.
+  - `takeSnapshotSafely(db: Db, now: number): boolean` in `src/state/backup.ts`:
+    - It writes a snapshot when `getSnapshotFiles()` is non-null and sets `lastSnapshotAt`.
+    - On any error it logs and returns false. It never throws.
+  - `shareFile(path: string): Promise<void>` in `src/state/backup.ts`, using `expo-sharing`.
+
+- [ ] **Step 1: Add dependencies** using the shadow procedure in environment.md: `npx expo install expo-file-system expo-sharing` in `C:\Users\eddie\.gymhound`, then copy the manifests back.
+- [ ] **Step 2: Wire startup** in `app/_layout.tsx`.
+  - **Native:** `startDatabase({ files: expoSnapshotFiles(), open: openAppDb, close: closeAppDb, migrate: (db) => migrate(db, migrations), now: Date.now() })`, with `migrate` from `drizzle-orm/expo-sqlite/migrator`. Then `ensureSettings` and `runSeed` run as before.
+  - **Web:** keeps the current path through `openAppDbAsync()`. It never restores.
+  - **`ok` with `restoredFrom`:** show a `Sheet` once, with "GymHound restored your data from {date and time of the snapshot, local}. A workout that was in progress may be missing." and **OK**.
+  - **`failed`:** keep the existing error screen text.
+    - Add **Export my data**, which shares the newest snapshot. It is shown only when there is one.
+    - Add **Export the file that failed**, which shares the set-aside file. It is shown only when there is one.
+- [ ] **Step 3: Add a Backups section to Settings**, below Appearance.
+  - It reads "Last snapshot: {local date and time}" or "No snapshot yet." On web it reads "Backups run in the phone app."
+  - **Share latest snapshot** (secondary) is shown when a snapshot exists.
+- [ ] **Step 4: Verify.**
+  - `npm run typecheck` and `npm test` are green.
+  - **Web:** the app boots, and Settings shows the web line. Use `npm run web` in the background and one browser tab.
+  - **iOS bundle:** `npx expo export --platform ios --output-dir <temp>` compiles offline. Delete the output.
+  - The phone checks are in Task 17.
+- [ ] **Step 5: Commit.** `git commit -m "feat(app): restore from snapshot at startup; export and Backups in Settings"`
+
+---
+
 ### Task 13: Train screen and minimal Routines list
 
 **Files:**
@@ -1039,7 +1382,7 @@ expect(resolveScheme('system', null)).toBe('light');
   5. **Up next card,** only when no workout is active.
      - Title "{routineName} · {dayName}".
      - "Last time: {formatTrainDate(fromLocalDate(lastTime.localDate), locale)} · {mark label}", or "First time on this day."
-     - One row per exercise: name, "{setCount}×{repMin}–{repMax}" ("{setCount}×{repMin}" when min = max, and "s" appended for timed), and today's load (`formatWeight(nextWeight)` or "pick a weight").
+     - One row per exercise: name, "{setCount}×{repMin}–{repMax}" ("{setCount}×{repMin}" when min = max, and "s" appended for timed and weight-and-time), and today's load (`formatWeight(nextWeight)` or "pick a weight").
      - A primary **Start this** button.
      - With no active routine, the card reads "Pick a routine to see what's up next." with a **Routines** button.
   - The mark labels are: Normal, Rough sleep, Short on food, Pain, Cutting.
@@ -1057,22 +1400,25 @@ expect(resolveScheme('system', null)).toBe('light');
 
 ---
 
-### Task 14: Session screen — blocks, set rows, ticks, set types, notes
+### Task 14: Session screen — blocks, set rows, the previous result, ticks, set types, notes
 
 **Files:**
 - Create: `app/session.tsx`, `src/ui/session/ExerciseBlock.tsx`, `src/ui/session/SetRow.tsx`
-- Modify: `src/state/sessionActions.ts`
+- Modify: `src/state/sessionActions.ts`, `app/_layout.tsx` (register `session` in the root Stack as `fullScreenModal`, `gestureEnabled: false`)
 
 **Interfaces:**
 - Consumes:
   - `getActiveWorkoutView` and `ActiveWorkoutView` (Task 8)
-  - `tickSet`, `untickSet` (Task 8)
+  - `tickSet` with `distanceUnit`, and `untickSet` (Task 8, as built)
   - `updateSet`, `addSet`, `removeSet`, `setExerciseNote` (Task 9)
-  - `setLabels`, `placeholdersFor`, `resolveTick`, `formatPrevious` (Task 4)
+  - `setLabels`, `placeholdersFor`, `resolveTick` (Task 4, as built)
+  - `matchPrevious` and `formatPrevious` (Task 12B)
+  - `convertWeight` (Task 2)
   - `parseDecimal`, `parseReps`, `parseDuration`, `parseRpe` (Task 2)
+  - `getSettings` (`unit`, `distanceUnit`)
 - Produces, in `sessionActions.ts`:
   - `commitSetField(db: Db, setId: string, patch: SetPatch): void`
-  - `tick(db: Db, ex: WorkoutExerciseView, set: SetView, entered: TickValues): boolean` returns false when `resolveTick` returns null.
+  - `tick(db: Db, ex: WorkoutExerciseView, set: SetView, entered: TickValues): boolean`. It returns false when `resolveTick` returns null. It calls `tickSet(db, set.id, values, settings.unit, now, settings.distanceUnit)`.
   - `untick(db: Db, setId: string): void`
   - `addSetTo(db: Db, workoutExerciseId: string): void`
   - `removeSetFrom(db: Db, setId: string): void`
@@ -1085,54 +1431,73 @@ expect(resolveScheme('system', null)).toBe('light');
   - The running clock, `formatElapsed(now - startedAt)`, updated every second.
 - [ ] **Step 2: Build `ExerciseBlock`.**
   - The name (Barlow Condensed 700, 22px) and a ⋯ button (wired in Task 15).
-  - The note as an inline `TextInput` with the placeholder "Add a note for next time", saved on blur.
-  - **Set table header:** SET, PREVIOUS, the load column, REPS, ✓, plus an RPE column when `showRpe`.
-    - The load column reads `unit.toUpperCase()` for weighted, "+LB" or "+KG" for bodyweight plus, "−LB" or "−KG" for assisted, and "TIME" for timed.
-    - Distance and time exercises show "DIST" and "TIME".
+  - The note as an inline `TextInput` with the placeholder "Add a note for next time", saved on blur. It is the exercise's own note (`ex.note`), so it is already there wherever the exercise appears.
+  - **Set table header:** SET, PREVIOUS, the input columns, ✓, plus RPE when `showRpe`. The input columns depend on the logging type:
+
+| logging type | inputs | headers |
+|---|---|---|
+| weighted | load, reps | `LB` or `KG`, REPS |
+| bodyweight_plus | load, reps | `+LB` or `+KG`, REPS |
+| assisted | load, reps | `−LB` or `−KG`, REPS |
+| weighted_time | load, time | `LB` or `KG`, TIME |
+| timed | time | TIME |
+| distance_time | distance, time | DIST, TIME |
+
   - "+ Add set" at the bottom.
 - [ ] **Step 3: Build `SetRow`.**
+  - **The previous result** (spec §8.4). Review Focus 7 applies.
+    - The block computes `const matched = matchPrevious(ex.sets, ex.previous)` once.
+    - Row i shows `formatPrevious(matched[i], ex.loggingType, settings.unit)` in its own PREVIOUS column, beside the inputs, in `textMuted`.
+    - An empty string renders as an empty cell. Nothing is ever shown above the exercise or behind a tap.
+  - **Placeholders:** `placeholdersFor({ previous: matched[i], ruleRepMax: ex.rule?.repMax ?? null, loggingType: ex.loggingType, unit: settings.unit })`.
+  - **Target:** `overrideWeight ?? plannedWeight`, converted to `settings.unit` with `convertWeight` before it is shown or passed to `resolveTick`, because `TickInput.target` must be in the entry unit.
   - **Columns:**
     - The label from `setLabels`. Tapping it opens a `Sheet` with Working, Warmup, Drop and Failure, which calls `commitSetField({ setType })`.
-    - Previous, from `formatPrevious` (empty when there is none).
-    - The load input. Its value is `set.weight ?? target`, where target is `overrideWeight ?? plannedWeight`, shown in normal text. When both are null, the input shows `placeholders.weight` in `textMuted`.
-    - The reps input, whose placeholder is `placeholders.reps`, in `textMuted`.
+    - Previous.
+    - The inputs, per the table in Step 2.
     - The tick.
-  - **Inputs by logging type:**
-    - weighted, bodyweight plus and assisted: load and reps.
-    - timed: one TIME input, parsed with `parseDuration`, with the placeholder `placeholders.durationS`.
-    - distance and time: DIST (`parseDecimal`, stored with `settings.distanceUnit`) and TIME.
-    - RPE, when shown: parsed with `parseRpe`.
-  - Inputs keep local text and parse on blur. Invalid text gets a `textMuted` underline (red is reserved) with the hint "Check this number", and the tick is disabled. A valid value is committed with `commitSetField`.
-  - **The tick** runs `tick()`. A done row gets the `surfaceRaised` background and a filled check in `text`, plus a light haptic (`Haptics.impactAsync(Light)`). Tapping a done tick unticks.
+  - **The load input:** its value is `set.weight ?? target` in normal text. When both are null, it shows `placeholders.weight` in `textMuted`.
+  - **Reps or time inputs:** their placeholders are `placeholders.reps` or `placeholders.durationS` (formatted as "40s" or "1:30"), in `textMuted`.
+  - **Parsing:** `parseDecimal` for load and distance (distance is stored with `settings.distanceUnit`), `parseReps`, `parseDuration` for time, and `parseRpe`.
+    - Inputs keep local text and parse on blur.
+    - **Blank text is "no value" and never an error.**
+    - Only non-blank text that fails to parse is invalid. It gets a `textMuted` underline (red is reserved) with the hint "Check this number", and the tick is disabled.
+    - A valid value is committed with `commitSetField`.
+  - **The tick** runs `tick()`.
+    - A done row gets the `surfaceRaised` background and a filled check in `text`, plus a light haptic (`Haptics.impactAsync(Light)`).
+    - Tapping a done tick unticks.
   - **Long-press a row** to open a `Sheet` with "Remove set" and "Cancel".
-  - **Units:** weights are written in `settings.unit`. When the target is in a different unit, convert it for display with `convertWeight`.
-- [ ] **Step 4: Verify in the browser pane.**
-  - Start Push A. The block shows 4 bench rows.
+  - **Font scaling:** all session text follows the phone's text size. Only the GYMHOUND wordmark is fixed.
+- [ ] **Step 4: Verify in the browser pane.** Use `npm run web` in the background and one browser tab.
+  - Start Push A. The block shows 4 bench rows with an empty PREVIOUS column.
   - Type 135 and 8, then tick. The row turns done.
   - Change set 1 to Warmup. The labels read W, 1, 2, 3.
   - Add a set, then long-press it and remove it.
-  - Write a note, go back to Train, and confirm Resume shows the name, time and "1 sets done".
-  - Resume, and the note and values are still there.
-- [ ] **Step 5: Commit.** `git commit -m "feat(session): exercise blocks, set rows, ticks, set types, notes"`
+  - Write a note, go back to Train, and confirm Resume shows the name, time and "1 sets done". Resume, and the note and values are still there.
+  - Clear a filled input to blank. No error hint appears.
+- [ ] **Step 5: Commit.** `git commit -m "feat(session): exercise blocks, set rows with last result, ticks, set types, notes"`
 
 ---
 
-### Task 15: Session — exercise picker, ⋯ menu, rest timer
+### Task 15: Session — exercise picker, ⋯ menu, rest timer and bell
 
 **Files:**
-- Create: `app/pick-exercise.tsx`, `src/ui/session/ExerciseMenu.tsx`, `src/ui/session/RestBar.tsx`, `src/platform/restTimer/index.ts`, `src/platform/restTimer/expoGoNotification.ts`
-- Modify: `src/state/sessionActions.ts`, `app/session.tsx`
+- Create: `app/pick-exercise.tsx`, `src/ui/session/ExerciseMenu.tsx`, `src/ui/session/RestBar.tsx`, `src/platform/restTimer/index.ts`, `src/platform/restTimer/expoGoNotification.ts`, `src/platform/restTimer/bell.ts`, `scripts/make-bells.mjs`, `assets/sounds/bell.wav`, `assets/sounds/chime.wav`, `assets/sounds/ding.wav`
+- Modify: `src/state/sessionActions.ts`, `app/session.tsx`, `app/_layout.tsx` (register `pick-exercise` as `modal`), `app/(tabs)/settings.tsx` (Rest timer section), `package.json` / `package-lock.json`
 
 **Interfaces:**
 - Consumes:
   - `listExercises` (Task 9) and `searchExercises` (Task 4)
-  - `addExerciseToWorkout`, `replaceExercise`, `removeExercise`, `moveExercise`, `toggleSupersetWithNext`, `setShowRpe` (Task 9)
+  - `addExerciseToWorkout`, `replaceExercise`, `removeExercise`, `moveExercise` (blocks), `toggleSupersetWithNext`, `setShowRpe` (Task 9, as built)
   - `setRestEndsAt` (Task 8)
   - `restRemainingSeconds`, `minus15`, `shouldStartRestAfterTick` (Task 4)
   - `formatRest` (Task 2)
+  - `getSettings` (`restSeconds`, `restBell`, `restBellSound`) and `setSetting` (Task 12C)
+  - `BellSound` (Task 12B)
 - Produces:
-  - `interface RestTimerSurface { start(endsAt: number): Promise<void>; update(endsAt: number): Promise<void>; cancel(): Promise<void> }`
-  - `getRestTimerSurface(): RestTimerSurface` returns a no-op on web and `expoGoNotification` elsewhere.
+  - `interface RestTimerSurface { start(endsAt: number, withSound: boolean): Promise<void>; update(endsAt: number, withSound: boolean): Promise<void>; cancel(): Promise<void> }`
+  - `getRestTimerSurface(): RestTimerSurface`, which is a no-op on web and `expoGoNotification` elsewhere.
+  - `playBell(sound: BellSound): Promise<void>` in `bell.ts`.
   - Session actions:
     - `restMinus15(db: Db, workoutId: string, endsAt: number): void`
     - `restSkip(db: Db, workoutId: string): void`
@@ -1147,52 +1512,85 @@ expect(resolveScheme('system', null)).toBe('light');
 - [ ] **Step 2: Build the ⋯ menu** as a `Sheet` with these items:
   - "Show RPE" or "Hide RPE".
   - "Superset with next" or "Remove from superset". This item is hidden on the last exercise.
-  - "Reorder" opens a sheet listing the exercises with ↑ and ↓ buttons that call `moveExercise`.
-  - "Replace" opens the picker with `mode=replace`.
+  - "Reorder" opens a sheet listing the exercises with ↑ and ↓ buttons that call `moveExercise`. A superset moves as one block.
+  - "Replace" opens the picker with `mode=replace`. The replacement shows its own note.
   - "Remove". If the exercise has done sets, a `ConfirmSheet` asks "Remove {name}?" with the body "Its sets will be deleted.", and the buttons **Remove** and **Keep**.
   - **Superset display:** members of a superset show a 3px `text`-coloured bar on their left edge.
-- [ ] **Step 3: Add the rest surface (`expoGoNotification`).**
+- [ ] **Step 3: Make the bells.**
+  - `scripts/make-bells.mjs` (Node, no dependencies) writes three 16-bit PCM, 44.1 kHz, mono WAV files to `assets/sounds/`. Each has a peak of −3 dBFS, no clipping, and an exponential decay to silence.
+
+| file | sound | length |
+|---|---|---|
+| `bell.wav` | 880 Hz plus a 2,640 Hz partial at a third of the amplitude | 1.0 s |
+| `chime.wav` | 1,047, 1,319 and 1,568 Hz, starting 80 ms apart | 1.1 s |
+| `ding.wav` | 1,320 Hz | 0.5 s |
+
+  - Run it once and commit both the script and the three files.
+- [ ] **Step 4: Add the bell player.**
+  - Install `expo-audio` with the shadow procedure (`npx expo install expo-audio` in `C:\Users\eddie\.gymhound`).
+  - `bell.ts` sets the audio mode so the bell **ducks** other audio and never stops it (expo-audio's `interruptionMode: 'duckOthers'`), and plays even with the ringer switch on silent (`playsInSilentMode: true`).
+  - It plays the chosen file through `expo-audio`. Bell failures are logged and swallowed.
+  - On web, `playBell` uses the same files through `expo-audio`'s web support, or is a no-op if that fails.
+- [ ] **Step 5: Add the rest surface (`expoGoNotification`).**
   - At module load, call `setNotificationHandler`, returning `{ shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }`, so the notification only appears when the app is in the background.
-  - **`start`:**
+  - **`start(endsAt, withSound)`:**
     1. Check permissions. If the status is undetermined and it can ask again, request permission.
     2. If permission isn't granted, resolve and do nothing.
-    3. Otherwise schedule `{ title: "Rest's up.", sound: true }` with `{ type: SchedulableTriggerInputTypes.DATE, date: endsAt }`, and keep the id.
+    3. Otherwise schedule `{ title: "Rest's up.", sound: withSound }` with `{ type: SchedulableTriggerInputTypes.DATE, date: endsAt }`, and keep the id.
+       - In Expo Go `sound: true` is the system sound.
+       - The chosen bell on the lock screen is phase 7.
+       - The phone's own settings decide vibration.
   - **`update`:** cancel, then start.
   - **`cancel`:** cancel the kept id.
-- [ ] **Step 4: Wire rest into `tick`.** After a successful tick:
-  - If `shouldStartRestAfterTick(view.exercises, ex.id)`, set `endsAt = now + settings.restSeconds * 1000`, then call `setRestEndsAt` and `surface.start(endsAt)`.
-  - `restMinus15` computes `minus15(endsAt, now)`. If there is a value, call `setRestEndsAt` and `surface.update`. If it's null, call `restSkip`.
+- [ ] **Step 6: Wire rest into `tick`.** After a successful tick:
+  - If `shouldStartRestAfterTick(view.exercises, ex.id)`, set `endsAt = now + settings.restSeconds * 1000`, then call `setRestEndsAt` and `surface.start(endsAt, settings.restBell)`.
+  - `restMinus15` computes `minus15(endsAt, now)`. If there is a value, call `setRestEndsAt` and `surface.update(…, settings.restBell)`. If it's null, call `restSkip`.
   - `restSkip` calls `setRestEndsAt(null)` and `surface.cancel()`.
-- [ ] **Step 5: Build `RestBar`.**
+- [ ] **Step 7: Build `RestBar`.**
   - It shows only when `restRemainingSeconds(restEndsAt, now)` is not null, re-rendering every 250ms.
   - It is fixed above the bottom safe area, in `surfaceRaised` with a top border.
   - Layout: **−15s** (secondary), the clock (`Num` 40px, `formatRest`), and **Skip** (quiet).
-  - When the remaining time crosses into null, call `Haptics.notificationAsync(Success)` and `restEnded` (which sets null without cancelling, because the notification already fired).
+  - **When the remaining time crosses into null:**
+    - Call `Haptics.notificationAsync(Success)`.
+    - If `settings.restBell`, call `playBell(settings.restBellSound)`.
+    - Then call `restEnded`, which sets null without cancelling, because the notification already fired.
   - The scroll content gets bottom padding while the bar is visible.
-- [ ] **Step 6: Verify in the browser pane.**
+- [ ] **Step 8: Add a Rest timer section to Settings**, below Appearance.
+  - **Bell at the end:** a switch bound to `restBell`, default on.
+  - **Bell sound:** a segmented Bell / Chime / Ding control bound to `restBellSound`. Choosing one plays it once as a preview.
+  - Both call `setSetting`, then `bumpData()`.
+- [ ] **Step 9: Verify in the browser pane.** Use `npm run web` in the background and one browser tab.
   - Tick a set and the bar shows 2:00 counting down. −15s shows 1:44 or 1:45. Skip hides the bar.
   - Superset bench with OHP. Ticking bench starts no rest, and ticking OHP does.
-  - Reorder, Replace and Remove work.
+  - Reorder (a superset moves as one block), Replace and Remove work.
   - Add "RDL" through the search.
   - Reload the page mid-rest and the bar resumes with the remaining time.
-- [ ] **Step 7: Commit.** `git commit -m "feat(session): exercise picker, exercise menu, supersets, rest timer"`
+  - Settings shows the Rest timer section, and switching the sound previews it.
+- [ ] **Step 10: Commit.** `git commit -m "feat(session): exercise picker, menu, supersets, rest timer with bell"`
 
 ---
 
-### Task 16: Finish, discard, and the finish summary
+### Task 16: Finish, discard, the finish summary, and the snapshot
 
 **Files:**
 - Create: `app/finish/[id].tsx`
-- Modify: `app/session.tsx`, `src/state/sessionActions.ts`
+- Modify: `app/session.tsx`, `src/state/sessionActions.ts`, `app/_layout.tsx` (register `finish/[id]` as `fullScreenModal`)
 
 **Interfaces:**
-- Consumes: `countUntickedWithValues`, `finishWorkout`, `NothingTickedError`, `discardWorkout` (Task 8); `getFinishSummary` (Task 10); `formatElapsed`, `formatVolume`.
+- Consumes:
+  - `countUntickedWithValues`, `finishWorkout` (which saves notes and clears rest), `NothingTickedError`, `discardWorkout` (Tasks 8 and 12C)
+  - `getFinishSummary` (Task 10)
+  - `takeSnapshotSafely` (Task 12E)
+  - `formatElapsed`, `formatVolume`
 - Produces, in `sessionActions.ts`:
-  - `finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'` cancels the rest surface and bumps on success.
-  - `discard(db: Db, workoutId: string): void` cancels the rest surface and bumps.
+  - `finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'`. On success, in this order:
+    1. It cancels the rest surface.
+    2. It calls `takeSnapshotSafely(db, Date.now())`. A false result never changes the outcome.
+    3. It bumps.
+  - `discard(db: Db, workoutId: string): void` cancels the rest surface and bumps. It never snapshots, and never moves Up next.
 
 - [ ] **Step 1: Add Finish** (primary, at the bottom of the session).
-  - If no set is ticked, show a `Sheet` with "Nothing is ticked yet." and the buttons **Keep logging** and **Discard workout**. This covers Review Focus 4.
+  - If no set is ticked, show a `Sheet` with "Nothing is ticked yet." and the buttons **Keep logging** and **Discard workout**.
   - Else, if `countUntickedWithValues` is above 0, show a `ConfirmSheet` with "{n} sets aren't ticked. They won't count.", **Finish anyway** and **Keep logging**.
   - Then call `finish` and `router.replace('/finish/' + id)`.
 - [ ] **Step 2: Add Discard** (quiet, under Finish).
@@ -1203,16 +1601,22 @@ expect(resolveScheme('system', null)).toBe('light');
   - Three figures: duration (`formatElapsed`), volume (`formatVolume`), and "{setCount} sets".
   - A primary **Done** button that calls `router.replace('/')`.
   - Phase 2 adds the next-time lines and phase 4 adds the PRs.
-- [ ] **Step 4: Verify in the browser pane.**
-  - Finish with nothing ticked shows "Nothing is ticked yet.".
-  - Finish with one ticked and one typed-but-unticked set shows "1 sets aren't ticked. They won't count.".
+- [ ] **Step 4: Verify in the browser pane.** Use `npm run web` in the background and one browser tab.
+  - Finish with nothing ticked shows "Nothing is ticked yet."
+  - Finish with one ticked and one typed-but-unticked set shows "1 sets aren't ticked. They won't count."
   - Finish anyway goes to the summary. Done returns to Train, where:
     - Streak is 1 day.
     - This week shows the volume.
     - Up next has moved to Pull A.
-  - Start empty, then add Barbell bench press. The previous column shows the sets just logged.
-  - Discard returns to Train with no Resume card.
-- [ ] **Step 5: Commit.** `git commit -m "feat(session): finish, discard, finish summary"`
+  - **The previous result:**
+    1. Set PPL back to Push A by finishing the rest of the rotation, or start empty and add Barbell bench press.
+    2. Each row shows that set's last result as "135 × 8", and warmup rows match warmups only.
+    3. A row beyond last time's count is empty.
+  - **Up next guard:**
+    1. Start this, then Discard. Up next is unchanged.
+    2. Start empty, add an exercise, tick, then finish. Up next is unchanged.
+  - Snapshots are skipped on web, and Settings still reads "Backups run in the phone app."
+- [ ] **Step 5: Commit.** `git commit -m "feat(session): finish with snapshot, discard, finish summary"`
 
 ---
 
@@ -1220,18 +1624,23 @@ expect(resolveScheme('system', null)).toBe('light');
 
 **Files:** none. Commit only if fixes were needed.
 
-- [ ] **Step 1: Automated checks.** `npm test` and `npm run typecheck` → all pass, 0 errors.
-- [ ] **Step 2: Web check (browser pane, 390×844, light then dark), screenshots of each.**
-  - Hound mark and red GYMHOUND at the top of Train, History, Stats, Fuel and Settings.
-  - The dock's active tab is red.
-  - "Powered by GruntHound LLC" appears at the bottom of Train, History, Stats and Settings. It is absent on Fuel, the session and the summary.
-  - Run a premade day end to end: set active, Start this, log, see previous on the second run, rest, finish, then Done.
-  - Resume after a reload mid-workout.
-  - Discard.
-  - read_network_requests during the run shows only `localhost:8081` (dev server) requests.
-- [ ] **Step 3: iPhone check (owner).**
-  - The owner runs `npx expo start --offline` (or `--tunnel` if the LAN blocks it), opens it in Expo Go, and repeats Step 2.
-  - The owner also confirms the rest notification arrives with the app in the background.
+- [ ] **Step 1: Automated checks.**
+  - `npm test` and `npm run typecheck` → all pass, 0 errors.
+  - `npx expo export --platform ios --output-dir <temp>` compiles offline. Delete the output.
+- [ ] **Step 2: Web check** in the browser pane, at 390×844 and 320×844, light then dark, with screenshots of each.
+  - **Header:** the hound sits on the left of red GYMHOUND on one line at both widths, on Train, History, Stats, Fuel and Settings.
+  - **Dock:** the active tab is red.
+  - **Footer:** "Powered by GruntHound LLC" appears at the bottom of Train, History, Stats and Settings. It is absent on Fuel, the session and the summary.
+  - **A premade day end to end:**
+    - Set active, Start this, log, rest, finish, then Done.
+    - On the next run of that day, every set row shows that set's last result beside the input.
+  - **Recovery:** Resume works after a reload mid-workout. Discard works, and leaves Up next unchanged.
+  - **Network:** read_network_requests during the run shows only `localhost:8081` (dev server) requests.
+- [ ] **Step 3: iPhone check (owner).** The owner runs `npx expo start --offline` (or `--tunnel` if the LAN blocks it), opens it in Expo Go, and repeats Step 2. Also check:
+  - **Large text:** with iPhone text size at its largest (Settings → Display & Brightness → Text Size), GYMHOUND stays the same size on one line beside the hound, while other text grows.
+  - **Bell, app open:** with music playing, the rest bell plays and the music dips for a moment, then carries on.
+  - **Bell, locked phone:** the "Rest's up." notification arrives with sound and vibration. In Expo Go this is the system sound, and it follows the ringer switch.
+  - **Snapshot:** after a finish, Settings shows "Last snapshot: {time}", and **Share latest snapshot** opens the share sheet.
 - [ ] **Step 4: Report.**
   - Send the owner the screenshots with SendUserFile.
   - List anything that failed with its output.
