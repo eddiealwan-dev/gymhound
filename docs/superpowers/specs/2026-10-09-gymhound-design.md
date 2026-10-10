@@ -1,7 +1,7 @@
 # GymHound — Design Spec
 
 Date: 2026-10-09
-Status: Draft for review
+Status: Approved; §18 added 2026-10-10 from the owner's device check
 Owner: GruntHound LLC
 
 ## 1. Summary
@@ -800,3 +800,54 @@ Added by the owner on 2026-10-09:
 ### 17.4 Watch apps (phase 8)
 - A watch app that logs each set on the wrist, for Apple Watch and Wear OS only.
 - Garmin, Whoop and other brands cannot run it. They reach GymHound only through Health (§17.1).
+
+## 18. Owner additions after the first device check (2026-10-10)
+
+The owner's report is kept in the build log. Where this section and an earlier one disagree, this section wins.
+
+### 18.1 Decisions
+| Topic | Decision |
+|---|---|
+| Landing | A phase 1 patch lands on `phase-1` before the merge (§18.2). Everything else folds into phases 2–6, each with its own plan and branch (§18.3) |
+| Marks | **Per exercise only.** The session-wide day-mark chip is dropped. Each exercise's ⋯ menu has **Something off**, with a reason (Rough sleep, Sick, Short on food, Pain, Cutting). A flagged exercise holds its weight next time, and its chart says why. The Short on food offer (7.10) and the Rough sleep offer (§17.1) become one-tap offers to flag every exercise in the session. The phase 2 plan settles the details and replaces `workouts.day_mark` with a per-exercise mark |
+| Exercise library | Built from **free-exercise-db** (github.com/yuhonas/free-exercise-db, public domain under the Unlicense): about 300 exercises picked from its ~870, each with a few lines of steps and two photos (start and end) that flip as the form demo. Photos are shrunk to keep the app small (under 10 MB in total). This replaces "about 250" in §3 and §10.1 |
+| Saved workouts | A saved workout remembers the last weights, sets and reps. Start it any time, or add it as a day in one of your routines |
+| Pro | Unchanged: more than one routine of your own, and Fuel (now including macro graphs). Everything else added here is free |
+
+### 18.2 Phase 1 patch (on `phase-1`, before the merge)
+- **Remove a set:** the set-type sheet (tap the set number) gets **Remove set**. Long-press stays.
+- **Add a warmup:** **+ Add warmup** beside **+ Add set** inserts a warmup after the exercise's existing warmups and before its first other set.
+- **More than one workout a day:** works. Each finished workout keeps its own row, and the streak and This week count them.
+- **Back on Routines:** a visible back control returns to Train. The dock's Train tab stays the home button.
+- **Units and bar:** Settings gets Units (lb or kg, and mi or km) and Bar (Standard 45 lb / 20 kg, Women's 35 lb / 15 kg, Technique 15 lb / 5 kg, or a custom weight) for each unit. Switching the unit follows 7.1.
+- **Plate calculator** (the ⋯ menu, barbell exercises): bar plus plates per side for a target weight, using the Settings bar and plates (7.7).
+- **Rest per exercise:** the ⋯ menu gets **Rest time**. It belongs to the exercise, like its note, and follows it everywhere. **Off** turns rest off for that exercise, and **Default** uses the Settings length.
+- **Rest under the set:** while a rest runs, its countdown, **−15s** and **Skip** also show under the set that started it. The bar at the bottom stays.
+- **Music in Expo Go:** a music button in the session header opens a sheet with buttons that open Apple Music (iPhone only), Spotify and Audible. Not in the browser build. Real controls stay in phase 7 (§17.3). Audible on iPhone only ever gets the open button.
+
+### 18.3 Folded into later phases
+- **Phase 2 (marks and the rule):** the per-exercise Something off flag (§18.1).
+- **Phase 3 (routines):** create and edit your own routines; saved workouts. The premade programs become eight, built on current evidence: about 10–20 hard sets per muscle per week, and each muscle trained at least twice a week where the split allows:
+  - Push/pull/legs
+  - 4-day upper/lower
+  - Beginner full body
+  - Advanced full body
+  - Bro split (once a week per muscle, as the owner asked)
+  - Dumbbell full body
+  - Calisthenics
+  - Mobility (timed holds)
+
+  5×5 and No equipment leave the Premade list. A user who has one active or in history keeps it.
+- **Phase 4 (library, plates, body):** the free-exercise-db library with the photo demo and steps on tap; custom exercises; plates owned in Settings; bodyweight plus measurements (waist, chest, hips, arms, thighs, neck, body fat %), each with a chart; PR flags; **Share a personal best** (an image through the share sheet; GymHound uploads nothing).
+- **Phase 5 (Pro, Fuel):** Fuel, with macro graphs and trends; the water logger with a custom daily goal (free).
+- **Phase 6 (History, Stats):**
+  - History, including **Repeat**, which starts a new workout copied from a past one.
+  - Trends for every lift and every measurement.
+  - Rule-based analytics: weekly sets per muscle against 10–20, sessions, PRs, and the bodyweight trend.
+  - A weekly check-in.
+  - The consistency tracker, a calendar of finished workouts.
+  - Progress photos, kept in the app's own folder on the phone.
+  - The pedometer: on iPhone, steps today and the last 7 days. On Android, Health Connect in phase 7.
+  - CSV.
+- **No AI coach:** "smart analytics" means rules and counts.
+- **§2 non-goals lifted:** the calendar view of history (the consistency tracker), and sharing, for a personal-best image only.

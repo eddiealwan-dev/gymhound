@@ -1711,3 +1711,248 @@ The owner asked on 2026-10-10 for the hound and GYMHOUND to be a little bigger.
   - Send the owner the screenshots with SendUserFile.
   - List anything that failed with its output.
   - Phase 1 is done only when the owner confirms Step 3.
+
+---
+
+## Phase 1 patch (owner's device check, 2026-10-10)
+
+Spec §18.2 is the requirement. Tasks 18–23 land on `phase-1` before the merge. Crashes 1–5 from the report were fixed first, in commit 295a0e1 (ruling R33).
+
+### Task 18: Set controls — remove a set, add a warmup, several workouts a day
+
+**Files:**
+- Modify: `src/db/repositories/workoutEditRepo.ts`, `src/state/sessionActions.ts`, `src/ui/session/ExerciseBlock.tsx`
+- Test: `src/db/repositories/workoutEditRepo.test.ts`, `src/db/repositories/workoutsRepo.test.ts`
+
+**Interfaces:**
+- Consumes: `removeSet`, `removeSetFrom`, `addSet`, `renumberSets` (Tasks 9 and 15); `matchPrevious` (Task 12C).
+- Produces:
+  - `addWarmupSet(db, workoutExerciseId): string` in `workoutEditRepo.ts`. It inserts an empty, undone `warmup` set right after the exercise's last leading warmup. That is position 0 when there are none, or the end when every set is a warmup. Later sets shift down one place. Returns the new id.
+  - `addWarmupTo(db, workoutExerciseId): void` in `sessionActions.ts`, which calls it and bumps.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `addWarmupSet`:
+    - With sets [working, working], the order becomes [warmup, working, working].
+    - With [warmup, working, working], it becomes [warmup, warmup, working, working], and the new set is at position 1.
+    - With [warmup], it becomes [warmup, warmup].
+    - With no sets, it becomes [warmup].
+    - Positions stay 0..n−1 with no gaps, and the existing sets keep their values and done flags.
+  - **Previous after a warmup:** an exercise last finished with [W 60×10, W 80×5, 1: 100×5]. The second warmup added today matches "80 × 5", and working set 1 still matches "100 × 5".
+  - **Two workouts on one day** (`workoutsRepo.test.ts`):
+    - Finish a workout, then start an empty one on the same `local_date`, tick a set and finish it. Both rows are `finished` with the same `local_date`.
+    - This week's volume counts both workouts.
+    - The streak counts that date once.
+- [ ] **Step 2:** `npx jest src/db` → FAIL (`addWarmupSet` is not defined). The two-a-day test may already pass. If it does, keep it as a guard and say so in the report.
+- [ ] **Step 3: Implement.**
+  - `addWarmupSet` runs in one transaction.
+  - **ExerciseBlock:**
+    - The "Set type" sheet gets a destructive **Remove set** button below the four types. It calls `removeSetFrom`. Long-press keeps working.
+    - The add row becomes two buttons side by side: **+ Add warmup** and **+ Add set**.
+- [ ] **Step 4:** `npx jest src/db`, `npm test`, `npm run typecheck` → green.
+- [ ] **Step 5: Commit.** `feat(session): remove a set from the set-type sheet; add warmup sets`
+
+### Task 19: Plates and switching the unit — rules and repository
+
+**Files:**
+- Create: `src/domain/plates.ts`, `src/domain/plates.test.ts`, `src/db/repositories/unitsRepo.ts`, `src/db/repositories/unitsRepo.test.ts`
+- Modify: `src/domain/units.ts`, `src/domain/units.test.ts`
+
+**Interfaces:**
+- Produces:
+  - `loadPlates(target: number, bar: number, platesOwned: Record<string, number>): { perSide: number[]; total: number }` (spec 7.7).
+    - The unit is implied by which plate set is passed.
+    - `platesOwned` maps a plate weight (as a string) to the number of pairs owned.
+    - `perSide` is heaviest first.
+    - Per side, it takes the combination closest to (target − bar) ÷ 2 without going over. On a tie, it takes fewer plates.
+    - The search is exact.
+    - If target < bar, it returns `{ perSide: [], total: bar }`.
+  - `nearestLoadable(value: number, bar: number, platesOwned: Record<string, number>): number`: the loadable total (bar + 2 × an achievable per-side sum) closest to `value` on either side. On a tie, it takes the lower. It returns `bar` when `value ≤ bar`.
+  - `convertIncrement(v: number, from: WeightUnit, to: WeightUnit): number`: the gym convention, kg = lb ÷ 2 and lb = kg × 2. It returns `v` when the units match.
+  - `roundToHalf(v: number): number`: the nearest 0.5.
+  - `switchDisplayUnit(db, to: WeightUnit): void` in `unitsRepo.ts`, one transaction (spec 7.1):
+    - It does nothing when `getSettings(db).unit === to`.
+    - Each `routine_exercises` row with `next_weight` not null and `next_weight_unit` different from `to`:
+      - Convert with `convertWeight`.
+      - For a barbell exercise (`exercises.equipment = 'barbell'`), round with `nearestLoadable` using the new unit's bar (`barLb`/`barKg`) and plates (`platesLb`/`platesKg`). Round anything else with `roundToHalf`.
+      - Set `next_weight_unit = to`.
+    - Each row whose `increment_unit` differs from `to`: `increment = convertIncrement(...)`, `increment_unit = to`.
+    - It sets the `unit` setting to `to`.
+    - It never touches `workouts`, `workout_exercises` or `sets`, so history and the active workout are unchanged.
+
+- [ ] **Step 1: Write the failing tests.** Default lb plates are `{45:4, 35:1, 25:1, 10:2, 5:1, 2.5:1}` with a 45 bar. Default kg plates are `{25:4, 20:1, 15:1, 10:1, 5:1, 2.5:1, 1.25:1}` with a 20 bar.
+  - `loadPlates`:
+    - 225 → perSide [45, 45], total 225.
+    - 230 → [45, 45, 2.5], total 230.
+    - 232 → total 230 (never over).
+    - 40 → { perSide: [], total: 45 }.
+    - 45 → { perSide: [], total: 45 }.
+    - With plates {10:1, 5:2}, bar 45 and target 65 → [10], not [5, 5] (fewer plates on a tie).
+    - Never uses more pairs than owned: 405 → [45, 45, 45, 45], and 500 → still four 45s plus the best fill below.
+  - `nearestLoadable`:
+    - 227 → 225.
+    - 227.5 → 225 (tie goes lower).
+    - 228 → 230.
+    - kg 102.06 → 102.5 (20 + 2 × 41.25).
+    - 10 → 45.
+  - `convertIncrement`:
+    - 5 lb → 2.5 kg.
+    - 2.5 kg → 5 lb.
+    - 10 lb → 5 kg.
+    - Same unit returns the input.
+  - `roundToHalf`: 22.68 → 22.5, 22.75 → 23.
+  - `switchDisplayUnit` (createTestDb, seed, settings in lb):
+    - A barbell row with next 225 lb becomes 102.5 kg.
+    - A dumbbell row with next 50 lb becomes 22.5 kg.
+    - A null next_weight stays null.
+    - Increments of 5 lb become 2.5 kg.
+    - `getSettings(db).unit === 'kg'`.
+    - Switching back gives lb, with increment 5.
+    - An active workout's `workout_exercises` rows and its sets are identical before and after.
+    - A finished workout's sets are unchanged.
+    - Calling with the current unit changes nothing.
+- [ ] **Step 2:** `npx jest src/domain/plates src/domain/units src/db/repositories/unitsRepo` → FAIL.
+- [ ] **Step 3: Implement.**
+  - Exact search: expand pairs into a list of plates and walk subsets with memoised reachable sums. Ten or so plates is tiny.
+  - Compare sums in integer hundredths, so 2.5 and 1.25 add exactly.
+- [ ] **Step 4:** targeted tests, `npm test`, `npm run typecheck` → green.
+- [ ] **Step 5: Commit.** `feat(domain): plates, nearest loadable weight, and switching the display unit`
+
+### Task 20: Settings units and bar; the plate calculator
+
+**Files:**
+- Create: `src/ui/BarPicker.tsx`, `src/ui/session/PlateSheet.tsx`
+- Modify: `app/(tabs)/settings.tsx`, `src/ui/session/ExerciseMenu.tsx`, `src/domain/sessionMenu.ts` (+ test)
+
+**Interfaces:**
+- Consumes: `switchDisplayUnit`, `loadPlates` (Task 19); `getSettings`, `setSetting`; `bumpData`; `WorkoutExerciseView.equipment`.
+- Produces:
+  - `BAR_PRESETS: Record<WeightUnit, { label: string; weight: number }[]>` in `src/ui/BarPicker.tsx`:
+    - lb: Standard 45, Women's 35, Technique 15.
+    - kg: Standard 20, Women's 15, Technique 5.
+  - `<BarPicker />`:
+    - It shows the presets for the display unit plus **Custom**.
+    - Custom takes a number above 0, up to 100 lb or 45 kg. It accepts a comma or a dot. An invalid entry is rejected inline.
+    - It writes `barLb` or `barKg`, then bumps.
+  - `plateTarget(ex: WorkoutExerciseView, unit: WeightUnit): number | null` in `sessionMenu.ts`. It returns the weight to load:
+    - the first undone working set's own value, converted to `unit`;
+    - otherwise the override, then the planned weight;
+    - otherwise the newest done working set's weight;
+    - otherwise null.
+
+- [ ] **Step 1: Write the failing tests.** `plateTarget` covers each fallback step and converts kg values to lb.
+- [ ] **Step 2: Run** → FAIL.
+- [ ] **Step 3: Implement.**
+  - **Settings**, before Rest timer:
+    - **Units:** Weight (lb or kg) as a two-choice control that calls `switchDisplayUnit` then bumps. Distance (mi or km) as a two-choice control that writes `distanceUnit`.
+    - **Bar:** `<BarPicker />` with the line "Used by the plate calculator."
+  - **The ⋯ menu** shows **Plate calculator** only when `ex.equipment === 'barbell'`. It opens `PlateSheet` after `afterSheetCloses`.
+  - **PlateSheet:**
+    - A weight field prefilled from `plateTarget`.
+    - The bar line, for example "Bar 45 lb", with `<BarPicker />` under it, so the bar can be changed here too.
+    - "Per side: 45 · 25 · 2.5".
+    - "Loads 230 lb" whenever the total differs from the target.
+    - "Below the bar: just the bar." when target < bar.
+    - It uses the display unit's plates from Settings.
+- [ ] **Step 4:** tests and typecheck → green. Check in the browser pane at 390 wide, in light and dark:
+  - Switch lb ↔ kg and the session's weight column header follows.
+  - Change the bar.
+  - Open the plate calculator on Barbell bench press.
+  - It is absent on Dumbbell curl.
+- [ ] **Step 5: Commit.** `feat(settings): units and bar; plate calculator in the exercise menu`
+
+### Task 21: Rest per exercise, and the countdown under the set
+
+**Files:**
+- Modify: `src/db/schema.ts`, `src/db/repositories/workoutViewsRepo.ts`, `src/state/sessionActions.ts`, `src/domain/rest.ts`, `src/ui/session/ExerciseMenu.tsx`, `src/ui/session/ExerciseBlock.tsx`, `app/session.tsx`
+- Create: `src/db/repositories/exercisePrefsRepo.ts` (+ test), `src/db/migrations/0002_*` (generated), `src/ui/session/RestInline.tsx`
+
+**Interfaces:**
+- Produces:
+  - **Table `exercise_prefs`:**
+    - `exercise_id` text PK, references `exercises.id`.
+    - `rest_seconds` integer null. A missing row or null means "use Settings", and 0 means Off.
+    - `updated_at` integer not null.
+  - `getRestSeconds(db, exerciseId): number | null` and `setRestSeconds(db, exerciseId, seconds: number | null, now: number): void` (an upsert).
+  - `WorkoutExerciseView.restSeconds: number | null` (the exercise's pref).
+  - `SetView.completedAt: number | null`.
+  - `REST_CHOICES = [0, 30, 45, 60, 90, 120, 150, 180, 240, 300]` in `src/domain/rest.ts`.
+  - `restLengthFor(exerciseRest: number | null, settingsRest: number): number`, which returns `exerciseRest ?? settingsRest`.
+  - `restAnchorSetId(exercises: { sets: { id: string; done: boolean; completedAt: number | null }[] }[]): string | null`: the done set with the latest `completedAt`. Ties go to the later set in workout order. Null when nothing is done.
+  - `tick` uses `restLengthFor(ex.restSeconds, settings.restSeconds)`, so 0 means no rest.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `0002` creates `exercise_prefs`.
+  - `setRestSeconds` then `getRestSeconds` round-trips: 90 → 90, then null → null, then 0 → 0.
+  - The view carries `restSeconds` and `completedAt`.
+  - `tick` with the bench pref at 90 → `rest_ends_at = now + 90 s`.
+  - With the pref at 0 → no rest.
+  - With no pref → `settings.restSeconds`.
+  - A superset round's last member uses its own pref.
+  - `restAnchorSetId`: latest wins, ties go to the later set, and it is null when nothing is done.
+  - The pref follows the exercise: set it, start a different routine day containing that exercise, and the view shows the pref.
+- [ ] **Step 2: Run** → FAIL.
+- [ ] **Step 3: Implement.**
+  - Schema, then `npm run db:generate`, which adds `0002_*.sql`, the meta files and `migrations.js`.
+  - **⋯ menu:** **Rest time · {current}**. {current} reads "Default (2:00)", "Off" or "1:30". It opens a sheet listing **Default (m:ss)**, then each `REST_CHOICES` entry, with 0 shown as **Off**. The current choice is highlighted. Choosing one calls `setRestSeconds` then bumps. A running rest is not changed.
+  - **RestInline**, under the anchor set's row, only while the rest is running:
+    - "Rest 1:45", **−15s** and **Skip**, wired to `restMinus15` and `restSkip`.
+    - The session screen passes `restEndsAt`, `now` and the anchor id to the blocks.
+    - The bottom `RestBar` stays as it is.
+- [ ] **Step 4:** tests and typecheck → green. Browser check:
+  - Set bench rest to 1:30, tick, and the countdown appears under that set from 1:30.
+  - −15s and Skip work from both places.
+  - With Off, ticking starts no rest.
+- [ ] **Step 5: Commit.** `feat(session): rest time per exercise; the countdown shows under the set that started it`
+
+### Task 22: Back on Routines; music buttons
+
+**Files:**
+- Modify: `app/(tabs)/routines/index.tsx`, `app/session.tsx`
+- Create: `src/ui/session/MusicSheet.tsx`, `src/platform/music.ts` (+ test)
+
+**Interfaces:**
+- Produces:
+  - `MUSIC_APPS`: `{ id: 'apple-music' | 'spotify' | 'audible'; label: string; url: string; platforms: ('ios' | 'android')[] }[]`.
+    - Apple Music: `music://`, iOS only.
+    - Spotify: `spotify://`, iOS and Android.
+    - Audible: `audible://`, iOS and Android.
+  - `musicAppsFor(os: string)` filters it by platform. It returns `[]` for web.
+  - `openMusicApp(app): Promise<'opened' | 'missing'>` calls `Linking.openURL`. A rejection means 'missing'.
+
+- [ ] **Step 1: Write the failing tests.**
+  - `musicAppsFor('ios')` lists all three.
+  - `musicAppsFor('android')` lists Spotify and Audible.
+  - `musicAppsFor('web')` is empty.
+  - `openMusicApp` maps a resolved `Linking.openURL` to 'opened' and a rejected one to 'missing' (mock `Linking`).
+- [ ] **Step 2: Run** → FAIL.
+- [ ] **Step 3: Implement.**
+  - **Routines:** a back control at the top, a chevron plus "Train" with `accessibilityLabel="Back to Train"`. It calls `router.back()` when it can go back, else `router.navigate('/')`.
+  - **Session header:** a music-notes icon button with `accessibilityLabel="Music"`, shown only when `musicAppsFor(Platform.OS)` is not empty.
+    - It opens `MusicSheet`, with one button per app: "Open Apple Music", "Open Spotify", "Open Audible".
+    - On 'missing', it shows "{label} isn't on this phone." inline.
+    - Leaving for the music app relies on the existing flush on AppState leaving active (R32).
+- [ ] **Step 4:** tests and typecheck → green. Browser check:
+  - Routines → Back to Train lands on Train.
+  - No music button on web.
+- [ ] **Step 5: Commit.** `feat: back to Train from Routines; open-app music buttons in the session`
+
+### Task 23: Patch acceptance
+
+- [ ] **Step 1:**
+  - `npm test` and `npm run typecheck` → green.
+  - `npx expo export --platform ios --output-dir <temp>` compiles. Delete the output.
+- [ ] **Step 2:** Web walkthrough at 390×844, light and dark, with screenshots:
+  - Remove a set from the sheet.
+  - + Add warmup.
+  - Two workouts in one day.
+  - lb ↔ kg.
+  - Bar change.
+  - The plate calculator.
+  - Rest time per exercise, and the countdown under the set.
+  - Back on Routines.
+  - The crash paths from the report (set active ×2, Start this, tick, −15s, Show RPE).
+- [ ] **Step 3: Owner, in Expo Go on the iPhone:**
+  - Everything in Step 2.
+  - The music buttons open Apple Music, Spotify and Audible.
+  - The Task 17 Step 3 list.
+- [ ] **Step 4:** Report to the owner. The merge waits for their OK.
