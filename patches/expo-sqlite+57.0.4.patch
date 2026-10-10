@@ -1,8 +1,17 @@
 diff --git a/node_modules/expo-sqlite/web/WorkerChannel.ts b/node_modules/expo-sqlite/web/WorkerChannel.ts
-index 7fba380..4e00994 100644
+index 7fba380..a9705fa 100644
 --- a/node_modules/expo-sqlite/web/WorkerChannel.ts
 +++ b/node_modules/expo-sqlite/web/WorkerChannel.ts
-@@ -40,7 +40,7 @@ export function sendWorkerResult({
+@@ -13,6 +13,8 @@ let messageId = 0;
+ const deferredMap = new Map<number, Deferred>();
+ const PENDING = 1;
+ const RESOLVED = 2;
++/** How long a synchronous call waits for the worker before it gives up. */
++const SYNC_TIMEOUT_MS = 10_000;
+ 
+ let hasWarnedSync = false;
+ 
+@@ -40,7 +42,7 @@ export function sendWorkerResult({
      const resultJson = error != null ? serialize({ error }) : serialize({ result });
      const resultBytes = new TextEncoder().encode(resultJson);
      const length = resultBytes.length;
@@ -11,3 +20,36 @@ index 7fba380..4e00994 100644
      resultArray.set(resultBytes, 4);
      Atomics.store(lock, 0, RESOLVED);
    } else {
+@@ -116,24 +118,20 @@ export function invokeWorkerSync<T extends SQLiteWorkerMessageType & keyof Resul
+     resultBuffer,
+   });
+ 
+-  let i = 0;
++  // GymHound patch: wait by the clock, not by a spin count. A million spins last only a few tens of
++  // milliseconds on a fast CPU, which is less than an ordinary write can take to commit to browser storage.
++  // NOTE(kudo): Unfortunate for the busy loop,
++  // because we don't have a way for main thread to yield its execution to other callbacks.
++  const deadline = Date.now() + SYNC_TIMEOUT_MS;
+   // @ts-expect-error: Remove this when TypeScript supports Atomics.pause
+   const useAtomicsPause = typeof Atomics.pause === 'function';
+   while (Atomics.load(lock, 0) === PENDING) {
+-    ++i;
+-
++    if (Date.now() > deadline) {
++      throw new Error('Sync operation timeout');
++    }
+     if (useAtomicsPause) {
+-      if (i > 1_000_000) {
+-        throw new Error('Sync operation timeout');
+-      }
+       // @ts-expect-error: Remove this when TypeScript supports Atomics.pause
+       Atomics.pause();
+-    } else {
+-      // NOTE(kudo): Unfortunate for the busy loop,
+-      // because we don't have a way for main thread to yield its execution to other callbacks.
+-      if (i > 1000_000_000) {
+-        throw new Error('Sync operation timeout');
+-      }
+     }
+   }
+ 

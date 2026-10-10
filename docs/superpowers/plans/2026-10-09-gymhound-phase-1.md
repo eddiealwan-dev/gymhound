@@ -132,8 +132,8 @@ Where the rulings changed an interface from the original task text, the code is 
   - The root Stack has no explicit screens yet. Each task registers the routes it creates.
 - **Database:**
   - The app opens the database with `openAppDbAsync()` (a web warm-up, then `openAppDb()`).
-  - On web, sync SQLite calls time out after about 33 ms, and sync results are capped at 1 MiB.
-  - The expo-sqlite web fix is `patches/expo-sqlite+57.0.4.patch`, and `.gitattributes` keeps patches byte-exact.
+  - On web, stock expo-sqlite gives a sync call a fixed spin count, which is about 16–36 ms on a fast CPU. Slow writes to browser storage crashed with "Sync operation timeout" in the owner's check. The patch makes it a 10 s wall-clock wait (`src/db/webSqliteWait.test.ts`). Sync results are capped at 1 MiB.
+  - The expo-sqlite web fixes live in `patches/expo-sqlite+57.0.4.patch`, and `.gitattributes` keeps patches byte-exact. Both fixes are web-only.
 - **`useDbQuery(query)`:** pass stable, module-level query functions. It skips the first focus after mount.
 - **Browser checks from subagents:** `preview_start` cannot find `launch.json`. Run `npm run web` in the background, navigate the browser pane to `http://localhost:8081/`, and use one tab per origin.
 - **Commits:** the trailer is `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.

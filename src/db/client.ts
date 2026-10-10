@@ -53,8 +53,8 @@ export function closeAppDb(): void {
 }
 
 /**
- * `openAppDb` for every platform. On web, expo-sqlite's sync calls wait only about 30 ms for the SQLite worker,
- * which is less than a cold worker needs to start. So start it with the async API first. Elsewhere this is `openAppDb`.
+ * `openAppDb` for every platform. On web, a sync call freezes the page while it waits for the SQLite worker,
+ * and a cold worker is slow to start. So start it with the async API first. Elsewhere this is `openAppDb`.
  */
 export async function openAppDbAsync(): Promise<Db> {
   if (Platform.OS === 'web' && !instance) {
