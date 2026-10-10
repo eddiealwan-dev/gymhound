@@ -1,8 +1,8 @@
-import { Keyboard } from 'react-native';
+import { Keyboard, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
-import { commitSetField, removeSetFrom } from '../../state/sessionActions';
+import { commitSetField, removeSetFrom, tick, untick } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
 import { SetRow } from './SetRow';
@@ -122,6 +122,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.mocked(commitSetField).mockClear();
   jest.mocked(removeSetFrom).mockClear();
+  jest.mocked(tick).mockReset();
+  jest.mocked(untick).mockClear();
   dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
 });
 
@@ -131,17 +133,85 @@ afterEach(() => {
 });
 
 describe('ExerciseBlock: a sheet opened over a field being typed in (F1)', () => {
-  it('puts the keyboard away, and the blur that follows saves the typed weight', () => {
+  it('puts the keyboard away before the sheet opens, and the blur that follows saves the typed weight', () => {
     const tree = mount(bench([set('s0', 0)]));
     act(() => byLabel(tree, 'LB, set 1').props.onChangeText('140'));
     expect(commitSetField).not.toHaveBeenCalled();
+    /** Whether the set-type sheet was showing at each Keyboard.dismiss. The opener and the Sheet's own effect may both call it. */
+    const sheetShowing: boolean[] = [];
     // What Keyboard.dismiss does on the phone: the field that has focus blurs.
-    dismiss.mockImplementation(() => byLabel(tree, 'LB, set 1').props.onBlur());
+    dismiss.mockImplementation(() => {
+      sheetShowing.push(shownText(tree).includes('Set type'));
+      byLabel(tree, 'LB, set 1').props.onBlur();
+    });
 
     act(() => byLabel(tree, 'Set 1').props.onPress());
 
-    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(sheetShowing[0]).toBe(false);
+    expect(shownText(tree)).toContain('Set type');
+    expect(commitSetField).toHaveBeenCalledTimes(1);
     expect(commitSetField).toHaveBeenCalledWith('db', 's0', { weight: 140, weightUnit: 'lb' });
+  });
+});
+
+/** Every TextInput a number is typed into, with its accessibility label. */
+const numberInputs = (tree: ReactTestRenderer) =>
+  tree.root.findAllByType(TextInput).filter((t) => t.props.keyboardType !== undefined);
+
+describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
+  it("gives every number field the Done key: weight, reps, RPE, time and distance, with React Native's own toolbar", () => {
+    const loads = mount({ ...bench([set('s0', 0)]), showRpe: true });
+    const timed = mount({ ...bench([set('s0', 0)]), loggingType: 'distance_time' });
+    const fields = [...numberInputs(loads), ...numberInputs(timed)];
+
+    expect(fields.map((f) => f.props.accessibilityLabel)).toEqual([
+      'LB, set 1',
+      'REPS, set 1',
+      'RPE, set 1',
+      expect.stringMatching(/, set 1$/),
+      expect.stringMatching(/, set 1$/),
+    ]);
+    for (const field of fields) {
+      expect(field.props.returnKeyType).toBe('done');
+      // A shared accessory view attaches to only the first field with its id; without one each gets the built-in Done bar.
+      expect(field.props.inputAccessoryViewID).toBeUndefined();
+    }
+  });
+
+  it('ticking a set stores the weight typed in the focused field, then closes the keyboard', () => {
+    jest.mocked(tick).mockReturnValue(true);
+    const ex = bench([set('s0', 0)]);
+    const tree = mount(ex);
+    act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('8'));
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('140'));
+    // The weight field still has focus: closing the keyboard blurs it.
+    dismiss.mockImplementation(() => byLabel(tree, 'LB, set 1').props.onBlur());
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(tick).toHaveBeenCalledTimes(1);
+    expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ weight: 140, reps: 8 }), 'lb');
+    expect(dismiss).toHaveBeenCalled();
+    expect(jest.mocked(tick).mock.invocationCallOrder[0]).toBeLessThan(dismiss.mock.invocationCallOrder[0]);
+  });
+
+  it('unticking a set closes the keyboard too', () => {
+    const tree = mount(oneDone());
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    expect(untick).toHaveBeenCalledWith('db', 's0');
+    expect(dismiss).toHaveBeenCalled();
+  });
+
+  it('pressing and holding a set closes the keyboard before its sheet opens', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    const sheetShowing: boolean[] = [];
+    dismiss.mockImplementation(() => void sheetShowing.push(shownText(tree).includes('Remove set')));
+    const row = tree.root.findAllByType(SetRow)[0];
+
+    act(() => row.props.onLongPress());
+
+    expect(shownText(tree)).toContain('Remove set');
+    expect(sheetShowing[0]).toBe(false);
   });
 });
 

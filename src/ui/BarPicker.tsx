@@ -151,6 +151,8 @@ function BarChoices({ unit, bar }: { unit: WeightUnit; bar: number }) {
               onBlur={commit}
               onSubmitEditing={commit}
               keyboardType="decimal-pad"
+              // iOS adds its own Done bar above the number pad with this key (R43); Done submits and blurs.
+              returnKeyType="done"
               selectTextOnFocus
               accessibilityLabel={`Custom bar weight, ${unit}`}
               style={{

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { getSettings } from '../src/db/repositories/settingsRepo';
@@ -93,7 +93,10 @@ function SessionHeader({ name, startedAt }: { name: string; startedAt: number })
             accessibilityRole="button"
             accessibilityLabel="Music"
             hitSlop={4}
-            onPress={() => setMusicOpen(true)}
+            onPress={() => {
+              Keyboard.dismiss();
+              setMusicOpen(true);
+            }}
             style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
           >
             <Ionicons name="musical-notes" size={24} color={colors.text} />
@@ -222,6 +225,7 @@ export default function Session() {
               restSetId={restSetId}
               onOpenMenu={() => {
                 flushAll();
+                Keyboard.dismiss();
                 setMenuFor(ex.id);
               }}
             />
@@ -231,6 +235,7 @@ export default function Session() {
             variant="secondary"
             onPress={() => {
               flushAll();
+              Keyboard.dismiss();
               router.push({ pathname: '/pick-exercise', params: { mode: 'add' } });
             }}
           />

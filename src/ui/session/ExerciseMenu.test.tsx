@@ -191,6 +191,16 @@ describe('ExerciseMenu: the plate calculator (Task 20)', () => {
     expect(text.join(' ')).not.toContain('Loads');
   });
 
+  it("gives the weight field the Done key and React Native's own toolbar (Task 24, R43)", () => {
+    const tree = mount(loaded('barbell', 190));
+    press(tree, 'Plate calculator');
+    afterSheetCloses();
+
+    const field = tree.root.findAllByType(TextInput).find((t) => t.props.accessibilityLabel === 'Weight to load, lb')!;
+    expect(field.props.returnKeyType).toBe('done');
+    expect(field.props.inputAccessoryViewID).toBeUndefined();
+  });
+
   it("opens at last time's weight on a fresh exercise, the placeholder its first set shows (F8)", () => {
     const fresh = {
       ...loaded('barbell', 0),

@@ -48,6 +48,8 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
             placeholder="0"
             placeholderTextColor={colors.textMuted}
             keyboardType="decimal-pad"
+            // iOS adds its own Done bar above the number pad with this key (R43).
+            returnKeyType="done"
             selectTextOnFocus
             accessibilityLabel={`Weight to load, ${unit}`}
             style={{

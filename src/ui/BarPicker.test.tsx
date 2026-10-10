@@ -71,6 +71,15 @@ beforeEach(() => {
   jest.mocked(setSetting).mockClear();
 });
 
+describe('BarPicker: the custom bar field closes its keyboard with Done (Task 24, R43)', () => {
+  it("has the Done key and React Native's own toolbar, with no shared accessory view", () => {
+    const tree = mount();
+    choose(tree, 'Custom');
+    expect(field(tree)!.props.returnKeyType).toBe('done');
+    expect(field(tree)!.props.inputAccessoryViewID).toBeUndefined();
+  });
+});
+
 describe('BarPicker: a custom bar is saved when the field is left, never per keystroke', () => {
   it('stores nothing while "120" is typed, nor when it is left, and says why', () => {
     const tree = mount();

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Fragment, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import type { Gear } from '../../domain/plates';
@@ -179,8 +179,15 @@ export function ExerciseBlock({
               columns={columns}
               unit={unit}
               distanceUnit={distanceUnit}
-              onChangeType={() => setTypeFor(row.set.id)}
-              onLongPress={() => setRemoveFor(row.set.id)}
+              // The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too).
+              onChangeType={() => {
+                Keyboard.dismiss();
+                setTypeFor(row.set.id);
+              }}
+              onLongPress={() => {
+                Keyboard.dismiss();
+                setRemoveFor(row.set.id);
+              }}
             />
             {restEndsAt !== null && row.set.id === restSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
           </Fragment>

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -118,17 +118,18 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   // Back, the ⋯ menu and the picker commit a half-typed entry as leaving the input would; the screen may unmount before a blur (R29).
   useDraftFlush(() => (Object.keys(drafts) as InputKey[]).forEach(leave));
 
+  /** Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the focused field is the one ticked. */
   const toggle = () => {
     if (set.done) {
       untick(db, set.id);
-      return;
+    } else if (canTick && tick(db, ex, set, reading.entered, reading.weightUnit)) {
+      // RPE is not part of a tick; save it if it is still being typed.
+      if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
+      setDrafts({});
+      setLeft([]);
+      lightHaptic();
     }
-    if (!canTick || !tick(db, ex, set, reading.entered, reading.weightUnit)) return;
-    // RPE is not part of a tick; save it if it is still being typed.
-    if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
-    setDrafts({});
-    setLeft([]);
-    lightHaptic();
+    Keyboard.dismiss();
   };
 
   const input = (key: InputKey, header: string) => {
@@ -141,6 +142,8 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         onChangeText={(text) => type(key, text)}
         onBlur={() => leave(key)}
         keyboardType={KEYBOARD[key]}
+        // iOS adds its own Done bar above a number pad with this key (R43); Done blurs, and the blur saves.
+        returnKeyType="done"
         selectTextOnFocus
         accessibilityLabel={`${header}, set ${row.label}`}
         style={{
