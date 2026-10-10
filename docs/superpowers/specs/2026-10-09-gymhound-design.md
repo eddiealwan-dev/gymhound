@@ -373,7 +373,7 @@ Saving an edit to a finished workout, or deleting one, runs one transaction:
   - Routines, library, history detail and Settings open inside the tabs, so the header and dock stay. On Settings no tab is highlighted.
   - The session screen, the finish summary and the paywall are full-screen routes above the tabs, so the dock is hidden there.
 - **Width:** content is capped at 512px (32rem) and centred.
-- **Footer:** on Train, History, Stats and Settings only. It matches FieldHound's footer exactly.
+- **Footer:** on Train, History, Stats, Fuel and Settings (Fuel added by the owner, §18.4). It matches FieldHound's footer exactly.
   - **Two lines, centred:**
     1. "powered by" in small muted type (Inter 400, 10px).
     2. The GruntHound wordmark: GRUNT in bold, HOUND in electric blue (#007EF8), and a small raised LLC beside it, 153.5px wide. On dark, GRUNT is white. On light, GRUNT is black. HOUND stays blue in both.
@@ -740,7 +740,7 @@ Each phase gets its own implementation plan and ends with its acceptance check.
 - A marked day keeps the weight and says why on the chart.
 - A free user can save one routine and is stopped, in one sentence, on the second.
 - Pro unlocks more routines and Fuel, and a finished workout uses the training-day targets.
-- The FieldHound-style footer ("powered by" over the GRUNTHOUND LLC wordmark) is pinned to the bottom of Train, History, Stats, and Settings.
+- The FieldHound-style footer ("powered by" over the GRUNTHOUND LLC wordmark) is pinned to the bottom of Train, History, Stats, Fuel, and Settings.
 - The app opens with no network and no account.
 
 Added by the owner on 2026-10-09:
