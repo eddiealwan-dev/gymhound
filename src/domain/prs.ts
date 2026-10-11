@@ -13,6 +13,18 @@ export const PR_BIT: Record<PrKind, number> = {
   longest_hold: 8,
 };
 
+/**
+ * How many personal bests a workout set (R178): the distinct (exercise, kind) pairs among its flagged sets, the same
+ * count as the finish summary's Personal bests list (R105). The one shared count for History and the weekly analytics.
+ */
+export function countPrKinds(rows: readonly { exerciseId: string; prFlags: number }[]): number {
+  const pairs = new Set<string>();
+  for (const { exerciseId, prFlags } of rows) {
+    for (const bit of Object.values(PR_BIT)) if ((prFlags & bit) !== 0) pairs.add(`${exerciseId}:${bit}`);
+  }
+  return pairs.size;
+}
+
 export type PrCandidate = {
   id: string;
   workoutId: string;
