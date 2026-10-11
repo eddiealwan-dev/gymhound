@@ -1,10 +1,12 @@
 import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
+import type { PrHighlight } from '../../domain/prs';
 import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { getWorkoutPrs } from './prRepo';
 import { ruleOf } from './ruleSnapshot';
 
 export type SetView = PrevSet & {
@@ -60,6 +62,8 @@ export type FinishSummary = {
   setCount: number;
   /** Next time's weight for each exercise with a rule and a next weight, in workout order (spec 8.5, R64). */
   next: NextTime[];
+  /** The personal bests set in this workout (R105), in workout order: one per exercise and kind. Empty when none. */
+  prs: PrHighlight[];
 };
 
 const PREV_SET_COLUMNS = {
@@ -250,7 +254,7 @@ function selectNextTimes(db: Db, workoutId: string): NextTime[] {
 }
 
 /**
- * The duration, volume, done-set count and next-time weights of a finished workout. Throws if it does not exist or is
+ * The duration, volume, done-set count, next-time weights and personal bests of a finished workout. Throws if it does not exist or is
  * not finished.
  */
 export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightUnit): FinishSummary {
@@ -267,5 +271,6 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     volume: totalVolume(workoutSets, displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
     next: selectNextTimes(db, workoutId),
+    prs: getWorkoutPrs(db, workoutId),
   };
 }

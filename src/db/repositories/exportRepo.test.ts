@@ -144,13 +144,23 @@ describe('workoutCsvRows', () => {
     expect(rows.map((r) => r[col('exercise_note')])).toEqual(['elbows in, pause', 'elbows in, pause', 'elbows in, pause', null, null]);
   });
 
-  it('writes the PR kinds from the stored flags, empty when there are none', () => {
+  it('writes the PR kinds the finish stored, empty when there are none (7.6, R103)', () => {
+    const { db } = build();
+
+    const rows = workoutCsvRows(db, () => 0);
+
+    // Oct 1 started first, so it is the first session even though it was logged second; Oct 6's 60 kg x 5 (132.3 lb)
+    // then beats its 105 x 4. The warm-up and the overhead press's only session flag nothing.
+    expect(rows.map((r) => r[col('pr')])).toEqual(['', '', '', '', 'heaviest|e1rm']);
+  });
+
+  it('writes every kind a set holds from the stored flags', () => {
     const { db } = build();
     db.update(sets).set({ prFlags: 5 }).where(eq(sets.weight, 105)).run();
 
     const rows = workoutCsvRows(db, () => 0);
 
-    expect(rows.map((r) => r[col('pr')])).toEqual(['', '', 'heaviest|e1rm', '', '']);
+    expect(rows.map((r) => r[col('pr')])[2]).toBe('heaviest|e1rm');
   });
 
   it("writes each exercise's Something off mark as day_mark, and normal for an exercise with none, never the workout's old day mark (R60)", () => {

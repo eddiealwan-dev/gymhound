@@ -15,6 +15,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { closeAppDb, liveDbPath, openAppDb, openAppDbAsync } from '../src/db/client';
 import { DbProvider } from '../src/db/DbProvider';
 import migrations from '../src/db/migrations/migrations';
+import { backfillPrFlags } from '../src/db/repositories/prRepo';
 import { ensureSettings } from '../src/db/repositories/settingsRepo';
 import { snapshotTime, startDatabase } from '../src/db/snapshots';
 import type { Db } from '../src/db/types';
@@ -186,7 +187,10 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
   );
 }
 
-/** The database is open and migrated. Ensures settings (so the seed picks the device's units), then seeds, and only then shows the app. */
+/**
+ * The database is open and migrated. Ensures settings (so the seed picks the device's units), then seeds, writes PR
+ * flags for older workouts once (R127), and only then shows the app.
+ */
 function Boot({ db, restoredFrom }: { db: Db; restoredFrom: string | null }) {
   const [fontsLoaded, fontError] = useFonts({
     [fonts.display600]: BarlowCondensed_600SemiBold,
@@ -203,6 +207,8 @@ function Boot({ db, restoredFrom }: { db: Db; restoredFrom: string | null }) {
     try {
       ensureSettings(db, getLocales()[0]?.measurementSystem ?? null);
       runSeed(db, Date.now());
+      // Once (R127): PR flags for workouts finished before phase 4. Only reads a setting after that.
+      backfillPrFlags(db);
       if (restoredFrom !== null) recordRestoredSnapshot(db, restoredFrom);
       setSeeded(true);
     } catch (e) {

@@ -18,6 +18,7 @@ const SPEC_KEYS = [
   'music_app',
   'plates_kg',
   'plates_lb',
+  'pr_flags_backfilled',
   'pro_cached',
   'pro_debug_unlock',
   'rest_bell',
