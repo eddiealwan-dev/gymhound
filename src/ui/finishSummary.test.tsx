@@ -53,10 +53,11 @@ describe('the finish summary (8.5, R64)', () => {
     mockRead = {
       unit: 'lb',
       summary: pushA([
-        { name: 'Barbell bench press', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
-        { name: 'Overhead press', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
-        { name: 'Incline dumbbell press', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
-        { name: 'Triceps pushdown', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+        { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+        { name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+        { name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+        { name: 'Assisted pull-up', loggingType: 'assisted', outcome: 'raised', nextWeight: 30, nextUnit: 'lb', mark: null },
+        { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
       ]),
     };
     const text = shownText(mount());
@@ -65,6 +66,7 @@ describe('the finish summary (8.5, R64)', () => {
       'Barbell bench press — next time 140 lb ↑',
       'Overhead press — holds at 95 lb · Pain',
       'Incline dumbbell press — holds at 50 lb',
+      'Assisted pull-up — next time 30 lb ↓',
       'Triceps pushdown — holds at 40 lb',
     ];
     const logged = text.indexOf('3 sets');

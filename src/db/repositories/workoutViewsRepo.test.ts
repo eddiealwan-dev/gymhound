@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
 import { totalVolume } from '../../domain/volume';
-import { routineExercises } from '../schema';
+import { exercises, routineExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setRestSeconds } from './exercisePrefsRepo';
@@ -143,7 +143,7 @@ describe('getFinishSummary', () => {
       volume: 675,
       setCount: 2,
       // One working set of the four missed: the bench holds at what was lifted.
-      next: [{ name: 'Barbell bench press', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
+      next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
     });
   });
 
@@ -201,10 +201,10 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     finishWorkout(db, id, OCT_9 + 60 * MINUTE);
 
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
-      { name: 'Barbell bench press', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
-      { name: 'Overhead press', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
-      { name: 'Incline dumbbell press', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
-      { name: 'Triceps pushdown', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+      { name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+      { name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+      { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
     ]);
   });
 
@@ -234,7 +234,21 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     finishWorkout(db, id, OCT_9 + 60 * MINUTE);
 
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
-      { name: 'Barbell bench press', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
+      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
+    ]);
+  });
+
+  it("carries each exercise's logging type: an assisted raise takes assistance off (R72)", () => {
+    const db = seededDb();
+    db.update(exercises).set({ loggingType: 'assisted' }).where(eq(exercises.id, 'cable-triceps-pushdown')).run();
+    plan(db, 'cable-triceps-pushdown', 40);
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    // Every set of three hits 15 with 40 lb of help, so 5 lb of it comes off.
+    setIds(db, 4).forEach((setId, i) => tick(db, setId, 40, 15, OCT_9 + (i + 1) * MINUTE));
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Triceps pushdown', loggingType: 'assisted', outcome: 'raised', nextWeight: 35, nextUnit: 'lb', mark: null },
     ]);
   });
 });

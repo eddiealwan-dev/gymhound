@@ -233,6 +233,7 @@ function selectNextTimes(db: Db, workoutId: string): NextTime[] {
   const rows = db
     .select({
       name: exercises.name,
+      loggingType: exercises.loggingType,
       outcome: workoutExercises.outcome,
       nextWeight: workoutExercises.nextWeight,
       nextUnit: workoutExercises.nextUnit,
@@ -243,10 +244,10 @@ function selectNextTimes(db: Db, workoutId: string): NextTime[] {
     .where(eq(workoutExercises.workoutId, workoutId))
     .orderBy(asc(workoutExercises.position))
     .all();
-  return rows.flatMap(({ name, outcome, nextWeight, nextUnit, mark }) =>
+  return rows.flatMap(({ name, loggingType, outcome, nextWeight, nextUnit, mark }) =>
     outcome === null || outcome === 'no_rule' || nextWeight === null || nextUnit === null
       ? []
-      : [{ name, outcome, nextWeight, nextUnit, mark }],
+      : [{ name, loggingType, outcome, nextWeight, nextUnit, mark }],
   );
 }
 

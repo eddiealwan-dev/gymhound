@@ -133,15 +133,23 @@ export function todaysRead(a: {
 }
 
 /** What the rule left for one exercise at finish: next time's weight, in the unit it was set in, and why. */
-export type NextTime = { name: string; outcome: Outcome; nextWeight: number; nextUnit: WeightUnit; mark: ExerciseMark | null };
+export type NextTime = {
+  name: string;
+  loggingType: LoggingType;
+  outcome: Outcome;
+  nextWeight: number;
+  nextUnit: WeightUnit;
+  mark: ExerciseMark | null;
+};
 
 /**
  * The finish summary's line for one exercise (spec 8.5, R64): "Bench press — next time 185 lb ↑" when the rule
- * raised it, else "Bench press — holds at 180 lb", with " · {Reason}" when a Something off flag held it.
+ * raised it, else "Bench press — holds at 180 lb", with " · {Reason}" when a Something off flag held it. A raised
+ * assisted exercise takes assistance off, so its arrow points down (R72).
  */
 export function finishLine(n: NextTime): string {
   const weight = formatWeight(n.nextWeight, n.nextUnit);
-  if (n.outcome === 'raised') return `${n.name} — next time ${weight} ↑`;
+  if (n.outcome === 'raised') return `${n.name} — next time ${weight} ${n.loggingType === 'assisted' ? '↓' : '↑'}`;
   const reason = n.outcome === 'held_marked' && n.mark ? ` · ${MARK_LABELS[n.mark]}` : '';
   return `${n.name} — holds at ${weight}${reason}`;
 }

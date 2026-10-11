@@ -316,6 +316,7 @@ describe("lastSummary: last time's sets for the rule line", () => {
 describe('finishLine (spec 8.5, R64)', () => {
   const bench = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null, nextUnit: WeightUnit = 'lb'): NextTime => ({
     name: 'Bench press',
+    loggingType: 'weighted',
     outcome,
     nextWeight,
     nextUnit,
@@ -342,5 +343,25 @@ describe('finishLine (spec 8.5, R64)', () => {
   it('keeps the unit the weight was logged in, without trailing zeros', () => {
     expect(finishLine(bench('raised', 82.5, null, 'kg'))).toBe('Bench press — next time 82.5 kg ↑');
     expect(finishLine(bench('held', 80, null, 'kg'))).toBe('Bench press — holds at 80 kg');
+  });
+
+  it('assisted: a raise takes assistance off, so it points down (R72); a hold reads as any other', () => {
+    const pullUp = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null): NextTime => ({
+      name: 'Assisted pull-up',
+      loggingType: 'assisted',
+      outcome,
+      nextWeight,
+      nextUnit: 'lb',
+      mark,
+    });
+    expect(finishLine(pullUp('raised', 30))).toBe('Assisted pull-up — next time 30 lb ↓');
+    expect(finishLine(pullUp('held', 40))).toBe('Assisted pull-up — holds at 40 lb');
+    expect(finishLine(pullUp('held_marked', 40, 'pain'))).toBe('Assisted pull-up — holds at 40 lb · Pain');
+  });
+
+  it('every other loaded type that is raised points up', () => {
+    for (const loggingType of ['bodyweight_plus', 'weighted_time'] as const) {
+      expect(finishLine({ ...bench('raised', 185), loggingType })).toBe('Bench press — next time 185 lb ↑');
+    }
   });
 });
