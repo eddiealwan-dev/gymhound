@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer, ReactTestRendererJSON } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { flushAll } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote, tick, untick } from '../../state/sessionActions';
@@ -702,53 +702,69 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     expect(shownText(mount(bench([])))).not.toContain('0/0');
   });
 
-  it('the name row wraps at large text: the count, + Note, Something off and ⋯ drop to a second line together, right-aligned', () => {
+  it('the name row keeps the name beside ⋯, and the count, + Note and Something off drop under it as one quiet line (design pass)', () => {
     const tree = mount(fourSets());
     const name = tree.root.findAll((n) => n.type === Text && n.props.children === 'Bench Press')[0];
     const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4')[0];
     const addNote = byLabel(tree, 'Add a note for Bench Press');
     const somethingOff = byLabel(tree, 'Something off for Bench Press');
     const options = byLabel(tree, 'Options for Bench Press');
+    const holds = (n: ReactTestInstance, m: ReactTestInstance) => n.findAll((x) => x === m).length > 0;
+    /** The innermost node under `root` that holds every one of `parts`. */
+    const innermost = (root: ReactTestInstance, parts: ReactTestInstance[]) => {
+      const all = root.findAll((n) => n !== root && parts.every((m) => holds(n, m)));
+      return all[all.length - 1];
+    };
 
-    // The row is the nearest ancestor of the name that also holds the controls.
+    // The row is the nearest ancestor of the name that also holds ⋯: [name and its group][⋯], ⋯ never squeezed and
+    // centred on the name's first line.
     let row = name.parent!;
     while (!row.findAll((n) => n === options).length) row = row.parent!;
-    expect(StyleSheet.flatten(row.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }),
+    expect(StyleSheet.flatten(row.props.style)).toEqual(expect.objectContaining({ flexDirection: 'row', alignItems: 'flex-start' }));
+    expect(restingStyle(options)).toMatchObject({ width: 44, height: 44, marginVertical: -9, flexShrink: 0 });
+
+    // The name and the group share a wrapping column beside ⋯: on one line when both fit, else the group drops under
+    // the name. flex: 1 on the name would give it a flex basis of 0, so the group would never drop and the name would
+    // be squeezed.
+    const column = innermost(row, [name, count, addNote, somethingOff]);
+    expect(StyleSheet.flatten(column.props.style)).toEqual(
+      expect.objectContaining({ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }),
     );
-    // flex: 1 would give the name a flex basis of 0, so the row would never wrap and the name would be squeezed.
+    expect(holds(column, options)).toBe(false);
     const nameStyle = StyleSheet.flatten(name.props.style);
-    expect(nameStyle).toEqual(expect.objectContaining({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
+    expect(nameStyle).toEqual(expect.objectContaining({ flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
+    // It takes its own width and does not grow, so the group follows the name on one line as it does when it drops under it.
+    expect(nameStyle.flexGrow).toBeUndefined();
     expect(nameStyle.flex).toBeUndefined();
 
-    // The four controls share one parent inside the row, pushed right and never squeezed. Wider than the row (the
-    // largest text), they wrap among themselves, right-aligned, rather than run off the edge.
-    const holds = (n: ReactTestInstance, m: ReactTestInstance) => n.findAll((x) => x === m).length > 0;
-    const group = row.findAll((n) => n !== row && [count, addNote, somethingOff, options].every((m) => holds(n, m)));
-    const controls = group[group.length - 1];
-    expect(controls).toBeDefined();
-    expect(StyleSheet.flatten(controls.props.style)).toEqual(
-      expect.objectContaining({
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        marginLeft: 'auto',
-        flexShrink: 0,
-        maxWidth: '100%',
-      }),
-    );
-    expect(controls.findAll((n) => n === name)).toHaveLength(0);
-    // Order stays [name][count][+ Note][Something off][⋯] (R81), with 44pt targets.
+    // The count, + Note and Something off share one group, left-aligned with the name when it drops, never squeezed.
+    // Wider than the column (the largest text), it wraps among itself rather than run off the edge.
+    const group = innermost(column, [count, addNote, somethingOff]);
+    const groupStyle = StyleSheet.flatten(group.props.style);
+    expect(groupStyle).toEqual(expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0, maxWidth: '100%' }));
+    expect(groupStyle.justifyContent).toBeUndefined();
+    expect(groupStyle.marginLeft).toBeUndefined();
+    expect(holds(group, name)).toBe(false);
+    // Stacked at large text, the controls' reaches meet and never overlap.
+    expect(groupStyle.rowGap).toBe(20);
+
+    // Order stays [name][count][+ Note][Something off][⋯] (R81).
     const shown = shownText(tree);
     expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf('1/4'));
     expect(shown.indexOf('1/4')).toBeLessThan(shown.indexOf('+ Note'));
     expect(shown.indexOf('+ Note')).toBeLessThan(shown.indexOf('Something off'));
     const drawn = tree.root.findAll(() => true);
     expect(drawn.indexOf(somethingOff)).toBeLessThan(drawn.indexOf(options));
-    expect(StyleSheet.flatten(addNote.props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
-    expect(StyleSheet.flatten(somethingOff.props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
-    expect(StyleSheet.flatten(options.props.style({ pressed: false }))).toMatchObject({ width: 44, height: 44 });
+
+    // 44pt targets: + Note and Something off draw a 24pt line and reach 10pt above and below it, and 6pt to each
+    // side, half the group's 12pt gap, so neighbours meet without overlapping.
+    for (const control of [addNote, somethingOff]) {
+      expect(restingStyle(control)).toMatchObject({ minHeight: 24, minWidth: 44 });
+      expect(control.props.hitSlop).toEqual({ top: 10, bottom: 10, left: 6, right: 6 });
+      expect(targetHeight(control)).toBe(44);
+    }
+    expect(groupStyle.columnGap).toBe(12);
+    expect(targetHeight(options)).toBeGreaterThanOrEqual(44);
   });
 
   it("the next set's tick has the bolder ring", () => {
@@ -895,6 +911,14 @@ const noteFields = (tree: ReactTestRenderer) =>
 const restingStyle = (node: { props: { style?: unknown } }) =>
   StyleSheet.flatten(typeof node.props.style === 'function' ? node.props.style({ pressed: false }) : node.props.style);
 
+/** How tall a Pressable's target is: what it draws (its minHeight, else its height) and its hitSlop above and below. */
+function targetHeight(node: ReactTestInstance): number {
+  const style = restingStyle(node);
+  const slop = node.props.hitSlop as number | { top?: number; bottom?: number } | undefined;
+  const reach = typeof slop === 'number' ? 2 * slop : (slop?.top ?? 0) + (slop?.bottom ?? 0);
+  return Number(style.minHeight ?? style.height) + reach;
+}
+
 /** The drawn Text whose child is exactly `text`. */
 const textNode = (tree: ReactTestRenderer, text: string) => {
   const found = tree.root.findAll((n) => n.type === Text && n.props.children === text);
@@ -907,6 +931,52 @@ const SAVED = 'Pause on the chest, 2s';
 const withNote = (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), note: SAVED });
 
 describe('ExerciseBlock: the note (UX item 6, R29)', () => {
+  describe("whatever is drawn under the name row starts below its controls' reach (design pass, fix round 1)", () => {
+    /**
+     * The block's drawn children (host nodes, in order), the one right after the name row, and how far the name row's
+     * controls reach below their line. A sibling drawn later wins the hit test where the two overlap, so the gap
+     * between them must cover that reach for + Note and Something off to keep their whole 44pt.
+     */
+    const underNameRow = (tree: ReactTestRenderer) => {
+      const isNode = (c: unknown): c is ReactTestRendererJSON => typeof c === 'object' && c !== null;
+      const holds = (node: ReactTestRendererJSON, label: string): boolean =>
+        node.props.accessibilityLabel === label || (node.children ?? []).some((c) => isNode(c) && holds(c, label));
+      const block = tree.toJSON() as ReactTestRendererJSON;
+      const drawn = (block.children ?? []).filter(isNode);
+      const row = drawn.findIndex((node) => holds(node, 'Options for Bench Press'));
+      expect(row).toBeGreaterThanOrEqual(0);
+      const next = drawn[row + 1];
+      const reach = (byLabel(tree, 'Something off for Bench Press').props.hitSlop as { bottom: number }).bottom;
+      return { next, gap: Number(StyleSheet.flatten(next.props.style)?.marginTop ?? 0), reach };
+    };
+
+    it('the rule line, with no note', () => {
+      const { next, gap, reach } = underNameRow(mount(bench([set('s0', 0)])));
+
+      expect(next.type).toBe('Text');
+      expect(reach).toBe(10);
+      expect(gap).toBeGreaterThanOrEqual(reach);
+    });
+
+    it('the saved note line, which keeps its 44pt', () => {
+      const tree = mount(withNote());
+      const { next, gap, reach } = underNameRow(tree);
+
+      expect(next.props.accessibilityLabel).toBe(`Note for Bench Press: ${SAVED}`);
+      expect(gap).toBeGreaterThanOrEqual(reach);
+      expect(restingStyle(byLabel(tree, `Note for Bench Press: ${SAVED}`))).toMatchObject({ minHeight: 44 });
+    });
+
+    it('the note field, while it is open', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      act(() => byLabel(tree, ADD_NOTE).props.onPress());
+      const { next, gap, reach } = underNameRow(tree);
+
+      expect(next.props.accessibilityLabel).toBe('Note for Bench Press');
+      expect(gap).toBeGreaterThanOrEqual(reach);
+    });
+  });
+
   it('an empty note shows "+ Note" in the header and no field', () => {
     const tree = mount(bench([set('s0', 0)]));
 
@@ -1130,7 +1200,9 @@ describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () =>
       expect(text.props.numberOfLines).toBeUndefined();
       expect(StyleSheet.flatten(text.props.style)).toMatchObject({ flexShrink: 1 });
       // It may shrink within the controls group, so its words wrap there.
-      expect(restingStyle(node)).toMatchObject({ minHeight: 44, flexShrink: 1 });
+      expect(restingStyle(node)).toMatchObject({ flexShrink: 1 });
+      // A 24pt line that reaches 10pt above and below it (design pass).
+      expect(targetHeight(node)).toBe(44);
     });
 
     it('tapping it opens the Something off reasons for this exercise', () => {
@@ -1228,7 +1300,8 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     const row = buttons[0].parent;
     expect(row).not.toBeNull();
     expect(buttons[1].parent).toBe(row);
-    expect(StyleSheet.flatten(row!.props.style)).toMatchObject({ flexDirection: 'row', justifyContent: 'flex-start' });
+    // The row steps back by a quiet button's 12pt padding, so "+ Set" lines up with the set column (design pass).
+    expect(StyleSheet.flatten(row!.props.style)).toMatchObject({ flexDirection: 'row', justifyContent: 'flex-start', marginLeft: -12 });
     expect(shownText(tree)).not.toContain('+ Add set');
     expect(shownText(tree)).not.toContain('+ Add warmup');
   });
@@ -1258,7 +1331,8 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     expect(restingStyle(byLabel(tree, 'Options for Bench Press'))).toMatchObject({ width: 44, height: 44 });
     // + Note shares Something off's control: it keeps its 44pt target, and shrinks (its words wrap) only when it alone is
     // wider than the controls group, which wraps first (Round 5 review).
-    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 1, minHeight: 44 });
+    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 1 });
+    expect(targetHeight(byLabel(tree, ADD_NOTE))).toBe(44);
     expect(StyleSheet.flatten(textNode(tree, 'Bench Press').props.style)).toMatchObject({ minWidth: 0 });
     // [name][count][+ Note][⋯], in the order they are drawn: every node, in drawing order (a parent before its children).
     const drawn = tree.root.findAll(() => true);

@@ -970,6 +970,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - The line under the name is two parts in a row, read as one label: the count ("5/18 sets") shrinks and truncates first, and the time (" · 24:10") is never cut.
     - Music has 8pt to Finish, so their 4pt hit slops never overlap.
   - Each exercise block shows a muted "{done}/{total}" before ⋯.
+    - Design pass (2026-10-11, pending the owner's iPhone check): the count leads the quiet group described under §18.7 R81, which follows the name. ⋯ stands alone at the right edge, level with the name.
   - The next set to do has a bolder tick ring (2.5pt, text colour). It is the first unticked set in workout order. In a superset, it is in the member with the fewest ticked sets, with the earlier member winning a tie.
 - **Suggested values look like suggestions:**
   - Today's target and every placeholder (from last time, the rule or a carry) draw with no fill, a dashed `borderStrong` outline, `textFaint` and Barlow 600.
@@ -978,6 +979,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - A cleared weight field on a row with a target shows the target as its placeholder, which is what the tick logs. A ticked set does too: leaving the weight blank takes the tick off, and the open row then shows the target.
 - **Slimmer exercise blocks** (replaces the always-open note in §8.4 and the §18.2 button labels):
   - An empty note shows a quiet **+ Note** with a pencil in the name row. It opens the note field, focused.
+    - Design pass (2026-10-11, pending the owner's iPhone check): + Note sits in the name row's quiet group (see §18.7 R81), beside the name when it fits, else on the line under it.
   - A saved note shows in full as a muted line under the name. Tap it to edit.
     - Round 5: the line leads with + Note's 14pt pencil. With a note saved there is no + Note, and the plain muted line read as the first line of the rule under it (phase 2), so the note looked missing on those exercises.
   - The note saves when the field is left and on every flush (R29). A blank note clears it.
@@ -1014,6 +1016,11 @@ The owner asked for phase 2 to start overnight without a review stop, so the cho
   - Each exercise in a session can be flagged from its ⋯ menu: **Something off** opens a sheet with Rough sleep, Sick, Short on food, Pain and Cutting, plus **Nothing off** to clear it. It is stored as `workout_exercises.mark` (null = nothing off).
   - A flagged exercise shows a muted line under its name, "Something off: {reason}".
     - Round 5 (R81): that line is gone. The name row has a quiet **Something off** control beside + Note, in the same compact style (a 14pt `alert-circle-outline` and the words), in the order [name][count][+ Note][Something off][⋯]. Flagged, it shows the reason instead ("Rough sleep"), muted, never red. Tapping it saves what is typed, puts the keyboard away and opens the ⋯ sheet straight on the Something off reasons. VoiceOver reads "Something off for {name}" or "Something off for {name}: {Reason}". Wider than the row (the largest text), the controls wrap among themselves, right-aligned.
+    - Design pass (2026-10-11, the design pass's change, pending the owner's iPhone check; it replaces the layout in the line above): the count, + Note and Something off with ⋯ never fitted beside a name on a phone (about 217pt of icons and words before any spacing, against 288 to 358pt of row and 101 to 179pt names), so every block spent a 44pt row on them, and at 320pt ⋯ wrapped onto a third line. Now:
+      - ⋯ stands alone at the right edge, a 44pt box level with the name's first line, over the tick column. The name always keeps the width beside it.
+      - The count, + Note and Something off are one quiet group that follows the name: beside it on the same line when both fit (a short name, a flagged day with a saved note, a tablet), otherwise on a line under it, left-aligned with the name. The order stays [name][count][+ Note][Something off][⋯].
+      - + Note and Something off draw a 24pt line and reach 10pt above and below it (44pt targets) and 6pt to each side (half the 12pt gap). Whatever is drawn under the name row (the note line, the note field, the rule line) starts 10pt down, so no later sibling takes part of those targets. The block's header is 53pt on a phone (was about 70pt at 390pt and 114pt at 320pt).
+      - At large text the name wraps, the group wraps among itself (20pt apart, so the reaches never overlap) and words wrap rather than end in "…".
   - `workouts.day_mark` stays in the database but the app no longer reads or writes it. The CSV keeps its `day_mark` column and fills it from the exercise's mark ("normal" when nothing is off).
   - The Short on food and Rough sleep one-tap offers wait for Fuel (phase 5) and Health (phase 7).
 - **The rule (§7.3) runs at finish, per exercise.** "Marked day" means the exercise is flagged.

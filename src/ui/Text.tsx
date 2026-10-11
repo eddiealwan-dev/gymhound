@@ -27,6 +27,22 @@ export function Body({ weight = 400, muted = false, style, ...rest }: BodyProps)
   return <Text {...rest} style={[{ fontFamily: BODY[weight], fontSize: 16, color: muted ? colors.textMuted : colors.text }, style]} />;
 }
 
+/**
+ * Inter 600 at 14pt, muted, upper case and lightly tracked: the state label on a Train card ("UP NEXT") and the heading
+ * of a group of settings or routines. The words are written as they read ("Units"); the screen reader hears them as a
+ * heading, in the case they were written in.
+ */
+export function Label({ style, ...rest }: TextProps) {
+  const { colors } = useTheme();
+  return (
+    <Text
+      accessibilityRole="header"
+      {...rest}
+      style={[{ fontFamily: BODY[600], fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.textMuted }, style]}
+    />
+  );
+}
+
 /** Barlow Condensed with tabular figures, so columns of numbers line up. */
 export function Num({ weight = 700, style, ...rest }: NumProps) {
   const { colors } = useTheme();

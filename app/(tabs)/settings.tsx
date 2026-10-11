@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
@@ -14,7 +15,7 @@ import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersio
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
-import { Body, Display } from '../../src/ui/Text';
+import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -109,6 +110,30 @@ function AppearanceControl() {
 }
 
 /**
+ * A group of settings under its heading (the shared upper-case Label, read as a heading). The heading sits 8pt over
+ * its first item; the items are 16pt apart, so a field's label is closer to its own control than to the one above it.
+ * The page puts 32pt between groups.
+ */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Label>{title}</Label>
+      <View style={{ gap: 16 }}>{children}</View>
+    </View>
+  );
+}
+
+/** A setting's name over its control, 8pt apart. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Body>{label}</Body>
+      {children}
+    </View>
+  );
+}
+
+/**
  * The display unit for weights (switching follows spec 7.1: only the setting changes, and plans convert when a workout
  * starts) and the unit for distances.
  */
@@ -116,44 +141,42 @@ function UnitsSection() {
   const db = useDb();
   const { unit, distanceUnit } = useDbQuery(getSettings);
   return (
-    <View style={{ gap: 8, marginTop: 24 }}>
-      <Body weight={600} muted>
-        Units
-      </Body>
-      <Body>Weight</Body>
-      <SegmentedControl
-        label="Weight"
-        options={WEIGHT_OPTIONS}
-        value={unit}
-        onChange={(value) => {
-          switchDisplayUnit(db, value);
-          bumpData();
-        }}
-      />
-      <Body>Distance</Body>
-      <SegmentedControl
-        label="Distance"
-        options={DISTANCE_OPTIONS}
-        value={distanceUnit}
-        onChange={(value) => {
-          setSetting(db, 'distanceUnit', value);
-          bumpData();
-        }}
-      />
-    </View>
+    <Section title="Units">
+      <Field label="Weight">
+        <SegmentedControl
+          label="Weight"
+          options={WEIGHT_OPTIONS}
+          value={unit}
+          onChange={(value) => {
+            switchDisplayUnit(db, value);
+            bumpData();
+          }}
+        />
+      </Field>
+      <Field label="Distance">
+        <SegmentedControl
+          label="Distance"
+          options={DISTANCE_OPTIONS}
+          value={distanceUnit}
+          onChange={(value) => {
+            setSetting(db, 'distanceUnit', value);
+            bumpData();
+          }}
+        />
+      </Field>
+    </Section>
   );
 }
 
-/** The bar for the display unit. */
+/** The bar for the display unit, under a muted line that says what it is for. */
 function BarSection() {
   return (
-    <View style={{ gap: 8, marginTop: 24 }}>
-      <Body weight={600} muted>
-        Bar
-      </Body>
-      <Body>Used by the plate calculator.</Body>
-      <BarPicker />
-    </View>
+    <Section title="Bar">
+      <View style={{ gap: 8 }}>
+        <Body muted>Used by the plate calculator.</Body>
+        <BarPicker />
+      </View>
+    </Section>
   );
 }
 
@@ -240,18 +263,16 @@ function RestTimerSection() {
   const db = useDb();
   const { restSeconds, restBell, restBellSound, restBellVolume } = useDbQuery(getSettings);
   return (
-    <View style={{ gap: 8, marginTop: 24 }}>
-      <Body weight={600} muted>
-        Rest timer
-      </Body>
-      <Body>Length</Body>
-      <RestLengthControl
-        value={restSeconds}
-        onChange={(seconds) => {
-          setSetting(db, 'restSeconds', seconds);
-          bumpData();
-        }}
-      />
+    <Section title="Rest timer">
+      <Field label="Length">
+        <RestLengthControl
+          value={restSeconds}
+          onChange={(seconds) => {
+            setSetting(db, 'restSeconds', seconds);
+            bumpData();
+          }}
+        />
+      </Field>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body>Bell at the end</Body>
         <Switch
@@ -261,34 +282,39 @@ function RestTimerSection() {
             setSetting(db, 'restBell', value);
             bumpData();
           }}
-          trackColor={{ false: colors.border, true: colors.text }}
+          // Off, the track is borderStrong (3:1 on the page in both themes), not border: a bg-coloured thumb on a border
+          // track all but vanished in dark. iOS shows the off track through `ios_backgroundColor`.
+          trackColor={{ false: colors.borderStrong, true: colors.text }}
+          ios_backgroundColor={colors.borderStrong}
           thumbColor={colors.bg}
           // react-native-web colours the thumb of a switch that is on from `activeThumbColor` (React Native has only
           // `thumbColor`) and would leave it teal. The phone ignores the extra prop.
           {...({ activeThumbColor: colors.bg } as object)}
         />
       </View>
-      <Body>Bell sound</Body>
-      <SegmentedControl
-        label="Bell sound"
-        options={BELL_OPTIONS}
-        value={restBellSound}
-        onChange={(value) => {
-          setSetting(db, 'restBellSound', value);
-          bumpData();
-          void playBell(value, restBellVolume);
-        }}
-      />
-      <Body>Bell volume</Body>
-      <BellVolumeControl
-        value={restBellVolume}
-        onChange={(volume) => {
-          setSetting(db, 'restBellVolume', volume);
-          bumpData();
-          void playBell(restBellSound, volume);
-        }}
-      />
-    </View>
+      <Field label="Bell sound">
+        <SegmentedControl
+          label="Bell sound"
+          options={BELL_OPTIONS}
+          value={restBellSound}
+          onChange={(value) => {
+            setSetting(db, 'restBellSound', value);
+            bumpData();
+            void playBell(value, restBellVolume);
+          }}
+        />
+      </Field>
+      <Field label="Bell volume">
+        <BellVolumeControl
+          value={restBellVolume}
+          onChange={(volume) => {
+            setSetting(db, 'restBellVolume', volume);
+            bumpData();
+            void playBell(restBellSound, volume);
+          }}
+        />
+      </Field>
+    </Section>
   );
 }
 
@@ -314,14 +340,11 @@ function BackupsSection() {
   const latestPath = listing.path;
   const failedSinceLastGood = lastSnapshotError !== null && (lastSnapshotAt === null || lastSnapshotError.at > lastSnapshotAt);
   return (
-    <View style={{ gap: 8, marginTop: 24 }}>
-      <Body weight={600} muted>
-        Backups
-      </Body>
+    <Section title="Backups">
       {Platform.OS === 'web' ? (
         <Body>Backups run in the phone app.</Body>
       ) : (
-        <>
+        <View style={{ gap: 8 }}>
           <Body>{lastSnapshotAt === null ? 'No snapshot yet.' : `Last snapshot: ${formatDateTime(lastSnapshotAt)}`}</Body>
           {failedSinceLastGood ? (
             <Body>{`The last snapshot failed: ${lastSnapshotError.message} (${formatDateTime(lastSnapshotError.at)}).`}</Body>
@@ -350,9 +373,9 @@ function BackupsSection() {
             </>
           ) : null}
           {shareFailed ? <Body muted>{SHARE_FAILED}</Body> : null}
-        </>
+        </View>
       )}
-    </View>
+    </Section>
   );
 }
 
@@ -369,14 +392,11 @@ function ExportSection() {
   const exporting = useRef(false);
   const [busy, setBusy] = useState(false);
   return (
-    <View style={{ gap: 8, marginTop: 24 }}>
-      <Body weight={600} muted>
-        Export
-      </Body>
+    <Section title="Export">
       {Platform.OS === 'web' ? (
         <Body>Export runs in the phone app.</Body>
       ) : (
-        <>
+        <View style={{ gap: 8 }}>
           <Button
             label="Export workouts (CSV)"
             variant="secondary"
@@ -399,9 +419,9 @@ function ExportSection() {
             }}
           />
           {message !== null && message.version === version ? <Body muted>{message.text}</Body> : null}
-        </>
+        </View>
       )}
-    </View>
+    </Section>
   );
 }
 
@@ -410,17 +430,17 @@ export default function Settings() {
   return (
     <Screen footer>
       <Display>Settings</Display>
-      <View style={{ gap: 8, marginTop: 16 }}>
-        <Body weight={600} muted>
-          Appearance
-        </Body>
-        <AppearanceControl />
+      {/* 24pt under the title, then 32pt between groups: more room above a heading than under it. */}
+      <View style={{ gap: 32, marginTop: 24 }}>
+        <Section title="Appearance">
+          <AppearanceControl />
+        </Section>
+        <UnitsSection />
+        <BarSection />
+        <RestTimerSection />
+        <BackupsSection />
+        <ExportSection />
       </View>
-      <UnitsSection />
-      <BarSection />
-      <RestTimerSection />
-      <BackupsSection />
-      <ExportSection />
     </Screen>
   );
 }
