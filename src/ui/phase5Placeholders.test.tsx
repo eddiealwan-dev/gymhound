@@ -6,7 +6,6 @@ import TabsLayout from '../../app/(tabs)/_layout';
 import FoodRoute from '../../app/food/[id]';
 import AddFoodRoute from '../../app/food/add';
 import PaywallRoute from '../../app/paywall';
-import { FuelTrends } from './fuel/FuelTrends';
 import { TargetsForm } from './fuel/TargetsForm';
 import { Footer } from './Footer';
 import { ProPitch } from './pro/ProPitch';
@@ -88,7 +87,6 @@ describe('the stubs draw nothing until their task fills them', () => {
     ['ProPitch', <ProPitch key="p" context="screen" />],
     ['ProPitch in the tab', <ProPitch key="t" context="tab" onDone={() => {}} />],
     ['TargetsForm', <TargetsForm key="f" initial={null} submitLabel="Save targets" onSaved={() => {}} />],
-    ['FuelTrends', <FuelTrends key="r" today="2026-10-11" />],
     ['FoodOfferBanner', <FoodOfferBanner key="b" workoutId="w1" />],
   ])('%s', (_name, element) => {
     expect(render(element).toJSON()).toBeNull();

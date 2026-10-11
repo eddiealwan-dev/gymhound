@@ -1,4 +1,4 @@
-import { chartSummary, formatChartDate, niceTicks, plotSeries, pointsInRange } from './chart';
+import { chartSummary, formatChartDate, niceTicks, plotSeries, pointsInDays, pointsInRange } from './chart';
 import type { SeriesPoint } from './chart';
 
 const p = (localDate: string, value: number): SeriesPoint => ({ localDate, value });
@@ -42,6 +42,47 @@ describe('pointsInRange', () => {
     const input = [points[4], points[0]];
     pointsInRange(input, 'All', today);
     expect(input.map((x) => x.value)).toEqual([5, 1]);
+  });
+});
+
+describe('pointsInDays', () => {
+  const today = '2026-10-11';
+  // 2026-09-12 is 29 days before today (the 30th day back counting today), 2026-09-11 is 30 days before.
+  const points = [p('2026-09-11', 1), p('2026-09-12', 2), p('2026-10-10', 3), p('2026-10-11', 4)];
+
+  it('keeps the last N days, today included', () => {
+    expect(pointsInDays(points, 30, today).map((x) => x.value)).toEqual([2, 3, 4]);
+  });
+
+  it('one day is today alone', () => {
+    expect(pointsInDays(points, 1, today).map((x) => x.value)).toEqual([4]);
+  });
+
+  it('drops dates after today', () => {
+    expect(pointsInDays([...points, p('2026-10-12', 5), p('2027-01-01', 6)], 30, today).map((x) => x.value)).toEqual([2, 3, 4]);
+  });
+
+  it('returns finite values only, oldest first, whatever order they came in', () => {
+    const odd = [points[3], p('2026-10-01', NaN), points[1], p('2026-10-02', Infinity), points[2]];
+    expect(pointsInDays(odd, 30, today).map((x) => x.localDate)).toEqual(['2026-09-12', '2026-10-10', '2026-10-11']);
+  });
+
+  it('gives nothing for 0 days or a count that is not a positive number', () => {
+    expect(pointsInDays(points, 0, today)).toEqual([]);
+    expect(pointsInDays(points, -5, today)).toEqual([]);
+    expect(pointsInDays(points, NaN, today)).toEqual([]);
+  });
+
+  it('matches pointsInRange for 91 and 365 days', () => {
+    const many = [p('2025-10-11', 1), p('2025-10-12', 2), p('2026-07-12', 3), p('2026-07-13', 4), p('2026-10-11', 5)];
+    expect(pointsInDays(many, 91, today)).toEqual(pointsInRange(many, '3M', today));
+    expect(pointsInDays(many, 365, today)).toEqual(pointsInRange(many, '1Y', today));
+  });
+
+  it('does not change the input', () => {
+    const input = [points[3], points[0]];
+    pointsInDays(input, 30, today);
+    expect(input.map((x) => x.value)).toEqual([4, 1]);
   });
 });
 
