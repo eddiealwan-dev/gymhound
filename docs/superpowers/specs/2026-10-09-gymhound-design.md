@@ -1016,4 +1016,10 @@ The owner asked for phase 2 to start overnight without a review stop, so the cho
 - **Override today's weight** (⋯ menu): a sheet with one number field in the display unit, **Save**, **Clear** and **Cancel**. It changes today's target only and is never written back to the rule.
 - **Finish summary (§8.5):** one line per exercise with a rule, each starting with the exercise's name: "Bench press — next time 185 lb ↑", "Bench press — holds at 180 lb · Rough sleep", "Bench press — holds at 180 lb" (R64).
 - **Up next (§8.3, §18.6):** each row's right side becomes "{scheme} · {load}" plus last time's outcome: " · ↑ 5 lb", " · held · Rough sleep" or " · held". Loads show in the display unit through `planInUnit` (R63; closes the §18.6 deferral).
+- **After the final review (R74–R78):**
+  - Finish writes `routine_exercises.next_weight`, and Up next reads last time, only while the routine slot still holds the same exercise (R74).
+  - A bodyweight_plus exercise at 0 added load shows no load on Up next, doesn't count as the day's weight, and its finish line reads "Dip — holds at bodyweight" (with " · {Reason}" when flagged) until it rises above 0 (R75).
+  - An assisted exercise already at 0 assistance with every set hit holds at 0, as a barbell holds when nothing heavier loads; a raise known to have moved nothing shows no rise on Up next, never the increment (R76).
+  - Up next's rise is the difference between the loads it shows: the next and last working weights each through `planInUnit` in the display unit with its gear, so after a unit switch the rise matches the shown loads (R77).
+  - Done (and Back to Train) on the finish summary returns to the Train screen already open, `router.dismissTo('/')`, instead of stacking another (R78).
 - Not in phase 2: History, Stats and charts (phase 6), stall labels (phase 6), PR flags (phase 4), recompute after history edits (phase 6).

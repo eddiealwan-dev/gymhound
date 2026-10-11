@@ -29,6 +29,11 @@ export function sameWeight(
   return Math.abs(toKg(a.value, a.unit) - toKg(b.value, b.unit)) < SAME_WEIGHT_TOLERANCE_KG;
 }
 
+/** A weight is 0 when it is within the same 0.01 kg of 0. */
+export function isZeroWeight(v: number, u: WeightUnit): boolean {
+  return sameWeight({ value: v, unit: u }, { value: 0, unit: u });
+}
+
 /** Rounds to 2 decimals and drops trailing zeros: 82.5 -> "82.5 kg", 80 -> "80 kg". */
 export function formatWeight(v: number, u: WeightUnit): string {
   return `${Number(v.toFixed(2))} ${u}`;

@@ -97,9 +97,10 @@ export function setActiveRoutine(db: Db, routineId: string | null): void {
 
 /**
  * The outcome, mark, working weight and next weight of the latest finished workout exercise run from
- * `routineExerciseId`; all null when it has never been finished (or was finished before the rule wrote outcomes).
+ * `routineExerciseId` with the exercise the slot holds now, `exerciseId` (R74); all null when it has never been
+ * finished (or was finished before the rule wrote outcomes).
  */
-function lastResult(db: Db, routineExerciseId: string): LastResult {
+function lastResult(db: Db, routineExerciseId: string, exerciseId: string): LastResult {
   return (
     db
       .select({
@@ -112,7 +113,13 @@ function lastResult(db: Db, routineExerciseId: string): LastResult {
       })
       .from(workoutExercises)
       .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
-      .where(and(eq(workoutExercises.routineExerciseId, routineExerciseId), eq(workouts.status, 'finished')))
+      .where(
+        and(
+          eq(workoutExercises.routineExerciseId, routineExerciseId),
+          eq(workoutExercises.exerciseId, exerciseId),
+          eq(workouts.status, 'finished'),
+        ),
+      )
       .orderBy(desc(workouts.finishedAt))
       .limit(1)
       .get() ?? NO_LAST_RESULT
@@ -175,6 +182,9 @@ export function getUpNext(db: Db): UpNext | null {
     dayId: day.id,
     dayName: day.name,
     lastTime,
-    exercises: dayExercises.map((exercise) => ({ ...exercise, ...lastResult(db, exercise.routineExerciseId) })),
+    exercises: dayExercises.map((exercise) => ({
+      ...exercise,
+      ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
+    })),
   };
 }

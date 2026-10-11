@@ -624,6 +624,11 @@ describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
     expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 130, 'lb');
   });
 
+  it('holds the target as the rows show it, to 2 decimals: an assisted 264.6 less 10 reads "254.6"', () => {
+    const tree = openOverride(today({ loggingType: 'assisted', equipment: 'machine', plannedWeight: 264.6 - 10, plannedUnit: 'lb' }));
+    expect(field(tree).props.value).toBe('254.6');
+  });
+
   it('starts empty with no plan and no override', () => {
     const tree = openOverride(today({ plannedWeight: null, plannedUnit: null }));
     expect(field(tree).props.value).toBe('');

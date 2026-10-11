@@ -182,7 +182,7 @@ function UpNextCard({
       {upNext.exercises.map((exercise) => {
         const load = upNextLoad(exercise, dayHasWeight, unit, gear);
         const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
-        const outcome = upNextOutcome(exercise, unit) ?? '';
+        const outcome = upNextOutcome(exercise, unit, gear) ?? '';
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
         // pushes the scheme to the right edge.

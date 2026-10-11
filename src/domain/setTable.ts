@@ -154,7 +154,8 @@ export type RowModel = {
   placeholders: ReturnType<typeof placeholdersFor>;
 };
 
-const round2 = (n: number) => Number(n.toFixed(2));
+/** A number to 2 decimals, as the set rows show it: 254.60000000000002 is 254.6. */
+export const round2 = (n: number) => Number(n.toFixed(2));
 
 /**
  * Today's target weight, in the entry unit (`TickInput.target` must be). The override wins over the planned weight.

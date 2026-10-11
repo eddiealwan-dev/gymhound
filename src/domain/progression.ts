@@ -6,7 +6,7 @@
 
 import { raiseLoadable, type Gear } from './plates';
 import type { Equipment, LoggingType, SetType, WeightUnit } from './types';
-import { convertIncrement, sameWeight, toKg } from './units';
+import { convertIncrement, isZeroWeight, sameWeight, toKg } from './units';
 
 export { raiseLoadable };
 
@@ -74,7 +74,12 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
 
   // Step 6: raise.
   const increment = convertIncrement(rule.increment, rule.incrementUnit, working.unit);
-  if (loggingType === 'assisted') return result('raised', { value: Math.max(0, working.value - increment), unit: working.unit });
+  if (loggingType === 'assisted') {
+    // Already at 0 assistance there is nothing lower, so it holds, as a barbell does when nothing heavier loads (R76).
+    if (isZeroWeight(working.value, working.unit)) return result('held', working);
+    // To 2 decimals, so 264.6 less 10 is 254.6 and not 254.60000000000002.
+    return result('raised', { value: Math.max(0, Number((working.value - increment).toFixed(2))), unit: working.unit });
+  }
   const raised = working.value + increment;
   if (input.equipment !== 'barbell') return result('raised', { value: raised, unit: working.unit });
   const loadable = raiseLoadable(raised, working.value, input.gear[working.unit]);

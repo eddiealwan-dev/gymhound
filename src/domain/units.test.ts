@@ -1,4 +1,14 @@
-import { convertDistance, convertIncrement, convertWeight, defaultUnitFor, formatWeight, roundToHalf, sameWeight, toKg } from './units';
+import {
+  convertDistance,
+  convertIncrement,
+  convertWeight,
+  defaultUnitFor,
+  formatWeight,
+  isZeroWeight,
+  roundToHalf,
+  sameWeight,
+  toKg,
+} from './units';
 
 describe('units', () => {
   it('converts pounds to kilograms', () => {
@@ -19,6 +29,14 @@ describe('units', () => {
   it('compares weights in kg, equal when closer than 0.01 kg', () => {
     expect(sameWeight({ value: 100, unit: 'kg' }, { value: 220.462, unit: 'lb' })).toBe(true);
     expect(sameWeight({ value: 100, unit: 'kg' }, { value: 100.02, unit: 'kg' })).toBe(false);
+  });
+
+  it('calls a weight 0 when it is within 0.01 kg of 0, in either unit', () => {
+    expect(isZeroWeight(0, 'lb')).toBe(true);
+    expect(isZeroWeight(0.005, 'kg')).toBe(true);
+    expect(isZeroWeight(0.02, 'lb')).toBe(true);
+    expect(isZeroWeight(0.025, 'kg')).toBe(false);
+    expect(isZeroWeight(2.5, 'lb')).toBe(false);
   });
 
   it('formats weights to 2 decimals with trailing zeros trimmed', () => {

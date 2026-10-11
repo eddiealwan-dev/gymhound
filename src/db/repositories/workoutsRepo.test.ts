@@ -137,7 +137,9 @@ describe('startWorkoutFromDay', () => {
     });
 
     const v = getActiveWorkoutView(db)!;
-    expect(v).toMatchObject({ startedAt: NOW, dayMark: 'normal', restEndsAt: null });
+    expect(v).toMatchObject({ startedAt: NOW, restEndsAt: null });
+    // Marks are per exercise now (R60): the view carries no workout-level mark.
+    expect(v).not.toHaveProperty('dayMark');
     expect(v.exercises.map((e) => [e.position, e.exerciseId])).toEqual([
       [0, 'barbell-bench-press'],
       [1, 'barbell-overhead-press'],
@@ -650,6 +652,18 @@ describe('finishWorkout runs the rule (7.3, 18.7)', () => {
       nextUnit: 'lb',
     });
     expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 145, nextWeightUnit: 'lb' });
+  });
+
+  it('leaves the routine slot alone when it now holds another exercise (R74)', () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const id = benchDay(db, 135, [8, 8, 8, 8]);
+    // The routine's bench slot is changed to another exercise while the workout runs.
+    db.update(routineExercises).set({ exerciseId: 'incline-dumbbell-press' }).where(eq(routineExercises.id, BENCH)).run();
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({ outcome: 'raised', nextWeight: 140 });
+    expect(routineExercise(db, BENCH)).toMatchObject({ exerciseId: 'incline-dumbbell-press', nextWeight: 135, nextWeightUnit: 'lb' });
   });
 
   it('a timed exercise has no rule: no_rule, and its routine next weight is kept', () => {

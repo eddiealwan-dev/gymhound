@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
 import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
-import type { DayMark, Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
+import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -44,7 +44,6 @@ export type ActiveWorkoutView = {
   id: string;
   name: string;
   startedAt: number;
-  dayMark: DayMark;
   restEndsAt: number | null;
   /** The set whose tick started the running rest (R38); the countdown shows under it. Null when no rest runs. */
   restSetId: string | null;
@@ -156,7 +155,6 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     id: workout.id,
     name: workout.name,
     startedAt: workout.startedAt,
-    dayMark: workout.dayMark,
     restEndsAt: workout.restEndsAt,
     restSetId: workout.restSetId,
     exercises: rows.map(({ we, exercise, note, restSeconds }) => ({

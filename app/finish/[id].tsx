@@ -14,7 +14,11 @@ import { Button } from '../../src/ui/Button';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
-const goToTrain = () => router.replace('/');
+/**
+ * Back to the Train screen already under this one, closing the summary (R78): replacing it with Train would stack a
+ * second Train screen after every workout. Opened by address with nothing under it, it puts Train in its place.
+ */
+const goToTrain = () => router.dismissTo('/');
 
 const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 

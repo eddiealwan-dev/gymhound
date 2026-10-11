@@ -11,7 +11,7 @@ import { MARK_LABELS } from '../../domain/labels';
 import { gearFor } from '../../domain/plates';
 import { REST_CHOICES } from '../../domain/rest';
 import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
-import { HAS_LOAD, targetFor } from '../../domain/setTable';
+import { HAS_LOAD, round2, targetFor } from '../../domain/setTable';
 import type { ExerciseMark } from '../../domain/types';
 import { formatWeight } from '../../domain/units';
 import { announce } from '../../platform/announce';
@@ -70,7 +70,7 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
   /** What the field starts with: the override, else the planned weight, in the display unit as the rows show it. */
   const [shown] = useState(() => {
     const target = targetFor(ex, unit, gearFor(unit, settings));
-    return target === null ? '' : String(target);
+    return target === null ? '' : String(round2(target));
   });
   const [text, setText] = useState(shown);
   /** Whether Save found a number that needs another look; typing again clears it. */

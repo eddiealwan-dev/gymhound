@@ -1,21 +1,8 @@
-import { DAY_MARK_LABELS, equipmentLabel, formatRepScheme, MARK_LABELS } from './labels';
+import { equipmentLabel, formatRepScheme, MARK_LABELS } from './labels';
 
 describe('MARK_LABELS', () => {
   it('names every Something off reason (spec 18.7)', () => {
     expect(MARK_LABELS).toEqual({
-      rough_sleep: 'Rough sleep',
-      sick: 'Sick',
-      short_on_food: 'Short on food',
-      pain: 'Pain',
-      cutting: 'Cutting',
-    });
-  });
-});
-
-describe('DAY_MARK_LABELS', () => {
-  it('names every day mark', () => {
-    expect(DAY_MARK_LABELS).toEqual({
-      normal: 'Normal',
       rough_sleep: 'Rough sleep',
       sick: 'Sick',
       short_on_food: 'Short on food',

@@ -364,4 +364,25 @@ describe('finishLine (spec 8.5, R64)', () => {
       expect(finishLine({ ...bench('raised', 185), loggingType })).toBe('Bench press — next time 185 lb ↑');
     }
   });
+
+  it('bodyweight_plus at 0 added load holds at bodyweight, with the reason when flagged; a raise reads as usual (R75)', () => {
+    const dip = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null, nextUnit: WeightUnit = 'lb'): NextTime => ({
+      name: 'Dip',
+      loggingType: 'bodyweight_plus',
+      outcome,
+      nextWeight,
+      nextUnit,
+      mark,
+    });
+    expect(finishLine(dip('held', 0))).toBe('Dip — holds at bodyweight');
+    expect(finishLine(dip('held', 0, null, 'kg'))).toBe('Dip — holds at bodyweight');
+    expect(finishLine(dip('held_marked', 0, 'sick'))).toBe('Dip — holds at bodyweight · Sick');
+    expect(finishLine(dip('no_sets', 0))).toBe('Dip — holds at bodyweight');
+    expect(finishLine(dip('raised', 5))).toBe('Dip — next time 5 lb ↑');
+    expect(finishLine(dip('held', 10))).toBe('Dip — holds at 10 lb');
+  });
+
+  it('a 0 load on any other type still says its weight', () => {
+    expect(finishLine(bench('held', 0))).toBe('Bench press — holds at 0 lb');
+  });
 });

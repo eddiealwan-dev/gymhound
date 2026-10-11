@@ -232,13 +232,21 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
 
   it('a kg user sees the loads and the raise in kg: a 135 lb barbell plan reads 60 kg (R63)', () => {
     const upNext = upperARun();
-    // Raised from 130 to 135 lb: 5 lb is 2.27 kg, which rounds to 2.5.
-    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 135, ...lastWeights(130, 135, 'lb') };
+    // Raised from 135 to 140 lb, which a kg user sees as 60 and 62.5 kg: the rise is the difference shown (R77).
+    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 140, ...lastWeights(135, 140, 'lb') };
     mockRead = { ...mockRead, unit: 'kg', gear: KG_GEAR, upNext };
     const all = lines(mount());
 
-    expect(all).toContain('4×5–8 · 60 kg · ↑ 2.5 kg');
+    expect(all).toContain('4×5–8 · 62.5 kg · ↑ 2.5 kg');
     expect(all).toContain('4×6–10 · 60 kg · held · Rough sleep');
+  });
+
+  it('a raise the kg loads do not show reads no rise: 130 and 135 lb both read 60 kg (R76, R77)', () => {
+    const upNext = upperARun();
+    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 135, ...lastWeights(130, 135, 'lb') };
+    mockRead = { ...mockRead, unit: 'kg', gear: KG_GEAR, upNext };
+
+    expect(lines(mount())).toContain('4×5–8 · 60 kg');
   });
 
   it('a raise shows the actual rise: 135 to 145 lb without 2.5 lb plates reads ↑ 10 lb (R73)', () => {

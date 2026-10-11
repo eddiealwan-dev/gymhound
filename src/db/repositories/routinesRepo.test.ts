@@ -273,6 +273,26 @@ describe('getUpNext', () => {
     expect(getUpNext(db)!.exercises[0]).toMatchObject({ lastOutcome: 'held_marked', lastMark: 'rough_sleep', nextWeight: 140 });
   });
 
+  it("a slot that now holds another exercise has no last time: the old exercise's finish is not its history (R74)", () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    finishBench(db, NOW, 135, 8);
+    db.update(routineExercises)
+      .set({ exerciseId: 'incline-dumbbell-press' })
+      .where(eq(routineExercises.id, `${PUSH_A}:barbell-bench-press`))
+      .run();
+
+    expect(getUpNext(db)!.exercises[0]).toMatchObject({
+      exerciseId: 'incline-dumbbell-press',
+      lastOutcome: null,
+      lastMark: null,
+      lastWorkingWeight: null,
+      lastWorkingUnit: null,
+      lastNextWeight: null,
+      lastNextUnit: null,
+    });
+  });
+
   it('a workout of the day still in progress is not last time', () => {
     const db = seededDb();
     setActiveRoutine(db, PPL);

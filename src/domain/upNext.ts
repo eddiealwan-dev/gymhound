@@ -3,7 +3,7 @@ import { MARK_LABELS } from './labels';
 import { planInUnit, type Gear } from './plates';
 import type { Outcome } from './progression';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
-import { convertIncrement, convertWeight, formatWeight, roundToHalf, toKg } from './units';
+import { convertIncrement, formatWeight, isZeroWeight } from './units';
 
 /** What the Up next card needs of an exercise to say its load. */
 export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | null; nextWeightUnit: WeightUnit | null };
@@ -11,10 +11,13 @@ export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | n
 /** Types that need a load to be logged. Bodyweight-plus, timed and distance exercises do fine without one. */
 const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assisted'];
 
+/** A weight and its unit, but not a bodyweight-plus exercise's 0 added load, which is no load (R75). */
 const hasWeight = (exercise: UpNextLoadInput): exercise is UpNextLoadInput & { nextWeight: number; nextWeightUnit: WeightUnit } =>
-  exercise.nextWeight !== null && exercise.nextWeightUnit !== null;
+  exercise.nextWeight !== null &&
+  exercise.nextWeightUnit !== null &&
+  !(exercise.loggingType === 'bodyweight_plus' && isZeroWeight(exercise.nextWeight, exercise.nextWeightUnit));
 
-/** Some exercise of the day has a weight (both the value and its unit). */
+/** Some exercise of the day has a weight (both the value and its unit; a bodyweight-plus 0 is none, R75). */
 export function upNextDayHasWeight(exercises: readonly UpNextLoadInput[]): boolean {
   return exercises.some(hasWeight);
 }
@@ -26,7 +29,8 @@ export function upNextNeedsWeights(exercises: readonly UpNextLoadInput[]): boole
 
 /**
  * The weight in the display unit, as a workout start would plan it (`planInUnit` with `gear`, the display unit's bar
- * and plates: R63); '—' when the type needs a load, it has none, and another exercise of the day has one; else null.
+ * and plates: R63); '—' when the type needs a load, it has none, and another exercise of the day has one; else null,
+ * as for a bodyweight-plus exercise at 0 added load (R75).
  */
 export function upNextLoad(
   exercise: UpNextLoadInput & { equipment: Equipment },
@@ -44,6 +48,7 @@ export function upNextLoad(
 /** What the Up next card needs of an exercise to say how it went last time. */
 export type UpNextOutcomeInput = {
   loggingType: LoggingType;
+  equipment: Equipment;
   lastOutcome: Outcome | null;
   lastMark: ExerciseMark | null;
   increment: number;
@@ -55,30 +60,33 @@ export type UpNextOutcomeInput = {
 };
 
 /**
- * How far last time's raise moved the load, in `unit` (R73): next − working, or working − next for assisted, computed
- * in kg. A converted amount rounds to the nearest 0.5, as converted plans do. Null when a weight is missing or the
- * amount comes to nothing.
+ * How far last time's raise moved the load, in `unit` (R73): the difference between the two loads as Up next shows
+ * them (`planInUnit` with `gear`, R77), next − working, or working − next for assisted. Weights already in `unit` show
+ * as they are. 0 when the shown load did not move (R76); null when a weight is missing, so the amount is unknown.
  */
-function actualRise(exercise: UpNextOutcomeInput, unit: WeightUnit): number | null {
+function actualRise(exercise: UpNextOutcomeInput, unit: WeightUnit, gear: Gear): number | null {
   const { lastWorkingWeight: working, lastWorkingUnit: workingUnit, lastNextWeight: next, lastNextUnit: nextUnit } = exercise;
   if (working === null || workingUnit === null || next === null || nextUnit === null) return null;
-  const riseKg = toKg(next, nextUnit) - toKg(working, workingUnit);
-  const rise = convertWeight(exercise.loggingType === 'assisted' ? -riseKg : riseKg, 'kg', unit);
-  const shown = workingUnit === unit && nextUnit === unit ? rise : roundToHalf(rise);
-  return shown > 0 ? shown : null;
+  const shown = (weight: number, from: WeightUnit) =>
+    planInUnit(weight, from, unit, exercise.equipment === 'barbell', gear.bar, gear.plates);
+  const rise = shown(next, nextUnit) - shown(working, workingUnit);
+  return Math.max(0, Number((exercise.loggingType === 'assisted' ? -rise : rise).toFixed(2)));
 }
 
 /**
  * Last time's outcome, to follow the load (spec 18.7): " · ↑ 10 lb" for a raise, by how much it actually rose (R73),
  * or " · ↓ 5 lb" on an assisted exercise, where a raise is less assistance (R72); " · held · Rough sleep" for a hold on
- * a flagged exercise, " · held" otherwise. Null with no history, no rule or no sets. A raise whose amount is unknown
- * or rounds to 0 reads the routine's increment, in the display unit by the gym convention.
+ * a flagged exercise, " · held" otherwise. Null with no history, no rule or no sets, and for a raise known to have
+ * moved nothing (R76). A raise whose amount is unknown reads the routine's increment, in the display unit by the gym
+ * convention. `gear` is the display unit's bar and plates, as for `upNextLoad`.
  */
-export function upNextOutcome(exercise: UpNextOutcomeInput, unit: WeightUnit): string | null {
+export function upNextOutcome(exercise: UpNextOutcomeInput, unit: WeightUnit, gear: Gear): string | null {
   switch (exercise.lastOutcome) {
     case 'raised': {
+      const rise = actualRise(exercise, unit, gear);
+      if (rise === 0) return null;
       const arrow = exercise.loggingType === 'assisted' ? '↓' : '↑';
-      const amount = actualRise(exercise, unit) ?? convertIncrement(exercise.increment, exercise.incrementUnit, unit);
+      const amount = rise ?? convertIncrement(exercise.increment, exercise.incrementUnit, unit);
       return ` · ${arrow} ${formatWeight(amount, unit)}`;
     }
     case 'held':

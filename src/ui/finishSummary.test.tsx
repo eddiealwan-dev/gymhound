@@ -1,13 +1,18 @@
+import { router } from 'expo-router';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import FinishSummaryScreen from '../../app/finish/[id]';
 import type { FinishSummary } from '../db/repositories/workoutViewsRepo';
+import { Button } from './Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let mockRead: { summary: FinishSummary | null; unit: 'lb' | 'kg' };
 
-jest.mock('expo-router', () => ({ router: { replace: jest.fn() }, useLocalSearchParams: () => ({ id: 'w1' }) }));
+jest.mock('expo-router', () => ({
+  router: { replace: jest.fn(), push: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() },
+  useLocalSearchParams: () => ({ id: 'w1' }),
+}));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead }));
@@ -79,5 +84,34 @@ describe('the finish summary (8.5, R64)', () => {
     const text = shownText(mount());
 
     expect(text.slice(text.indexOf('3 sets') + 1)).toEqual(['Done']);
+  });
+});
+
+describe('leaving the finish summary (R78)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  /** Presses the button labelled `label`. */
+  function pressButton(tree: ReactTestRenderer, label: string): void {
+    const button = tree.root.findAllByType(Button).find((b) => b.props.label === label)!;
+    act(() => button.props.onPress());
+  }
+
+  it('Done goes back to the Train screen already there, without stacking another', () => {
+    mockRead = { unit: 'lb', summary: pushA([]) };
+    pressButton(mount(), 'Done');
+
+    expect(router.dismissTo).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('Back to Train does the same when the workout is not there', () => {
+    mockRead = { unit: 'lb', summary: null };
+    pressButton(mount(), 'Back to Train');
+
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

@@ -186,8 +186,9 @@ export function getNextDayTitle(db: Db, workoutId: string): string | null {
 
 /**
  * Runs the rule (spec 7.3, 18.7) on each exercise of the workout: stores its working weight, outcome and next weight,
- * and, unless the outcome is `no_rule`, writes the next weight to the routine exercise it came from. "Marked" is the
- * exercise flagged Something off. Barbell raises round with the bar and plates in Settings for the working unit.
+ * and, unless the outcome is `no_rule`, writes the next weight to the routine exercise it came from, if that slot still
+ * holds the same exercise (R74). "Marked" is the exercise flagged Something off. Barbell raises round with the bar and
+ * plates in Settings for the working unit.
  */
 function writeOutcomes(db: Db, workoutId: string): void {
   const settings = getSettings(db);
@@ -234,9 +235,10 @@ function writeOutcomes(db: Db, workoutId: string): void {
       .where(eq(workoutExercises.id, we.id))
       .run();
     if (we.routineExerciseId !== null && result.outcome !== 'no_rule') {
+      // Only while the routine slot still holds this exercise (R74).
       db.update(routineExercises)
         .set({ nextWeight: result.nextWeight, nextWeightUnit: result.nextUnit })
-        .where(eq(routineExercises.id, we.routineExerciseId))
+        .where(and(eq(routineExercises.id, we.routineExerciseId), eq(routineExercises.exerciseId, we.exerciseId)))
         .run();
     }
   }

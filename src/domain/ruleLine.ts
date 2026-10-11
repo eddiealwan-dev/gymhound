@@ -10,7 +10,7 @@ import type { Gear } from './plates';
 import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
-import { convertIncrement, formatWeight } from './units';
+import { convertIncrement, formatWeight, isZeroWeight } from './units';
 
 export type Rule = NonNullable<OutcomeInput['rule']>;
 
@@ -145,11 +145,13 @@ export type NextTime = {
 /**
  * The finish summary's line for one exercise (spec 8.5, R64): "Bench press — next time 185 lb ↑" when the rule
  * raised it, else "Bench press — holds at 180 lb", with " · {Reason}" when a Something off flag held it. A raised
- * assisted exercise takes assistance off, so its arrow points down (R72).
+ * assisted exercise takes assistance off, so its arrow points down (R72). A bodyweight-plus exercise with 0 added load
+ * "holds at bodyweight" (R75).
  */
 export function finishLine(n: NextTime): string {
   const weight = formatWeight(n.nextWeight, n.nextUnit);
   if (n.outcome === 'raised') return `${n.name} — next time ${weight} ${n.loggingType === 'assisted' ? '↓' : '↑'}`;
   const reason = n.outcome === 'held_marked' && n.mark ? ` · ${MARK_LABELS[n.mark]}` : '';
-  return `${n.name} — holds at ${weight}${reason}`;
+  const at = n.loggingType === 'bodyweight_plus' && isZeroWeight(n.nextWeight, n.nextUnit) ? 'bodyweight' : weight;
+  return `${n.name} — holds at ${at}${reason}`;
 }

@@ -187,6 +187,26 @@ describe('computeOutcome', () => {
       });
     });
 
+    it('holds an assisted exercise already at 0 assistance with every set hit: nothing lower (R76)', () => {
+      const rule = { ...RULE, increment: 10 };
+      const atZero = (unit: WeightUnit) =>
+        input({ loggingType: 'assisted', equipment: 'machine', rule, plannedWeight: 0, plannedUnit: unit, sets: [set(0, unit, 8), set(0, unit, 9), set(null, null, 8)] });
+      expect(computeOutcome(atZero('lb'))).toEqual({
+        workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb',
+      });
+      expect(computeOutcome(atZero('kg'))).toEqual({
+        workingWeight: 0, workingUnit: 'kg', outcome: 'held', nextWeight: 0, nextUnit: 'kg',
+      });
+    });
+
+    it('rounds less assistance to 2 decimals: 264.6 lb less 10 is 254.6, not 254.60000000000002', () => {
+      const rule = { ...RULE, increment: 10 };
+      const sets = [lb(264.6, 8), lb(264.6, 8), lb(264.6, 8)];
+      expect(computeOutcome(input({ loggingType: 'assisted', equipment: 'machine', rule, sets }))).toMatchObject({
+        outcome: 'raised', nextWeight: 254.6, nextUnit: 'lb',
+      });
+    });
+
     it('takes the highest assistance as the working weight for assisted', () => {
       const rule = { ...RULE, increment: 10 };
       const sets = [lb(30, 8), lb(40, 8), lb(30, 8)];
