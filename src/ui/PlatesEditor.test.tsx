@@ -134,6 +134,25 @@ describe('PlatesEditor (Task 5, R107)', () => {
     expect(texts(tree)).not.toContain('Keep at least one pair.');
   });
 
+  it("tells VoiceOver why the last pair's row won't go down, and only that row", () => {
+    mockStored.platesLb = { '45': 1 };
+    const tree = mount();
+    expect(row(tree, '45 lb plates').props.accessibilityHint).toBe('Keep at least one pair.');
+    expect(row(tree, '35 lb plates').props.accessibilityHint).toBeUndefined();
+  });
+
+  it('has no hint while more than one pair is owned', () => {
+    const tree = mount();
+    expect(row(tree, '45 lb plates').props.accessibilityHint).toBeUndefined();
+  });
+
+  it("keeps the last real pair when a restored set holds a key that isn't a size", () => {
+    mockStored.platesLb = { '45': 1, x: 1 };
+    const tree = mount();
+    expect(stepper(tree, 'Remove a pair of 45 lb').props.disabled).toBe(true);
+    expect(texts(tree)).toContain('Keep at least one pair.');
+  });
+
   it('adds a size of your own with one pair, in its place', () => {
     const tree = mount();
     expect(sizeField(tree).props.keyboardType).toBe('decimal-pad');

@@ -70,6 +70,8 @@ function PlateRow({
       accessibilityRole="adjustable"
       accessibilityLabel={`${sizeText} plates`}
       accessibilityValue={{ text: pairsText(pairs) }}
+      // The row holding the last pair says why it won't go down.
+      accessibilityHint={pairs > 0 && !canRemove ? 'Keep at least one pair.' : undefined}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(event: AccessibilityActionEvent) => {
         if (event.nativeEvent.actionName === 'increment' && canAdd) onChange(pairs + 1);

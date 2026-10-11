@@ -20,11 +20,14 @@ const MAX_SIZE: Record<WeightUnit, number> = { lb: 100, kg: 50 };
 /** Sizes compare in hundredths, so "2.50" and "2.5" are one size. */
 const hundredths = (v: number): number => Math.round(v * 100);
 
+/** Whole pairs of a stored count: a fraction of a pair (or junk) is no plate, as the plate maths reads it. */
+const wholePairs = (count: number): number => (count > 0 ? Math.floor(count) : 0);
+
 /** The pairs owned of `size`, whatever way its key was written. */
 function pairsOf(owned: Record<string, number>, size: number): number {
   let pairs = 0;
   for (const [key, count] of Object.entries(owned)) {
-    if (hundredths(Number(key)) === hundredths(size) && count > 0) pairs += count;
+    if (hundredths(Number(key)) === hundredths(size)) pairs += wholePairs(count);
   }
   return pairs;
 }
@@ -35,7 +38,7 @@ export function plateRows(owned: Record<string, number>, unit: WeightUnit): { si
   const rows = standard.map((size) => ({ size, pairs: pairsOf(owned, size), standard: true }));
   for (const [key, count] of Object.entries(owned)) {
     const size = Number(key);
-    if (!(size > 0) || !(count > 0)) continue;
+    if (!(size > 0) || wholePairs(count) === 0) continue;
     if (rows.some((row) => hundredths(row.size) === hundredths(size))) continue;
     rows.push({ size, pairs: pairsOf(owned, size), standard: false });
   }
@@ -57,16 +60,23 @@ export function setPairs(owned: Record<string, number>, size: number, pairs: num
   return next;
 }
 
-/** A plate size as typed (a comma or a dot, at most 2 decimals): above 0 and up to 100 lb or 50 kg, else null. */
+/**
+ * A plate size as typed (a comma or a dot, at most 2 decimals): a multiple of 0.25 above 0 and up to 100 lb or 50 kg,
+ * else null. The quarter steps keep the plate maths' reachable sums small (`plates.ts`).
+ */
 export function parsePlateSize(text: string, unit: WeightUnit): number | null {
   const trimmed = text.trim();
   if (!/^(\d+([.,]\d{0,2})?|[.,]\d{1,2})$/.test(trimmed)) return null;
   const size = Number(trimmed.replace(',', '.'));
-  if (!(size > 0) || size > MAX_SIZE[unit]) return null;
+  if (!(size > 0) || size > MAX_SIZE[unit] || hundredths(size) % 25 !== 0) return null;
   return size;
 }
 
-/** Every pair owned, of every size. */
+/** Every whole pair owned of a real size: what `plateRows` lists, so a junk key can't stand in for the last pair. */
 export function totalPairs(owned: Record<string, number>): number {
-  return Object.values(owned).reduce((sum, count) => sum + (count > 0 ? count : 0), 0);
+  let total = 0;
+  for (const [key, count] of Object.entries(owned)) {
+    if (Number(key) > 0) total += wholePairs(count);
+  }
+  return total;
 }

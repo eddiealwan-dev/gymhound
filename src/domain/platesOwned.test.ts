@@ -80,11 +80,25 @@ describe('parsePlateSize', () => {
     expect(parsePlateSize('1.255', 'kg')).toBeNull();
     expect(parsePlateSize('-5', 'lb')).toBeNull();
   });
+
+  it('takes only multiples of 0.25, so the plate maths stays small', () => {
+    expect(parsePlateSize('0.25', 'kg')).toBe(0.25);
+    expect(parsePlateSize('0.75', 'lb')).toBe(0.75);
+    expect(parsePlateSize('0.01', 'kg')).toBeNull();
+    expect(parsePlateSize('0.33', 'lb')).toBeNull();
+    expect(parsePlateSize('7.6', 'lb')).toBeNull();
+  });
 });
 
 describe('totalPairs', () => {
   it('adds the pairs of every size', () => {
     expect(totalPairs({ '45': 4, '35': 1, '2.5': 1 })).toBe(6);
     expect(totalPairs({})).toBe(0);
+  });
+
+  it('counts only what plateRows lists, in whole pairs: a junk key or half a pair adds nothing', () => {
+    expect(totalPairs({ '45': 1, x: 1 })).toBe(1);
+    expect(totalPairs({ '45': 1, '0': 2, '-5': 1, '25': 0.5 })).toBe(1);
+    expect(totalPairs({ '45': 2.7 })).toBe(2);
   });
 });
