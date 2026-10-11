@@ -365,6 +365,28 @@ describe('the routine editor: your own routine', () => {
     expect(shownText(tree).filter((t) => t === 'Barbell bench press')).toHaveLength(2);
   });
 
+  it("says \"Couldn't save. Try again.\" when the save fails, stays open with the changes, and saves on a retry", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Renamed');
+
+    expect(() => press(tree, 'Save')).not.toThrow();
+
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+    expect(router.back).not.toHaveBeenCalled();
+    expect(bumpData).not.toHaveBeenCalled();
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed');
+
+    press(tree, 'Save');
+    expect(saved().name).toBe('Renamed');
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    warn.mockRestore();
+  });
+
   it('says so when the routine is not there', () => {
     jest.mocked(routineToDraft).mockReturnValue(null);
     const tree = mount('gone');

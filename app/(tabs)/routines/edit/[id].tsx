@@ -340,6 +340,8 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const { draft, latest, apply, reset } = useDraft(saved);
   /** Save was tapped: what stops it shows, and keeps up as the draft changes, until the editor is left or saved. */
   const [tried, setTried] = useState(false);
+  /** The last Save failed to write: it says so over the button until the next Save. */
+  const [saveFailed, setSaveFailed] = useState(false);
   /** The move Back, the dock or the header was making when "Discard changes?" opened. */
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
@@ -436,7 +438,15 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const write = () => {
     const current = latest.current;
     if (current === null) return;
-    const id = saveRoutine(db, current, Date.now());
+    let id: string;
+    try {
+      id = saveRoutine(db, current, Date.now());
+    } catch (e) {
+      // Nothing was written (one transaction): the changes stay here to try again.
+      console.warn('GymHound: the routine could not be saved.', e);
+      setSaveFailed(true);
+      return;
+    }
     bumpData();
     startOver(routineId === null ? newDraft() : routineToDraft(db, id));
     goBack(routineId === null ? '/routines' : `/routines/${id}`);
@@ -445,6 +455,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const save = () => {
     flushAll();
     setTried(true);
+    setSaveFailed(false);
     if (latest.current === null || validateDraft(latest.current).length > 0) return;
     // A new routine keeps to the free limit however the editor was reached (R88).
     if (routineId === null) limit.whenRoomFor(write);
@@ -452,6 +463,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   };
 
   const problems = tried ? validateDraft(draft) : [];
+  if (saveFailed) problems.push("Couldn't save. Try again.");
 
   return (
     <Screen>
