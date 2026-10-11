@@ -1,6 +1,9 @@
 import {
+  buildFoodCsvRows,
   buildWorkoutCsvRows,
   csvField,
+  FOOD_CSV_COLUMNS,
+  type FoodCsvEntry,
   isoWithOffset,
   neutraliseFormula,
   prKinds,
@@ -245,5 +248,66 @@ describe('buildWorkoutCsvRows', () => {
 
     expect([row[5], row[6], row[20]]).toEqual([null, null, null]);
     expect([plain[4], plain[8], plain[20]]).toEqual(['Push A', 'Bench press', 'elbows in']);
+  });
+});
+
+describe('FOOD_CSV_COLUMNS', () => {
+  it('is the 8 spec §11 columns in order, with no serving label', () => {
+    expect(FOOD_CSV_COLUMNS.join(', ')).toBe('date, logged_at, name, servings, kcal, protein_g, carbs_g, fat_g');
+  });
+});
+
+describe('buildFoodCsvRows', () => {
+  const at = Date.UTC(2026, 9, 10, 13, 5, 7, 250);
+  const entry = (over: Partial<FoodCsvEntry> = {}): FoodCsvEntry => ({
+    localDate: '2026-10-10',
+    loggedAt: at,
+    name: 'Egg, whole',
+    servings: 1.5,
+    kcal: 107.25,
+    proteinG: 9.42,
+    carbsG: 0.54,
+    fatG: 7.13,
+    ...over,
+  });
+
+  it('writes the date, the time with its offset, the name, servings and the four totals', () => {
+    expect(buildFoodCsvRows([entry()], () => -300)).toEqual([
+      ['2026-10-10', '2026-10-10T08:05:07.250-05:00', 'Egg, whole', 1.5, 107.25, 9.42, 0.54, 7.13],
+    ]);
+  });
+
+  it("asks for the offset at each entry's own time", () => {
+    const offsetAt = jest.fn(() => 60);
+
+    buildFoodCsvRows([entry()], offsetAt);
+
+    expect(offsetAt).toHaveBeenCalledWith(at);
+  });
+
+  it('keeps the unrounded numbers to 2 decimals, never rounding to whole numbers', () => {
+    const [row] = buildFoodCsvRows([entry({ servings: 0.333333, kcal: 33.3333333, proteinG: 0.006, carbsG: 12, fatG: 2.499 })], () => 0);
+
+    expect(row.slice(3)).toEqual([0.33, 33.33, 0.01, 12, 2.5]);
+  });
+
+  it('never writes -0', () => {
+    const [row] = buildFoodCsvRows([entry({ kcal: -0.001, proteinG: 0, carbsG: 0, fatG: 0 })], () => 0);
+
+    expect(Object.is(row[4], -0)).toBe(false);
+    expect(row[4]).toBe(0);
+  });
+
+  it('puts an apostrophe in front of a name that reads as a formula', () => {
+    const [row] = buildFoodCsvRows([entry({ name: '=SUM(A1:A9)' })], () => 0);
+
+    expect(row[2]).toBe("'=SUM(A1:A9)");
+    expect(toCsv(FOOD_CSV_COLUMNS, [row]).split('\r\n')[1]).toContain(",'=SUM(A1:A9),");
+  });
+
+  it('keeps the order it is given', () => {
+    const rows = buildFoodCsvRows([entry({ name: 'B' }), entry({ name: 'A' })], () => 0);
+
+    expect(rows.map((r) => r[2])).toEqual(['B', 'A']);
   });
 });

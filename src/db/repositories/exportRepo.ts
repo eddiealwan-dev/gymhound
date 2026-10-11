@@ -1,6 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
-import { buildWorkoutCsvRows, deviceOffsetMinutes, type CsvValue } from '../../domain/csv';
-import { exercises, routineDays, routines, sets, workoutExercises, workouts } from '../schema';
+import { buildFoodCsvRows, buildWorkoutCsvRows, deviceOffsetMinutes, type CsvValue } from '../../domain/csv';
+import { exercises, foodLog, routineDays, routines, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 
 /**
@@ -43,4 +43,28 @@ export function workoutCsvRows(db: Db, offsetAt: (epochMs: number) => number = d
     .orderBy(asc(workouts.startedAt), asc(workouts.id), asc(workoutExercises.position), asc(sets.position))
     .all();
   return buildWorkoutCsvRows(records, offsetAt);
+}
+
+/**
+ * The rows of the food CSV (spec §11), one per food log entry, ordered by the day it is logged for, then the time
+ * logged. Each entry's own copied name and totals are written, never the food's current ones (§6). Pro is not asked:
+ * the food CSV stays free, and a lapsed user keeps it (§9, R153). Times carry the offset `offsetAt` gives for each
+ * instant: by default the device's own at that instant.
+ */
+export function foodCsvRows(db: Db, offsetAt: (epochMs: number) => number = deviceOffsetMinutes): CsvValue[][] {
+  const entries = db
+    .select({
+      localDate: foodLog.localDate,
+      loggedAt: foodLog.loggedAt,
+      name: foodLog.name,
+      servings: foodLog.servings,
+      kcal: foodLog.kcal,
+      proteinG: foodLog.proteinG,
+      carbsG: foodLog.carbsG,
+      fatG: foodLog.fatG,
+    })
+    .from(foodLog)
+    .orderBy(asc(foodLog.localDate), asc(foodLog.loggedAt), asc(foodLog.id))
+    .all();
+  return buildFoodCsvRows(entries, offsetAt);
 }
