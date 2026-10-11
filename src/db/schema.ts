@@ -305,3 +305,16 @@ export const settings = sqliteTable('settings', {
   // A JSON value. SQL NULL stands for JSON null.
   value: text('value', { mode: 'json' }).$type<unknown>(),
 });
+
+// Water drunk, in ml whatever the unit shown (R150). Free. Added in 0007 (R132).
+export const waterLog = sqliteTable(
+  'water_log',
+  {
+    id: text('id').primaryKey(),
+    // The day it is logged for.
+    localDate: text('local_date').notNull(),
+    loggedAt: integer('logged_at').notNull(),
+    amountMl: real('amount_ml').notNull(),
+  },
+  (t) => [index('water_log_local_date_idx').on(t.localDate)],
+);

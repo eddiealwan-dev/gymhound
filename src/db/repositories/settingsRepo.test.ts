@@ -28,6 +28,7 @@ const SPEC_KEYS = [
   'seed_version',
   'theme',
   'unit',
+  'water_goal_ml',
 ];
 
 const storedKeys = (db: Db) =>
@@ -279,5 +280,35 @@ describe('setSetting', () => {
     expect(getSettings(db).activeRoutineId).toBe('premade-5x5-3');
     setSetting(db, 'activeRoutineId', null);
     expect(getSettings(db).activeRoutineId).toBeNull();
+  });
+});
+
+describe('the water goal (phase 5, R150)', () => {
+  it('defaults to no goal', () => {
+    expect(defaultSettings('us').waterGoalMl).toBeNull();
+    expect(defaultSettings('metric').waterGoalMl).toBeNull();
+  });
+
+  it('is added, as null, to a database whose settings predate it, without touching the other keys', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    db.delete(settings).where(eq(settings.key, 'water_goal_ml')).run();
+    setSetting(db, 'restSeconds', 90);
+    expect(storedKeys(db)).not.toContain('water_goal_ml');
+
+    ensureSettings(db, 'us');
+
+    expect(storedKeys(db)).toEqual(SPEC_KEYS);
+    expect(getSettings(db)).toMatchObject({ waterGoalMl: null, restSeconds: 90 });
+  });
+
+  it('round-trips 2000 ml, survives ensureSettings, and clears back to null', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    setSetting(db, 'waterGoalMl', 2000);
+    ensureSettings(db, 'us');
+    expect(getSettings(db).waterGoalMl).toBe(2000);
+    setSetting(db, 'waterGoalMl', null);
+    expect(getSettings(db).waterGoalMl).toBeNull();
   });
 });

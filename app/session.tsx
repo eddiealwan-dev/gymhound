@@ -24,6 +24,7 @@ import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
+import { FoodOfferBanner } from '../src/ui/session/FoodOfferBanner';
 import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
@@ -303,6 +304,8 @@ export default function Session() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SessionHeader name={workout.name} startedAt={workout.startedAt} musicApp={musicApp} progress={progress} onFinish={onFinish} />
+      {/* The Short on food offer (§7.10): under the header, outside the scroll. */}
+      <FoodOfferBanner workoutId={workout.id} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1 }}

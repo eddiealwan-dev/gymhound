@@ -310,3 +310,49 @@ describe('migration 0006 (phase 4, R102)', () => {
     close();
   });
 });
+
+describe('migration 0007 (phase 5, R132)', () => {
+  type Column = { name: string; type: string; notnull: number; dflt_value: string | null; pk: number };
+  const columns = (db: Db, table: string) =>
+    db.all<Column>(sql.raw(`pragma table_info(${table})`)).map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, pk: c.pk }));
+  const indexes = (db: Db, table: string) => db.all<{ name: string }>(sql.raw(`pragma index_list(${table})`)).map((i) => i.name);
+  const tableNames = (db: Db) => db.all<{ name: string }>(sql`select name from sqlite_master where type='table'`).map((r) => r.name);
+
+  it('adds only the water_log table, with its local date index', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'water_log')).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'local_date', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'logged_at', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'amount_ml', type: 'REAL', notnull: 1, pk: 0 },
+    ]);
+    expect(indexes(db, 'water_log')).toContain('water_log_local_date_idx');
+  });
+
+  it('round-trips a water entry in ml', () => {
+    const { db } = createTestDb();
+    db.insert(schema.waterLog).values({ id: 'wl1', localDate: '2026-10-11', loggedAt: 1, amountMl: 236.588 }).run();
+    expect(db.select().from(schema.waterLog).all()).toEqual([{ id: 'wl1', localDate: '2026-10-11', loggedAt: 1, amountMl: 236.588 }]);
+  });
+
+  it('migrates a database at 0006 forward: its data is kept and water_log starts empty', () => {
+    const { db, close } = openFileDb(':memory:');
+    migrateUpTo(db, 6);
+    const before = tableNames(db);
+    expect(before).not.toContain('water_log');
+    db.run(sql`
+      INSERT INTO workouts (id, name, status, day_mark, started_at, finished_at, local_date, food_offer_shown, saved_workout_id)
+      VALUES ('w1', 'Push A', 'finished', 'normal', 1, 2, '2026-10-10', 0, NULL)`);
+    db.run(sql`
+      INSERT INTO food_log (id, local_date, logged_at, food_id, name, servings, kcal, protein_g, carbs_g, fat_g)
+      VALUES ('f1', '2026-10-10', 1, NULL, 'Quick add', 1, 500, 40, 0, 0)`);
+
+    migrateTestDb(db);
+
+    expect(tableNames(db).sort()).toEqual([...before, 'water_log'].sort());
+    expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
+    expect(db.select().from(schema.foodLog).all()).toEqual([expect.objectContaining({ id: 'f1', kcal: 500, proteinG: 40 })]);
+    expect(db.select().from(schema.waterLog).all()).toEqual([]);
+    close();
+  });
+});

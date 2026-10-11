@@ -1,11 +1,5 @@
 import { parseDecimal } from './input';
-
-/**
- * Local twins of the targets shape that `settingsRepo` stores as `fuelTargets`. Task 1 adds `Macros` and `FuelTargets` to
- * `types.ts`; once it lands, these two lines become `import type { FuelTargets, Macros } from './types'`.
- */
-type Macros = { kcal: number; protein: number; carbs: number | null; fat: number | null };
-type FuelTargets = { training: Macros; rest: Macros };
+import type { FuelTargets, Macros } from './types';
 
 /** One serving of a food, as `foods` stores it (§6). */
 export type FoodPerServing = {
