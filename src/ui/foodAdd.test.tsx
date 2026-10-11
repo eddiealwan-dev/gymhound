@@ -51,6 +51,32 @@ const mockAnnounce = jest.fn();
 jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 const mockFlushAll = jest.fn();
 jest.mock('../state/draftFlush', () => ({ flushAll: () => mockFlushAll() }));
+// Pro is a store the test flips, as the debug switch or a lapse would. On unless a test turns it off.
+let mockPro = true;
+const mockProListeners = new Set<() => void>();
+jest.mock('../platform/entitlements', () => {
+  const React = require('react');
+  return {
+    useIsPro: () =>
+      React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockProListeners.add(listener);
+          return () => mockProListeners.delete(listener);
+        },
+        () => mockPro,
+      ),
+  };
+});
+const setPro = (on: boolean) =>
+  act(() => {
+    mockPro = on;
+    mockProListeners.forEach((listener) => listener());
+  });
+// Its own tests cover the pitch; here, only where it shows.
+jest.mock('./pro/ProPitch', () => {
+  const { Text: T } = require('react-native');
+  return { ProPitch: ({ context }: { context: string }) => <T>{`PRO PITCH ${context}`}</T> };
+});
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -65,6 +91,7 @@ const EGG = 'fdc-171287';
 const mounted: ReactTestRenderer[] = [];
 
 beforeEach(() => {
+  mockPro = true;
   jest.useFakeTimers({ now: NOW });
   mockDb = seededDb();
   mockParams = {};
@@ -521,5 +548,30 @@ describe('review fixes', () => {
     const sheets = tree.root.findAllByType(Sheet).filter((s) => (s.props.children as { props?: { food?: { name: string } } } | null)?.props?.food?.name === 'Egg, large');
     expect(sheets).toHaveLength(1);
     expect(sheets[0].props.visible).toBe(false);
+  });
+});
+
+describe('without Pro (R151)', () => {
+  it('opened by address, shows the pitch and no search, and Done closes', () => {
+    mockPro = false;
+    jest.mocked(router.canGoBack).mockReturnValueOnce(false);
+    const tree = mount();
+    const text = allText(tree);
+    expect(text).toContain('Add food');
+    expect(text).toContain('PRO PITCH tab');
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    press(tree, 'Done');
+    expect(router.replace).toHaveBeenCalledWith('/fuel');
+  });
+
+  it('Pro lapsing while it is open locks it at once, and logs nothing', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg');
+    setPro(false);
+    expect(allText(tree)).toContain('PRO PITCH tab');
+    expect(allText(tree)).not.toContain('Egg, large');
+    expect(listEntries(mockDb, TODAY)).toHaveLength(0);
+    setPro(true);
+    expect(field(tree, 'Search foods')).toBeTruthy();
   });
 });

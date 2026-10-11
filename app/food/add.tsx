@@ -8,6 +8,7 @@ import { daysBetween, fromLocalDate, toLocalDate } from '../../src/domain/dates'
 import { indexFoods } from '../../src/domain/foodSearch';
 import type { FoodPerServing } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
+import { useIsPro } from '../../src/platform/entitlements';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
@@ -15,6 +16,8 @@ import { deviceLocale } from '../../src/ui/body/BodyLog';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
 import { kcalProteinText, ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
+import { ProPitch } from '../../src/ui/pro/ProPitch';
+import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
@@ -111,7 +114,7 @@ const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing
  * "Added {name}." so a meal goes in one visit. **New food** opens your own food's editor with the search as its name;
  * saved, it comes back here and opens its servings. **Done** closes; a quick add typed and not added asks first.
  */
-export default function AddFood() {
+function AddFood() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -295,5 +298,25 @@ export default function AddFood() {
         onCancel={() => setAskDiscard(false)}
       />
     </View>
+  );
+}
+
+/**
+ * The add screen, or without Pro the pitch in its place (R151) with **Done** to close: Pro lapsing while it is open
+ * locks it at once, and an address can't open it around the lock.
+ */
+export default function AddFoodScreen() {
+  const pro = useIsPro();
+  if (pro) return <AddFood />;
+  return (
+    <Screen>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, marginBottom: 24 }}>
+        <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
+          Add food
+        </Display>
+        <Button label="Done" variant="quiet" onPress={close} />
+      </View>
+      <ProPitch context="tab" />
+    </Screen>
   );
 }
