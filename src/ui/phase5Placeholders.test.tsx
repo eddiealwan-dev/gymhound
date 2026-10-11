@@ -4,7 +4,6 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
 import FoodRoute from '../../app/food/[id]';
 import AddFoodRoute from '../../app/food/add';
-import { FuelTrends } from './fuel/FuelTrends';
 import { Footer } from './Footer';
 import { FoodOfferBanner } from './session/FoodOfferBanner';
 
@@ -78,7 +77,6 @@ describe('the placeholder routes', () => {
 
 describe('the stubs draw nothing until their task fills them', () => {
   it.each([
-    ['FuelTrends', <FuelTrends key="r" today="2026-10-11" />],
     ['FoodOfferBanner', <FoodOfferBanner key="b" workoutId="w1" />],
   ])('%s', (_name, element) => {
     expect(render(element).toJSON()).toBeNull();
