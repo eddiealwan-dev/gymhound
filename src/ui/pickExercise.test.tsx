@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
-import { FlatList, Image, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { FlatList, Image, Keyboard, Platform, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import PickExercise from '../../app/pick-exercise';
+import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import type { ExerciseRow } from '../db/repositories/exercisesRepo';
+import { photoFileExists } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
 import { useCreatedExercise } from '../state/createdExercise';
@@ -36,7 +38,12 @@ jest.mock('expo-router', () => {
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRows }));
+jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRows, useDataVersion: () => 0 }));
+jest.mock('../db/repositories/exercisePhotosRepo', () => ({ getOwnPhotos: jest.fn() }));
+jest.mock('../platform/exercisePhotoFiles', () => ({
+  photoFileExists: jest.fn(),
+  photoUri: (name: string) => `file:///documents/exercise-photos/${name}`,
+}));
 jest.mock('../state/sessionActions', () => ({ addExercise: jest.fn(), replaceWith: jest.fn() }));
 // Its own tests cover what it shows; here, which exercise it is opened for is what the tests read.
 jest.mock('./FormDemo', () => ({ FormDemo: () => null }));
@@ -93,7 +100,10 @@ const drawnRows = (tree: ReactTestRenderer) =>
 
 const texts = (node: ReactTestInstance) => node.findAll((n) => n.type === Text).map((t) => t.props.children);
 
+const originalOS = Platform.OS;
+
 afterEach(() => {
+  Platform.OS = originalOS;
   for (const tree of mounted.splice(0)) act(() => tree.unmount());
   jest.useRealTimers();
 });
@@ -109,6 +119,8 @@ beforeEach(() => {
   jest.mocked(router.push).mockClear();
   jest.mocked(addExercise).mockClear();
   jest.mocked(replaceWith).mockClear();
+  jest.mocked(getOwnPhotos).mockReset().mockReturnValue({ start: null, end: null });
+  jest.mocked(photoFileExists).mockReset().mockReturnValue(true);
 });
 
 describe('the exercise picker: every exercise (§18.8)', () => {
@@ -150,6 +162,38 @@ describe('the exercise picker: every exercise (§18.8)', () => {
       return typeof n.type === 'string' && style?.width === 44 && style?.height === 44;
     });
     expect(tile).toHaveLength(1);
+  });
+
+  it('shows your own start photo where none is bundled (R111)', () => {
+    jest.mocked(getOwnPhotos).mockImplementation((_db, id) => (id === 'wall-sit' ? { start: 'wall-sit-start-1.jpg', end: null } : { start: null, end: null }));
+    const tree = mount();
+    search(tree, 'wall sit');
+
+    const photo = row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image);
+    expect(photo).toHaveLength(1);
+    expect(photo[0].props.source).toEqual({ uri: 'file:///documents/exercise-photos/wall-sit-start-1.jpg' });
+    expect(StyleSheet.flatten(photo[0].props.style)).toMatchObject({ width: 44, height: 44 });
+    expect(photo[0].props.resizeMethod).toBe('resize');
+  });
+
+  it('keeps the empty tile when your own photo file has gone, and on web', () => {
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: null });
+    jest.mocked(photoFileExists).mockReturnValue(false);
+    let tree = mount();
+    search(tree, 'wall sit');
+    expect(row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image)).toHaveLength(0);
+
+    jest.mocked(photoFileExists).mockReturnValue(true);
+    Platform.OS = 'web';
+    tree = mount();
+    search(tree, 'wall sit');
+    expect(row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image)).toHaveLength(0);
+  });
+
+  it('never looks for your own photos for an exercise with bundled ones', () => {
+    const tree = mount();
+    search(tree, 'barbell bench press');
+    expect(jest.mocked(getOwnPhotos).mock.calls.some(([, id]) => id === 'barbell-bench-press')).toBe(false);
   });
 
   it('names each of several primary muscles on its row', () => {

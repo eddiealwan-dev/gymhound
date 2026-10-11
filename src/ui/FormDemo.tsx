@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Image, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Image, Platform, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { getExercise, type ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { musclesLine } from '../domain/labels';
 import { Button } from './Button';
-import { exercisePhotos } from './exercisePhotos';
+import { canHaveOwnPhotos, useExercisePhotos } from './exercisePhotos';
+import { OwnPhotos } from './OwnPhotos';
 import { afterSheetCloses, Sheet } from './Sheet';
 import { Body, Display, Num } from './Text';
 import { useTheme } from './ThemeProvider';
@@ -48,27 +49,28 @@ function useReduceMotion(): boolean | null {
  * start photo, and only the end photo's opacity flips between 0 and 1, so iOS never shows a blank frame decoding a new
  * source. The end photo has an opaque background, so none of the start photo shows around it when their letterboxing
  * differs. With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while
- * unknown, the start photo shows alone.
+ * unknown, the start photo shows alone. With one photo only (your own, R111), it shows alone and still.
  */
-function Photos({ name, photos }: { name: string; photos: readonly [ImageSourcePropType, ImageSourcePropType] }) {
+function Photos({ name, photos }: { name: string; photos: readonly [ImageSourcePropType, ImageSourcePropType | null] }) {
   const { colors } = useTheme();
   const reduced = useReduceMotion();
   /** Whether the end photo is shown: its opacity is 1 and it covers the start photo, or 0 and the start photo shows. */
   const [endShown, setEndShown] = useState(false);
+  const single = photos[1] === null;
 
   useEffect(() => {
-    if (reduced !== false) return;
+    if (reduced !== false || single) return;
     const timer = setInterval(() => setEndShown((shown) => !shown), PHOTO_MS);
     return () => {
       clearInterval(timer);
       setEndShown(false);
     };
-  }, [reduced]);
+  }, [reduced, single]);
 
   const frame = { aspectRatio: 3 / 2, borderRadius: 12, overflow: 'hidden' as const, backgroundColor: colors.surfaceRaised };
   // Neither photo is a stop for the screen reader, so it never lands on the hidden one: the frame is (review of R86).
   const photo = (which: 0 | 1) => ({
-    source: photos[which],
+    source: photos[which] ?? photos[0],
     testID: which === 0 ? 'form-demo-start' : 'form-demo-end',
     accessible: false,
     accessibilityIgnoresInvertColors: true,
@@ -76,6 +78,13 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   });
   const described = { accessible: true, accessibilityRole: 'image' as const, accessibilityLabel: `${name}, start and end positions` };
 
+  if (single) {
+    return (
+      <View accessible accessibilityRole="image" accessibilityLabel={`${name}, photo`} style={frame}>
+        <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
+      </View>
+    );
+  }
   if (reduced) {
     return (
       <View {...described} style={{ flexDirection: 'row', gap: 8 }}>
@@ -123,7 +132,7 @@ function Steps({ steps }: { steps: readonly string[] }) {
 }
 
 function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => void) | null }) {
-  const photos = exercisePhotos(exercise.id);
+  const photos = useExercisePhotos(exercise.id);
   /** Your own exercise has no steps: the demo says so and offers its editor instead. */
   const yours = exercise.isCustom && exercise.instructions.length === 0;
   return (
@@ -148,6 +157,12 @@ function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => v
         <View style={{ marginTop: 16, gap: 16 }}>
           <Body muted>No steps for your own exercise.</Body>
           {onEdit ? <Button label="Edit exercise" variant="secondary" onPress={onEdit} /> : null}
+        </View>
+      ) : null}
+      {/* Your own photos: only where none are bundled, and on a phone (R111). */}
+      {Platform.OS !== 'web' && canHaveOwnPhotos(exercise.id) ? (
+        <View style={{ marginTop: 16 }}>
+          <OwnPhotos exerciseId={exercise.id} />
         </View>
       ) : null}
     </>
