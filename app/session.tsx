@@ -13,7 +13,9 @@ import { finishCheck, finishConfirm, type FinishConfirm } from '../src/domain/fi
 import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
-import { joinsNextInSuperset } from '../src/domain/sessionMenu';
+import { listNames } from '../src/domain/finishCheck';
+import { latestTickedSetId, restWaitsFor } from '../src/domain/rest';
+import { joinsNextInSuperset, startsSuperset } from '../src/domain/sessionMenu';
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -213,6 +215,8 @@ export default function Session() {
   }
 
   const { restEndsAt, restSetId } = workout;
+  /** The set ticked last: mid-superset it shows when the rest comes (R100). */
+  const lastTicked = latestTickedSetId(workout.exercises);
   /** What the rest row says at zero, by the set the rest is (or was) under. */
   const upText = restUpText(workout.exercises, restSetId ?? restUp?.setId ?? '');
   /**
@@ -328,6 +332,13 @@ export default function Session() {
               distanceUnit={distanceUnit}
               inSuperset={ex.supersetGroup !== null}
               joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
+              supersetLabel={
+                startsSuperset(workout.exercises, ex.id)
+                  ? `Superset of ${listNames(workout.exercises.filter((e) => e.supersetGroup === ex.supersetGroup).map((e) => e.name))}`
+                  : null
+              }
+              restWaitsFor={restWaitsFor(workout.exercises, ex.id)}
+              latestTickedSetId={lastTicked}
               restEndsAt={restEndsAt}
               restSetId={restSetId}
               nextSetId={next}

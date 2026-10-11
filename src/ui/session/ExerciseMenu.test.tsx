@@ -705,3 +705,30 @@ describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
     expect(shownText(tree)).toEqual([]);
   });
 });
+
+describe('ExerciseMenu: the Rest panel of a superset member that is not last (R100)', () => {
+  const member = (id: string, name: string, position: number) =>
+    ({ ...exercise(), id, name, position, supersetGroup: 1, restSeconds: null }) as unknown as WorkoutExerciseView;
+
+  function openRest(exercises: WorkoutExerciseView[], exerciseId: string) {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ExerciseMenu exercises={exercises} exerciseId={exerciseId} initialPanel="rest" onClose={() => {}} />);
+    });
+    return tree;
+  }
+
+  it('says "Rest after {last exercise}" under the name, as the line under a ticked set does', () => {
+    const tree = openRest([member('we1', 'Bench Press', 0), member('we2', 'Ab roller', 1)], 'we1');
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Rest time', 'Bench Press', 'Rest after Ab roller']));
+  });
+
+  it('says nothing more for the last member, or outside a superset', () => {
+    const last = openRest([member('we1', 'Bench Press', 0), member('we2', 'Ab roller', 1)], 'we2');
+    expect(shownText(last).some((t) => t.startsWith('Rest after'))).toBe(false);
+
+    const alone = openRest([{ ...exercise(), restSeconds: null } as unknown as WorkoutExerciseView], 'we1');
+    expect(shownText(alone).some((t) => t.startsWith('Rest after'))).toBe(false);
+  });
+});

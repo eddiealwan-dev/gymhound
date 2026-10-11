@@ -83,16 +83,29 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
 
 type Rest = { restEndsAt: number | null; restSetId: string | null; restUp?: { setId: string; endsAt: number } | null };
 
-function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null): ReactTestRenderer {
+/** What the session screen works out about the block's superset (R100). None by default. */
+type Superset = { inSuperset?: boolean; supersetLabel?: string | null; restWaitsFor?: string | null; latestTickedSetId?: string | null };
+
+function mount(
+  ex: WorkoutExerciseView,
+  rest: Rest = { restEndsAt: null, restSetId: null },
+  nextSetId: string | null = null,
+  superset: Superset = {},
+): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(block(ex, rest, nextSetId));
+    tree = create(block(ex, rest, nextSetId, superset));
   });
   return tree;
 }
 
 /** The block as the session screen draws it. */
-function block(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null) {
+function block(
+  ex: WorkoutExerciseView,
+  rest: Rest = { restEndsAt: null, restSetId: null },
+  nextSetId: string | null = null,
+  superset: Superset = {},
+) {
   return (
     <ExerciseBlock
       workoutId="w1"
@@ -101,8 +114,11 @@ function block(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSet
       gear={{ bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } }}
       distanceUnit="mi"
       onOpenMenu={() => {}}
-      inSuperset={false}
+      inSuperset={superset.inSuperset ?? false}
       joinsNext={false}
+      supersetLabel={superset.supersetLabel ?? null}
+      restWaitsFor={superset.restWaitsFor ?? null}
+      latestTickedSetId={superset.latestTickedSetId ?? null}
       restEndsAt={rest.restEndsAt}
       restSetId={rest.restSetId}
       restUp={rest.restUp ?? null}
@@ -1494,5 +1510,62 @@ describe('ExerciseBlock: the form demo (R86)', () => {
     expect(restingStyle(byLabel(tree, SHOW_FORM))).toEqual(expect.objectContaining({ flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
     expect(restingStyle(byLabel(tree, SHOW_FORM)).flexGrow).toBeUndefined();
     expect(restingStyle(byLabel(tree, SHOW_FORM)).flex).toBeUndefined();
+  });
+});
+
+describe('ExerciseBlock: a superset says so in words (R100)', () => {
+  const LABEL = 'Superset of Bench Press and Ab roller';
+  const twoTicked = () =>
+    bench([
+      set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 1 }),
+      set('s1', 1, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 2 }),
+      set('s2', 2),
+    ]);
+  /** The drawn Text reading exactly `text`. */
+  const texts = (tree: ReactTestRenderer, text: string) => tree.root.findAll((n) => n.type === Text && n.props.children === text);
+
+  it('the block opening a superset shows a quiet "Superset" label by its bar, before the name, and VoiceOver hears the members', () => {
+    const tree = mount(bench([set('s0', 0)]), undefined, null, { inSuperset: true, supersetLabel: LABEL });
+
+    const [label] = texts(tree, 'Superset');
+    expect(label).toBeDefined();
+    expect(label.props.accessibilityLabel).toBe(LABEL);
+    const style = StyleSheet.flatten(label.props.style);
+    // Muted and small, never red, and it grows with the phone's text size (no fixed line height, scaling left on).
+    expect(style).toMatchObject({ color: '#a39d90', fontSize: 13 });
+    expect(style.lineHeight).toBeUndefined();
+    expect(label.props.allowFontScaling).not.toBe(false);
+    const drawn = tree.root.findAll(() => true);
+    expect(drawn.indexOf(label)).toBeLessThan(drawn.indexOf(byLabel(tree, 'Show form for Bench Press')));
+  });
+
+  it('shows no label on the other members, or outside a superset', () => {
+    expect(texts(mount(bench([set('s0', 0)]), undefined, null, { inSuperset: true }), 'Superset')).toHaveLength(0);
+    expect(texts(mount(bench([set('s0', 0)])), 'Superset')).toHaveLength(0);
+  });
+
+  it('mid-superset, the set ticked last shows "Rest after {last exercise}" under it, where the rest row would be', () => {
+    const tree = mount(twoTicked(), undefined, 's2', { inSuperset: true, restWaitsFor: 'Ab roller', latestTickedSetId: 's1' });
+
+    const lines = texts(tree, 'Rest after Ab roller');
+    expect(lines).toHaveLength(1);
+    expect(StyleSheet.flatten(lines[0].props.style)).toMatchObject({ color: '#a39d90' });
+    // Under set 2, before set 3.
+    const drawn = tree.root.findAll(() => true);
+    expect(drawn.indexOf(lines[0])).toBeGreaterThan(drawn.indexOf(byLabel(tree, 'Set 2 done')));
+    expect(drawn.indexOf(lines[0])).toBeLessThan(drawn.indexOf(byLabel(tree, 'Set 3')));
+    expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+
+  it('shows no such line when the last tick was in another exercise, or when this one ends the superset', () => {
+    expect(texts(mount(twoTicked(), undefined, null, { restWaitsFor: 'Ab roller', latestTickedSetId: 'elsewhere' }), 'Rest after Ab roller')).toHaveLength(0);
+    expect(shownText(mount(twoTicked(), undefined, null, { latestTickedSetId: 's1' })).some((t) => t.startsWith('Rest after'))).toBe(false);
+  });
+
+  it('a rest running under that set wins: the countdown shows, not the line', () => {
+    const tree = mount(twoTicked(), { restEndsAt: 60_000, restSetId: 's1' }, null, { restWaitsFor: 'Ab roller', latestTickedSetId: 's1' });
+
+    expect(texts(tree, 'Rest after Ab roller')).toHaveLength(0);
+    expect(tree.root.findAllByType(RestInline)).toHaveLength(1);
   });
 });

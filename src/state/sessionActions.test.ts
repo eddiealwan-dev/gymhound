@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { getRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
-import { getUpNext, setActiveRoutine } from '../db/repositories/routinesRepo';
+import { getRoutineDetail, getUpNext, saveRoutine, setActiveRoutine } from '../db/repositories/routinesRepo';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../db/repositories/unitsRepo';
 import {
@@ -13,10 +13,11 @@ import {
   tickSet,
 } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/workoutViewsRepo';
-import { routineExercises, workoutExercises, workouts } from '../db/schema';
+import { exercises, routineExercises, workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
+import { draftReducer, newDraft } from '../domain/routineDraft';
 import { buildRows, fieldPatch, readRow, valueText } from '../domain/setTable';
 import { useDataVersion } from './dataVersion';
 import {
@@ -1433,5 +1434,107 @@ describe('Up next after finish and discard', () => {
     expect(finish(db, workoutId())).toBe('nothing_ticked');
 
     expect(upNextDay()).toBe('Push A');
+  });
+});
+
+// ---- the ab roller rest (Round 6, handoff 4.3) ----
+
+describe("the ab roller rest: 'set a rest timer on ab roller, ticked a set, no rest came up' (Round 6)", () => {
+  const AB_ROLLER = 'fedb-ab-roller';
+
+  /** Saves a routine of one day, as the editor's Save does, with the exercises in order; returns the day's id. */
+  function routineDay(exerciseIds: string[], supersetFirstTwo = false): string {
+    let draft = draftReducer(draftReducer(newDraft(), { type: 'rename', name: 'Core' }), { type: 'addDay', name: 'Abs' });
+    for (const exerciseId of exerciseIds) {
+      const ex = activeLibrary(exerciseId);
+      draft = draftReducer(draft, { type: 'addExercise', dayKey: draft.days[0].key, exercise: ex, increment: { value: 5, unit: 'lb' } });
+    }
+    if (supersetFirstTwo) draft = draftReducer(draft, { type: 'toggleSuperset', dayKey: draft.days[0].key, exerciseKey: draft.days[0].exercises[0].key });
+    const id = saveRoutine(db, draft, NOW);
+    return getRoutineDetail(db, id)!.days[0].id;
+  }
+
+  /** The library row the editor's picker hands back. */
+  function activeLibrary(exerciseId: string) {
+    const row = db.select().from(exercises).where(eq(exercises.id, exerciseId)).get()!;
+    return { id: row.id, name: row.name, loggingType: row.loggingType };
+  }
+
+  /** Ticks the first set of the ab roller as its row does: the weight field left empty, 10 reps typed. */
+  function tickAbRoller(): boolean {
+    const settings = getSettings(db);
+    const ex = activeView().exercises.find((e) => e.exerciseId === AB_ROLLER)!;
+    const row = buildRows(ex, settings.unit, gearFor(settings.unit, settings), settings.distanceUnit)[0];
+    const reading = readRow(row, { reps: '10' }, settings.unit, settings.distanceUnit);
+    expect(reading.tickable).toBe(true);
+    expect(reading.entered.weight).toBeNull();
+    return tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit);
+  }
+
+  it('is a bodyweight plus exercise in the library', () => {
+    expect(activeLibrary(AB_ROLLER).loggingType).toBe('bodyweight_plus');
+  });
+
+  it("starts the ab roller's own rest (set from its ⋯ Rest panel) in a routine of the owner's, with the weight left empty", () => {
+    startFromDay(db, routineDay([BENCH, AB_ROLLER]));
+    setExerciseRest(db, AB_ROLLER, 60);
+
+    expect(tickAbRoller()).toBe(true);
+
+    const ab = activeView().exercises.find((e) => e.exerciseId === AB_ROLLER)!;
+    expect(ab.supersetGroup).toBeNull();
+    expect(ab.sets[0].done).toBe(true);
+    expect(restEndsAt()).toBe(NOW + 60_000);
+    expect(activeView().restSetId).toBe(ab.sets[0].id);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 60_000, true);
+    expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged. Rest 1 minute.');
+  });
+
+  it('starts it with the rest chosen before the workout started, too', () => {
+    setExerciseRest(db, AB_ROLLER, 90);
+    startFromDay(db, routineDay([AB_ROLLER]));
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 90_000);
+  });
+
+  it('starts the rest in Settings when the ab roller has none of its own', () => {
+    startFromDay(db, routineDay([AB_ROLLER]));
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+  });
+
+  it('starts it in an empty workout the ab roller was added to', () => {
+    startEmpty(db);
+    addExercise(db, AB_ROLLER);
+    setExerciseRest(db, AB_ROLLER, 45);
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 45_000);
+  });
+
+  it('starts it when the ab roller ends a superset made in the editor', () => {
+    setExerciseRest(db, AB_ROLLER, 60);
+    startFromDay(db, routineDay([BENCH, AB_ROLLER], true));
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 60_000);
+  });
+
+  it('waits when the ab roller opens a superset made in the editor: the rest comes after the last member (the likely Round 6 case)', () => {
+    setExerciseRest(db, AB_ROLLER, 60);
+    startFromDay(db, routineDay([AB_ROLLER, BENCH], true));
+    expect(activeView().exercises.map((e) => e.supersetGroup)).toEqual([1, 1]);
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBeNull();
+    // VoiceOver hears which exercise the rest waits for (R100).
+    expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged. Rest after Barbell bench press.');
   });
 });

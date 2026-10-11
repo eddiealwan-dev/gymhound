@@ -222,3 +222,38 @@ describe('Something off in the name row opens the reasons (R81, Round 5)', () =>
     expect(mockOrder).toEqual(['flushAll', 'dismiss', 'menu we1 mark']);
   });
 });
+
+describe('a superset in words (R100)', () => {
+  it("labels the superset's first block, and tells a member that is not last which exercise the rest waits for", () => {
+    const benchTicked: WorkoutExerciseView = {
+      ...mockBench,
+      supersetGroup: 1,
+      sets: [{ ...set('s1', 0), done: true, weight: 135, weightUnit: 'lb', reps: 5, completedAt: 5 }, set('s2', 1)],
+    };
+    const abRoller: WorkoutExerciseView = {
+      ...mockBench,
+      id: 'we2',
+      exerciseId: 'fedb-ab-roller',
+      name: 'Ab roller',
+      loggingType: 'bodyweight_plus',
+      equipment: 'other',
+      position: 1,
+      supersetGroup: 1,
+      sets: [{ ...set('a1', 0), done: true, reps: 10, completedAt: 3 }],
+    };
+    const squat: WorkoutExerciseView = { ...mockBench, id: 'we3', exerciseId: 'barbell-squat', name: 'Squat', position: 2, sets: [set('q1', 0)] };
+    mockState.exercises = [benchTicked, abRoller, squat];
+    mockState.restEndsAt = null;
+    mockState.restSetId = null;
+
+    act(() => {
+      tree = create(<Session />);
+    });
+
+    const [benchBlock, abBlock, squatBlock] = tree!.root.findAllByType(ExerciseBlock);
+    expect(benchBlock.props).toMatchObject({ supersetLabel: 'Superset of Bench Press and Ab roller', restWaitsFor: 'Ab roller', latestTickedSetId: 's1' });
+    expect(abBlock.props).toMatchObject({ supersetLabel: null, restWaitsFor: null, latestTickedSetId: 's1' });
+    expect(squatBlock.props).toMatchObject({ supersetLabel: null, restWaitsFor: null });
+    expect(benchBlock.findAll((n) => n.props.children === 'Rest after Ab roller' && typeof n.type !== 'string').length).toBeGreaterThan(0);
+  });
+});

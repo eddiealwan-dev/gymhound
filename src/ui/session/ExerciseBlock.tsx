@@ -5,7 +5,7 @@ import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { MARK_LABELS } from '../../domain/labels';
 import { planInUnit, type Gear } from '../../domain/plates';
-import { restLengthFor } from '../../domain/rest';
+import { restAfterLine, restLengthFor } from '../../domain/rest';
 import { lastSummary, ruleSentence, todaysRead } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
@@ -41,6 +41,18 @@ type Props = {
   inSuperset: boolean;
   /** Whether the next exercise is in the same superset: the bar then runs on through the gap between them. */
   joinsNext: boolean;
+  /**
+   * On the block that opens a superset, what VoiceOver says for its "Superset" label ("Superset of Bench press and Ab
+   * roller"); null on every other block (R100).
+   */
+  supersetLabel: string | null;
+  /**
+   * Mid-superset, the exercise the rest waits for (`restWaitsFor`): the set ticked last then shows "Rest after {it}"
+   * where the rest row would be. Null when a tick of this exercise starts the rest itself (R100).
+   */
+  restWaitsFor: string | null;
+  /** The set ticked last in the whole workout (`latestTickedSetId`), or null. */
+  latestTickedSetId: string | null;
   /** When the running rest ends (`rest_ends_at`), or null when none is running. */
   restEndsAt: number | null;
   /**
@@ -135,6 +147,9 @@ export function ExerciseBlock({
   onOpenMenu,
   inSuperset,
   joinsNext,
+  supersetLabel,
+  restWaitsFor,
+  latestTickedSetId,
   restEndsAt,
   restSetId,
   nextSetId,
@@ -235,6 +250,12 @@ export function ExerciseBlock({
         not grow (a basis of 'auto', never flex: 1), so the group sits right after it either way. At large text the name
         wraps, and the group wraps among itself; its words wrap rather than end in "…".
       */}
+      {supersetLabel !== null ? (
+        // The bar alone said nothing about what it means (R100): a quiet word beside it, on the superset's first block.
+        <Body muted weight={500} accessibilityLabel={supersetLabel} style={{ fontSize: 13, marginBottom: 2 }}>
+          Superset
+        </Body>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', columnGap: NAME_ROW_GAP }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: NAME_ROW_GAP, rowGap: 2 }}>
           {/*
@@ -417,6 +438,11 @@ export function ExerciseBlock({
                   upText={upText}
                   onOpenRest={onOpenRest}
                 />
+              ) : restWaitsFor !== null && row.set.id === latestTickedSetId ? (
+                // A tick mid-superset starts no rest: where the rest row would be, a quiet line says when it comes (R100).
+                <Body muted style={{ fontSize: 14, paddingVertical: 6 }}>
+                  {restAfterLine(restWaitsFor)}
+                </Body>
               ) : null}
             </Fragment>
           );

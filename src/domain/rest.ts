@@ -38,6 +38,33 @@ export function shouldStartRestAfterTick(
   return exercises.every((e) => e.supersetGroup !== ticked.supersetGroup || e.position <= ticked.position);
 }
 
+/**
+ * The exercise the rest waits for after a tick of this one (R100): the last member of its superset, by position, when
+ * the exercise is in a superset and is not that member. Null otherwise, when a tick starts the rest itself.
+ */
+export function restWaitsFor(
+  exercises: { id: string; name: string; position: number; supersetGroup: number | null }[],
+  workoutExerciseId: string,
+): string | null {
+  const ticked = exercises.find((e) => e.id === workoutExerciseId);
+  if (!ticked || ticked.supersetGroup === null) return null;
+  const last = exercises
+    .filter((e) => e.supersetGroup === ticked.supersetGroup)
+    .reduce((a, b) => (b.position > a.position ? b : a));
+  return last.id === ticked.id ? null : last.name;
+}
+
+/** The set ticked last in the workout (the latest `completedAt` of a done set), or null with nothing ticked (R100). */
+export function latestTickedSetId(exercises: { sets: { id: string; done: boolean; completedAt: number | null }[] }[]): string | null {
+  let latest: { id: string; at: number } | null = null;
+  for (const ex of exercises) {
+    for (const set of ex.sets) {
+      if (set.done && set.completedAt !== null && (latest === null || set.completedAt > latest.at)) latest = { id: set.id, at: set.completedAt };
+    }
+  }
+  return latest?.id ?? null;
+}
+
 /** What a tick, -15s, +15s or Skip does to the rest timer. The caller writes `rest_ends_at` and calls the rest surface to match. */
 export type RestChange =
   /** Start a rest that ends at `endsAt`. */
@@ -101,10 +128,19 @@ export function spokenRest(seconds: number): string {
   return rest === 0 ? unitWord(minutes, 'minute') : `${unitWord(minutes, 'minute')} ${unitWord(rest, 'second')}`;
 }
 
-/** What VoiceOver says after a tick: "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when the tick started no rest. */
-export function tickAnnouncement(setLabel: string, restSeconds: number | null): string {
+/**
+ * What VoiceOver says after a tick: "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when the tick started no rest.
+ * Mid-superset, `waitsFor` names the exercise the rest comes after: "Set 2 logged. Rest after Ab roller." (R100).
+ */
+export function tickAnnouncement(setLabel: string, restSeconds: number | null, waitsFor: string | null = null): string {
   const logged = `${setName(setLabel)} logged.`;
-  return restSeconds === null ? logged : `${logged} Rest ${spokenRest(restSeconds)}.`;
+  if (restSeconds !== null) return `${logged} Rest ${spokenRest(restSeconds)}.`;
+  return waitsFor === null ? logged : `${logged} ${restAfterLine(waitsFor)}.`;
+}
+
+/** The quiet line under a set ticked mid-superset, and in its ⋯ Rest panel: "Rest after Ab roller" (R100). */
+export function restAfterLine(name: string): string {
+  return `Rest after ${name}`;
 }
 
 /** How long after the end the watcher still rings. Later than this, the app was away and the notification already rang. */

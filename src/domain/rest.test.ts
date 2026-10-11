@@ -1,4 +1,5 @@
 import {
+  latestTickedSetId,
   minus15,
   plus15,
   PLUS_15_MS,
@@ -12,6 +13,7 @@ import {
   restRemainingSeconds,
   restRowPhase,
   restTrackFraction,
+  restWaitsFor,
   RING_WINDOW_MS,
   shouldStartRestAfterTick,
   spokenRest,
@@ -257,5 +259,50 @@ describe('spokenRest and tickAnnouncement: what VoiceOver says after a tick', ()
     expect(tickAnnouncement('2', 120)).toBe('Set 2 logged. Rest 2 minutes.');
     expect(tickAnnouncement('2', null)).toBe('Set 2 logged.');
     expect(tickAnnouncement('W', 90)).toBe('Warmup logged. Rest 1 minute 30 seconds.');
+  });
+
+  it('says which exercise the rest waits for after a tick mid-superset (R100)', () => {
+    expect(tickAnnouncement('2', null, 'Ab roller')).toBe('Set 2 logged. Rest after Ab roller.');
+    expect(tickAnnouncement('2', 90, 'Ab roller')).toBe('Set 2 logged. Rest 1 minute 30 seconds.');
+  });
+});
+
+describe('restWaitsFor: the exercise a superset rest waits for (R100)', () => {
+  const list = [
+    { id: 'a', name: 'Bench press', position: 1, supersetGroup: 1 },
+    { id: 'b', name: 'Ab roller', position: 2, supersetGroup: 1 },
+    { id: 'c', name: 'Squat', position: 3, supersetGroup: null },
+    { id: 'd', name: 'Row', position: 4, supersetGroup: 2 },
+    { id: 'e', name: 'Curl', position: 5, supersetGroup: 2 },
+    { id: 'f', name: 'Plank', position: 6, supersetGroup: 2 },
+  ];
+
+  it('names the last member of the superset for every other member', () => {
+    expect(list.map((e) => restWaitsFor(list, e.id))).toEqual(['Ab roller', null, null, 'Plank', 'Plank', null]);
+  });
+
+  it('judges the last member by position, as shouldStartRestAfterTick does', () => {
+    const shuffled = [list[1], list[0]];
+    expect(restWaitsFor(shuffled, 'a')).toBe('Ab roller');
+    expect(restWaitsFor(shuffled, 'b')).toBeNull();
+  });
+
+  it('is null for an exercise that is not in the list', () => {
+    expect(restWaitsFor(list, 'zz')).toBeNull();
+  });
+});
+
+describe('latestTickedSetId: the set ticked last in the workout (R100)', () => {
+  const sets = (...completed: (number | null)[]) =>
+    completed.map((completedAt, i) => ({ id: `s${i}`, done: completedAt !== null, completedAt }));
+
+  it('is the done set with the latest tick time, across exercises', () => {
+    expect(latestTickedSetId([{ sets: sets(10, 30) }, { sets: sets(20, null) }])).toBe('s1');
+    expect(latestTickedSetId([{ sets: sets(10, null) }, { sets: sets(20) }])).toBe('s0');
+  });
+
+  it('is null with nothing ticked', () => {
+    expect(latestTickedSetId([{ sets: sets(null, null) }])).toBeNull();
+    expect(latestTickedSetId([])).toBeNull();
   });
 });

@@ -228,7 +228,7 @@ Flat by default. Depth is three tonal steps (bg, surface, surfaceRaised) separat
 
 ## Shapes
 
-Softly squared. Cards and sheets take 16px corners; regular buttons and segmented wells 12px; rows that tint (a done set, the rest row) 10px; selected segments 9px so they nest inside a 12px well with 4px padding; set fields and the set-number chip 8px. Compact pills are fully rounded (18px on a 36px height). The tick is a 40px circle, and the header's Settings button a 40px circle. A superset is a 3px bar in the text colour running down the left edge of its members, the only straight-edged accent in the system.
+Softly squared. Cards and sheets take 16px corners; regular buttons and segmented wells 12px; rows that tint (a done set, the rest row) 10px; selected segments 9px so they nest inside a 12px well with 4px padding; set fields and the set-number chip 8px. Compact pills are fully rounded (18px on a 36px height). The tick is a 40px circle, and the header's Settings button a 40px circle. A superset is a 3px bar in the text colour running down the left edge of its members, the only straight-edged accent in the system. Its first block carries a quiet muted "Superset" label (Inter 500, 13px) above the name, beside the bar, so the bar is never the only sign (R100).
 
 ## Components
 
