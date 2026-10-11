@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { router } from 'expo-router';
-import { AccessibilityInfo, TextInput } from 'react-native';
+import { AccessibilityInfo, Platform, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import BodyDetail from '../../app/(tabs)/body/[kind]';
@@ -11,6 +11,13 @@ import { createTestDb } from '../db/testing/createTestDb';
 import type { Db } from '../db/types';
 import { LineChart } from './charts/LineChart';
 import { Footer } from './Footer';
+
+/** React Native's own sendAccessibilityEvent, put back after a test takes it away as React Native Web does. */
+const realSendAccessibilityEvent = AccessibilityInfo.sendAccessibilityEvent;
+function setSendAccessibilityEvent(fn: (() => void) | undefined): void {
+  (AccessibilityInfo as { sendAccessibilityEvent?: unknown }).sendAccessibilityEvent = fn;
+}
+afterEach(() => setSendAccessibilityEvent(realSendAccessibilityEvent as () => void));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,7 +36,10 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({
+  ...jest.requireActual('../platform/announce'),
+  announce: (text: string) => mockAnnounce(text),
+}));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -335,6 +345,19 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     expect(listBodyEntries(mockDb, 'waist')).toEqual([]);
     expect(shownText(tree)).not.toContain('Delete this entry?');
     expect(shownText(tree)).toContain('No entries yet.');
+  });
+
+  it('on the web, which has no sendAccessibilityEvent, Delete asks and deletes without crashing', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    setSendAccessibilityEvent(undefined);
+    mockKind = 'waist';
+    addBodyEntry(mockDb, 'waist', 34, 'in', NOW);
+    const tree = mount(<BodyDetail />);
+    press(tree, 'Oct 11, 34 in');
+    press(tree, 'Delete');
+    expect(shownText(tree)).toContain('Delete this entry?');
+    press(tree, 'Delete');
+    expect(listBodyEntries(mockDb, 'waist')).toEqual([]);
   });
 
   it('says "That isn\'t here." for a kind that is not one', () => {
