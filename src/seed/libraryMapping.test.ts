@@ -1,6 +1,7 @@
 import { SEED_EXERCISES } from './exercises';
 import {
   LEGACY_SOURCE,
+  LEGACY_STEPS,
   NAME_ACRONYMS,
   NAME_PROPER_NOUNS,
   buildLibrary,
@@ -334,15 +335,16 @@ describe('buildLibrary', () => {
       const { sourceId, instructions, ...kept } = byId.get(legacy.id)!;
       expect(kept).toEqual(legacy);
       expect(sourceId).toBe(LEGACY_SOURCE[legacy.id]);
-      expect(instructions).toEqual(sourceId === null ? [] : FEDB.find((e) => e.id === sourceId)!.instructions);
+      expect(instructions).toEqual(sourceId === null ? LEGACY_STEPS[legacy.id] : FEDB.find((e) => e.id === sourceId)!.instructions);
     }
   });
 
-  it('gives an existing exercise with no match no source and no steps', () => {
+  it('gives an existing exercise with no match no source and its hand-written steps (R95)', () => {
     const unmatched = Object.entries(LEGACY_SOURCE).filter(([, s]) => s === null).map(([id]) => id);
     expect(unmatched.length).toBeGreaterThan(0);
     for (const id of unmatched) {
-      expect(byId.get(id)).toMatchObject({ sourceId: null, instructions: [] });
+      expect(byId.get(id)).toMatchObject({ sourceId: null, instructions: LEGACY_STEPS[id] });
+      expect(LEGACY_STEPS[id]!.length).toBeGreaterThanOrEqual(3);
     }
   });
 

@@ -105,8 +105,8 @@ describe('getExercise', () => {
     });
   });
 
-  it('gives an exercise without a source no steps and a null source', () => {
-    expect(getExercise(seededDb(), 'wall-sit')).toMatchObject({ name: 'Wall sit', instructions: [], sourceId: null });
+  it('gives an exercise without a source its hand-written steps (R95) and a null source', () => {
+    expect(getExercise(seededDb(), 'wall-sit')).toMatchObject({ name: 'Wall sit', instructions: expect.arrayContaining([expect.stringMatching(/^Stand with your back flat/)]), sourceId: null });
   });
 
   it('still returns an archived exercise, which history may show', () => {

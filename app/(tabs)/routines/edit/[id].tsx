@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { BackHandler, Pressable, Switch, TextInput, View } from 'react-native';
@@ -35,7 +35,7 @@ const NO_REPS: LoggingType[] = ['distance_time'];
 const NO_LOAD: LoggingType[] = ['timed', 'distance_time'];
 
 /** Back to the screen the editor was opened from: the routine, or Routines for a new one. */
-function goBack(fallback: string) {
+function goBack(fallback: Href) {
   if (router.canGoBack()) router.back();
   else router.navigate(fallback);
 }
@@ -337,7 +337,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
   const pickFor = useRef<string | null>(null);
   const limit = useRoutineLimit();
-  const backTo = routineId === null ? '/routines' : `/routines/${routineId}`;
+  const backTo: Href = routineId === null ? '/routines' : `/routines/${routineId}`;
 
   const startOver = (next: RoutineDraft | null) => {
     savedRef.current = next;

@@ -255,8 +255,11 @@ export function ExerciseBlock({
               opacity: pressed ? 0.8 : 1,
             })}
           >
+            {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
             <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
               {ex.name}
+              {' '}
+              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} />
             </Display>
           </Pressable>
           <View

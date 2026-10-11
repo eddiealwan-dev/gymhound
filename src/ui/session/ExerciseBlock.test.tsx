@@ -707,7 +707,7 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
 
   it('the name row keeps the name beside ⋯, and the count, + Note and Something off drop under it as one quiet line (design pass)', () => {
     const tree = mount(fourSets());
-    const name = tree.root.findAll((n) => n.type === Text && n.props.children === 'Bench Press')[0];
+    const name = textNode(tree, 'Bench Press');
     const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4')[0];
     const addNote = byLabel(tree, 'Add a note for Bench Press');
     const somethingOff = byLabel(tree, 'Something off for Bench Press');
@@ -922,9 +922,11 @@ function targetHeight(node: ReactTestInstance): number {
   return Number(style.minHeight ?? style.height) + reach;
 }
 
-/** The drawn Text whose child is exactly `text`. */
+/** The drawn Text whose child is exactly `text`, or whose first child is (the exercise name, followed by its ⓘ). */
 const textNode = (tree: ReactTestRenderer, text: string) => {
-  const found = tree.root.findAll((n) => n.type === Text && n.props.children === text);
+  const found = tree.root.findAll(
+    (n) => n.type === Text && (n.props.children === text || (Array.isArray(n.props.children) && n.props.children[0] === text)),
+  );
   expect(found).toHaveLength(1);
   return found[0];
 };
@@ -1442,8 +1444,17 @@ describe('ExerciseBlock: the form demo (R86)', () => {
     const name = byLabel(tree, SHOW_FORM);
     expect(name.props.accessibilityRole).toBe('button');
     expect(targetHeight(name)).toBe(44);
-    expect(name.findAll((n) => n.type === Text && n.props.children === 'Bench Press')).toHaveLength(1);
+    expect(name.findAll((n) => n.type === Text && ([] as unknown[]).concat(n.props.children).includes('Bench Press'))).toHaveLength(1);
     expect(demo(tree).props.exerciseId).toBeNull();
+  });
+
+  it('a muted ⓘ follows the last word of the name, inside its text, so it wraps and scales with it (R94)', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    const nameText = byLabel(tree, SHOW_FORM).find((n) => n.type === Text && ([] as unknown[]).concat(n.props.children).includes('Bench Press'));
+    const cue = nameText.find((n) => n.props.testID === 'form-demo-cue' && n.props.name === 'information-circle-outline');
+    expect(cue.props.size).toBe(16);
+    expect(([] as unknown[]).concat(nameText.props.children)[1]).toBe(' ');
   });
 
   it('tapping the name saves what is typed, puts the keyboard away, then opens the demo for its exercise (R29)', () => {

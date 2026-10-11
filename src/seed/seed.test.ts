@@ -114,7 +114,10 @@ describe('runSeed', () => {
       instructions: expect.arrayContaining([expect.stringMatching(/^Lie back on a flat bench/)]),
     });
     expect(exercise(db, 'fedb-ez-bar-curl')).toMatchObject({ name: 'EZ-bar curl', equipment: 'ez_bar', sourceId: 'EZ-Bar_Curl' });
-    expect(exercise(db, 'wall-sit')).toMatchObject({ instructions: [], sourceId: null });
+    expect(exercise(db, 'wall-sit')).toMatchObject({
+      instructions: expect.arrayContaining([expect.stringMatching(/^Stand with your back flat against a wall/)]),
+      sourceId: null,
+    });
   });
 
   it('inserts the eight premade programs, each starting at day 0 and none retired', () => {

@@ -107,6 +107,48 @@ export const LEGACY_SOURCE: Readonly<Record<string, string | null>> = {
   'bird-dog': null,
 };
 
+/**
+ * Steps for the existing exercises with no free-exercise-db entry (R95), so every exercise's form demo has steps.
+ */
+export const LEGACY_STEPS: Readonly<Record<string, readonly string[]>> = {
+  'wall-sit': [
+    'Stand with your back flat against a wall, feet about a foot out in front of you.',
+    'Slide down until your knees are bent to about 90 degrees, thighs level with the floor.',
+    'Keep your knees over your ankles and your whole back on the wall.',
+    'Hold for the time, breathing steadily, then slide back up.',
+  ],
+  'hollow-body-hold': [
+    'Lie on your back with your arms overhead and your legs straight.',
+    'Press your lower back into the floor, then lift your shoulders and legs a few inches off it.',
+    'Keep your lower back down the whole time. Bend your knees or bring your arms in to make it easier.',
+    'Hold for the time, breathing steadily.',
+  ],
+  'bodyweight-reverse-lunge': [
+    'Stand tall with your feet hip-width apart.',
+    'Step one foot back and lower until both knees are bent to about 90 degrees, the back knee just above the floor.',
+    'Keep your front knee over your foot and your chest up.',
+    'Push through the front heel to stand back up, then switch legs.',
+  ],
+  'pike-push-up': [
+    'Start in a push-up position, then walk your feet in and lift your hips so your body makes an upside-down V.',
+    'Bend your elbows to lower the top of your head toward the floor between your hands.',
+    'Keep your hips high and your elbows angled back, not flared out.',
+    'Press back up until your arms are straight.',
+  ],
+  'bodyweight-split-squat': [
+    'Stand in a long stride, one foot forward and the back heel lifted.',
+    'Lower straight down until the back knee is just above the floor.',
+    'Keep your front knee over your foot and your chest up.',
+    'Push through the front foot to rise. Do every rep on one side, then switch.',
+  ],
+  'bird-dog': [
+    'Start on your hands and knees, hands under your shoulders and knees under your hips.',
+    'Reach one arm forward and the opposite leg back until both are level with your body.',
+    "Keep your hips square and your back flat; don't let it arch.",
+    'Pause, return slowly, then switch sides.',
+  ],
+};
+
 const EQUIPMENT: Readonly<Record<string, Equipment>> = {
   barbell: 'barbell',
   'e-z curl bar': 'ez_bar',
@@ -361,7 +403,7 @@ export function buildLibrary(src: readonly FedbExercise[], legacy: readonly Lega
   for (const exercise of legacy) {
     if (!(exercise.id in LEGACY_SOURCE)) throw new Error(`No LEGACY_SOURCE entry for ${exercise.id}`);
     const sourceId = LEGACY_SOURCE[exercise.id] ?? null;
-    let instructions: string[] = [];
+    let instructions: string[] = [...(LEGACY_STEPS[exercise.id] ?? [])];
     if (sourceId !== null) {
       const source = byId.get(sourceId);
       if (!source) throw new Error(`${exercise.id} is linked to ${sourceId}, which free-exercise-db does not have`);
