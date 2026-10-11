@@ -1,5 +1,4 @@
 import { act, create } from 'react-test-renderer';
-import SavedWorkout from '../../app/(tabs)/saved/[id]';
 import BodyDetail from '../../app/(tabs)/body/[kind]';
 import ExerciseEditor from '../../app/exercise/[id]';
 
@@ -22,7 +21,6 @@ const shown = (element: React.ReactElement) => {
 
 it.each([
   ['exercise/[id]', ExerciseEditor],
-  ['saved/[id]', SavedWorkout],
   ['body/[kind]', BodyDetail],
 ])('%s is a placeholder', (_route, Placeholder) => {
   expect(shown(<Placeholder />)).toContain('Not built yet.');

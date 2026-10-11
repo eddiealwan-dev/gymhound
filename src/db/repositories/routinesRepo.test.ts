@@ -3,6 +3,9 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { draftReducer, hasChanges, newDraft } from '../../domain/routineDraft';
 import type { DraftAction, LibraryExercise, RoutineDraft } from '../../domain/routineDraft';
 import { canAddRoutine } from '../../domain/routineLimit';
+import { gearFor } from '../../domain/plates';
+import type { DayFromSaved } from '../../domain/savedWorkout';
+import { upNextDayHasWeight, upNextLoad } from '../../domain/upNext';
 import type { ExerciseMark, WeightUnit } from '../../domain/types';
 import { PREMADE_ORDER, runSeed } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
@@ -1042,6 +1045,66 @@ describe('saveRoutine (R89)', () => {
       'Upper',
       0,
       [['barbell-bench-press', 0, 1], ['barbell-row', 1, 1], ['dumbbell-curl', 2, null]],
+    ]);
+  });
+});
+
+describe('saveRoutine: a day made from a saved workout (R121)', () => {
+  /** Push A as `dayFromSaved` makes it, last logged in kg: bench from 80 kg, dumbbell press from 30 kg, a plank. */
+  const pushA: DayFromSaved = {
+    name: 'Push A',
+    exercises: [
+      { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb', supersetWithNext: false, startWeight: { weight: 80, unit: 'kg' } },
+      { exerciseId: 'dumbbell-curl', name: 'Dumbbell curl', loggingType: 'weighted', setCount: 2, repMin: 10, repMax: 12, increment: 5, incrementUnit: 'lb', supersetWithNext: false, startWeight: { weight: 30, unit: 'kg' } },
+      { exerciseId: 'plank', name: 'Plank', loggingType: 'timed', setCount: 3, repMin: 45, repMax: 60, increment: 0, incrementUnit: 'lb', supersetWithNext: false, startWeight: null },
+    ],
+  };
+
+  it('writes each start weight as the new row’s next weight, in the unit it was logged in, and Up next shows it converted', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, edit(newDraft(), { type: 'rename', name: 'Mine' }, { type: 'addDayFromSaved', day: pushA }), NOW);
+
+    expect(rowsOf(db, id)[0].exercises.map((e) => [e.exerciseId, e.setCount, e.repMin, e.repMax, e.increment, e.incrementUnit, e.nextWeight, e.nextWeightUnit])).toEqual([
+      ['barbell-bench-press', 3, 5, 8, 5, 'lb', 80, 'kg'],
+      ['dumbbell-curl', 2, 10, 12, 5, 'lb', 30, 'kg'],
+      ['plank', 3, 45, 60, 0, 'lb', null, null],
+    ]);
+
+    setActiveRoutine(db, id);
+    const upNext = getUpNext(db)!;
+    expect(upNext.dayName).toBe('Push A');
+    const gear = gearFor('lb', getSettings(db));
+    const hasWeight = upNextDayHasWeight(upNext.exercises);
+    // 80 kg is 176.4 lb: the nearest loadable bench in lb. 30 kg is 66.1 lb: to the nearest 0.5.
+    expect(upNext.exercises.map((e) => upNextLoad(e, hasWeight, 'lb', gear))).toEqual(['175 lb', '66 lb', null]);
+    expect(upNext.exercises.map((e) => upNextLoad(e, hasWeight, 'kg', gearFor('kg', getSettings(db))))).toEqual(['80 kg', '30 kg', null]);
+  });
+
+  it('leaves the next weights of rows already saved as they are, and adds the new day’s', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const benchRow = rowsOf(db, id)[0].exercises[0].id;
+    db.update(routineExercises).set({ nextWeight: 185, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, benchRow)).run();
+
+    const draft = routineToDraft(db, id)!;
+    // Even a start weight on a row already saved is ignored: its own next weight stands.
+    const tampered: RoutineDraft = {
+      ...draft,
+      days: draft.days.map((d, i) => (i === 0 ? { ...d, exercises: d.exercises.map((e, j) => (j === 0 ? { ...e, startWeight: { weight: 50, unit: 'kg' } } : e)) } : d)),
+    };
+    saveRoutine(db, edit(tampered, { type: 'addDayFromSaved', day: pushA }), NOW + HOUR);
+
+    const after = rowsOf(db, id);
+    expect(after.map((d) => d.day.name)).toEqual(['Upper', 'Lower', 'Push A']);
+    expect(after[0].exercises.map((e) => [e.id, e.nextWeight, e.nextWeightUnit])).toEqual([
+      [benchRow, 185, 'lb'],
+      [after[0].exercises[1].id, null, null],
+      [after[0].exercises[2].id, null, null],
+    ]);
+    expect(after[2].exercises.map((e) => [e.nextWeight, e.nextWeightUnit])).toEqual([
+      [80, 'kg'],
+      [30, 'kg'],
+      [null, null],
     ]);
   });
 });

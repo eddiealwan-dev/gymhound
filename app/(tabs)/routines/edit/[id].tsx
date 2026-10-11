@@ -7,10 +7,13 @@ import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
 import { getRoutineDetail, routineToDraft, saveRoutine } from '../../../../src/db/repositories/routinesRepo';
+import { getSavedWorkout, listSavedWorkouts } from '../../../../src/db/repositories/savedWorkoutsRepo';
+import type { Db } from '../../../../src/db/types';
 import { getSettings } from '../../../../src/db/repositories/settingsRepo';
 import { parseDecimal, parseDuration, parseReps } from '../../../../src/domain/input';
-import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, validateDraft } from '../../../../src/domain/routineDraft';
+import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, refreshDraft, validateDraft } from '../../../../src/domain/routineDraft';
 import type { DraftAction, DraftDay, DraftExercise, RoutineDraft } from '../../../../src/domain/routineDraft';
+import { dayFromSaved } from '../../../../src/domain/savedWorkout';
 import type { LoggingType, WeightUnit } from '../../../../src/domain/types';
 import { convertIncrement } from '../../../../src/domain/units';
 import { bumpData, useDbQuery } from '../../../../src/state/dataVersion';
@@ -21,7 +24,7 @@ import { BackLink } from '../../../../src/ui/BackLink';
 import { Button } from '../../../../src/ui/Button';
 import { useRoutineLimit } from '../../../../src/ui/RoutineLimit';
 import { Screen } from '../../../../src/ui/Screen';
-import { afterSheetCloses, ConfirmSheet } from '../../../../src/ui/Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
 import { Body, Display, Label, Num } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
@@ -293,6 +296,47 @@ function DayEditor({ day, index, count, unit, apply, onAddExercise }: DayProps) 
   );
 }
 
+/**
+ * A custom exercise can be deleted, renamed or retyped while the editor is away (Task 6): the draft is brought up to
+ * date with the library, and what changed is said in plain words (`refreshDraft`). Null when nothing changed.
+ */
+function draftFromLibrary(db: Db, draft: RoutineDraft): { draft: RoutineDraft; notices: string[] } | null {
+  const result = refreshDraft(draft, (exerciseId) => getExercise(db, exerciseId), defaultIncrement(getSettings(db)));
+  return result.draft === draft ? null : result;
+}
+
+const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
+
+/** The saved workouts **Add a saved workout** offers, each a row that adds it as a day (R121). */
+function SavedWorkoutSheet({ visible, onPick, onClose }: { visible: boolean; onPick: (savedId: string) => void; onClose: () => void }) {
+  const { colors } = useTheme();
+  const saved = useDbQuery(listSavedWorkouts);
+  return (
+    <Sheet visible={visible} onClose={onClose}>
+      <Display weight={700} accessibilityRole="header" style={{ marginBottom: 8 }}>
+        Add a saved workout
+      </Display>
+      <View style={{ marginBottom: 16 }}>
+        {saved.map((w, i) => (
+          <Pressable
+            key={w.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${w.name}, ${exerciseCount(w.exerciseCount)}`}
+            onPress={() => onPick(w.id)}
+            style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingVertical: 8, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.border, opacity: pressed ? 0.8 : 1 })}
+          >
+            <Body weight={600}>{w.name}</Body>
+            <Body muted style={{ fontSize: 14 }}>
+              {exerciseCount(w.exerciseCount)}
+            </Body>
+          </Pressable>
+        ))}
+      </View>
+      <Button label="Cancel" variant="secondary" onPress={onClose} />
+    </Sheet>
+  );
+}
+
 /** The draft as React state, with a ref that always holds the latest, so Save and Back read what a flush just wrote. */
 function useDraft(initial: RoutineDraft | null) {
   const latest = useRef(initial);
@@ -337,6 +381,10 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
   const pickFor = useRef<string | null>(null);
   const limit = useRoutineLimit();
+  /** What changed in the library while the editor was away, said once it is back (`draftFromLibrary`). */
+  const [notices, setNotices] = useState<string[]>([]);
+  const [pickingSaved, setPickingSaved] = useState(false);
+  const hasSaved = useDbQuery(listSavedWorkouts).length > 0;
   const backTo: Href = routineId === null ? '/routines' : `/routines/${routineId}`;
 
   const startOver = (next: RoutineDraft | null) => {
@@ -344,6 +392,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     setSaved(next);
     reset(next);
     setTried(false);
+    setNotices([]);
   };
 
   /** Takes `leave` over when there are changes to lose, opening "Discard changes?"; false lets it go now. */
@@ -374,6 +423,13 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
           increment: defaultIncrement(getSettings(db)),
         });
       }
+      if (latest.current !== null) {
+        const refreshed = draftFromLibrary(db, latest.current);
+        if (refreshed) {
+          reset(refreshed.draft);
+          setNotices(refreshed.notices);
+        }
+      }
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const back = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(() => goBack(backTo)));
       return () => {
@@ -382,7 +438,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
         if (!unsaved(savedRef.current, latest.current)) setTried(false);
       };
-    }, [db, apply, backTo]),
+    }, [db, apply, reset, latest, backTo]),
   );
 
   useEffect(() => {
@@ -417,6 +473,17 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     router.push('/pick-exercise?mode=routine');
   };
 
+  const openSaved = () => {
+    flushAll();
+    setPickingSaved(true);
+  };
+
+  const addSaved = (savedId: string) => {
+    setPickingSaved(false);
+    const saved = getSavedWorkout(db, savedId);
+    if (saved) apply({ type: 'addDayFromSaved', day: dayFromSaved(saved, defaultIncrement(getSettings(db))) });
+  };
+
   const write = () => {
     const current = latest.current;
     if (current === null) return;
@@ -449,11 +516,21 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         </Field>
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Days</Label>
+      {notices.length > 0 ? (
+        <View accessibilityLiveRegion="polite" style={{ gap: 4, marginBottom: 8 }}>
+          {notices.map((notice, i) => (
+            <Body key={i} muted>
+              {notice}
+            </Body>
+          ))}
+        </View>
+      ) : null}
       <View style={{ gap: 16 }}>
         {draft.days.map((day, index) => (
           <DayEditor key={day.key} day={day} index={index} count={draft.days.length} unit={unit} apply={apply} onAddExercise={addExercise} />
         ))}
         <Button label="+ Add day" variant="secondary" onPress={() => apply({ type: 'addDay' })} />
+        {hasSaved ? <Button label="Add a saved workout" variant="secondary" onPress={openSaved} /> : null}
       </View>
       <View style={{ marginTop: 32, gap: 16 }}>
         {problems.length > 0 ? (
@@ -482,6 +559,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         }}
         onCancel={() => setPendingLeave(null)}
       />
+      <SavedWorkoutSheet visible={pickingSaved} onPick={addSaved} onClose={() => setPickingSaved(false)} />
       {limit.sheets}
     </Screen>
   );

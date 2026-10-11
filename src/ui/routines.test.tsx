@@ -21,8 +21,10 @@ jest.mock('expo-router', () => ({
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRoutines, bumpData: jest.fn() }));
-jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
+jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: string) => unknown) => query('db'), bumpData: jest.fn() }));
+jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(() => mockRoutines), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
+// The saved workouts group has its own tests (savedWorkouts.test.tsx).
+jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => mockPro }) }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));

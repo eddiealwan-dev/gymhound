@@ -6,10 +6,12 @@ import {
   hasChanges,
   linksFromGroups,
   newDraft,
+  refreshDraft,
   supersetGroups,
   validateDraft,
 } from './routineDraft';
 import type { DraftAction, ExercisePatch, LibraryExercise, RoutineDraft } from './routineDraft';
+import type { DayFromSaved } from './savedWorkout';
 
 const BENCH: LibraryExercise = { id: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted' };
 const ROW: LibraryExercise = { id: 'barbell-row', name: 'Barbell row', loggingType: 'weighted' };
@@ -366,5 +368,102 @@ describe('defaultIncrement', () => {
     expect(defaultIncrement({ ...s, unit: 'lb' })).toEqual({ value: 5, unit: 'lb' });
     expect(defaultIncrement({ ...s, unit: 'kg' })).toEqual({ value: 2.5, unit: 'kg' });
     expect(defaultIncrement({ defaultIncrementLb: 10, defaultIncrementKg: 5, unit: 'kg' })).toEqual({ value: 5, unit: 'kg' });
+  });
+});
+
+describe('addDayFromSaved (R121)', () => {
+  /** Push A as `dayFromSaved` makes it: a bench and fly superset with start weights, then a plank. */
+  const pushA = (name = 'Push A'): DayFromSaved => ({
+    name,
+    exercises: [
+      { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb', supersetWithNext: true, startWeight: { weight: 80, unit: 'kg' } },
+      { exerciseId: 'cable-fly', name: 'Cable fly', loggingType: 'weighted', setCount: 2, repMin: 10, repMax: 12, increment: 5, incrementUnit: 'lb', supersetWithNext: false, startWeight: { weight: 30, unit: 'lb' } },
+      { exerciseId: 'plank', name: 'Plank', loggingType: 'timed', setCount: 3, repMin: 45, repMax: 60, increment: 0, incrementUnit: 'lb', supersetWithNext: false, startWeight: null },
+    ],
+  });
+
+  it('appends the day with the converted exercises, new rows with their own keys and start weights', () => {
+    const d = run(oneDay(BENCH), { type: 'addDayFromSaved', day: pushA() });
+
+    expect(d.days.map((day) => [day.name, day.id])).toEqual([
+      ['Day 1', null],
+      ['Push A', null],
+    ]);
+    const added = d.days[1].exercises;
+    expect(added.map((e) => [e.id, e.exerciseId, e.name, e.loggingType, e.setCount, e.repMin, e.repMax, e.increment, e.incrementUnit, e.supersetWithNext, e.startWeight])).toEqual([
+      [null, 'barbell-bench-press', 'Barbell bench press', 'weighted', 3, 5, 8, 5, 'lb', true, { weight: 80, unit: 'kg' }],
+      [null, 'cable-fly', 'Cable fly', 'weighted', 2, 10, 12, 5, 'lb', false, { weight: 30, unit: 'lb' }],
+      [null, 'plank', 'Plank', 'timed', 3, 45, 60, 0, 'lb', false, null],
+    ]);
+    const keys = [...d.days.map((day) => day.key), ...d.days.flatMap((day) => day.exercises.map((e) => e.key))];
+    expect(new Set(keys).size).toBe(keys.length);
+    // Later rows still get fresh keys.
+    const more = run(d, addTo(1, ROW));
+    expect(new Set(more.days[1].exercises.map((e) => e.key)).size).toBe(4);
+  });
+
+  it('a blank name becomes "Day {n}", and a name already in use gets " 2"', () => {
+    const blank = run(oneDay(BENCH), { type: 'addDayFromSaved', day: pushA('  ') });
+    expect(blank.days.map((day) => day.name)).toEqual(['Day 1', 'Day 2']);
+
+    const twice = run(newDraft(), { type: 'addDayFromSaved', day: pushA() }, { type: 'addDayFromSaved', day: pushA() }, { type: 'addDayFromSaved', day: pushA() });
+    expect(twice.days.map((day) => day.name)).toEqual(['Push A', 'Push A 2', 'Push A 3']);
+  });
+
+  it('never links the last exercise onward, and keeps the rule within limits', () => {
+    const day = pushA();
+    day.exercises[2] = { ...day.exercises[2], supersetWithNext: true, setCount: 14, repMin: 9, repMax: 3 };
+    const d = draftReducer(newDraft(), { type: 'addDayFromSaved', day });
+    expect(d.days[0].exercises.map((e) => [e.supersetWithNext, e.setCount, e.repMin, e.repMax])).toEqual([
+      [true, 3, 5, 8],
+      [false, 2, 10, 12],
+      [false, 10, 9, 9],
+    ]);
+  });
+
+  it('counts as a change', () => {
+    const before = oneDay(BENCH);
+    expect(hasChanges(before, draftReducer(before, { type: 'addDayFromSaved', day: pushA() }))).toBe(true);
+  });
+});
+
+describe('refreshDraft: exercises changed while the editor was away (Task 6)', () => {
+  const library = new Map<string, Pick<LibraryExercise, 'name' | 'loggingType'>>([
+    [BENCH.id, BENCH],
+    [ROW.id, ROW],
+    [PLANK.id, PLANK],
+  ]);
+  const lookup = (id: string) => library.get(id) ?? null;
+  const KG = { value: 2.5, unit: 'kg' as const };
+
+  it('changes nothing, returning the same draft, when every exercise is as it was', () => {
+    const d = oneDay(BENCH, ROW);
+    const result = refreshDraft(d, lookup, KG);
+    expect(result.draft).toBe(d);
+    expect(result.notices).toEqual([]);
+  });
+
+  it('drops a deleted exercise from its day, keeping a superset of the rest, and says so', () => {
+    const d = run(newDraft(), { type: 'addDay', name: 'Upper' }, addTo(0, BENCH), addTo(0, CURL), addTo(0, ROW), toggle(0), toggle(1));
+    const result = refreshDraft(d, lookup, KG);
+    expect(ids(result.draft)).toEqual(['barbell-bench-press', 'barbell-row']);
+    expect(links(result.draft)).toEqual([true, false]);
+    expect(result.notices).toEqual(["Dumbbell curl was deleted, so it's gone from Upper."]);
+  });
+
+  it('a retyped exercise starts its rule over for the new type, keeping its row and links; a renamed one takes the new name', () => {
+    const d = run(oneDay(BENCH, ROW), toggle(0), (s) => ({
+      type: 'updateExercise',
+      dayKey: s.days[0].key,
+      exerciseKey: s.days[0].exercises[1].key,
+      patch: { setCount: 5, repMin: 3, repMax: 5 },
+    }));
+    const retyped = (id: string) => (id === ROW.id ? { name: 'Row hold', loggingType: 'timed' as const } : lookup(id));
+    const result = refreshDraft(d, retyped, KG);
+    const row = result.draft.days[0].exercises[1];
+    expect(row).toMatchObject({ key: d.days[0].exercises[1].key, name: 'Row hold', loggingType: 'timed', setCount: 3, repMin: 30, repMax: 60, increment: 0, incrementUnit: 'kg' });
+    expect(links(result.draft)).toEqual([true, false]);
+    expect(result.draft.days[0].exercises[0]).toBe(d.days[0].exercises[0]);
+    expect(result.notices).toEqual(["Row hold changed how it's logged, so its sets and reps start over."]);
   });
 });

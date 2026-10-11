@@ -311,7 +311,7 @@ function nextDayIndexAfter(oldDayIds: string[], nextDayIndex: number, newIndexBy
  * Saves the editor's draft in one transaction (R89) and returns the routine's id. A new draft becomes a routine of
  * your own, created at `now`. Otherwise days and exercises that still exist in the routine are updated in place by id,
  * so an exercise that stays keeps its next weight (unless its slot now holds another exercise, R74); new rows get
- * uuids and removed ones are deleted. Positions and superset groups are renumbered from the draft's order, names are
+ * uuids (a new row's next weight is its `startWeight`, if any) and removed ones are deleted. Positions and superset groups are renumbered from the draft's order, names are
  * trimmed, rules are kept within the editor's limits (`clampRule`), and the day up next stays up next. Workouts are never touched, a workout in progress included. Throws
  * `InvalidDraftError` for a draft that does not validate and `PremadeRoutineError` for a premade, changing nothing.
  * The free limit is the caller's to check before a new routine (`canAddRoutine`).
@@ -386,7 +386,11 @@ export function saveRoutine(db: Db, draft: RoutineDraft, now: number): string {
         };
         const rowId = keep(e.id, (id) => oldExercises.has(id));
         if (rowId === null) {
-          tx.insert(routineExercises).values({ id: newId(), ...rule }).run();
+          // A day made from a saved workout starts at its easiest working load, in the unit it was logged in (R121).
+          const start = e.startWeight ?? null;
+          tx.insert(routineExercises)
+            .values({ id: newId(), ...rule, nextWeight: start?.weight ?? null, nextWeightUnit: start?.unit ?? null })
+            .run();
           return;
         }
         // A slot that now holds another exercise starts its progress afresh (R74).
