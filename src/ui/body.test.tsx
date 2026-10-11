@@ -67,6 +67,12 @@ afterEach(() => {
   closeDb();
 });
 
+/** Every node with a live region, which TalkBack reads as it changes. */
+const liveRegions = (tree: ReactTestRenderer) =>
+  tree.root
+    .findAll((n) => n.props.accessibilityLiveRegion !== undefined && n.props.accessibilityLiveRegion !== 'none')
+    .map((n) => n.props.accessibilityLiveRegion as string);
+
 function mount(element: React.ReactElement): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
@@ -143,8 +149,8 @@ describe('Stats: Body (R114)', () => {
     expect(shownText(tree)).toContain('Check this number');
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
     expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
-    const line = tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite' && n.findAll((c) => c.children.includes('Check this number')).length > 0);
-    expect(line.length).toBeGreaterThan(0);
+    // Said once: announce() speaks it on both phones, so no live region reads it again on Android.
+    expect(liveRegions(tree)).toEqual([]);
     // Typing again clears it.
     type(tree, 'Bodyweight, lb', '180');
     expect(shownText(tree)).not.toContain('Check this number');
@@ -307,6 +313,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Check this number');
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    expect(liveRegions(tree)).toEqual([]);
     expect(listBodyEntries(mockDb, 'waist')[0].value).toBe(33.75);
 
     act(() => edit().props.onChangeText('33'));

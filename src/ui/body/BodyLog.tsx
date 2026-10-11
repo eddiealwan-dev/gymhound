@@ -30,11 +30,14 @@ export function bodyNumber(value: number): string {
   return `${Number(value.toFixed(1))}`;
 }
 
-/** "Check this number" under a field, read out as it appears (the caller also announces it, for iOS). */
+/**
+ * "Check this number" under a field. The caller announces it on both phones, so it has no live region: TalkBack would
+ * read it a second time.
+ */
 export function CheckLine({ shown }: { shown: boolean }) {
   if (!shown) return null;
   return (
-    <Body muted accessibilityLiveRegion="polite">
+    <Body muted>
       Check this number
     </Body>
   );
