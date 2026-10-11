@@ -46,6 +46,9 @@ export function useDbQuery<T>(query: (db: Db) => T): T {
  * As useDbQuery, but a bump while the screen is not focused only marks it stale; it reads again on focus if stale (R185).
  * A focus with no bump since the last read reads nothing. For History, Stats and their sections, which scan all history:
  * every tick in a workout bumps the data version, and they should not read again while out of sight.
+ *
+ * `query` must be stable: a module-level function, or a `useCallback` whose dependencies are the values it reads with
+ * (such as `today`). A new function each render reads on every render.
  */
 export function useFocusedDbQuery<T>(query: (db: Db) => T): T {
   const db = useDb();

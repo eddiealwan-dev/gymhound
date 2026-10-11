@@ -25,9 +25,11 @@ import { WeekCard } from './stats/WeekCard';
 
 /** The screens each `Tabs.Screen` registered, by name, with its options. */
 const mockTabScreens: { name: string; options?: { href?: unknown } }[] = [];
+/** Whether the router has somewhere to go back to; a link opened cold has not. */
+let mockCanGoBack = true;
 
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), replace: jest.fn(), push: jest.fn(), canGoBack: () => true },
+  router: { back: jest.fn(), replace: jest.fn(), push: jest.fn(), navigate: jest.fn(), canGoBack: () => mockCanGoBack },
   useLocalSearchParams: () => ({ id: 'x' }),
 }));
 jest.mock('expo-router/js-tabs', () => {
@@ -59,16 +61,23 @@ const text = (tree: ReactTestRenderer) => JSON.stringify(tree.toJSON());
 
 beforeEach(() => {
   jest.mocked(router.back).mockClear();
+  jest.mocked(router.navigate).mockClear();
+  mockCanGoBack = true;
 });
 
+/** Each route, the label of its way out, and where that goes when there is no history to go back to. */
 const ROUTES = [
-  ['/history/[id]', WorkoutDetailRoute, 'Back to History'],
-  ['/history/edit/[id]', WorkoutEditRoute, 'Back to History'],
-  ['/lifts', LiftsRoute, 'Back to Stats'],
-  ['/lift/[id]', LiftRoute, 'Back'],
-  ['/photos', PhotosRoute, 'Back to Stats'],
-  ['/photo/[id]', PhotoRoute, 'Close'],
+  ['/history/[id]', WorkoutDetailRoute, 'Back to History', '/history'],
+  ['/history/edit/[id]', WorkoutEditRoute, 'Cancel', '/history'],
+  ['/lifts', LiftsRoute, 'Back to Stats', '/stats'],
+  ['/lift/[id]', LiftRoute, 'Back', '/lifts'],
+  ['/photos', PhotosRoute, 'Back to Stats', '/stats'],
+  ['/photo/[id]', PhotoRoute, 'Close', '/photos'],
 ] as const;
+
+/** The control labelled `label` that does something when pressed. */
+const control = (tree: ReactTestRenderer, label: string) =>
+  tree.root.findAll((n) => (n.props.accessibilityLabel === label || n.props.label === label) && typeof n.props.onPress === 'function')[0];
 
 describe('the placeholder routes', () => {
   it.each(ROUTES)('%s says "Not built yet." and has no footer', (_route, Route) => {
@@ -79,11 +88,17 @@ describe('the placeholder routes', () => {
 
   it.each(ROUTES)('%s goes back', (_route, Route, label) => {
     const tree = render(<Route />);
-    const [control] = tree.root.findAll(
-      (n) => (n.props.accessibilityLabel === label || n.props.label === label) && typeof n.props.onPress === 'function',
-    );
-    act(() => control.props.onPress());
+    act(() => control(tree, label).props.onPress());
     expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it.each(ROUTES)('%s, opened with nothing to go back to, goes to its fallback', (_route, Route, label, fallback) => {
+    mockCanGoBack = false;
+    const tree = render(<Route />);
+    act(() => control(tree, label).props.onPress());
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(fallback);
   });
 });
 
@@ -109,4 +124,26 @@ describe('the tabs layout', () => {
       expect(mockTabScreens.find((s) => s.name === name)?.options).toEqual({ href: null });
     },
   );
+});
+
+describe('app.json (R186)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- the config file itself
+  const { expo } = require('../../app.json') as { expo: { android: Record<string, unknown>; plugins: unknown[] } };
+
+  it('blocks the activity recognition permission expo-sensors adds on Android: Android steps wait for Health Connect', () => {
+    expect(expo.android.blockedPermissions).toEqual(['android.permission.ACTIVITY_RECOGNITION']);
+    expect(expo.android.predictiveBackGestureEnabled).toBe(false);
+  });
+
+  it('names the motion, photo and camera uses', () => {
+    expect(expo.plugins).toContainEqual(['expo-sensors', { motionPermission: 'GymHound reads your step count only to show your steps on Stats.' }]);
+    expect(expo.plugins).toContainEqual([
+      'expo-image-picker',
+      {
+        photosPermission: 'GymHound uses your photos only for exercise and progress pictures you choose.',
+        cameraPermission: 'GymHound uses the camera only to take exercise and progress pictures.',
+        microphonePermission: false,
+      },
+    ]);
+  });
 });

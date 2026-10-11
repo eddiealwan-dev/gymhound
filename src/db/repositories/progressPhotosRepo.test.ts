@@ -1,10 +1,10 @@
 /** @jest-environment node */
 import { progressPhotos } from '../schema';
 import { createTestDb } from '../testing/createTestDb';
-import { progressPhotoDatesSince } from './progressPhotosRepo';
+import { progressPhotosSince } from './progressPhotosRepo';
 
-describe('progressPhotoDatesSince (R162, R180)', () => {
-  it('gives the local dates of photo rows on or after the date, oldest first, one per row', () => {
+describe('progressPhotosSince (R162, R180, R181)', () => {
+  it('gives the date and file name of each photo row on or after the date, oldest first, so a caller can drop a missing file', () => {
     const { db, close } = createTestDb();
     db.insert(progressPhotos)
       .values([
@@ -14,8 +14,12 @@ describe('progressPhotoDatesSince (R162, R180)', () => {
         { id: 'd', localDate: '2026-10-05', takenAt: 2, fileName: 'progress-2.jpg' },
       ])
       .run();
-    expect(progressPhotoDatesSince(db, '2026-10-05')).toEqual(['2026-10-05', '2026-10-05', '2026-10-11']);
-    expect(progressPhotoDatesSince(db, '2026-10-12')).toEqual([]);
+    expect(progressPhotosSince(db, '2026-10-05')).toEqual([
+      { localDate: '2026-10-05', fileName: 'progress-2.jpg' },
+      { localDate: '2026-10-05', fileName: 'progress-3.jpg' },
+      { localDate: '2026-10-11', fileName: 'progress-5.jpg' },
+    ]);
+    expect(progressPhotosSince(db, '2026-10-12')).toEqual([]);
     close();
   });
 });

@@ -80,4 +80,45 @@ describe('useFocusedDbQuery (R185)', () => {
     focus();
     expect(query).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps two screens apart: a bump reads the focused one only, and the other catches up on its own focus', () => {
+    // The first probe (mounted in beforeEach) is blurred; a second one mounts focused.
+    blur();
+    const second = jest.fn((_db: Db) => 'second');
+    function SecondProbe() {
+      useFocusedDbQuery(second);
+      return null;
+    }
+    let other!: ReactTestRenderer;
+    act(() => {
+      other = create(<SecondProbe />);
+    });
+    expect(second).toHaveBeenCalledTimes(1);
+    act(() => bumpData());
+    expect(second).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(1);
+    act(() => other.unmount());
+  });
+
+  it('reads the newer data when a bump lands between the first render and its subscription', () => {
+    // The beforeEach probe is out of sight, so the write below sets no other component's state mid-render.
+    blur();
+    const late = jest.fn((_db: Db) => 'late');
+    let bumped = false;
+    function LateProbe() {
+      useFocusedDbQuery(late);
+      // A write during the first render, before the effects subscribe.
+      if (!bumped) {
+        bumped = true;
+        bumpData();
+      }
+      return null;
+    }
+    let other!: ReactTestRenderer;
+    act(() => {
+      other = create(<LateProbe />);
+    });
+    expect(late).toHaveBeenCalledTimes(2);
+    act(() => other.unmount());
+  });
 });
