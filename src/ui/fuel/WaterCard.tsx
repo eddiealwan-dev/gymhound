@@ -5,7 +5,7 @@ import { getSettings } from '../../db/repositories/settingsRepo';
 import { listWater, logWater } from '../../db/repositories/waterRepo';
 import type { Db } from '../../db/types';
 import { toLocalDate } from '../../domain/dates';
-import { formatWater, quickAmounts, toMl, waterUnitFor, waterUnitLabel } from '../../domain/water';
+import { formatWater, formatWaterSpoken, quickAmounts, toMl, waterUnitFor, waterUnitLabel } from '../../domain/water';
 import { announce } from '../../platform/announce';
 import { bumpData, useDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
@@ -69,7 +69,7 @@ export function WaterCard({ localDate }: { localDate: string }): ReactElement | 
         <View style={{ gap: 8 }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${total} of ${formatWater(goalMl, unit, locale)}`}
+            accessibilityLabel={`${formatWaterSpoken(totalMl, unit, locale)} of ${formatWaterSpoken(goalMl, unit, locale)}`}
             accessibilityHint="Changes your daily goal."
             onPress={() => open('goal')}
             style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
@@ -95,7 +95,7 @@ export function WaterCard({ localDate }: { localDate: string }): ReactElement | 
             <Button
               key={amount}
               label={`+${n} ${unitLabel}`}
-              accessibilityLabel={`Add ${n} ${unitLabel} of water`}
+              accessibilityLabel={`Add ${formatWaterSpoken(toMl(amount, unit), unit, locale)} of water`}
               variant="secondary"
               size="compact"
               onPress={() => add(amount)}

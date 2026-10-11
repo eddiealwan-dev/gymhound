@@ -31,15 +31,37 @@ function fromMl(ml: number, unit: WaterUnit): number {
   return unit === 'fl_oz' ? ml / ML_PER_FL_OZ : ml;
 }
 
+/** What VoiceOver hears for the unit: "fluid ounces" in full (the screen keeps "fl oz"); "ml" stays "ml". */
+export function waterUnitSpoken(unit: WaterUnit, one = false): string {
+  if (unit === 'ml') return 'ml';
+  return one ? 'fluid ounce' : 'fluid ounces';
+}
+
 /**
- * An amount in ml as it is shown: "1,250 ml" or "40 fl oz", whole, with the locale's separators. Under 1 fl oz it keeps
- * one decimal ("0.5 fl oz"), so a small entry never reads as nothing.
+ * An amount's number as shown: whole, with the locale's separators; under 1 fl oz with one decimal. A positive amount
+ * that would still round to 0 is "less than" the smallest step shown (0.1 fl oz or 1 ml), never 0.
  */
-export function formatWater(ml: number, unit: WaterUnit, locale?: string): string {
+function waterNumber(ml: number, unit: WaterUnit, locale?: string): { text: string; under: boolean; one: boolean } {
   const value = fromMl(ml, unit);
-  const digits = unit === 'fl_oz' && value > 0 && value < 0.95 ? 1 : 0;
+  const digits = unit === 'fl_oz' && value < 0.95 ? 1 : 0;
   const n = Number(value.toFixed(digits)) || 0;
-  return `${n.toLocaleString(locale, { maximumFractionDigits: digits })} ${waterUnitLabel(unit)}`;
+  if (n === 0 && value > 0) {
+    const step = unit === 'fl_oz' ? 0.1 : 1;
+    return { text: step.toLocaleString(locale, { maximumFractionDigits: 1 }), under: true, one: false };
+  }
+  return { text: n.toLocaleString(locale, { maximumFractionDigits: digits }), under: false, one: n === 1 };
+}
+
+/** An amount in ml as it is shown: "1,250 ml", "40 fl oz", "0.5 fl oz", or "<0.1 fl oz" for a sip. */
+export function formatWater(ml: number, unit: WaterUnit, locale?: string): string {
+  const { text, under } = waterNumber(ml, unit, locale);
+  return `${under ? '<' : ''}${text} ${waterUnitLabel(unit)}`;
+}
+
+/** An amount in ml as VoiceOver hears it: "1,250 ml", "8 fluid ounces", "1 fluid ounce", "less than 0.1 fluid ounces". */
+export function formatWaterSpoken(ml: number, unit: WaterUnit, locale?: string): string {
+  const { text, under, one } = waterNumber(ml, unit, locale);
+  return `${under ? 'less than ' : ''}${text} ${waterUnitSpoken(unit, one)}`;
 }
 
 /** An amount in ml as the number to edit in a field, in the unit: "2000", "64", "8.5". */
@@ -47,20 +69,25 @@ export function waterAmountText(ml: number, unit: WaterUnit): string {
   return `${Number(fromMl(ml, unit).toFixed(unit === 'fl_oz' ? 1 : 0))}`;
 }
 
-function parseInRange(text: string, unit: WaterUnit, ml: [number, number], flOz: [number, number]): number | null {
+/** A typed amount, in ml: 1–3,000 ml or 0.1–100 fl oz. Anything else is null ("Check this number"). */
+export function parseWaterAmount(text: string, unit: WaterUnit): number | null {
   const n = parseDecimal(text);
   if (n === null) return null;
-  const [min, max] = unit === 'fl_oz' ? flOz : ml;
-  if (n < min || n > max) return null;
-  return toMl(n, unit);
+  const [min, max] = unit === 'fl_oz' ? [0.1, 100] : [1, 3000];
+  return n < min || n > max ? null : toMl(n, unit);
 }
 
-/** A typed amount, in ml: 1â€“3,000 ml or 0.1â€“100 fl oz. Anything else is null ("Check this number"). */
-export function parseWaterAmount(text: string, unit: WaterUnit): number | null {
-  return parseInRange(text, unit, [1, 3000], [0.1, 100]);
-}
+/** The daily goal's bounds, in ml whatever the unit: 8 fl oz (236.6 ml) to 10,000 ml (338.1 fl oz). */
+const GOAL_MIN_ML = 8 * ML_PER_FL_OZ;
+const GOAL_MAX_ML = 10000;
 
-/** A typed daily goal, in ml: 250â€“10,000 ml or 8â€“340 fl oz. Anything else is null ("Check this number"). */
+/**
+ * A typed daily goal, in ml: 8 fl oz to 10,000 ml, checked in ml in both units, so a goal set in one unit is accepted
+ * again as the field shows it in the other (237–10,000 ml, 8–338.1 fl oz). Anything else is null ("Check this number").
+ */
 export function parseWaterGoal(text: string, unit: WaterUnit): number | null {
-  return parseInRange(text, unit, [250, 10000], [8, 340]);
+  const n = parseDecimal(text);
+  if (n === null) return null;
+  const ml = toMl(n, unit);
+  return ml < GOAL_MIN_ML - 1e-9 || ml > GOAL_MAX_ML ? null : ml;
 }

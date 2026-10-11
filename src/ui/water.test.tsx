@@ -148,10 +148,12 @@ describe('the water card (R150)', () => {
     const tree = mount(<WaterCard localDate={TODAY} />);
     expect(shownText(tree)).toEqual(expect.arrayContaining(['+8 fl oz', '+16 fl oz']));
     expect(allText(tree)).toContain('40 fl oz of 64 fl oz');
-    press(tree, 'Add 8 fl oz of water');
+    press(tree, 'Add 8 fluid ounces of water');
     const entries = listWater(mockDb, TODAY);
     expect(entries[entries.length - 1].amountMl).toBeCloseTo(236.588, 3);
-    expect(mockAnnounce).toHaveBeenCalledWith('Added 8 fl oz. 48 fl oz today.');
+    expect(mockAnnounce).toHaveBeenCalledWith('Added 8 fluid ounces. 48 fluid ounces today.');
+    // VoiceOver hears the goal line in full; the screen keeps fl oz.
+    expect(pressables(tree, '48 fluid ounces of 64 fluid ounces').length).toBeGreaterThan(0);
   });
 
   it('a pill logs for today and says the new total', () => {
@@ -211,7 +213,7 @@ describe('Other', () => {
     setSetting(mockDb, 'unit', 'lb');
     const tree = mount(<WaterCard localDate={TODAY} />);
     press(tree, 'Add another amount of water');
-    type(tree, 'Amount, fl oz', '12,5');
+    type(tree, 'Amount, fluid ounces', '12,5');
     press(tree, 'Add');
     expect(listWater(mockDb, TODAY)[0].amountMl).toBeCloseTo(toMl(12.5, 'fl_oz'), 6);
   });
@@ -264,7 +266,7 @@ describe('the daily goal', () => {
     setSetting(mockDb, 'unit', 'lb');
     const tree = mount(<WaterCard localDate={TODAY} />);
     press(tree, 'Set a daily goal');
-    type(tree, 'Daily water goal, fl oz', '64');
+    type(tree, 'Daily water goal, fluid ounces', '64');
     press(tree, 'Save');
     expect(getSettings(mockDb).waterGoalMl).toBeCloseTo(toMl(64, 'fl_oz'), 6);
     expect(allText(tree)).toContain('0 fl oz of 64 fl oz');
@@ -281,6 +283,17 @@ describe('the daily goal', () => {
 });
 
 describe('Entries', () => {
+  it('says fluid ounces to VoiceOver on Delete', () => {
+    setSetting(mockDb, 'unit', 'lb');
+    logWater(mockDb, toMl(8, 'fl_oz'), TODAY, new Date(2026, 9, 11, 8, 14).getTime());
+    const tree = mount(<WaterCard localDate={TODAY} />);
+    press(tree, 'Water entries');
+    expect(shownText(tree)).toContain('8 fl oz');
+    const del = tree.root.findAll((n) => typeof n.props.onPress === 'function' && /^Delete 8 fluid ounces at 8:14\sAM$/.test(n.props.accessibilityLabel ?? ''));
+    act(() => del[0].props.onPress());
+    expect(mockAnnounce).toHaveBeenCalledWith('Deleted 8 fluid ounces.');
+  });
+
   it('lists the day by time and amount, and Delete removes one without asking', () => {
     const at814 = new Date(2026, 9, 11, 8, 14).getTime();
     const at1030 = new Date(2026, 9, 11, 10, 30).getTime();
@@ -305,7 +318,9 @@ describe('Entries', () => {
     const tree = mount(<WaterCard localDate="2026-10-10" />);
     press(tree, 'Water entries');
     expect(shownText(tree)).toContain('Water on Oct 10');
-    const del = tree.root.findAll((n) => typeof n.props.onPress === 'function' && /^Delete 250 ml at/.test(n.props.accessibilityLabel ?? ''));
+    // An earlier day's entries were logged later, so their time says nothing: just the amount.
+    expect(allText(tree)).not.toMatch(/\d:\d\d/);
+    const del = tree.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Delete 250 ml');
     act(() => del[0].props.onPress());
     expect(listWater(mockDb, '2026-10-10')).toEqual([]);
     expect(shownText(tree)).not.toContain('Water on Oct 10');

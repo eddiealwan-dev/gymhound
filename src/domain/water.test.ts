@@ -7,7 +7,9 @@ import {
   toMl,
   waterAmountText,
   waterUnitFor,
+  formatWaterSpoken,
   waterUnitLabel,
+  waterUnitSpoken,
 } from './water';
 
 describe('water units (R150)', () => {
@@ -49,6 +51,11 @@ describe('formatWater', () => {
 
   it('keeps one decimal under 1 fl oz, so a small entry never reads as 0', () => {
     expect(formatWater(toMl(0.5, 'fl_oz'), 'fl_oz', 'en-US')).toBe('0.5 fl oz');
+  });
+
+  it('never shows 0 for a positive amount', () => {
+    expect(formatWater(1, 'fl_oz', 'en-US')).toBe('<0.1 fl oz');
+    expect(formatWater(0.2, 'ml', 'en-US')).toBe('<1 ml');
   });
 
   it('follows the locale', () => {
@@ -99,7 +106,8 @@ describe('parseWaterGoal', () => {
     ['10000', 'ml', 10000],
     ['64', 'fl_oz', 64 * ML_PER_FL_OZ],
     ['8', 'fl_oz', 8 * ML_PER_FL_OZ],
-    ['340', 'fl_oz', 340 * ML_PER_FL_OZ],
+    ['338.1', 'fl_oz', 338.1 * ML_PER_FL_OZ],
+    ['237', 'ml', 237],
   ] as const)('reads %s %s', (text, unit, ml) => {
     expect(parseWaterGoal(text, unit)).toBeCloseTo(ml, 6);
   });
@@ -107,11 +115,33 @@ describe('parseWaterGoal', () => {
   it.each([
     ['', 'ml'],
     ['x', 'ml'],
-    ['249', 'ml'],
+    ['236', 'ml'],
     ['10001', 'ml'],
     ['7.9', 'fl_oz'],
-    ['341', 'fl_oz'],
+    ['338.2', 'fl_oz'],
   ] as const)('refuses %s %s', (text, unit) => {
     expect(parseWaterGoal(text, unit)).toBeNull();
+  });
+});
+
+describe('a goal stays editable in the other unit', () => {
+  // The goal is checked in ml in both units (8 fl oz to 10,000 ml), so the number the field shows in either unit
+  // is accepted again.
+  const goals = ['237', '250', '1000', '2000', '3785', '9999', '10000'].map((t) => parseWaterGoal(t, 'ml')!)
+    .concat(['8', '8.1', '64', '100', '338', '338.1'].map((t) => parseWaterGoal(t, 'fl_oz')!));
+  it.each(goals.map((ml) => [ml]))('%s ml', (ml) => {
+    expect(ml).not.toBeNull();
+    for (const unit of ['ml', 'fl_oz'] as const) expect(parseWaterGoal(waterAmountText(ml, unit), unit)).not.toBeNull();
+  });
+});
+
+describe('what VoiceOver hears', () => {
+  it('says fluid ounces in full; ml stays ml', () => {
+    expect(waterUnitSpoken('fl_oz')).toBe('fluid ounces');
+    expect(waterUnitSpoken('ml')).toBe('ml');
+    expect(formatWaterSpoken(toMl(8, 'fl_oz'), 'fl_oz', 'en-US')).toBe('8 fluid ounces');
+    expect(formatWaterSpoken(toMl(1, 'fl_oz'), 'fl_oz', 'en-US')).toBe('1 fluid ounce');
+    expect(formatWaterSpoken(1, 'fl_oz', 'en-US')).toBe('less than 0.1 fluid ounces');
+    expect(formatWaterSpoken(1250, 'ml', 'en-US')).toBe('1,250 ml');
   });
 });

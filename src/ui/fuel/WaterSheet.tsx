@@ -3,7 +3,7 @@ import { AccessibilityInfo, Text, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteWater, logWater, setWaterGoal, type WaterEntry } from '../../db/repositories/waterRepo';
 import type { WaterUnit } from '../../domain/types';
-import { formatWater, parseWaterAmount, parseWaterGoal, waterAmountText, waterUnitLabel } from '../../domain/water';
+import { formatWater, formatWaterSpoken, parseWaterAmount, parseWaterGoal, waterAmountText, waterUnitLabel, waterUnitSpoken } from '../../domain/water';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { BodyField, CheckLine, formatEntryDate } from '../body/BodyLog';
@@ -20,9 +20,9 @@ export function waterDayPhrase(localDate: string, today: string, locale: string)
   return localDate === today ? 'today' : `on ${formatEntryDate(localDate, today, locale)}`;
 }
 
-/** What VoiceOver hears after water is added: "Added 250 ml. 1,250 ml today." */
+/** What VoiceOver hears after water is added: "Added 250 ml. 1,250 ml today." (fl oz said in full). */
 export function waterAddedMessage(addedMl: number, totalMl: number, unit: WaterUnit, dayPhrase: string, locale: string): string {
-  return `Added ${formatWater(addedMl, unit, locale)}. ${formatWater(totalMl, unit, locale)} ${dayPhrase}.`;
+  return `Added ${formatWaterSpoken(addedMl, unit, locale)}. ${formatWaterSpoken(totalMl, unit, locale)} ${dayPhrase}.`;
 }
 
 /** A sheet title as ConfirmSheet draws it (Display 700); VoiceOver moves to it when the sheet opens. */
@@ -58,7 +58,7 @@ function AmountField({
   return (
     <View style={{ gap: 8, marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <BodyField value={value} onChangeText={onChange} onSubmit={onSubmit} accessibilityLabel={`${label}, ${waterUnitLabel(unit)}`} invalid={invalid} />
+        <BodyField value={value} onChangeText={onChange} onSubmit={onSubmit} accessibilityLabel={`${label}, ${waterUnitSpoken(unit)}`} invalid={invalid} />
         <Body muted>{waterUnitLabel(unit)}</Body>
       </View>
       <CheckLine shown={invalid} />
@@ -130,7 +130,7 @@ function GoalEditor({ unit, locale, goalMl, onClose }: Shared & { goalMl: number
     }
     setWaterGoal(db, ml);
     bumpData();
-    announce(`Daily goal ${formatWater(ml, unit, locale)}.`);
+    announce(`Daily goal ${formatWaterSpoken(ml, unit, locale)}.`);
     onClose();
   };
 
@@ -164,7 +164,10 @@ function GoalEditor({ unit, locale, goalMl, onClose }: Shared & { goalMl: number
   );
 }
 
-/** The day's water by time, each with a compact Delete (no question: an entry is small and easy to add again). */
+/**
+ * The day's water, each with a compact Delete (no question: an entry is small and easy to add again). Today's entries
+ * show their time; an earlier day's were logged later, so they show the amount alone.
+ */
 function EntryList({ localDate, today, unit, locale, entries, onClose }: Shared & { entries: readonly WaterEntry[] }) {
   const db = useDb();
   const { colors } = useTheme();
@@ -173,7 +176,7 @@ function EntryList({ localDate, today, unit, locale, entries, onClose }: Shared 
   const remove = (entry: WaterEntry) => {
     deleteWater(db, entry.id);
     bumpData();
-    announce(`Deleted ${formatWater(entry.amountMl, unit, locale)}.`);
+    announce(`Deleted ${formatWaterSpoken(entry.amountMl, unit, locale)}.`);
     if (entries.length <= 1) onClose();
   };
 
@@ -183,8 +186,9 @@ function EntryList({ localDate, today, unit, locale, entries, onClose }: Shared 
       <SheetTitle>{`Water ${waterDayPhrase(localDate, today, locale)}`}</SheetTitle>
       <View style={{ marginBottom: 16 }}>
         {entries.map((entry, i) => {
-          const at = time.format(entry.loggedAt);
+          const at = localDate === today ? time.format(entry.loggedAt) : null;
           const amount = formatWater(entry.amountMl, unit, locale);
+          const spoken = formatWaterSpoken(entry.amountMl, unit, locale);
           return (
             <View
               key={entry.id}
@@ -200,13 +204,15 @@ function EntryList({ localDate, today, unit, locale, entries, onClose }: Shared 
                 borderTopColor: colors.border,
               }}
             >
-              <Body muted style={{ minWidth: 80 }}>
-                {at}
-              </Body>
+              {at !== null ? (
+                <Body muted style={{ minWidth: 80 }}>
+                  {at}
+                </Body>
+              ) : null}
               <Body weight={600} style={{ flexGrow: 1 }}>
                 {amount}
               </Body>
-              <Button label="Delete" variant="secondary" size="compact" accessibilityLabel={`Delete ${amount} at ${at}`} onPress={() => remove(entry)} />
+              <Button label="Delete" variant="secondary" size="compact" accessibilityLabel={at !== null ? `Delete ${spoken} at ${at}` : `Delete ${spoken}`} onPress={() => remove(entry)} />
             </View>
           );
         })}
