@@ -319,6 +319,8 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(lines(tree)).toContain('Change routine');
     // A 44pt target.
     expect(StyleSheet.flatten(link[0].props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
+    // It reaches 12pt into the card's bottom padding, so its words sit 16pt from the edge (design pass).
+    expect(StyleSheet.flatten(link[0].props.style({ pressed: false }))).toMatchObject({ marginBottom: -12 });
 
     act(() => link[0].props.onPress());
 
@@ -489,7 +491,10 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     const right = tree.root.findAllByType(Body).find((b) => b.props.children === '4×5–8')!;
     const row = name.parent!;
 
-    expect(StyleSheet.flatten(row.props.style)).toEqual(expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8 }));
+    // The 14pt scheme sits on the 16pt name's baseline (design pass).
+    expect(StyleSheet.flatten(row.props.style)).toEqual(
+      expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8 }),
+    );
     expect(right.parent).toBe(row);
     // flex: 1 would give the name a flex basis of 0, so the row would never wrap and the name would be squeezed.
     const nameStyle = StyleSheet.flatten(name.props.style);

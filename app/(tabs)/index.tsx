@@ -24,7 +24,7 @@ import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, Sheet } from '../../src/ui/Sheet';
-import { Body, Display, Num } from '../../src/ui/Text';
+import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
@@ -61,15 +61,6 @@ function Card({ children }: { children: ReactNode }) {
   );
 }
 
-/** A small upper-case label over a card's title: "UP NEXT", "IN PROGRESS". */
-function Eyebrow({ children }: { children: string }) {
-  return (
-    <Body weight={600} muted style={{ fontSize: 14, letterSpacing: 0.5 }}>
-      {children}
-    </Body>
-  );
-}
-
 /**
  * The workout in progress, with an elapsed clock that ticks every second, and the quiet Change routine at its foot, as
  * on Up next (Round 4). The routine can't change while a workout runs, so it says so (`onChangeRoutine`, R80).
@@ -88,7 +79,7 @@ function ResumeCard({
   const now = useNow(1000);
   return (
     <Card>
-      <Eyebrow>IN PROGRESS</Eyebrow>
+      <Label>IN PROGRESS</Label>
       <Display weight={800} style={{ fontSize: 32, marginTop: 4 }}>
         {name}
       </Display>
@@ -138,7 +129,11 @@ function volumeNumber(n: number, unit: WeightUnit, locale: string): string {
 
 const openRoutines = () => router.push('/routines');
 
-/** A quiet link at the foot of the Up next and Resume cards. It opens Routines unless `onPress` says otherwise. */
+/**
+ * A quiet link at the foot of the Up next and Resume cards. It opens Routines unless `onPress` says otherwise. Its 44pt
+ * target reaches 12pt into the card's bottom padding, so the words sit as far from the card's bottom edge as the label
+ * does from its top (16pt) instead of floating 28pt above it.
+ */
 function ChangeRoutineLink({ onPress = openRoutines }: { onPress?: () => void }) {
   const { colors } = useTheme();
   return (
@@ -154,6 +149,7 @@ function ChangeRoutineLink({ onPress = openRoutines }: { onPress?: () => void })
         gap: 4,
         minHeight: 44,
         marginTop: 4,
+        marginBottom: -12,
         opacity: pressed ? 0.8 : 1,
       })}
     >
@@ -183,7 +179,7 @@ function UpNextCard({
   const dayHasWeight = upNextDayHasWeight(upNext.exercises);
   return (
     <Card>
-      <Eyebrow>UP NEXT</Eyebrow>
+      <Label>UP NEXT</Label>
       <Display weight={700} style={{ fontSize: 24, marginTop: 4 }}>
         {`${upNext.routineName} · ${upNext.dayName}`}
       </Display>
@@ -199,9 +195,12 @@ function UpNextCard({
         const outcome = upNextOutcome(exercise, unit, gear) ?? '';
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
-        // pushes the scheme to the right edge.
+        // pushes the scheme to the right edge. The 14pt scheme sits on the 16pt name's baseline, not its top.
         return (
-          <View key={exercise.routineExerciseId} style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, paddingVertical: 8 }}>
+          <View
+            key={exercise.routineExerciseId}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}
+          >
             <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
             <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
               {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
