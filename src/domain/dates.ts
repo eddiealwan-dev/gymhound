@@ -43,9 +43,12 @@ export function greetingFor(d: Date): 'GOOD MORNING' | 'GOOD AFTERNOON' | 'GOOD 
   return 'GOOD EVENING';
 }
 
-/** Short weekday, day and month in upper case, laid out for the locale: "FRI 9 OCT" or "FRI OCT 9". */
-export function formatTrainDate(d: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' })
+/**
+ * Short weekday, day and month in upper case, laid out for the locale: "FRI 9 OCT" or "FRI OCT 9". With `year`, the
+ * year follows: "SUN 11 OCT 2026" or "SUN OCT 11 2026" (the personal best card).
+ */
+export function formatTrainDate(d: Date, locale: string, opts?: { year?: boolean }): string {
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', ...(opts?.year ? { year: 'numeric' } : {}) })
     .format(d)
     .replace(/[,.]/g, '')
     .replace(/\s+/g, ' ')
