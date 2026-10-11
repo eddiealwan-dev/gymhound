@@ -1,4 +1,3 @@
-import { getLocales } from 'expo-localization';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -9,6 +8,7 @@ import type { Db } from '../../src/db/types';
 import { formatElapsed } from '../../src/domain/dates';
 import { finishLine } from '../../src/domain/ruleLine';
 import { formatVolume } from '../../src/domain/volume';
+import { deviceLocale } from '../../src/platform/locale';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { FinishPrs } from '../../src/ui/finish/FinishPrs';
@@ -22,8 +22,6 @@ import { useTheme } from '../../src/ui/ThemeProvider';
  * second Train screen after every workout. Opened by address with nothing under it, it puts Train in its place.
  */
 const goToTrain = () => router.dismissTo('/');
-
-const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 
 /** The summary of a finished workout, or null when there is none with this id (the page was opened by address, or the data was cleared). */
 function readSummary(db: Db, id: string) {

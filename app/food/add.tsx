@@ -12,7 +12,7 @@ import { useIsPro } from '../../src/platform/entitlements';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
-import { deviceLocale } from '../../src/ui/body/BodyLog';
+import { deviceLocale } from '../../src/platform/locale';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
 import { kcalProteinText, ServingsSheet } from '../../src/ui/fuel/ServingsSheet';

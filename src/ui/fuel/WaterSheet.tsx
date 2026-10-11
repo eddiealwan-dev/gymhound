@@ -2,12 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteWater, logWater, setWaterGoal, type WaterEntry } from '../../db/repositories/waterRepo';
-import { dayTitle } from '../../domain/dates';
+import { calendarDayTitle } from '../../domain/dates';
 import type { WaterUnit } from '../../domain/types';
 import { formatWater, formatWaterSpoken, parseWaterAmount, parseWaterGoal, waterAmountText, waterUnitLabel, waterUnitSpoken } from '../../domain/water';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
-import { BodyField, CheckLine } from '../body/BodyLog';
+import { BodyField, CheckLine } from '../fields';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';
@@ -18,7 +18,7 @@ export type WaterSheetMode = 'other' | 'goal' | 'entries';
 
 /** The day as Fuel's header says it, in a sentence: "today", "yesterday", or "on Fri, Oct 9". */
 export function waterDayPhrase(localDate: string, today: string, locale: string): string {
-  const title = dayTitle(localDate, today, locale);
+  const title = calendarDayTitle(localDate, today, locale);
   if (title === 'Today' || title === 'Yesterday') return title.toLowerCase();
   return `on ${title}`;
 }

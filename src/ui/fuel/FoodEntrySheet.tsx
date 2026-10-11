@@ -6,7 +6,7 @@ import { type EntryTotals, fuelNumber, type MacroInput, parseQuickAdd, parseServ
 import { parseDecimal } from '../../domain/input';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
-import { BodyField, CheckLine } from '../body/BodyLog';
+import { BodyField, CheckLine } from '../fields';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';

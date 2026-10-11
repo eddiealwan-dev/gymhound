@@ -5,7 +5,7 @@ import { logFood } from '../../db/repositories/foodLogRepo';
 import { entryTotals, type FoodPerServing, fuelNumber, parseServings, servingsText } from '../../domain/fuel';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
-import { deviceLocale } from '../body/BodyLog';
+import { deviceLocale } from '../../platform/locale';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';

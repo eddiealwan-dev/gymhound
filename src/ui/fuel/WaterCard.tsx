@@ -9,7 +9,7 @@ import { formatWater, formatWaterSpoken, quickAmounts, toMl, waterUnitFor, water
 import { announce } from '../../platform/announce';
 import { bumpData, useDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
-import { deviceLocale } from '../body/BodyLog';
+import { deviceLocale } from '../../platform/locale';
 import { Button } from '../Button';
 import { Body, Label, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';

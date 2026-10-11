@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Keyboard, View } from 'react-native';
 import { getFuelTargets, isTrainingDay, listEntries } from '../../src/db/repositories/foodLogRepo';
 import type { Db } from '../../src/db/types';
-import { dayTitle, toLocalDate } from '../../src/domain/dates';
+import { calendarDayTitle, toLocalDate } from '../../src/domain/dates';
 import { dayTotals, targetsFor } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
-import { deviceLocale } from '../../src/ui/body/BodyLog';
+import { deviceLocale } from '../../src/platform/locale';
 import { Button } from '../../src/ui/Button';
 import { DayHeader } from '../../src/ui/fuel/DayHeader';
 import { FoodEntries } from '../../src/ui/fuel/FoodEntries';
@@ -75,7 +75,7 @@ export default function Fuel() {
     Keyboard.dismiss();
     const clamped = next > today ? today : next;
     setDay(clamped);
-    announce(dayTitle(clamped, today, locale));
+    announce(calendarDayTitle(clamped, today, locale));
   };
 
   const push = (go: () => void) => {
