@@ -25,6 +25,8 @@ export default function FuelTargets() {
   /** Remounting the form (a new key) starts it again from what is stored. */
   const [formKey, setFormKey] = useState(0);
   const dirty = useRef(false);
+  /** Whether the screen has had its first focus (the mount). */
+  const focused = useRef(false);
   /** The move Back, the dock or the header was making when "Discard changes?" opened. */
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   const pro = useRef(isPro);
@@ -49,7 +51,9 @@ export default function FuelTargets() {
   useFocusEffect(
     useCallback(() => {
       // Back on the screen with nothing unsaved: the form starts from what is stored now (Settings may have changed it).
-      if (!dirty.current) setFormKey((key) => key + 1);
+      // The first focus is the mount, which already read it.
+      if (!focused.current) focused.current = true;
+      else if (!dirty.current) setFormKey((key) => key + 1);
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const hardware = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(back));
       return () => {

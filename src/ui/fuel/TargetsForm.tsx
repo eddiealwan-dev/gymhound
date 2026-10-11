@@ -94,7 +94,8 @@ export function TargetsForm({
   onDirtyChange?: (dirty: boolean) => void;
 }): ReactElement | null {
   const db = useDb();
-  const [start] = useState(() => toInput(initial));
+  /** What the fields hold no changes against: `initial`, then whatever was last saved. */
+  const [start, setStart] = useState(() => toInput(initial));
   const [input, setInput] = useState(start);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -141,6 +142,7 @@ export function TargetsForm({
     setFuelTargets(db, result.targets);
     bumpData();
     setErrors({});
+    setStart(input);
     // Saved: nothing is left to lose, so the screen can go without asking.
     reported.current = false;
     tell.current?.(false);

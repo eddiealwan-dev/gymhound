@@ -28,6 +28,20 @@ jest.mock('expo-router', () => {
   };
 });
 jest.mock('../platform/entitlements', () => ({ useIsPro: () => mockPro }));
+// The real form, counting its mounts: the route should mount it once, not again on its first focus.
+const mockFormMounts = { count: 0 };
+jest.mock('./fuel/TargetsForm', () => {
+  const actual = jest.requireActual<typeof import('./fuel/TargetsForm')>('./fuel/TargetsForm');
+  const { createElement, useEffect } = jest.requireActual<typeof import('react')>('react');
+  return {
+    TargetsForm: (props: Parameters<typeof actual.TargetsForm>[0]) => {
+      useEffect(() => {
+        mockFormMounts.count += 1;
+      }, []);
+      return createElement(actual.TargetsForm, props);
+    },
+  };
+});
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 const mockAnnounce = jest.fn();
@@ -200,6 +214,19 @@ describe('TargetsForm (R145)', () => {
     expect(['Calories', 'Protein', 'Carbs', 'Fat'].map((l) => valueOf(tree, `Rest day, ${l}`))).toEqual(['2400', '170', '', '70']);
   });
 
+  it('after a save that keeps it open, the saved numbers are what it holds no changes against', () => {
+    const onDirtyChange = jest.fn();
+    const tree = mount(<TargetsForm initial={null} submitLabel="Save" onSaved={() => {}} onDirtyChange={onDirtyChange} />);
+    fill(tree, 'Training day', ['2800', '180', '', '']);
+    press(tree, 'Same as training day');
+    press(tree, 'Save');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    type(tree, 'Rest day, Fat', '70');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    type(tree, 'Rest day, Fat', '');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('tells whether it holds changes', () => {
     const onDirtyChange = jest.fn();
     const tree = mount(<TargetsForm initial={TARGETS} submitLabel="Save" onSaved={() => {}} onDirtyChange={onDirtyChange} />);
@@ -224,6 +251,12 @@ describe('/fuel-targets', () => {
     expect(t).toEqual(expect.arrayContaining(['Fuel', 'Targets', 'Training days are days you finish a workout. Every other day uses the rest day targets.']));
     expect(valueOf(tree, 'Training day, Calories')).toBe('2800');
     expect(t).toContain('Save');
+  });
+
+  it('mounts the form once', () => {
+    mockFormMounts.count = 0;
+    mount(<FuelTargetsRoute />);
+    expect(mockFormMounts.count).toBe(1);
   });
 
   it('Save stores the targets and goes back', () => {
