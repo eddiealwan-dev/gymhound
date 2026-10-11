@@ -10,6 +10,7 @@ import type { PrHighlight } from '../domain/prs';
 import { announce } from '../platform/announce';
 import { Button } from './Button';
 import { PbCard } from './finish/PbCard';
+import { PB_READY_TIMEOUT_MS } from './finish/PbCardHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,7 +25,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
 jest.mock('../db/repositories/workoutViewsRepo', () => ({ getFinishSummary: jest.fn() }));
-jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///cache/ReactNative-snapshot-image1.png') }));
+jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///cache/ReactNative-snapshot-image1.png'), releaseCapture: jest.fn() }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(async () => true), shareAsync: jest.fn(async () => {}) }));
 jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 let mockScheme: 'light' | 'dark' = 'dark';
@@ -242,12 +243,14 @@ describe('the personal best card (R106)', () => {
 describe('sharing a personal best (R106)', () => {
   const next: FinishSummary['next'] = [];
   const originalOS = Platform.OS;
+  const FAILED = "Couldn't make the image. Try again.";
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(captureRef).mockReset().mockResolvedValue('file:///cache/ReactNative-snapshot-image1.png');
     jest.mocked(Sharing.isAvailableAsync).mockReset().mockResolvedValue(true);
     mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest'), plankPr]) };
+    Platform.OS = 'android'; // view-shot takes pixels here (iOS points: see sharePb.test.ts)
   });
   afterEach(() => {
     Platform.OS = originalOS;
@@ -255,12 +258,22 @@ describe('sharing a personal best (R106)', () => {
 
   const shareButtons = (tree: ReactTestRenderer) => tree.root.findAllByType(Button).filter((b) => b.props.label === 'Share');
 
-  /** Lets the frame, the capture and the share sheet run. */
-  const settle = () => act(async () => new Promise<void>((r) => setTimeout(r, 50)));
+  /** The hound mark on the card being drawn, if any. */
+  const cardMark = (tree: ReactTestRenderer) => tree.root.findAllByType(Image).find((i) => i.props.source === require('../../assets/brand/mark-dark.png'));
 
-  /** Presses Share on row `i` and waits for the frame, the capture and the share sheet. */
+  /** Lets the frame, the capture and the share sheet run. */
+  const settle = (ms = 50) => act(async () => new Promise<void>((r) => setTimeout(r, ms)));
+
+  /** Presses Share on row `i`. */
+  const press = (tree: ReactTestRenderer, i: number) => act(async () => shareButtons(tree)[i].props.onPress());
+
+  /** The card's hound mark finishes loading. */
+  const markLoads = (tree: ReactTestRenderer) => act(async () => cardMark(tree)!.props.onLoad());
+
+  /** Presses Share on row `i`, lets the card's mark load, and waits for the frame, the capture and the share sheet. */
   async function pressShare(tree: ReactTestRenderer, i: number): Promise<void> {
-    await act(async () => shareButtons(tree)[i].props.onPress());
+    await press(tree, i);
+    await markLoads(tree);
     await settle();
   }
 
@@ -272,7 +285,7 @@ describe('sharing a personal best (R106)', () => {
     ]);
   });
 
-  it("draws that personal best's card off-screen, captures it as a 1080 × 1350 PNG and opens the share sheet, then removes the card", async () => {
+  it("draws that personal best's card, captures it as a 1080 × 1350 PNG and opens the share sheet, then removes the card", async () => {
     const tree = await mountSettled();
     expect(shownText(tree)).not.toContain('PERSONAL BEST');
     let drawnAtCapture: string[] = [];
@@ -284,7 +297,7 @@ describe('sharing a personal best (R106)', () => {
     await pressShare(tree, 1);
 
     expect(drawnAtCapture).toEqual(expect.arrayContaining(['PERSONAL BEST', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026']));
-    expect(drawnAtCapture).not.toContain('Bench press');
+    expect(drawnAtCapture.filter((t) => t === 'Bench press')).toEqual([]);
     expect(captureRef).toHaveBeenCalledWith(expect.objectContaining({ current: null }), {
       format: 'png',
       result: 'tmpfile',
@@ -297,24 +310,74 @@ describe('sharing a personal best (R106)', () => {
       dialogTitle: 'Share a personal best',
     });
     expect(shownText(tree)).not.toContain('PERSONAL BEST');
-    expect(shownText(tree)).not.toContain("Couldn't make the image. Try again.");
+    expect(shownText(tree)).not.toContain(FAILED);
   });
 
-  it('keeps the card off-screen, untouchable and out of VoiceOver while it is drawn', async () => {
+  it('waits for the hound mark to load before capturing', async () => {
     const tree = await mountSettled();
-    let holder: Record<string, unknown> | undefined;
-    jest.mocked(captureRef).mockImplementationOnce(async () => {
-      holder = tree.root.findAll((n) => typeof n.type === 'string' && flatStyle(n.props.style).left === -10000)[0]?.props;
-      return 'file:///x.png';
-    });
+    await press(tree, 0);
+    await settle();
 
-    await pressShare(tree, 0);
+    expect(shownText(tree)).toContain('PERSONAL BEST');
+    expect(captureRef).not.toHaveBeenCalled();
 
-    expect(holder).toBeDefined();
-    expect(flatStyle(holder!.style)).toMatchObject({ position: 'absolute', left: -10000 });
-    expect(holder!.importantForAccessibility).toBe('no-hide-descendants');
-    expect(holder!.accessibilityElementsHidden).toBe(true);
-    expect(holder!.pointerEvents).toBe('none');
+    await markLoads(tree);
+    await settle();
+    expect(captureRef).toHaveBeenCalledTimes(1);
+    expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures anyway when the mark fails to load', async () => {
+    const tree = await mountSettled();
+    await press(tree, 0);
+    await act(async () => cardMark(tree)!.props.onError());
+    await settle();
+
+    expect(captureRef).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures anyway when the mark never reports, after a short wait', async () => {
+    const tree = await mountSettled();
+    await press(tree, 0);
+    await settle(PB_READY_TIMEOUT_MS - 300);
+    expect(captureRef).not.toHaveBeenCalled();
+
+    await settle(400);
+    expect(captureRef).toHaveBeenCalledTimes(1);
+    expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws the card at the screen's top left, under the scroll view, untouchable and out of VoiceOver, never faded", async () => {
+    const tree = await mountSettled();
+    await press(tree, 0);
+
+    type Json = { type: string; props: Record<string, unknown>; children: (Json | string)[] | null };
+    const root = tree.toJSON() as Json;
+    const [holder, scroll] = root.children as Json[];
+    expect(flatStyle(holder.props.style)).toMatchObject({ position: 'absolute', top: 0, left: 0 });
+    expect(holder.props.pointerEvents).toBe('none');
+    expect(holder.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(holder.props.accessibilityElementsHidden).toBe(true);
+    // The scroll view comes after it, outside it, and paints over it.
+    expect(scroll.type).toBe('RCTScrollView');
+    expect(flatStyle(scroll.props.style).backgroundColor).toBe('#100f0c');
+
+    // The card, and nothing between the screen and the card, is faded, so the capture isn't either.
+    const pathToCard = (n: Json): Json[] | null => {
+      if (n.props.collapsable === false && flatStyle(n.props.style).width === 360) return [n];
+      for (const c of n.children ?? []) {
+        if (typeof c === 'string') continue;
+        const p = pathToCard(c);
+        if (p) return [n, ...p];
+      }
+      return null;
+    };
+    const path = pathToCard(root)!;
+    expect(path[1]).toBe(holder);
+    for (const n of path) expect(flatStyle(n.props.style).opacity ?? 1).toBe(1);
+
+    await markLoads(tree);
+    await settle();
   });
 
   it("shows a muted line under the row when the image can't be made, and clears it on the next try", async () => {
@@ -328,19 +391,31 @@ describe('sharing a personal best (R106)', () => {
     expect(text.slice(text.indexOf('Bench press — heaviest: 185 lb × 5'))).toEqual([
       'Bench press — heaviest: 185 lb × 5',
       'Share',
-      "Couldn't make the image. Try again.",
+      FAILED,
       'PR',
       'Plank — longest hold: 1:30',
       'Share',
       'Done',
     ]);
-    const failure = tree.root.findAll((n) => (n.type as unknown) === 'Text' && n.props.children === "Couldn't make the image. Try again.")[0];
+    const failure = tree.root.findAll((n) => (n.type as unknown) === 'Text' && n.props.children === FAILED)[0];
     expect(flatStyle(failure.props.style).color).toBe('#a39d90');
-    expect(announce).toHaveBeenCalledWith("Couldn't make the image. Try again.");
+    expect(announce).toHaveBeenCalledWith(FAILED);
 
     await pressShare(tree, 0);
-    expect(shownText(tree)).not.toContain("Couldn't make the image. Try again.");
+    expect(shownText(tree)).not.toContain(FAILED);
     expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the same line when sharing has become unavailable by the tap', async () => {
+    const tree = await mountSettled();
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(false);
+
+    await pressShare(tree, 1);
+
+    expect(captureRef).not.toHaveBeenCalled();
+    const text = shownText(tree);
+    expect(text.slice(text.indexOf('Plank — longest hold: 1:30'))).toEqual(['Plank — longest hold: 1:30', 'Share', FAILED, 'Done']);
+    expect(text).not.toContain('PERSONAL BEST');
   });
 
   it('ignores a second tap while an image is being made', async () => {
@@ -349,6 +424,7 @@ describe('sharing a personal best (R106)', () => {
       shareButtons(tree)[0].props.onPress();
       shareButtons(tree)[1].props.onPress();
     });
+    await markLoads(tree);
     await settle();
 
     expect(captureRef).toHaveBeenCalledTimes(1);

@@ -1,4 +1,3 @@
-import { getLocales } from 'expo-localization';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { View } from 'react-native';
@@ -6,15 +5,13 @@ import type { FinishSummary } from '../../db/repositories/workoutViewsRepo';
 import { prLine } from '../../domain/prs';
 import type { PrHighlight } from '../../domain/prs';
 import { announce } from '../../platform/announce';
-import { canSharePb, sharePbImage } from '../../platform/sharePb';
+import { canSharePb } from '../../platform/sharePb';
 import { Button } from '../Button';
 import { Body, Display, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
-import { PbCard } from './PbCard';
+import { useSharePb } from './PbCardHost';
 
 const SHARE_FAILED = "Couldn't make the image. Try again.";
-
-const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 
 /**
  * The finish summary's personal bests (R105), after the next-time lines: the heading "Personal bests", then one row
@@ -22,9 +19,9 @@ const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
  * and line read to VoiceOver as "Personal best. {line}". Hidden when there are none, as on a first workout (R103). PRs
  * are computed at finish only (R104).
  *
- * On a phone that can share, each row ends with a Share pill (R106) that wraps under the line at large text sizes.
- * Share draws that highlight's `PbCard` off-screen, waits a frame for it to be laid out, captures it and opens the
- * share sheet, then removes it. A failure shows a muted line under the row.
+ * On a phone that can share, inside the finish screen's `PbCardHost`, each row ends with a Share pill (R106) that
+ * wraps under the line at large text sizes. Share asks the host to draw, capture and share that highlight's card. A
+ * failure, or a share sheet that has gone by the tap, shows a muted line under the row.
  */
 export function FinishPrs({ summary }: { workoutId: string; summary: FinishSummary }): ReactElement | null {
   if (summary.prs.length === 0) return null;
@@ -33,15 +30,14 @@ export function FinishPrs({ summary }: { workoutId: string; summary: FinishSumma
 
 function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: boolean }): ReactElement {
   const { colors } = useTheme();
+  const sharePb = useSharePb();
   const [canShare, setCanShare] = useState(false);
-  /** The highlight whose card is drawn for capture, or null. */
-  const [drawing, setDrawing] = useState<number | null>(null);
   /** The row whose image couldn't be made, or null. */
   const [failed, setFailed] = useState<number | null>(null);
-  const card = useRef<View>(null);
   const busy = useRef(false);
 
   useEffect(() => {
+    if (sharePb === null) return;
     let live = true;
     void canSharePb().then((ok) => {
       if (live) setCanShare(ok);
@@ -49,35 +45,18 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
     return () => {
       live = false;
     };
-  }, []);
+  }, [sharePb]);
 
-  // Once the card is committed, give it one frame to be laid out natively, then capture and share it.
-  useEffect(() => {
-    if (drawing === null) return;
-    let live = true;
-    const frame = requestAnimationFrame(() => {
-      sharePbImage(card)
-        .catch(() => {
-          if (!live) return;
-          setFailed(drawing);
-          announce(SHARE_FAILED);
-        })
-        .finally(() => {
-          busy.current = false;
-          if (live) setDrawing(null);
-        });
-    });
-    return () => {
-      live = false;
-      cancelAnimationFrame(frame);
-    };
-  }, [drawing]);
-
-  const share = (i: number) => {
-    if (busy.current) return;
+  const share = async (i: number) => {
+    if (sharePb === null || busy.current) return;
     busy.current = true;
     setFailed(null);
-    setDrawing(i);
+    const result = await sharePb(prs[i]).catch(() => 'failed' as const);
+    busy.current = false;
+    if (result !== 'shared') {
+      setFailed(i);
+      announce(SHARE_FAILED);
+    }
   };
 
   return (
@@ -99,7 +78,7 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
                 <Body style={{ flex: 1 }}>{line}</Body>
               </View>
               {canShare && (
-                <Button label="Share" variant="secondary" size="compact" accessibilityLabel={`Share ${line}`} onPress={() => share(i)} />
+                <Button label="Share" variant="secondary" size="compact" accessibilityLabel={`Share ${line}`} onPress={() => void share(i)} />
               )}
             </View>
             {failed === i && (
@@ -110,16 +89,6 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
           </View>
         );
       })}
-      {drawing !== null && (
-        <View
-          pointerEvents="none"
-          importantForAccessibility="no-hide-descendants"
-          accessibilityElementsHidden
-          style={{ position: 'absolute', left: -10000, top: 0 }}
-        >
-          <PbCard ref={card} highlight={prs[drawing]} locale={deviceLocale()} />
-        </View>
-      )}
     </View>
   );
 }

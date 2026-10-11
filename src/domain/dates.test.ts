@@ -55,6 +55,11 @@ describe('formatTrainDate', () => {
     expect(formatTrainDate(new Date(2026, 9, 9), 'en-GB')).toBe('FRI 9 OCT'); // 9 Oct 2026 is a Friday
     expect(formatTrainDate(new Date(2026, 9, 9), 'en-US')).toBe('FRI OCT 9');
   });
+
+  it('adds the year when asked, as the personal best card shows it', () => {
+    expect(formatTrainDate(new Date(2026, 9, 11), 'en-GB', { year: true })).toBe('SUN 11 OCT 2026');
+    expect(formatTrainDate(new Date(2026, 9, 11), 'en-US', { year: true })).toBe('SUN OCT 11 2026');
+  });
 });
 
 describe('formatElapsed', () => {
