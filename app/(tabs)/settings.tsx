@@ -529,11 +529,11 @@ type ExportKind = keyof typeof EXPORTS;
 
 /**
  * The finished workouts, the food log and the body entries as CSV files (spec §11, R183) through the share sheet, to
- * open in Numbers or Excel. The food CSV is free and stays after Pro lapses (§9, R153); the body CSV is free. Phone app only, like Backups. A muted line under the
- * button pressed says when there is nothing to export or the share sheet couldn't open, and the screen reader is told
- * it. The line belongs to the data version it was shown at, so a write since (a finished workout, a logged food) drops
- * it. While an export runs, all three buttons are faded and presses are ignored, so a second tap as the share sheet opens
- * doesn't start a second export.
+ * open in Numbers or Excel. The food CSV is free and stays after Pro lapses (§9, R153); the body CSV is free. Phone
+ * app only, like Backups. A muted line under the button pressed says when there is nothing to export or the share
+ * sheet couldn't open, and the screen reader is told it. The line belongs to the data version it was shown at, so a
+ * write since (a finished workout, a logged food) drops it. While an export runs, all three buttons are faded and
+ * presses are ignored, so a second tap as the share sheet opens doesn't start a second export.
  */
 function ExportSection() {
   const db = useDb();
