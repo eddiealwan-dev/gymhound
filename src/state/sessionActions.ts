@@ -63,8 +63,9 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
 
 /**
  * Ticks a set. `entered` is what the user typed or had stored (null for a field left empty); today's target and the
- * placeholders fill the gaps (spec 8.4). Returns false, changing nothing, when a field the logging type needs still
- * has no value. `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when
+ * placeholders fill the gaps (spec 8.4): last time's set, else today's own values carried from the set above (spec
+ * 18.6), so the tick records what the row shows (R48). Returns false, changing nothing, when a field the logging type
+ * needs still has no value; the row says which one (spec 18.6). `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when
  * left out: a weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged
  * (spec 7.1), and a weight from the target or a placeholder is recorded in the unit in Settings, which they are in.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,

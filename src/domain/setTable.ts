@@ -2,6 +2,7 @@ import { formatRest } from './dates';
 import { parseDecimal, parseDuration, parseReps, parseRpe } from './input';
 import { planInUnit, type Gear } from './plates';
 import {
+  carryAbove,
   formatDuration,
   formatPrevious,
   matchPrevious,
@@ -145,7 +146,10 @@ export type RowModel = {
   previous: string;
   /** Today's target weight in the entry unit, for a working set of a type with a load. */
   target: number | null;
-  /** The greyed-out values, in the entry unit (a previous weight in the other unit rounds to the nearest 0.5). */
+  /**
+   * The greyed-out values, in the entry unit (a weight in the other unit rounds to the nearest 0.5): last time's set,
+   * else today's own values from the set above (spec 18.6), with the rule filling the reps or time.
+   */
   placeholders: ReturnType<typeof placeholdersFor>;
 };
 
@@ -169,25 +173,33 @@ function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): number | nu
  * One row per set. Each row's previous is the same set from last time: the previous set with the same type and the
  * same number within that type (`matchPrevious`, computed once here), so a warmup is never the previous result for a
  * working set. Only working sets start from today's target (spec 8.4); a warmup starts from its own previous.
+ * A set with no previous takes today's own values from the nearest set above of its type (`carryAbove`, spec 18.6) as
+ * placeholders, except a carried weight under a target: the target wins. The Previous column never shows a carry.
+ * What a row shows is what its tick records, so a set with a value above it ticks in one tap (R48).
  * `gear` is the bar and plates in Settings for `unit`, which a barbell target in the other unit rounds to.
  */
 export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear): RowModel[] {
   const matched = matchPrevious(ex.sets, ex.previous);
   const labels = setLabels(ex.sets.map((s) => s.setType));
   const target = targetFor(ex, unit, gear);
-  return ex.sets.map((set, i) => ({
-    set,
-    loggingType: ex.loggingType,
-    label: labels[i],
-    previous: formatPrevious(matched[i], ex.loggingType, unit),
-    target: set.setType === 'working' ? target : null,
-    placeholders: placeholdersFor({
-      previous: matched[i],
-      ruleRepMax: ex.rule?.repMax ?? null,
+  return ex.sets.map((set, i) => {
+    const rowTarget = set.setType === 'working' ? target : null;
+    const carried = matched[i] === null ? carryAbove(ex.sets, i) : null;
+    return {
+      set,
       loggingType: ex.loggingType,
-      unit,
-    }),
-  }));
+      label: labels[i],
+      previous: formatPrevious(matched[i], ex.loggingType, unit),
+      target: rowTarget,
+      placeholders: placeholdersFor({
+        previous: matched[i],
+        ruleRepMax: ex.rule?.repMax ?? null,
+        loggingType: ex.loggingType,
+        unit,
+        carried: carried !== null && rowTarget !== null ? { ...carried, weight: null } : carried,
+      }),
+    };
+  });
 }
 
 const numberText = (n: number) => String(round2(n));
@@ -258,11 +270,24 @@ export type RowReading = {
   rpe: number | null;
   /** The inputs whose non-blank text does not parse. */
   invalid: InputKey[];
-  /** Whether a tick would record something: nothing invalid and every field the type needs has a value. */
+  /**
+   * Whether a tick would record something: nothing invalid and every field the type needs has a value. A tick that
+   * is not ready still takes a tap: it records nothing and says why (spec 18.6).
+   */
   tickable: boolean;
+  /**
+   * The first field (in column order) the logging type needs that has no value from what was entered, the target
+   * (weight only) or the placeholder; null when every needed field has one. Bodyweight plus needs only reps.
+   */
+  missing: FieldKey | null;
 };
 
 const ORDER: InputKey[] = ['weight', 'reps', 'durationS', 'distance', 'rpe'];
+
+/** The fields a tick needs a value for: the type's fields, except bodyweight plus, where no load means none added. */
+function neededFields(loggingType: LoggingType): FieldKey[] {
+  return loggingType === 'bodyweight_plus' ? ['reps'] : FIELDS[loggingType];
+}
 
 /** The row as it stands: the stored values overlaid with what is being typed. Typed text counts before it is saved. */
 export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowReading {
@@ -281,7 +306,14 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowRea
   const entered: TickValues = { weight: values.weight, reps: values.reps, durationS: values.durationS, distance: values.distance };
   const resolved = resolveTick({ loggingType: row.loggingType, entered, target: row.target, placeholders: row.placeholders });
   const weightUnit = drafts.weight === undefined ? (row.set.weightUnit ?? unit) : unit;
-  return { entered, weightUnit, rpe: values.rpe, invalid, tickable: invalid.length === 0 && resolved !== null };
+  const filled: TickValues = {
+    weight: entered.weight ?? row.target ?? row.placeholders.weight,
+    reps: entered.reps ?? row.placeholders.reps,
+    durationS: entered.durationS ?? row.placeholders.durationS,
+    distance: entered.distance ?? row.placeholders.distance,
+  };
+  const missing = neededFields(row.loggingType).find((key) => filled[key] === null) ?? null;
+  return { entered, weightUnit, rpe: values.rpe, invalid, tickable: invalid.length === 0 && resolved !== null, missing };
 }
 
 /**

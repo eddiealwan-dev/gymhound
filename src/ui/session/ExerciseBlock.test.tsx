@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { Keyboard, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -11,7 +12,12 @@ import { SetRow } from './SetRow';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(() => Promise.resolve()), ImpactFeedbackStyle: { Light: 'light' } }));
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(() => Promise.resolve()),
+  ImpactFeedbackStyle: { Light: 'light' },
+  notificationAsync: jest.fn(() => Promise.resolve()),
+  NotificationFeedbackType: { Warning: 'warning' },
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../state/sessionActions', () => ({
@@ -221,6 +227,70 @@ describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
 
 /** Set 1 ticked at 135 x 8, set 2 not ticked yet. */
 const oneDone = () => bench([set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 1 }), set('s1', 1)]);
+
+describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
+  beforeEach(() => {
+    jest.mocked(Haptics.impactAsync).mockClear();
+    jest.mocked(Haptics.notificationAsync).mockClear();
+  });
+
+  it('stays pressable at full strength, with a hint', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    const tickButton = byLabel(tree, 'Set 1 done');
+
+    expect(tickButton.props.disabled).toBeFalsy();
+    expect(tickButton.props.accessibilityHint).toBe('Enter a weight first');
+    expect(tickButton.props.style({ pressed: false })).toMatchObject({ opacity: 1, borderStyle: 'dashed' });
+  });
+
+  it('tapping it focuses the weight field, says "Add a weight to tick", gives a warning haptic, and ticks nothing', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    const focus = jest.spyOn(byLabel(tree, 'LB, set 1').instance, 'focus');
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(tick).not.toHaveBeenCalled();
+    // A not-ready tap keeps the keyboard up, so the focused field can be typed in.
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain('Add a weight to tick');
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  });
+
+  it('the line goes once a weight is typed', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    expect(shownText(tree)).toContain('Add a weight to tick');
+
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('135'));
+
+    expect(shownText(tree)).not.toContain('Add a weight to tick');
+  });
+
+  it('Check this number wins over the nudge', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(shownText(tree)).toContain('Check this number');
+    expect(shownText(tree)).not.toContain('Add a weight to tick');
+    expect(tick).not.toHaveBeenCalled();
+  });
+
+  it("set 2 shows set 1's weight as a ghost and ticks in one tap", () => {
+    jest.mocked(tick).mockReturnValue(true);
+    const tree = mount(oneDone());
+
+    expect(byLabel(tree, 'LB, set 2').props.placeholder).toBe('135');
+    expect(byLabel(tree, 'REPS, set 2').props.placeholder).toBe('8');
+
+    act(() => byLabel(tree, 'Set 2 done').props.onPress());
+
+    expect(tick).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('ExerciseBlock: Remove set asks first when the set is ticked (F5)', () => {
   it('says the set number opens a sheet that changes the type or removes the set', () => {

@@ -218,6 +218,27 @@ describe('tick', () => {
     expect(tick(db, ex, ex.sets[2], NOTHING)).toBe(false);
   });
 
+  it("ticks set 2 on the weight carried from set 1, with the rule's reps (first run)", () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+    tick(db, ex, ex.sets[0], { weight: 135, reps: 6, durationS: null, distance: null });
+
+    const fresh = bench();
+    expect(tick(db, fresh, fresh.sets[1], NOTHING)).toBe(true);
+
+    expect(reread(fresh.sets[1].id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb', reps: 8 });
+  });
+
+  it('a typed, unticked weight carries to the next set', () => {
+    startFromDay(db, PUSH_A);
+    commitSetField(db, bench().sets[2].id, { weight: 140, weightUnit: 'lb' });
+
+    const fresh = bench();
+    expect(tick(db, fresh, fresh.sets[3], NOTHING)).toBe(true);
+
+    expect(reread(fresh.sets[3].id)).toMatchObject({ done: true, weight: 140, reps: 8 });
+  });
+
   it('returns false and writes nothing when a field the type needs has no value and no placeholder', () => {
     startFromDay(db, PUSH_A);
     const ex = bench();

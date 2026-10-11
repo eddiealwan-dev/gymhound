@@ -327,6 +327,83 @@ describe('buildRows: the target and the placeholders', () => {
   });
 });
 
+describe("buildRows: carrying today's values (spec 18.6)", () => {
+  const done = (weight: number, reps: number, weightUnit: 'lb' | 'kg' = 'kg', setType: SetType = 'working') =>
+    set(setType, { done: true, weight, weightUnit, reps });
+
+  it('first run: set 1 ticked at 60 × 8 gives sets 2-4 a 60 / 8 ghost and a one-tap tick', () => {
+    const rows = buildRows(exercise({ rule: null, sets: [done(60, 8), set('working'), set('working'), set('working')] }), 'kg', KG_GEAR);
+    for (const row of rows.slice(1)) expect(row.placeholders).toEqual({ weight: 60, reps: 8, durationS: null, distance: null });
+    expect(hintText(rows[1], 'weight')).toBe('60');
+    expect(readRow(rows[1], {}, 'kg').tickable).toBe(true);
+    expect(rows.map((r) => r.previous)).toEqual(['', '', '', '']);
+  });
+
+  it('typed 62.5 on set 3 carries to set 4, not up to set 2', () => {
+    const rows = buildRows(
+      exercise({ rule: null, sets: [done(60, 8), set('working'), set('working', { weight: 62.5, weightUnit: 'kg' }), set('working')] }),
+      'kg',
+      KG_GEAR,
+    );
+    expect(rows[3].placeholders.weight).toBe(62.5);
+    expect(rows[1].placeholders.weight).toBe(60);
+    expect(rows[3].placeholders.reps).toBe(8);
+  });
+
+  it("the rule's reps win over today's reps", () => {
+    const rows = buildRows(exercise({ rule: { repMax: 12 }, sets: [done(60, 8), set('working')] }), 'kg', KG_GEAR);
+    expect(rows[1].placeholders).toEqual({ weight: 60, reps: 12, durationS: null, distance: null });
+  });
+
+  it('real history wins row by row; only a set with no match carries', () => {
+    const rows = buildRows(
+      exercise({
+        rule: null,
+        previous: [prev(0, 'working', 135, 8), prev(1, 'working', 140, 7)],
+        sets: [done(150, 5, 'lb'), set('working'), set('working')],
+      }),
+      'lb',
+      LB_GEAR,
+    );
+    expect(rows[1].placeholders).toEqual({ weight: 140, reps: 7, durationS: null, distance: null });
+    expect(rows[2].placeholders).toEqual({ weight: 150, reps: 5, durationS: null, distance: null });
+  });
+
+  it('a target wins: no carried weight under it', () => {
+    const rows = buildRows(
+      exercise({ plannedWeight: 135, plannedUnit: 'lb', sets: [done(140, 8, 'lb'), set('working')] }),
+      'lb',
+      LB_GEAR,
+    );
+    expect(rows[1].placeholders.weight).toBeNull();
+    expect(rows[1].placeholders.reps).toBe(8);
+    expect(valueText(rows[1], 'weight', 'lb')).toBe('135');
+  });
+
+  it('a warmup carries from the warmup above, never from a working set', () => {
+    const rows = buildRows(
+      exercise({ rule: null, sets: [done(45, 10, 'lb', 'warmup'), set('warmup'), done(135, 8, 'lb'), set('working')] }),
+      'lb',
+      LB_GEAR,
+    );
+    expect(rows[1].placeholders).toEqual({ weight: 45, reps: 10, durationS: null, distance: null });
+    expect(rows[3].placeholders).toEqual({ weight: 135, reps: 8, durationS: null, distance: null });
+    const after = buildRows(exercise({ rule: null, sets: [done(135, 8, 'lb'), set('warmup')] }), 'lb', LB_GEAR);
+    expect(after[1].placeholders).toEqual({ weight: null, reps: null, durationS: null, distance: null });
+  });
+
+  it('a carried weight logged in the other unit converts to the entry unit', () => {
+    const rows = buildRows(exercise({ rule: null, sets: [done(60, 8, 'kg'), set('working')] }), 'lb', LB_GEAR);
+    expect(rows[1].placeholders.weight).toBe(132.5);
+  });
+
+  it('invents nothing with nothing above', () => {
+    const rows = buildRows(exercise({ rule: null }), 'lb', LB_GEAR);
+    for (const row of rows) expect(row.placeholders).toEqual({ weight: null, reps: null, durationS: null, distance: null });
+    expect(readRow(rows[1], {}, 'lb').tickable).toBe(false);
+  });
+});
+
 describe('valueText and hintText', () => {
   it('shows the target as the load until a weight is stored', () => {
     const [row] = buildRows(exercise({ sets: [set('working')], plannedWeight: 135, plannedUnit: 'lb' }), 'lb', LB_GEAR);
@@ -465,6 +542,21 @@ describe('readRow: what the row holds while it is being typed into', () => {
     expect(r({ distance: '5' }).tickable).toBe(false);
     expect(r({ distance: '5', durationS: '25:00' }).tickable).toBe(true);
     expect(r({ distance: '5', durationS: '25:00' }).entered).toMatchObject({ distance: 5, durationS: 1500 });
+  });
+});
+
+describe('readRow: missing (spec 18.6: a tick that is not ready says why)', () => {
+  const row = (extra: Partial<ExerciseInput> = {}) => buildRows(exercise({ sets: [set('working')], ...extra }), 'lb', LB_GEAR)[0];
+
+  it('is the first field the type needs that has no value, typed, target or placeholder', () => {
+    expect(readRow(row({ rule: null }), {}, 'lb').missing).toBe('weight');
+    expect(readRow(row({ rule: null }), { weight: '60' }, 'lb').missing).toBe('reps');
+    expect(readRow(row({ previous: [prev(0, 'working', 135, 8)] }), {}, 'lb').missing).toBeNull();
+  });
+
+  it('needs only reps for bodyweight plus, and the time after the distance for distance and time', () => {
+    expect(readRow(row({ loggingType: 'bodyweight_plus', rule: null }), {}, 'lb').missing).toBe('reps');
+    expect(readRow(row({ loggingType: 'distance_time', rule: null }), { distance: '5' }, 'lb').missing).toBe('durationS');
   });
 });
 

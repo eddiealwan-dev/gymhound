@@ -81,6 +81,37 @@ export function matchPrevious(
   });
 }
 
+/** The fields one set carries to the sets below it (spec 18.6). A weight keeps the unit it was logged in. */
+export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'durationS' | 'distance'>;
+
+/**
+ * Today's own values for the set at `index` (spec 18.6): per field, the nearest set above `index` of the same set type
+ * with a stored value (ticked or typed); null if none. Never looks below or at other types.
+ */
+export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Carried>, index: number): Carried | null {
+  const carried: Carried = { weight: null, weightUnit: null, reps: null, durationS: null, distance: null };
+  const setType = current[index]?.setType;
+  for (let i = index - 1; i >= 0; i--) {
+    const above = current[i];
+    if (above.setType !== setType) continue;
+    if (carried.weight === null && above.weight !== null) {
+      carried.weight = above.weight;
+      carried.weightUnit = above.weightUnit;
+    }
+    carried.reps ??= above.reps;
+    carried.durationS ??= above.durationS;
+    carried.distance ??= above.distance;
+  }
+  const found = carried.weight !== null || carried.reps !== null || carried.durationS !== null || carried.distance !== null;
+  return found ? carried : null;
+}
+
+/** A weight in the entry unit: one logged in the other unit converts to the nearest 0.5 (84 kg is 185 lb, not 185.19). */
+function inEntryUnit(weight: number | null, from: WeightUnit | null, unit: WeightUnit | undefined): number | null {
+  if (weight === null || !unit || !from || from === unit) return weight;
+  return roundToHalf(convertWeight(weight, from, unit));
+}
+
 /**
  * The greyed-out values a set row shows: the previous set, else the rule's value.
  *
@@ -88,27 +119,39 @@ export function matchPrevious(
  * feeds the duration and reps stay empty), and unused for `distance_time`. Without `loggingType`
  * it is treated as reps.
  *
- * Pass `unit` (the unit the user is entering in) so a previous weight logged in the other unit is
- * converted and rounded to the nearest 0.5 (84 kg is 185 lb, not 185.19); otherwise the previous weight
- * is returned as logged.
+ * `carried` is today's own values from the set above (`carryAbove`, spec 18.6). It counts only when
+ * there is no previous set, because history wins row by row. Then the weight is the carried weight
+ * (bodyweight plus never carries a 0 load), the reps are the rule's, else the carried reps, the
+ * duration is the rule's seconds for the timed types, else the carried time, and the distance is
+ * the carried distance.
+ *
+ * Pass `unit` (the unit the user is entering in) so a previous or carried weight logged in the
+ * other unit is converted and rounded to the nearest 0.5 (84 kg is 185 lb, not 185.19); otherwise
+ * the weight is returned as logged.
  */
 export function placeholdersFor(a: {
   previous: PrevSet | null;
   ruleRepMax: number | null;
   loggingType?: LoggingType;
   unit?: WeightUnit;
+  carried?: Carried | null;
 }): SetFields {
-  const { previous, loggingType } = a;
-
-  let weight = previous?.weight ?? null;
-  if (weight !== null && a.unit && previous?.weightUnit && previous.weightUnit !== a.unit) {
-    weight = roundToHalf(convertWeight(weight, previous.weightUnit, a.unit));
-  }
-
+  const { previous, loggingType, carried } = a;
   const ruleIsSeconds = loggingType === 'timed' || loggingType === 'weighted_time';
   const ruleReps = ruleIsSeconds || loggingType === 'distance_time' ? null : a.ruleRepMax;
+
+  if (previous === null && carried) {
+    const weight = inEntryUnit(carried.weight, carried.weightUnit, a.unit);
+    return {
+      weight: loggingType === 'bodyweight_plus' && weight === 0 ? null : weight,
+      reps: ruleIsSeconds ? null : (ruleReps ?? carried.reps),
+      durationS: ruleIsSeconds ? (a.ruleRepMax ?? carried.durationS) : carried.durationS,
+      distance: carried.distance,
+    };
+  }
+
   return {
-    weight,
+    weight: inEntryUnit(previous?.weight ?? null, previous?.weightUnit ?? null, a.unit),
     reps: ruleIsSeconds ? null : (previous?.reps ?? ruleReps),
     durationS: previous?.durationS ?? (ruleIsSeconds ? a.ruleRepMax : null),
     distance: previous?.distance ?? null,
@@ -118,8 +161,8 @@ export function placeholdersFor(a: {
 /**
  * The values a tick records (spec 8.4): each field is what was entered, else (weight only) today's
  * target, else the placeholder. Only the fields the logging type uses come back; the rest are
- * null. Null when a field the logging type needs still has no value, which keeps the tick
- * disabled.
+ * null. Null when a field the logging type needs still has no value: the tick then records
+ * nothing and says which field is missing (spec 18.6).
  */
 export function resolveTick(i: TickInput): TickValues | null {
   const { entered, placeholders } = i;

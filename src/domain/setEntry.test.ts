@@ -1,9 +1,11 @@
 import {
+  carryAbove,
   formatPrevious,
   matchPrevious,
   placeholdersFor,
   resolveTick,
   setLabels,
+  type Carried,
   type PrevSet,
 } from './setEntry';
 import type { SetType } from './types';
@@ -197,6 +199,72 @@ describe('placeholdersFor', () => {
     it('leaves a previous weight alone when it has no recorded unit', () => {
       const logged: PrevSet = { ...prev, weight: 84, weightUnit: null };
       expect(placeholdersFor({ previous: logged, ruleRepMax: null, unit: 'lb' }).weight).toBe(84);
+    });
+  });
+});
+
+describe("carryAbove (spec 18.6: today's own values)", () => {
+  it('takes each field from the nearest set above of the same type, ticked or typed', () => {
+    const c = [
+      P(0, 'warmup', 20, 10, { weightUnit: 'kg' }),
+      P(1, 'working', 60, 8, { weightUnit: 'kg' }),
+      P(2, 'working', 62.5, null, { weightUnit: 'kg' }),
+      P(3, 'working', null, null),
+    ];
+    expect(carryAbove(c, 3)).toEqual({ weight: 62.5, weightUnit: 'kg', reps: 8, durationS: null, distance: null });
+  });
+
+  it('never carries across types', () => {
+    expect(carryAbove([P(0, 'working', 60, 8), P(1, 'warmup', null, null)], 1)).toBeNull();
+  });
+
+  it('is null for the first set, and never looks below', () => {
+    expect(carryAbove([P(0, 'working', null, null), P(1, 'working', 60, 8)], 0)).toBeNull();
+  });
+});
+
+describe('placeholdersFor with a carry', () => {
+  const carried: Carried = { weight: 60, weightUnit: 'kg', reps: 8, durationS: null, distance: null };
+
+  it("carries today's weight, and today's reps only when there is no rule", () => {
+    expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'weighted', unit: 'kg', carried })).toEqual({
+      weight: 60,
+      reps: 8,
+      durationS: null,
+      distance: null,
+    });
+    expect(placeholdersFor({ previous: null, ruleRepMax: 12, loggingType: 'weighted', unit: 'kg', carried })).toEqual({
+      weight: 60,
+      reps: 12,
+      durationS: null,
+      distance: null,
+    });
+  });
+
+  it('a previous set wins over the carry', () => {
+    expect(placeholdersFor({ previous: prev, ruleRepMax: null, loggingType: 'weighted', unit: 'lb', carried })).toEqual({
+      weight: 180,
+      reps: 10,
+      durationS: null,
+      distance: null,
+    });
+  });
+
+  it('converts a carried weight in the other unit to the nearest 0.5', () => {
+    expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'weighted', unit: 'lb', carried }).weight).toBe(132.5);
+  });
+
+  it('timed: the rule seconds win, else the carried time', () => {
+    const timed: Carried = { weight: null, weightUnit: null, reps: null, durationS: 45, distance: null };
+    expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'timed', carried: timed })).toEqual({ ...none, durationS: 45 });
+    expect(placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'timed', carried: timed })).toEqual({ ...none, durationS: 60 });
+  });
+
+  it('bodyweight plus never carries a 0 load', () => {
+    const bw: Carried = { weight: 0, weightUnit: 'lb', reps: 10, durationS: null, distance: null };
+    expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'bodyweight_plus', unit: 'lb', carried: bw })).toEqual({
+      ...none,
+      reps: 10,
     });
   });
 });

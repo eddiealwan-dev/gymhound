@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
-import type { KeyboardTypeOptions, ViewStyle } from 'react-native';
+import type { KeyboardTypeOptions, PressableStateCallbackType, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import {
@@ -15,6 +15,7 @@ import {
   type Column,
   type ColumnKey,
   type Drafts,
+  type FieldKey,
   type InputKey,
   type RowModel,
 } from '../../domain/setTable';
@@ -62,6 +63,31 @@ function lightHaptic(): void {
   }
 }
 
+/** A warning buzz when a tick that is not ready is tapped. As with `lightHaptic`, a missing haptic changes nothing. */
+function warningHaptic(): void {
+  try {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+  } catch {
+    // no haptics here
+  }
+}
+
+/** The line under a row whose tick was tapped before it was ready (spec 18.6). */
+const NEED_LINE: Record<FieldKey, string> = {
+  weight: 'Add a weight to tick',
+  reps: 'Add reps to tick',
+  durationS: 'Add a time to tick',
+  distance: 'Add a distance to tick',
+};
+
+/** The tick's VoiceOver hint while it is not ready (spec 18.6). */
+const NEED_HINT: Record<FieldKey, string> = {
+  weight: 'Enter a weight first',
+  reps: 'Enter reps first',
+  durationS: 'Enter a time first',
+  distance: 'Enter a distance first',
+};
+
 type Props = {
   ex: WorkoutExerciseView;
   row: RowModel;
@@ -74,7 +100,9 @@ type Props = {
 
 /**
  * One set. Each input keeps what is typed locally and saves on blur; blank is "no value", and only non-blank text
- * that does not parse is marked (an underline and "Check this number") and keeps the tick off.
+ * that does not parse is marked (an underline and "Check this number"). A tick that is not ready (a number to check,
+ * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, focuses the field
+ * and says why (spec 18.6).
  */
 export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onLongPress }: Props) {
   const db = useDb();
@@ -83,15 +111,21 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   const [drafts, setDrafts] = useState<Drafts>({});
   /** Inputs that have been left since they were typed in. A half-typed number is only called wrong once it is left. */
   const [left, setLeft] = useState<InputKey[]>([]);
+  /** The field a tap on the not-ready tick asked for. Typing clears it. */
+  const [need, setNeed] = useState<FieldKey | null>(null);
+  const inputs = useRef<Partial<Record<InputKey, TextInput | null>>>({});
 
   const reading = readRow(row, drafts, unit);
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
+  /** Under the row: a number to check wins over the field a not-ready tick asked for. */
+  const line = showHint ? 'Check this number' : need !== null && !set.done && !canTick ? NEED_LINE[need] : null;
 
   const type = (key: InputKey, text: string) => {
     setDrafts((d) => ({ ...d, [key]: text }));
     // Typing again means it has not been left since: the hint waits until it is.
     setLeft((l) => l.filter((k) => k !== key));
+    setNeed(null);
   };
 
   const leave = (key: InputKey) => {
@@ -118,24 +152,64 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   // Back, the ⋯ menu and the picker commit a half-typed entry as leaving the input would; the screen may unmount before a blur (R29).
   useDraftFlush(() => (Object.keys(drafts) as InputKey[]).forEach(leave));
 
-  /** Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the focused field is the one ticked. */
+  /**
+   * Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the
+   * focused field is the one ticked; other rows are not flushed first (R48). A tick that is not ready ticks nothing: it
+   * points at the number to check, else at the missing field, focuses it and keeps the keyboard up (spec 18.6).
+   */
   const toggle = () => {
     if (set.done) {
       untick(db, set.id);
-    } else if (canTick && tick(db, ex, set, reading.entered, reading.weightUnit)) {
+      Keyboard.dismiss();
+      return;
+    }
+    if (!canTick) {
+      const { invalid, missing } = reading;
+      if (invalid.length > 0) {
+        setLeft((l) => [...l, ...invalid.filter((key) => !l.includes(key))]);
+        inputs.current[invalid[0]]?.focus();
+      } else {
+        setNeed(missing);
+        if (missing !== null) inputs.current[missing]?.focus();
+      }
+      warningHaptic();
+      return;
+    }
+    if (tick(db, ex, set, reading.entered, reading.weightUnit)) {
       // RPE is not part of a tick; save it if it is still being typed.
       if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
       setDrafts({});
       setLeft([]);
+      setNeed(null);
       lightHaptic();
     }
     Keyboard.dismiss();
+  };
+
+  /** The tick's look: filled when done; otherwise an open ring, dashed while it is not ready. */
+  const tickStyle = ({ pressed }: PressableStateCallbackType): ViewStyle => {
+    const shape: ViewStyle = {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: pressed ? 0.8 : 1,
+    };
+    if (set.done) {
+      return { ...shape, borderWidth: 1.5, borderColor: colors.text, borderStyle: 'solid', backgroundColor: colors.text };
+    }
+    const ring: ViewStyle = { borderWidth: 1.5, borderColor: colors.textMuted };
+    return { ...shape, ...ring, borderStyle: canTick ? 'solid' : 'dashed', backgroundColor: 'transparent' };
   };
 
   const input = (key: InputKey, header: string) => {
     const invalid = reading.invalid.includes(key) && left.includes(key);
     return (
       <TextInput
+        ref={(node) => {
+          inputs.current[key] = node;
+        }}
         value={drafts[key] ?? valueText(row, key, unit)}
         placeholder={hintText(row, key)}
         placeholderTextColor={colors.textMuted}
@@ -204,20 +278,10 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
             accessibilityRole="checkbox"
             accessibilityLabel={`Set ${row.label} done`}
             aria-checked={set.done}
-            disabled={!set.done && !canTick}
+            accessibilityHint={!set.done && !canTick && reading.missing !== null ? NEED_HINT[reading.missing] : undefined}
             onPress={toggle}
             hitSlop={4}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              borderWidth: 1.5,
-              borderColor: set.done ? colors.text : colors.textMuted,
-              backgroundColor: set.done ? colors.text : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: !set.done && !canTick ? 0.35 : pressed ? 0.8 : 1,
-            })}
+            style={tickStyle}
           >
             {set.done ? <Ionicons name="checkmark" size={24} color={colors.bg} /> : null}
           </Pressable>
@@ -247,9 +311,9 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
           </View>
         ))}
       </View>
-      {showHint ? (
+      {line !== null ? (
         <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 12, marginTop: 2 }}>
-          Check this number
+          {line}
         </Body>
       ) : null}
     </Pressable>

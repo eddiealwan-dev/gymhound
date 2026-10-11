@@ -55,7 +55,12 @@ jest.mock('expo-router', () => ({
   useNavigation: () => ({ addListener: () => () => {} }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(() => Promise.resolve()), ImpactFeedbackStyle: { Light: 'light' } }));
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(() => Promise.resolve()),
+  ImpactFeedbackStyle: { Light: 'light' },
+  notificationAsync: jest.fn(() => Promise.resolve()),
+  NotificationFeedbackType: { Warning: 'warning' },
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../db/repositories/settingsRepo', () => ({ getSettings: jest.fn(), setSetting: jest.fn() }));
