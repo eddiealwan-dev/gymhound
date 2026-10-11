@@ -11,9 +11,14 @@ const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assist
 
 const hasWeight = (exercise: UpNextLoadInput) => exercise.nextWeight !== null && exercise.nextWeightUnit !== null;
 
+/** Some exercise of the day has a weight (both the value and its unit). */
+export function upNextDayHasWeight(exercises: readonly UpNextLoadInput[]): boolean {
+  return exercises.some(hasWeight);
+}
+
 /** A day needs weights when some exercise's type needs a load and no exercise of the day has a weight. */
 export function upNextNeedsWeights(exercises: readonly UpNextLoadInput[]): boolean {
-  return exercises.some((exercise) => NEEDS_LOAD.includes(exercise.loggingType)) && !exercises.some(hasWeight);
+  return exercises.some((exercise) => NEEDS_LOAD.includes(exercise.loggingType)) && !upNextDayHasWeight(exercises);
 }
 
 /** The weight; '—' when the type needs a load, it has none, and another exercise of the day has one; else null. */

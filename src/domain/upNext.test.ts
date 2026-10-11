@@ -1,5 +1,5 @@
 import type { LoggingType, WeightUnit } from './types';
-import { dayTitle, startDayLabel, upNextLoad, upNextNeedsWeights, upNextSubtitle } from './upNext';
+import { dayTitle, startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextSubtitle } from './upNext';
 
 const w = (nextWeight: number | null, unit: WeightUnit | null = nextWeight === null ? null : 'kg') => ({
   loggingType: 'weighted' as const,
@@ -32,6 +32,19 @@ describe('upNextLoad', () => {
 
   it('still shows the weight of a bodyweight-plus exercise that has one', () => {
     expect(upNextLoad({ loggingType: 'bodyweight_plus', nextWeight: 10, nextWeightUnit: 'kg' }, true)).toBe('10 kg');
+  });
+});
+
+describe('upNextDayHasWeight', () => {
+  it('is true when any exercise of the day has a weight and its unit', () => {
+    expect(upNextDayHasWeight([w(null), w(60)])).toBe(true);
+    expect(upNextDayHasWeight([none('timed'), { loggingType: 'bodyweight_plus', nextWeight: 10, nextWeightUnit: 'kg' }])).toBe(true);
+  });
+
+  it('is false when no exercise has both a weight and a unit', () => {
+    expect(upNextDayHasWeight([w(null), none('timed')])).toBe(false);
+    expect(upNextDayHasWeight([w(60, null)])).toBe(false);
+    expect(upNextDayHasWeight([])).toBe(false);
   });
 });
 

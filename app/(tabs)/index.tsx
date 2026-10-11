@@ -15,7 +15,7 @@ import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } fr
 import { formatRepScheme } from '../../src/domain/labels';
 import { computeStreak } from '../../src/domain/streak';
 import type { WeightUnit } from '../../src/domain/types';
-import { startDayLabel, upNextLoad, upNextNeedsWeights, upNextSubtitle } from '../../src/domain/upNext';
+import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
@@ -144,7 +144,7 @@ function ChangeRoutineLink() {
 
 /** The next day of the active routine: its name, when it was last done, a button that starts it, and its exercises. */
 function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: string; onStart: (dayId: string) => void }) {
-  const dayHasWeight = upNext.exercises.some((exercise) => exercise.nextWeight !== null && exercise.nextWeightUnit !== null);
+  const dayHasWeight = upNextDayHasWeight(upNext.exercises);
   return (
     <Card>
       <Eyebrow>UP NEXT</Eyebrow>
@@ -160,10 +160,12 @@ function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: strin
       {upNext.exercises.map((exercise) => {
         const load = upNextLoad(exercise, dayHasWeight);
         const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
-        // At a large text size the scheme drops under the name rather than squeezing it.
+        // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
+        // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
+        // pushes the scheme to the right edge.
         return (
           <View key={exercise.routineExerciseId} style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, paddingVertical: 8 }}>
-            <Body style={{ flex: 1, minWidth: 0 }}>{exercise.name}</Body>
+            <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
             <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
               {load === null ? scheme : `${scheme} · ${load}`}
             </Body>

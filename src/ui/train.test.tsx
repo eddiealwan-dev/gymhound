@@ -277,7 +277,13 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
 
     expect(StyleSheet.flatten(row.props.style)).toEqual(expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8 }));
     expect(right.parent).toBe(row);
-    expect(StyleSheet.flatten(name.props.style)).toEqual(expect.objectContaining({ flex: 1, minWidth: 0 }));
-    expect(StyleSheet.flatten(right.props.style).flexShrink).toBeUndefined();
+    // flex: 1 would give the name a flex basis of 0, so the row would never wrap and the name would be squeezed.
+    const nameStyle = StyleSheet.flatten(name.props.style);
+    expect(nameStyle).toEqual(expect.objectContaining({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
+    expect(nameStyle.flex).toBeUndefined();
+    const rightStyle = StyleSheet.flatten(right.props.style);
+    expect(rightStyle.flex).toBeUndefined();
+    expect(rightStyle.flexShrink).toBeUndefined();
+    expect(rightStyle.flexGrow).toBeUndefined();
   });
 });
