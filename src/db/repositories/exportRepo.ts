@@ -1,6 +1,23 @@
 import { and, asc, eq } from 'drizzle-orm';
-import { buildFoodCsvRows, buildWorkoutCsvRows, deviceOffsetMinutes, type CsvValue } from '../../domain/csv';
-import { exercises, foodLog, routineDays, routines, sets, workoutExercises, workouts } from '../schema';
+import {
+  buildBodyCsvRows,
+  buildFoodCsvRows,
+  buildWorkoutCsvRows,
+  deviceOffsetMinutes,
+  type BodyCsvEntry,
+  type CsvValue,
+} from '../../domain/csv';
+import {
+  bodyweight,
+  exercises,
+  foodLog,
+  measurements,
+  routineDays,
+  routines,
+  sets,
+  workoutExercises,
+  workouts,
+} from '../schema';
 import type { Db } from '../types';
 
 /**
@@ -67,4 +84,30 @@ export function foodCsvRows(db: Db, offsetAt: (epochMs: number) => number = devi
     .orderBy(asc(foodLog.localDate), asc(foodLog.loggedAt), asc(foodLog.id))
     .all();
   return buildFoodCsvRows(entries, offsetAt);
+}
+
+/**
+ * The rows of the body CSV (R183): every bodyweight entry and every measurement together, by date, then the time
+ * measured, then kind in the Body order. Each value is written as stored, in the unit it was logged in. Free. Times
+ * carry the offset `offsetAt` gives for each instant: by default the device's own at that instant.
+ */
+export function bodyCsvRows(db: Db, offsetAt: (epochMs: number) => number = deviceOffsetMinutes): CsvValue[][] {
+  const weights: BodyCsvEntry[] = db
+    .select({ localDate: bodyweight.localDate, measuredAt: bodyweight.measuredAt, value: bodyweight.weight, unit: bodyweight.unit })
+    .from(bodyweight)
+    .orderBy(asc(bodyweight.localDate), asc(bodyweight.measuredAt), asc(bodyweight.id))
+    .all()
+    .map((e) => ({ ...e, kind: 'bodyweight' }));
+  const others: BodyCsvEntry[] = db
+    .select({
+      localDate: measurements.localDate,
+      measuredAt: measurements.measuredAt,
+      kind: measurements.kind,
+      value: measurements.value,
+      unit: measurements.unit,
+    })
+    .from(measurements)
+    .orderBy(asc(measurements.localDate), asc(measurements.measuredAt), asc(measurements.id))
+    .all();
+  return buildBodyCsvRows([...weights, ...others], offsetAt);
 }

@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
 import { announce } from '../platform/announce';
-import { exportFoodCsv, exportWorkoutsCsv } from '../platform/exportFiles';
+import { exportBodyCsv, exportFoodCsv, exportWorkoutsCsv } from '../platform/exportFiles';
 import { shareFile } from '../state/backup';
 import { bumpData } from '../state/dataVersion';
 
@@ -26,7 +26,7 @@ jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: () => ({ ...mockStored }), setSetting: jest.fn() }));
 jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() }));
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
-jest.mock('../platform/exportFiles', () => ({ exportWorkoutsCsv: jest.fn(), exportFoodCsv: jest.fn() }));
+jest.mock('../platform/exportFiles', () => ({ exportWorkoutsCsv: jest.fn(), exportFoodCsv: jest.fn(), exportBodyCsv: jest.fn() }));
 jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../state/backup', () => ({
   snapshotListing: () => ({ path: '/docs/snapshots/gymhound-20261009-090000-000.db', names: [], error: null }),
@@ -54,6 +54,7 @@ jest.mock('./ThemeProvider', () => {
 
 const EXPORT = 'Export workouts (CSV)';
 const FOOD = 'Export food (CSV)';
+const BODY = 'Export body (CSV)';
 const SHARE_FAILED = "Couldn't open the share sheet.";
 
 function mount(): ReactTestRenderer {
@@ -87,6 +88,7 @@ const originalOS = Platform.OS;
 beforeEach(() => {
   jest.mocked(exportWorkoutsCsv).mockReset();
   jest.mocked(exportFoodCsv).mockReset();
+  jest.mocked(exportBodyCsv).mockReset();
   jest.mocked(announce).mockClear();
   jest.mocked(shareFile).mockClear();
 });
@@ -119,11 +121,11 @@ describe('Settings: Backups wording (Task 27)', () => {
 });
 
 describe('Settings: Export (Task 27)', () => {
-  it('comes after Backups, with Export workouts (CSV) and then Export food (CSV)', () => {
+  it('comes after Backups, with Export workouts (CSV), Export food (CSV) and then Export body (CSV)', () => {
     const all = lines(mount());
 
     expect(all.indexOf('Export')).toBeGreaterThan(all.indexOf('Backups'));
-    expect(exportLines(mount())).toEqual([EXPORT, FOOD]);
+    expect(exportLines(mount())).toEqual([EXPORT, FOOD, BODY]);
   });
 
   it('exports with the time it was pressed and says nothing more when the share sheet opens', async () => {
@@ -137,7 +139,7 @@ describe('Settings: Export (Task 27)', () => {
     const [db, now] = jest.mocked(exportWorkoutsCsv).mock.calls[0];
     expect(db).toBe('db');
     expect(now).toBeGreaterThanOrEqual(before);
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);
   });
 
   it('says there is nothing to export before the first finished workout', async () => {
@@ -146,7 +148,7 @@ describe('Settings: Export (Task 27)', () => {
 
     await press(tree, EXPORT);
 
-    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD, BODY]);
     expect(announce).toHaveBeenCalledWith('No finished workouts yet.');
   });
 
@@ -156,7 +158,7 @@ describe('Settings: Export (Task 27)', () => {
 
     await press(tree, EXPORT);
 
-    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD, BODY]);
     expect(announce).toHaveBeenCalledWith(SHARE_FAILED);
   });
 
@@ -165,11 +167,11 @@ describe('Settings: Export (Task 27)', () => {
     const tree = mount();
 
     await press(tree, EXPORT);
-    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD, BODY]);
     expect(announce).toHaveBeenCalledWith(SHARE_FAILED);
 
     await press(tree, EXPORT);
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);
     expect(announce).toHaveBeenCalledTimes(1);
   });
 
@@ -215,11 +217,11 @@ describe('Settings: Export (Task 27)', () => {
     jest.mocked(exportWorkoutsCsv).mockResolvedValue('empty');
     const tree = mount();
     await press(tree, EXPORT);
-    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD, BODY]);
 
     act(() => bumpData());
 
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);
   });
 
   it('has no export button on web, only the phone-app line', () => {
@@ -245,7 +247,7 @@ describe('Settings: Export food (CSV) (§11, R153)', () => {
     const [db, now] = jest.mocked(exportFoodCsv).mock.calls[0];
     expect(db).toBe('db');
     expect(now).toBeGreaterThanOrEqual(before);
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);
     expect(announce).not.toHaveBeenCalled();
   });
 
@@ -260,7 +262,7 @@ describe('Settings: Export food (CSV) (§11, R153)', () => {
 
     await press(tree, FOOD);
 
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD, 'No food logged yet.']);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, 'No food logged yet.', BODY]);
     expect(announce).toHaveBeenCalledWith('No food logged yet.');
     const message = tree.root.findAllByType(Text).find((n) => n.props.children === 'No food logged yet.')!;
     expect(message.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]));
@@ -272,10 +274,10 @@ describe('Settings: Export food (CSV) (§11, R153)', () => {
     const tree = mount();
 
     await press(tree, FOOD);
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD, SHARE_FAILED]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, SHARE_FAILED, BODY]);
 
     await press(tree, FOOD);
-    expect(exportLines(tree)).toEqual([EXPORT, FOOD, SHARE_FAILED]);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, SHARE_FAILED, BODY]);
     expect(announce).toHaveBeenCalledTimes(2);
     expect(announce).toHaveBeenLastCalledWith(SHARE_FAILED);
   });
@@ -288,7 +290,7 @@ describe('Settings: Export food (CSV) (§11, R153)', () => {
     await press(tree, FOOD);
     await press(tree, EXPORT);
 
-    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD]);
+    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD, BODY]);
   });
 
   it('ignores either button while an export is running, so two share sheets never open', async () => {
@@ -312,5 +314,82 @@ describe('Settings: Export food (CSV) (§11, R153)', () => {
     Platform.OS = 'web';
 
     expect(mount().root.findAll((n) => n.props.label === FOOD)).toHaveLength(0);
+  });
+});
+
+describe('Settings: Export body (CSV) (R183)', () => {
+  it('exports the body entries with the time it was pressed and says nothing more when the share sheet opens', async () => {
+    jest.mocked(exportBodyCsv).mockResolvedValue('shared');
+    const tree = mount();
+    const before = Date.now();
+
+    await press(tree, BODY);
+
+    expect(exportBodyCsv).toHaveBeenCalledTimes(1);
+    expect(exportWorkoutsCsv).not.toHaveBeenCalled();
+    expect(exportFoodCsv).not.toHaveBeenCalled();
+    const [db, now] = jest.mocked(exportBodyCsv).mock.calls[0];
+    expect(db).toBe('db');
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it('is there for a free user too', () => {
+    expect(button(mount(), BODY).props.disabled).toBe(false);
+  });
+
+  it('says no body entries yet, under its own button, muted, and tells the screen reader', async () => {
+    jest.mocked(exportBodyCsv).mockResolvedValue('empty');
+    const tree = mount();
+
+    await press(tree, BODY);
+
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY, 'No body entries yet.']);
+    expect(announce).toHaveBeenCalledWith('No body entries yet.');
+    const message = tree.root.findAllByType(Text).find((n) => n.props.children === 'No body entries yet.')!;
+    expect(message.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]));
+  });
+
+  it("says the share sheet couldn't open when sharing is unavailable or the export throws", async () => {
+    jest.mocked(exportBodyCsv).mockResolvedValueOnce('unavailable').mockRejectedValueOnce(new Error('disk full'));
+    const tree = mount();
+
+    await press(tree, BODY);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY, SHARE_FAILED]);
+
+    await press(tree, BODY);
+    expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY, SHARE_FAILED]);
+    expect(announce).toHaveBeenCalledTimes(2);
+    expect(announce).toHaveBeenLastCalledWith(SHARE_FAILED);
+  });
+
+  it('fades all three buttons and ignores them while any export is running', async () => {
+    let finish!: (result: 'shared') => void;
+    jest.mocked(exportBodyCsv).mockReturnValueOnce(new Promise((resolve) => (finish = resolve))).mockResolvedValueOnce('shared');
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('shared');
+    jest.mocked(exportFoodCsv).mockResolvedValue('shared');
+    const tree = mount();
+
+    await press(tree, BODY);
+    await press(tree, EXPORT);
+    await press(tree, FOOD);
+    await press(tree, BODY);
+
+    expect(exportWorkoutsCsv).not.toHaveBeenCalled();
+    expect(exportFoodCsv).not.toHaveBeenCalled();
+    expect(exportBodyCsv).toHaveBeenCalledTimes(1);
+    expect([EXPORT, FOOD, BODY].map((label) => button(tree, label).props.disabled)).toEqual([true, true, true]);
+
+    await act(async () => finish('shared'));
+    expect([EXPORT, FOOD, BODY].map((label) => button(tree, label).props.disabled)).toEqual([false, false, false]);
+    await press(tree, BODY);
+    expect(exportBodyCsv).toHaveBeenCalledTimes(2);
+  });
+
+  it('has no body export button on web', () => {
+    Platform.OS = 'web';
+
+    expect(mount().root.findAll((n) => n.props.label === BODY)).toHaveLength(0);
   });
 });
