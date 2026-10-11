@@ -26,10 +26,10 @@ const CANDIDATE_COLUMNS = {
  * workout, then the set's position. The logging type is the exercise's current one. Sets of the active workout are
  * neither read nor written. Only rows whose flags change are updated, batched by flag value.
  *
- * Spec 7.12 step 2 (phase 6) reuses this after an edit to history. The caller passes every exercise whose history
- * changed: on a replace, both the old and the new exercise id (the old one's later sets may now be PRs, the new one's
- * may stop being); before deleting a workout, collect its exercise ids first (the rows are gone afterwards), then
- * recompute them once the delete is done.
+ * Spec 7.12 step 2: `saveWorkoutEdit` and `deleteFinishedWorkout` (`workoutHistoryRepo.ts`) call this inside their
+ * transactions with every exercise whose history changed: an edit passes each exercise the workout had before or
+ * after it (one whose every set was unticked is gone from the workout, but its later sets may now be PRs); a delete
+ * collects the workout's exercise ids first (the rows are gone afterwards), then recomputes them once it is done.
  */
 export function recomputePrFlags(db: Db, exerciseIds: readonly string[]): void {
   if (exerciseIds.length === 0) return;
