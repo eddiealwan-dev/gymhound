@@ -51,6 +51,11 @@ function sameLoad(a: Load, b: Load): boolean {
   );
 }
 
+/** R125's same load for two logged weights, for stall (7.5) and lift records (R174). */
+export function sameLoggedWeight(a: { value: number; unit: WeightUnit }, b: { value: number; unit: WeightUnit }): boolean {
+  return sameLoad({ ...a, kg: toKg(a.value, a.unit) }, { ...b, kg: toKg(b.value, b.unit) });
+}
+
 /** `a` is heavier than `b`: not the same load, and more in kg. */
 const heavier = (a: Load, b: Load) => !sameLoad(a, b) && a.kg > b.kg;
 
