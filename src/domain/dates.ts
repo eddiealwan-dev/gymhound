@@ -21,6 +21,25 @@ export function fromLocalDate(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** The local date `days` days after `localDate` (before, when negative), across months, years and DST changes. */
+export function shiftDay(localDate: string, days: number): string {
+  const d = fromLocalDate(localDate);
+  return toLocalDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).getTime());
+}
+
+/**
+ * A day as Fuel and water say it: "Today", "Yesterday", else the weekday and date laid out for the locale ("Fri, Oct 9"),
+ * with the year when it isn't this year ("Mon, Dec 15, 2025").
+ */
+export function dayTitle(localDate: string, today: string, locale: string): string {
+  if (localDate === today) return 'Today';
+  if (localDate === shiftDay(today, -1)) return 'Yesterday';
+  const sameYear = localDate.slice(0, 4) === today.slice(0, 4);
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', ...(sameYear ? null : { year: 'numeric' }) }).format(
+    fromLocalDate(localDate),
+  );
+}
+
 /** Whole calendar days from a to b (b minus a). Uses UTC so DST cannot shift the count. */
 export function daysBetween(a: string, b: string): number {
   const [ay, am, ad] = parseParts(a);

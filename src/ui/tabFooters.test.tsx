@@ -18,10 +18,23 @@ jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 // Routines holds the "Workout in progress" sheet (R80), which reads the safe area.
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(), setActiveRoutine: jest.fn() }));
+// What every read returns: Routines' list, unless a test says otherwise.
+const ROUTINES = [{ id: 'ppl', name: 'Push Pull Legs', dayCount: 6, isPremade: true, isActive: true }];
+let mockQueryResult: unknown = ROUTINES;
 jest.mock('../state/dataVersion', () => ({
   bumpData: jest.fn(),
-  useDbQuery: () => [{ id: 'ppl', name: 'Push Pull Legs', dayCount: 6, isPremade: true, isActive: true }],
+  useDbQuery: () => mockQueryResult,
 }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: () => undefined }));
+// Fuel: locked (the footer shows in every Fuel state); its water card has its own tests.
+jest.mock('../platform/entitlements', () => ({ ...jest.requireActual('../platform/entitlements'), useIsPro: () => false }));
+jest.mock('./fuel/WaterCard', () => ({ WaterCard: () => null }));
+// The pitch reads the store; its own tests cover it (paywall.test).
+jest.mock('./pro/ProPitch', () => ({ ProPitch: () => null }));
+
+beforeEach(() => {
+  mockQueryResult = ROUTINES;
+});
 
 function render(element: React.ReactElement) {
   let tree!: ReturnType<typeof create>;
@@ -42,6 +55,7 @@ describe('the GruntHound footer sits on Train, Fuel, History, Stats and Settings
   });
 
   it('shows on Fuel, as on Train (Task 26)', () => {
+    mockQueryResult = { targets: null, entries: [], trainingDay: false };
     const tree = render(<Fuel />);
     expect(JSON.stringify(tree.toJSON())).toContain('Fuel');
     expect(tree.root.findAllByType(Footer).length).toBe(1);

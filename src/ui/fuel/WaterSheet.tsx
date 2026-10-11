@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Text, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteWater, logWater, setWaterGoal, type WaterEntry } from '../../db/repositories/waterRepo';
+import { dayTitle } from '../../domain/dates';
 import type { WaterUnit } from '../../domain/types';
 import { formatWater, formatWaterSpoken, parseWaterAmount, parseWaterGoal, waterAmountText, waterUnitLabel, waterUnitSpoken } from '../../domain/water';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
-import { BodyField, CheckLine, formatEntryDate } from '../body/BodyLog';
+import { BodyField, CheckLine } from '../body/BodyLog';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { Body } from '../Text';
@@ -15,9 +16,11 @@ import { useTheme } from '../ThemeProvider';
 
 export type WaterSheetMode = 'other' | 'goal' | 'entries';
 
-/** "today", or "on Oct 10" for an earlier day. */
+/** The day as Fuel's header says it, in a sentence: "today", "yesterday", or "on Fri, Oct 9". */
 export function waterDayPhrase(localDate: string, today: string, locale: string): string {
-  return localDate === today ? 'today' : `on ${formatEntryDate(localDate, today, locale)}`;
+  const title = dayTitle(localDate, today, locale);
+  if (title === 'Today' || title === 'Yesterday') return title.toLowerCase();
+  return `on ${title}`;
 }
 
 /** What VoiceOver hears after water is added: "Added 250 ml. 1,250 ml today." (fl oz said in full). */
@@ -182,7 +185,7 @@ function EntryList({ localDate, today, unit, locale, entries, onClose }: Shared 
 
   return (
     <>
-      {/* "Water today" or "Water on Oct 10". */}
+      {/* "Water today", "Water yesterday" or "Water on Fri, Oct 9". */}
       <SheetTitle>{`Water ${waterDayPhrase(localDate, today, locale)}`}</SheetTitle>
       <View style={{ marginBottom: 16 }}>
         {entries.map((entry, i) => {

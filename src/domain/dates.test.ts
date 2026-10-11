@@ -1,4 +1,5 @@
 import {
+  dayTitle,
   daysBetween,
   formatDateTime,
   formatElapsed,
@@ -7,6 +8,7 @@ import {
   fromLocalDate,
   greetingFor,
   mondayOf,
+  shiftDay,
   toLocalDate,
 } from './dates';
 
@@ -88,5 +90,28 @@ describe('formatDateTime', () => {
   it('puts a late-night time on its own local day', () => {
     const at = new Date(2026, 9, 9, 23, 50).getTime();
     expect(spaced(formatDateTime(at, 'en-US'))).toBe('Oct 9, 2026, 11:50 PM');
+  });
+});
+
+describe('shiftDay', () => {
+  it('steps across months, years and a DST change', () => {
+    expect(shiftDay('2026-10-11', -1)).toBe('2026-10-10');
+    expect(shiftDay('2026-03-01', -1)).toBe('2026-02-28');
+    expect(shiftDay('2026-01-01', -1)).toBe('2025-12-31');
+    expect(shiftDay('2025-12-31', 1)).toBe('2026-01-01');
+    expect(shiftDay('2026-03-07', 2)).toBe('2026-03-09');
+    expect(shiftDay('2026-11-01', 1)).toBe('2026-11-02');
+    expect(shiftDay('2026-10-11', -300)).toBe('2025-12-15');
+  });
+});
+
+describe('dayTitle', () => {
+  it('says Today and Yesterday, else the weekday and date, with the year only for another year', () => {
+    expect(dayTitle('2026-10-11', '2026-10-11', 'en-US')).toBe('Today');
+    expect(dayTitle('2026-10-10', '2026-10-11', 'en-US')).toBe('Yesterday');
+    expect(dayTitle('2026-10-09', '2026-10-11', 'en-US')).toBe('Fri, Oct 9');
+    expect(dayTitle('2025-12-31', '2026-01-01', 'en-US')).toBe('Yesterday');
+    expect(dayTitle('2025-12-15', '2026-10-11', 'en-US')).toBe('Mon, Dec 15, 2025');
+    expect(dayTitle('2026-10-09', '2026-10-11', 'en-GB')).toBe('Fri 9 Oct');
   });
 });
