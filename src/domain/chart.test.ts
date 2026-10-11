@@ -1,4 +1,4 @@
-import { chartSummary, formatChartDate, LABEL_GAP_PT, markedSummary, niceTicks, placeLabels, plotSeries, pointsInDays, pointsInRange, rangeChange } from './chart';
+import { chartSummary, formatChartDate, LABEL_CLEARANCE_PT, LABEL_GAP_PT, markedSummary, niceTicks, placeLabels, plotSeries, pointsInDays, pointsInRange, rangeChange } from './chart';
 import type { ChartPoint, SeriesPoint } from './chart';
 
 const p = (localDate: string, value: number): SeriesPoint => ({ localDate, value });
@@ -237,6 +237,45 @@ describe('placeLabels (R173)', () => {
 
   it('takes another gap', () => {
     expect(placeLabels([dot(100, 'Pain'), dot(130, 'Stall')], 20)).toHaveLength(2);
+  });
+
+  describe('with measured widths (R191)', () => {
+    const fit = (widths: Record<string, number>, plotWidth = 300) => ({ widthOf: (label: string) => widths[label], plotWidth });
+
+    it('clears labels by 8pt between their spans', () => {
+      expect(LABEL_CLEARANCE_PT).toBe(8);
+    });
+
+    it('places one of two 78pt labels 60pt apart, though the dots are more than 56pt apart', () => {
+      expect(placeLabels([dot(100, 'Rough sleep'), dot(160, 'Short on food')], LABEL_GAP_PT, fit({ 'Rough sleep': 78, 'Short on food': 78 }))).toEqual([
+        { index: 1, label: 'Short on food', left: 121 },
+      ]);
+    });
+
+    it('places both when their spans clear by 8pt, each centred on its dot', () => {
+      expect(placeLabels([dot(100, 'Pain'), dot(170, 'Stall')], LABEL_GAP_PT, fit({ Pain: 30, Stall: 32 }))).toEqual([
+        { index: 1, label: 'Stall', left: 154 },
+        { index: 0, label: 'Pain', left: 85 },
+      ]);
+    });
+
+    it('at a large text size, wide labels need more room: 120pt labels 100pt apart place one, 130pt apart place both', () => {
+      const widths = { Sick: 120, Pain: 120 };
+      expect(placeLabels([dot(80, 'Sick'), dot(180, 'Pain')], LABEL_GAP_PT, fit(widths, 400))).toHaveLength(1);
+      expect(placeLabels([dot(80, 'Sick'), dot(210, 'Pain')], LABEL_GAP_PT, fit(widths, 400))).toHaveLength(2);
+    });
+
+    it('measures a span after clamping it inside the plot', () => {
+      // The newest, at the right edge, is pushed left to 200–300, so a label at 150–210 no longer clears it.
+      const placed = placeLabels([dot(180, 'Pain'), dot(295, 'Rough sleep')], LABEL_GAP_PT, fit({ Pain: 60, 'Rough sleep': 100 }));
+      expect(placed).toEqual([{ index: 1, label: 'Rough sleep', left: 200 }]);
+      // Clamped at the left edge too.
+      expect(placeLabels([dot(5, 'Pain')], LABEL_GAP_PT, fit({ Pain: 60 }))).toEqual([{ index: 0, label: 'Pain', left: 0 }]);
+    });
+
+    it('keeps 56pt between dots as the least, even for narrow labels', () => {
+      expect(placeLabels([dot(100, 'A'), dot(140, 'B')], LABEL_GAP_PT, fit({ A: 10, B: 10 }))).toHaveLength(1);
+    });
   });
 
   it('places nothing with no labels', () => {

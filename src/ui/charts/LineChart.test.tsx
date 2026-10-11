@@ -189,18 +189,41 @@ describe('LineChart', () => {
   });
 });
 
-describe('LineChart marks (R173)', () => {
+describe('LineChart marks (R173, R191)', () => {
   const marked = [
     { localDate: '2026-08-03', value: 180 },
     { localDate: '2026-09-01', value: 178.5, hollow: true, label: 'Rough sleep' },
     { localDate: '2026-10-10', value: 186, label: 'Stall' },
   ];
-  const labelText = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Text).find((t) => t.props.children === label);
+  const withText = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Text).filter((t) => t.props.children === label);
+  /** The label that is shown: the one not waiting to be measured. */
+  const shownLabel = (tree: ReactTestRenderer, label: string) => withText(tree, label).find((t) => StyleSheet.flatten(t.props.style).opacity !== 0);
+  /** Lays each label out at a width, as the phone would measure it. */
+  function measure(tree: ReactTestRenderer, widths: Record<string, number>) {
+    for (const [label, width] of Object.entries(widths)) {
+      for (const t of withText(tree, label).filter((n) => typeof n.props.onLayout === 'function')) {
+        act(() => t.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width, height: 16 } } }));
+      }
+    }
+  }
+  const absoluteTexts = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).filter((t) => StyleSheet.flatten(t.props.style).position === 'absolute');
 
-  it('an unmarked series draws exactly as before', () => {
+  it('an unmarked series draws as before: no extra room, plain dots, no labels', () => {
     const tree = render(<LineChart points={pts} formatValue={(v) => `${v} lb`} locale="en-GB" accessibilityLabel="Bodyweight" />);
-    layOut(tree);
-    expect(tree.toJSON()).toMatchSnapshot();
+    layOut(tree, 300);
+    const lines = tree.root.findAllByType(Line).map((l) => l.props.y1);
+    expect(Math.min(...lines)).toBe(8);
+    expect(Math.max(...lines)).toBe(172);
+    const dots = tree.root.findAllByType(Circle);
+    expect(dots).toHaveLength(3);
+    dots.forEach((d) => {
+      expect(d.props).toMatchObject({ r: 2, fill: '#f1ece2' });
+      expect(d.props.stroke).toBeUndefined();
+    });
+    // The dots sit DOT_RADIUS + 1 in from each side.
+    expect(dots[0].props.cx).toBe(3);
+    expect(dots[2].props.cx).toBe(297);
+    expect(absoluteTexts(tree)).toHaveLength(0);
   });
 
   it('draws a hollow point as a ring in the text colour filled with the card colour, and the rest as dots', () => {
@@ -219,43 +242,36 @@ describe('LineChart marks (R173)', () => {
     expect(tree.root.findAllByType(Circle)[1].props.fill).toBe('#100f0c');
   });
 
-  it('writes each placed label in the chart label style, 6pt over its dot', () => {
+  it('measures each label unseen first, so none shows in the wrong place', () => {
     const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
     layOut(tree);
+    expect(shownLabel(tree, 'Stall')).toBeUndefined();
+    expect(withText(tree, 'Stall')).toHaveLength(1);
+    expect(StyleSheet.flatten(withText(tree, 'Stall')[0].props.style).opacity).toBe(0);
+    // One measured is not enough: labels are placed together once every width is known.
+    measure(tree, { Stall: 30 });
+    expect(shownLabel(tree, 'Stall')).toBeUndefined();
+  });
+
+  it('writes each placed label in the chart label style, centred 6pt over its dot', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 300);
+    measure(tree, { 'Rough sleep': 70, Stall: 30 });
     const dots = tree.root.findAllByType(Circle);
-    for (const [label, i] of [['Rough sleep', 1], ['Stall', 2]] as const) {
-      const text = labelText(tree, label)!;
+    for (const [label, i, width] of [['Rough sleep', 1, 70], ['Stall', 2, 30]] as const) {
+      const text = shownLabel(tree, label)!;
       expect(text).toBeDefined();
       const style = StyleSheet.flatten(text.props.style);
       expect(style).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#a39d90', fontVariant: ['tabular-nums'], position: 'absolute' });
       expect(text.props.numberOfLines).toBe(1);
       expect((style.top as number) + (style.height as number)).toBeCloseTo(dots[i].props.cy - dots[i].props.r - 6, 6);
+      if (label === 'Rough sleep') expect(style.left).toBeCloseTo(dots[i].props.cx - width / 2, 6);
     }
-  });
-
-  it('centres a label over its dot once measured, and keeps it inside the plot', () => {
-    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
-    layOut(tree, 300);
-    const dots = tree.root.findAllByType(Circle);
-    const measure = (label: string, width: number) =>
-      act(() => labelText(tree, label)!.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width, height: 16 } } }));
-    measure('Rough sleep', 70);
-    const middle = StyleSheet.flatten(labelText(tree, 'Rough sleep')!.props.style);
-    expect(middle.left).toBeCloseTo(dots[1].props.cx - 35, 6);
-    expect(middle.opacity ?? 1).toBe(1);
     // The newest point sits at the right edge: its label ends there instead of running off.
-    measure('Stall', 30);
-    const last = StyleSheet.flatten(labelText(tree, 'Stall')!.props.style);
-    expect(last.left).toBe(300 - 30);
+    expect(StyleSheet.flatten(shownLabel(tree, 'Stall')!.props.style).left).toBe(300 - 30);
   });
 
-  it('hides a label until it is measured, so it never shows in the wrong place', () => {
-    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
-    layOut(tree);
-    expect(StyleSheet.flatten(labelText(tree, 'Stall')!.props.style).opacity).toBe(0);
-  });
-
-  it('skips a label too close to a newer one', () => {
+  it('skips a label whose dot is too close to a newer one', () => {
     const close = [
       { localDate: '2026-10-01', value: 180, hollow: true, label: 'Pain' },
       { localDate: '2026-10-02', value: 181, label: 'Stall' },
@@ -263,8 +279,58 @@ describe('LineChart marks (R173)', () => {
     ];
     const tree = render(<LineChart points={close} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
     layOut(tree, 300);
-    expect(labelText(tree, 'Stall')).toBeDefined();
-    expect(labelText(tree, 'Pain')).toBeUndefined();
+    measure(tree, { Pain: 30, Stall: 30 });
+    expect(shownLabel(tree, 'Stall')).toBeDefined();
+    expect(shownLabel(tree, 'Pain')).toBeUndefined();
+  });
+
+  // Four days over a 600pt plot: the two marked dots are 60pt apart.
+  const wide = [
+    { localDate: '2026-10-01', value: 180 },
+    { localDate: '2026-10-11', value: 181, hollow: true, label: 'Rough sleep' },
+    { localDate: '2026-10-13', value: 182, hollow: true, label: 'Short on food' },
+    { localDate: '2026-10-21', value: 183 },
+  ];
+
+  it('places one of two 78pt labels whose dots are 60pt apart, as their spans overlap (R191)', () => {
+    const tree = render(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 612);
+    const dots = tree.root.findAllByType(Circle);
+    expect(dots[2].props.cx - dots[1].props.cx).toBe(60);
+    measure(tree, { 'Rough sleep': 78, 'Short on food': 78 });
+    expect(shownLabel(tree, 'Short on food')).toBeDefined();
+    expect(shownLabel(tree, 'Rough sleep')).toBeUndefined();
+    // Narrow enough to clear by 8pt, both show.
+    const narrow = render(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(narrow, 612);
+    measure(narrow, { 'Rough sleep': 50, 'Short on food': 50 });
+    expect(shownLabel(narrow, 'Short on food')).toBeDefined();
+    expect(shownLabel(narrow, 'Rough sleep')).toBeDefined();
+  });
+
+  it('at a large text size, wider labels place fewer, measured again at that size', () => {
+    mockFontScale = 2;
+    const tree = render(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 612);
+    measure(tree, { 'Rough sleep': 50, 'Short on food': 50 });
+    expect(shownLabel(tree, 'Rough sleep')).toBeDefined();
+    // The same labels at twice the size no longer clear each other.
+    mockFontScale = 3;
+    act(() => tree.update(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />));
+    expect(shownLabel(tree, 'Short on food')).toBeUndefined();
+    measure(tree, { 'Rough sleep': 100, 'Short on food': 100 });
+    expect(shownLabel(tree, 'Short on food')).toBeDefined();
+    expect(shownLabel(tree, 'Rough sleep')).toBeUndefined();
+  });
+
+  it('keys a measured width by the label, so the same word elsewhere needs no new measure', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 300);
+    measure(tree, { 'Rough sleep': 70, Stall: 30 });
+    const moved = [{ localDate: '2026-07-01', value: 175 }, ...marked];
+    act(() => tree.update(<LineChart points={moved} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />));
+    expect(shownLabel(tree, 'Rough sleep')).toBeDefined();
+    expect(shownLabel(tree, 'Stall')).toBeDefined();
   });
 
   it('keeps a label line clear above the top tick when a label is placed', () => {
@@ -276,9 +342,17 @@ describe('LineChart marks (R173)', () => {
     expect(Math.max(...lines)).toBe(172);
   });
 
+  it('stays one accessible image with its labels inside', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    measure(tree, { 'Rough sleep': 70, Stall: 30 });
+    expect(tree.root.findAll((n) => n.props.accessible === true && typeof n.type === 'string')).toHaveLength(1);
+  });
+
   it('never uses red', () => {
     const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
     layOut(tree);
+    measure(tree, { 'Rough sleep': 70, Stall: 30 });
     const values = allPropValues(tree.root).map((s) => s.toUpperCase());
     expect(values).toContain('#F1ECE2');
     expect(values).not.toContain('#E10600');

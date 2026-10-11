@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { Text, useWindowDimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import { formatChartDate, placeLabels, plotSeries } from '../../domain/chart';
+import { formatChartDate, LABEL_GAP_PT, placeLabels, plotSeries } from '../../domain/chart';
 import type { ChartPoint } from '../../domain/chart';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
@@ -47,14 +47,15 @@ function byDate(a: ChartPoint, b: ChartPoint): number {
  * A hand-drawn line chart (R116): a 2px line in the text colour with a dot at each point, a hairline grid at the y
  * ticks with their labels on the left, and the first and last dates under the axis. One point is a dot only; no points
  * draws nothing, so the screen shows its own empty text. The whole chart is one accessible element. Never red.
- * Marked points (R173): a hollow point is a ring; labels are placed newest first, 56pt apart, centred over their dots,
- * and the plot keeps a label line clear above the top tick when any is placed.
+ * Marked points (R173, R191): a hollow point is a ring; labels are placed newest first, their dots at least 56pt apart
+ * and their measured spans at least 8pt apart, centred over their dots, and the plot keeps a label line clear above the
+ * top tick when any label is placed.
  */
 export function LineChart({ points, formatValue, locale, height = 180, accessibilityLabel, dotFill }: LineChartProps): ReactElement | null {
   const { colors } = useTheme();
   const { fontScale } = useWindowDimensions();
   const [width, setWidth] = useState(0);
-  // Each mark label's measured width, keyed by its point and word, so it can be centred over its dot.
+  // Each mark label's measured width, keyed by the text size and the word, so a word is measured once per size.
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({});
   // Oldest first, as plotSeries lays the dots out (both sorts are stable), so a dot's index is its point's.
   const drawable = points.filter((pt) => Number.isFinite(pt.value)).sort(byDate);
@@ -86,18 +87,23 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
   const smallText = { fontFamily: fonts.body400, fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, color: colors.textMuted, fontVariant: ['tabular-nums' as const] };
   const onLayout = (e: LayoutChangeEvent) => setWidth(Math.floor(e.nativeEvent.layout.width));
 
-  const placed = anyLabel ? placeLabels(plotted.dots.map((dot, i) => ({ x: dot.x, y: dot.y, label: drawable[i].label ?? null }))) : [];
-  const marks = placed.map(({ index, label }) => {
+  // Mark labels (R173, R191): each word is measured once per text size, unseen; once every word's width is known, the
+  // labels are placed newest first by their dots' gap and their spans' clearance, centred and kept inside the plot.
+  const widthKey = (label: string) => `${fontScale}:${label}`;
+  const words = anyLabel ? [...new Set(drawable.map((pt) => pt.label).filter((l): l is string => l != null && l !== ''))] : [];
+  const unmeasured = words.filter((w) => labelWidths[widthKey(w)] === undefined);
+  const dotsWithLabels = plotted.dots.map((dot, i) => ({ x: dot.x, y: dot.y, label: drawable[i].label ?? null }));
+  const placed =
+    anyLabel && unmeasured.length === 0 ? placeLabels(dotsWithLabels, LABEL_GAP_PT, { widthOf: (l) => labelWidths[widthKey(l)], plotWidth: width }) : [];
+  const marks = placed.map(({ index, label, left }) => {
     const dot = plotted.dots[index];
-    const key = `${index}:${label}`;
-    const measured = labelWidths[key];
     const radius = drawable[index].hollow ? RING_RADIUS : DOT_RADIUS;
-    // Its bottom LABEL_RISE over the dot, kept inside the plot; centred across once its width is known.
+    // Its bottom LABEL_RISE over the dot, kept inside the plot.
     const top = Math.min(Math.max(dot.y - radius - LABEL_RISE - lineHeight, 0), height - lineHeight);
-    const left = measured === undefined ? 0 : Math.min(Math.max(dot.x - measured / 2, 0), Math.max(width - measured, 0));
-    return { key, label, top, left, shown: measured !== undefined };
+    return { key: `${index}:${label}`, label, top, left: left ?? 0 };
   });
-  const measureLabel = (key: string) => (e: LayoutChangeEvent) => {
+  const measureLabel = (label: string) => (e: LayoutChangeEvent) => {
+    const key = widthKey(label);
     const w = e.nativeEvent.layout.width;
     setLabelWidths((prev) => (prev[key] === w ? prev : { ...prev, [key]: w }));
   };
@@ -133,16 +139,23 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
               )}
             </Svg>
           )}
-          {/* Mark labels over their dots. Each is first laid out unseen at the left edge, where it has the whole width
-              for its one line, then centred over its dot and kept inside the plot. */}
+          {/* Words not yet measured at this text size, laid out unseen at the top left, where each has the whole width
+              for its one line. */}
           {width > 0 &&
-            marks.map(({ key, label, top, left, shown }) => (
+            unmeasured.map((label) => (
               <Text
-                key={key}
-                onLayout={measureLabel(key)}
+                key={`measure:${label}`}
+                onLayout={measureLabel(label)}
                 numberOfLines={1}
-                style={[smallText, { position: 'absolute', top, left, height: lineHeight, opacity: shown ? 1 : 0 }]}
+                style={[smallText, { position: 'absolute', top: 0, left: 0, height: lineHeight, opacity: 0 }]}
               >
+                {label}
+              </Text>
+            ))}
+          {/* The placed mark labels over their dots. */}
+          {width > 0 &&
+            marks.map(({ key, label, top, left }) => (
+              <Text key={key} numberOfLines={1} style={[smallText, { position: 'absolute', top, left, height: lineHeight }]}>
                 {label}
               </Text>
             ))}

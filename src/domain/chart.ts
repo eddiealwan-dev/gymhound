@@ -136,25 +136,47 @@ export function chartSummary(points: readonly SeriesPoint[], formatValue: (v: nu
  */
 export type ChartPoint = SeriesPoint & { hollow?: boolean; label?: string | null };
 
-/** Two placed labels are at least this far apart across the chart (R173). */
+/** Two placed labels' dots are at least this far apart across the chart (R173). */
 export const LABEL_GAP_PT = 56;
+/** Once widths are known, two placed labels' spans are at least this far apart (R191). */
+export const LABEL_CLEARANCE_PT = 8;
+
+/** The measured labels' widths and the plot's width, for placing labels by their spans (R191). */
+export type LabelFit = { widthOf: (label: string) => number; plotWidth: number; clearance?: number };
+
+/** A label's left edge: centred on `x`, then kept inside the plot (the left edge wins when it is wider than the plot). */
+export function labelLeft(x: number, width: number, plotWidth: number): number {
+  return Math.max(Math.min(x - width / 2, plotWidth - width), 0);
+}
 
 /**
- * Which labels fit (R173): newest (last) first, a label is skipped when it is within `minGap` across of one already
- * placed. Returned in the order placed. Skipped labels still show in the screen's list and the VoiceOver label.
+ * Which labels fit (R173, R191): newest (last) first, a label is skipped when its dot is within `minGap` across of a
+ * placed one's, or, given `fit`, when its span (centred over its dot and kept inside the plot) comes within the
+ * clearance (8pt) of a placed one's. Returned in the order placed, with each one's left edge when `fit` is given.
+ * Skipped labels still show in the screen's list and the VoiceOver label.
  */
 export function placeLabels(
   dots: readonly { x: number; y: number; label: string | null }[],
   minGap: number = LABEL_GAP_PT,
-): { index: number; label: string }[] {
-  const placed: { index: number; label: string; x: number }[] = [];
+  fit?: LabelFit,
+): { index: number; label: string; left?: number }[] {
+  const clearance = fit?.clearance ?? LABEL_CLEARANCE_PT;
+  const placed: { index: number; label: string; x: number; left?: number; right?: number }[] = [];
   for (let i = dots.length - 1; i >= 0; i--) {
     const { x, label } = dots[i];
     if (label === null || label === '') continue;
     if (placed.some((other) => Math.abs(other.x - x) < minGap)) continue;
-    placed.push({ index: i, label, x });
+    if (!fit) {
+      placed.push({ index: i, label, x });
+      continue;
+    }
+    const width = fit.widthOf(label);
+    const left = labelLeft(x, width, fit.plotWidth);
+    const right = left + width;
+    const clears = placed.every((other) => left >= other.right! + clearance || right <= other.left! - clearance);
+    if (clears) placed.push({ index: i, label, x, left, right });
   }
-  return placed.map(({ index, label }) => ({ index, label }));
+  return placed.map(({ index, label, left }) => (left === undefined ? { index, label } : { index, label, left }));
 }
 
 /**
