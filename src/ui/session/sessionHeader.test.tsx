@@ -58,6 +58,12 @@ jest.mock('./ExerciseBlock', () => ({
 }));
 jest.mock('./ExerciseMenu', () => ({ ExerciseMenu: () => null }));
 jest.mock('./RestBar', () => ({ RestBar: () => null }));
+jest.mock('./FoodOfferBanner', () => ({
+  FoodOfferBanner: (props: { workoutId: string }) => {
+    const { Text: MockText } = jest.requireActual<typeof import('react-native')>('react-native');
+    return <MockText testID="food-offer-slot">{`offer for ${props.workoutId}`}</MockText>;
+  },
+}));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -288,5 +294,23 @@ describe('Back to Train returns to the Train screen already there, without stack
 
     expect(router.dismissTo).toHaveBeenCalledWith('/');
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Short on food offer slot (phase 5, §7.10)', () => {
+  it('sits directly under the session header, outside the scroll, above the first exercise', () => {
+    const tree = mount();
+    const slot = tree.root.findAll((n) => n.props.testID === 'food-offer-slot' && n.type === Text);
+    expect(slot).toHaveLength(1);
+    expect(slot[0].props.children).toBe('offer for w1');
+    // Outside the ScrollView that holds the exercises.
+    const scroll = tree.root.findByType(ScrollView);
+    expect(scroll.findAll((n) => n.props.testID === 'food-offer-slot')).toHaveLength(0);
+    // Among the screen's own children: right after the header, right before the scroll.
+    const screen = scroll.parent!;
+    const kids = screen.children as unknown as { props: Record<string, unknown> }[];
+    const at = kids.indexOf(scroll as unknown as (typeof kids)[number]);
+    expect(kids[at - 1].props.workoutId).toBe('w1');
+    expect(kids[at - 2].props).toMatchObject({ name: 'Push A', startedAt: 1_000 });
   });
 });

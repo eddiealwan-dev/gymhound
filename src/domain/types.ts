@@ -82,3 +82,10 @@ export type MusicAppId = 'apple-music' | 'spotify' | 'audible';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type MeasurementSystem = 'us' | 'metric' | 'uk' | null;
+
+/** Calories and grams of protein, carbs and fat for one day's target (spec §6). Carbs and fat are optional (R145). */
+export type Macros = { kcal: number; protein: number; carbs: number | null; fat: number | null };
+/** The stored `fuel_targets` setting: training-day and rest-day targets (§7.11). */
+export type FuelTargets = { training: Macros; rest: Macros };
+/** How water is shown and typed: ml for kg users, fl oz for lb users (R150). Always stored in ml. */
+export type WaterUnit = 'ml' | 'fl_oz';

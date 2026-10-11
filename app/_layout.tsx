@@ -179,6 +179,10 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="exercise/[id]" options={{ presentation: 'modal' }} />
         {/* The summary of the workout just finished. Done leaves it. */}
         <Stack.Screen name="finish/[id]" options={{ presentation: 'fullScreenModal' }} />
+        {/* Phase 5 (R154): the paywall, full screen above the tabs with no dock (§8.1); adding food and your own foods rise over Fuel. */}
+        <Stack.Screen name="paywall" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="food/add" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="food/[id]" options={{ presentation: 'modal' }} />
       </Stack>
       {/* Rings the end of the rest timer wherever the user is in the app. */}
       <RestWatcher />

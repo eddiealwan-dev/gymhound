@@ -1,9 +1,9 @@
-import type { BellSound, DistanceUnit, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
+import type { BellSound, DistanceUnit, FuelTargets, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
 import { defaultUnitFor } from '../../domain/units';
 import { settings } from '../schema';
 import type { Db } from '../types';
 
-export type Macros = { kcal: number; protein: number; carbs: number | null; fat: number | null };
+export type { FuelTargets, Macros } from '../../domain/types';
 
 export type Settings = {
   theme: ThemePreference;
@@ -29,12 +29,14 @@ export type Settings = {
   /** Why the last snapshot attempt failed, and when; null once one works. Settings shows it while it is newer than `lastSnapshotAt`. */
   lastSnapshotError: { at: number; message: string } | null;
   activeRoutineId: string | null;
-  fuelTargets: null | { training: Macros; rest: Macros };
+  fuelTargets: FuelTargets | null;
   proDebugUnlock: boolean;
   proCached: boolean;
   seedVersion: number;
   /** Whether the PR flags of workouts finished before phase 4 have been written (R127). Runs once at launch. */
   prFlagsBackfilled: boolean;
+  /** The daily water goal in ml, or null until the user sets one (R150: no health default). */
+  waterGoalMl: number | null;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -61,6 +63,7 @@ const KEYS: Record<keyof Settings, string> = {
   proCached: 'pro_cached',
   seedVersion: 'seed_version',
   prFlagsBackfilled: 'pr_flags_backfilled',
+  waterGoalMl: 'water_goal_ml',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -90,6 +93,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     proCached: false,
     seedVersion: 0,
     prFlagsBackfilled: false,
+    waterGoalMl: null,
   };
 }
 
