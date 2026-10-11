@@ -5,10 +5,13 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import EditRoutine from '../../app/(tabs)/routines/edit/[id]';
 import { getRoutineDetail, routineToDraft, saveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
 import type { RoutineDetail } from '../db/repositories/routinesRepo';
+import { getSavedWorkout } from '../db/repositories/savedWorkoutsRepo';
+import type { SavedWorkoutDetail, SavedWorkoutSummary } from '../db/repositories/savedWorkoutsRepo';
 import type { RoutineDraft } from '../domain/routineDraft';
 import { bumpData } from '../state/dataVersion';
 import { leaveGuarded } from '../state/leaveGuard';
 import { usePendingPick } from '../state/pendingPick';
+import { announce } from '../platform/announce';
 import { Button } from './Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,20 +47,23 @@ jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: string) => u
 jest.mock('../db/repositories/settingsRepo', () => ({
   getSettings: () => ({ unit: 'kg', defaultIncrementLb: 5, defaultIncrementKg: 2.5 }),
 }));
-jest.mock('../db/repositories/exercisesRepo', () => {
-  const library: Record<string, { id: string; name: string; loggingType: string }> = {
-    bench: { id: 'bench', name: 'Barbell bench press', loggingType: 'weighted' },
-    row: { id: 'row', name: 'Barbell row', loggingType: 'weighted' },
-    plank: { id: 'plank', name: 'Plank', loggingType: 'timed' },
-  };
-  return { getExercise: (_db: unknown, id: string) => library[id] ?? null };
+/** The exercise library as the editor reads it; a test may delete or retype one while the editor is away. */
+let mockLibrary: Record<string, { id: string; name: string; loggingType: string }>;
+const LIBRARY = () => ({
+  bench: { id: 'bench', name: 'Barbell bench press', loggingType: 'weighted' },
+  row: { id: 'row', name: 'Barbell row', loggingType: 'weighted' },
+  plank: { id: 'plank', name: 'Plank', loggingType: 'timed' },
 });
+jest.mock('../db/repositories/exercisesRepo', () => ({ getExercise: (_db: unknown, id: string) => mockLibrary[id] ?? null }));
+let mockSaved: SavedWorkoutSummary[];
+jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => mockSaved, getSavedWorkout: jest.fn() }));
 jest.mock('../db/repositories/routinesRepo', () => ({
   getRoutineDetail: jest.fn(),
   routineToDraft: jest.fn(),
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
 }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -184,6 +190,8 @@ beforeEach(() => {
   jest.setSystemTime(NOW);
   jest.clearAllMocks();
   mockPro = false;
+  mockLibrary = LIBRARY();
+  mockSaved = [];
   usePendingPick.setState({ exerciseId: null });
   jest.mocked(routineToDraft).mockReturnValue(MINE);
   jest.mocked(saveRoutine).mockReturnValue('saved-id');
@@ -731,5 +739,181 @@ describe('the routine editor: leaving with unsaved changes (R89)', () => {
     act(() => leaveGuarded(toTrain));
     expect(toTrain).toHaveBeenCalledTimes(1);
     expect(shownText(tree)).not.toContain('Discard changes?');
+  });
+});
+
+/** Push A as saved: a bench press last done at 80, 80, 75 kg for 5, 6, 8, and a plank held 45 and 60 seconds. */
+const PUSH_A: SavedWorkoutDetail = {
+  id: 'push-a',
+  name: 'Push A',
+  exercises: [
+    {
+      id: 'swe-bench',
+      exerciseId: 'bench',
+      name: 'Barbell bench press',
+      loggingType: 'weighted',
+      equipment: 'barbell',
+      supersetGroup: null,
+      sets: [80, 80, 75].map((weight, i) => ({ setType: 'working' as const, weight, weightUnit: 'kg' as const, reps: [5, 6, 8][i], durationS: null, distance: null, distanceUnit: null })),
+    },
+    {
+      id: 'swe-plank',
+      exerciseId: 'plank',
+      name: 'Plank',
+      loggingType: 'timed',
+      equipment: 'bodyweight',
+      supersetGroup: null,
+      sets: [45, 60].map((durationS) => ({ setType: 'working' as const, weight: null, weightUnit: null, reps: null, durationS, distance: null, distanceUnit: null })),
+    },
+  ],
+};
+
+describe('the routine editor: Add a saved workout (R121)', () => {
+  beforeEach(() => {
+    mockSaved = [{ id: 'push-a', name: 'Push A', exerciseCount: 2, updatedAt: NOW }];
+    jest.mocked(getSavedWorkout).mockImplementation((_db, id) => (id === 'push-a' ? PUSH_A : null));
+  });
+
+  it('is hidden when there are no saved workouts', () => {
+    mockSaved = [];
+    expect(buttons(mount('new'), 'Add a saved workout')).toEqual([]);
+  });
+
+  it('sits under + Add day as a secondary button, and lists the saved workouts in a sheet', () => {
+    const tree = mount('new');
+    const [add] = buttons(tree, 'Add a saved workout');
+    expect(add.props.variant).toBe('secondary');
+    const text = shownText(tree);
+    expect(text.indexOf('Add a saved workout')).toBeGreaterThan(text.indexOf('+ Add day'));
+
+    press(tree, 'Add a saved workout');
+    const shown = shownText(tree);
+    expect(shown).toContain('Push A');
+    expect(shown).toContain('2 exercises');
+    expect(tree.root.findAll((n) => typeof n.type !== 'string' && n.props.accessibilityLabel === 'Push A, 2 exercises' && n.props.accessibilityRole === 'button')).not.toHaveLength(0);
+
+    press(tree, 'Cancel');
+    expect(shownText(tree)).not.toContain('2 exercises');
+  });
+
+  it('adds the saved workout as a day, which Save writes with its start weights', () => {
+    const tree = mount('new');
+    type(tree, 'Routine name', 'Mine');
+    press(tree, 'Add a saved workout');
+    press(tree, 'Push A, 2 exercises');
+
+    expect(shownText(tree)).not.toContain('2 exercises');
+    expect(field(tree, 'Day 1 name').props.value).toBe('Push A');
+    expect(field(tree, 'Barbell bench press reps from').props.value).toBe('5');
+    expect(field(tree, 'Barbell bench press reps to').props.value).toBe('8');
+    expect(field(tree, 'Plank seconds from').props.value).toBe('45');
+
+    press(tree, 'Save');
+    const day = saved().days[0];
+    expect(day.name).toBe('Push A');
+    expect(day.exercises.map((e) => [e.exerciseId, e.setCount, e.repMin, e.repMax, e.increment, e.incrementUnit, e.startWeight])).toEqual([
+      ['bench', 3, 5, 8, 2.5, 'kg', { weight: 75, unit: 'kg' }],
+      ['plank', 2, 45, 60, 0, 'kg', null],
+    ]);
+  });
+
+  it('a new routine made from a saved workout still keeps to the free limit', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount('new');
+    type(tree, 'Routine name', 'Mine');
+    press(tree, 'Add a saved workout');
+    press(tree, 'Push A, 2 exercises');
+    press(tree, 'Save');
+
+    expect(saveRoutine).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain(LIMIT);
+  });
+});
+
+describe('the routine editor: exercises changed while it was away (Task 6)', () => {
+  it('drops a deleted exercise from its day and says so', () => {
+    const tree = mount('mine');
+    delete mockLibrary.row;
+    leaveAndReturn();
+
+    expect(hasField(tree, 'Barbell row reps from')).toBe(false);
+    expect(hasField(tree, 'Barbell bench press reps from')).toBe(true);
+    expect(shownText(tree)).toContain("Barbell row was deleted, so it's gone from Day A.");
+    press(tree, 'Save');
+    expect(saved().days[0].exercises.map((e) => e.exerciseId)).toEqual(['bench']);
+  });
+
+  it('starts a retyped exercise’s rule over for its new type, and says so', () => {
+    const tree = mount('mine');
+    mockLibrary.plank = { id: 'plank', name: 'Plank', loggingType: 'weighted' };
+    leaveAndReturn();
+
+    expect(hasField(tree, 'Plank seconds from')).toBe(false);
+    expect(field(tree, 'Plank reps from').props.value).toBe('8');
+    expect(field(tree, 'Plank increment in kg').props.value).toBe('2.5');
+    expect(shownText(tree)).toContain("Plank changed how it's logged, so its sets and reps start over.");
+  });
+
+  it('says nothing when nothing changed', () => {
+    const tree = mount('mine');
+    leaveAndReturn();
+    expect(shownText(tree).some((t) => /deleted|changed how/.test(t))).toBe(false);
+  });
+});
+
+describe('the routine editor: re-reading on focus (review round 1)', () => {
+  /** "My split" as the database now has it, the bench press renamed "Bench" elsewhere. */
+  const renamedMine = (): RoutineDraft => ({
+    ...MINE,
+    days: MINE.days.map((d, i) => (i === 0 ? { ...d, exercises: d.exercises.map((e, j) => (j === 0 ? { ...e, name: 'Bench' } : e)) } : d)),
+  });
+
+  it('a rename made elsewhere, with nothing changed here, is no change: Back leaves without asking', () => {
+    const tree = mount('mine');
+    mockLibrary.bench = { ...mockLibrary.bench, name: 'Bench' };
+    jest.mocked(routineToDraft).mockReturnValue(renamedMine());
+    leaveAndReturn();
+
+    expect(hasField(tree, 'Bench reps from')).toBe(true);
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).not.toContain('Discard changes?');
+    expect(router.back).toHaveBeenCalled();
+  });
+
+  it('with a change made here, a rename elsewhere still is not one: Discard keeps the new name, and asks no more', () => {
+    const tree = mount('mine');
+    enter(tree, 'Barbell bench press reps from', '6');
+    mockLibrary.bench = { ...mockLibrary.bench, name: 'Bench' };
+    jest.mocked(routineToDraft).mockReturnValue(renamedMine());
+    leaveAndReturn();
+
+    expect(field(tree, 'Bench reps from').props.value).toBe('6');
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).toContain('Discard changes?');
+    press(tree, 'Discard');
+    act(() => void jest.advanceTimersByTime(400));
+    expect(field(tree, 'Bench reps from').props.value).toBe('5');
+
+    jest.mocked(router.back).mockClear();
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).not.toContain('Discard changes?');
+    expect(router.back).toHaveBeenCalled();
+  });
+
+  it('re-reads the routine when nothing changed here, so an edit saved elsewhere shows', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'My split v2' });
+    leaveAndReturn();
+    expect(field(tree, 'Routine name').props.value).toBe('My split v2');
+  });
+
+  it('tells the screen reader what changed, and the line goes on the next focus with nothing new', () => {
+    const tree = mount('mine');
+    delete mockLibrary.row;
+    leaveAndReturn();
+    expect(announce).toHaveBeenCalledWith("Barbell row was deleted, so it's gone from Day A.");
+
+    leaveAndReturn();
+    expect(shownText(tree).some((t) => /deleted/.test(t))).toBe(false);
   });
 });

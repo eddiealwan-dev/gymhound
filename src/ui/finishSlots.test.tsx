@@ -84,9 +84,7 @@ it('shows neither slot when the workout is not there', () => {
   expect(SaveAsWorkout).not.toHaveBeenCalled();
 });
 
-it('the slots draw nothing with no personal bests and until Save as a workout is built', () => {
+it('the PR slot draws nothing with no personal bests', () => {
   const { FinishPrs: RealPrs } = jest.requireActual('./finish/FinishPrs');
-  const { SaveAsWorkout: RealSave } = jest.requireActual('./finish/SaveAsWorkout');
   expect(RealPrs({ workoutId: 'w1', summary })).toBeNull();
-  expect(RealSave({ workoutId: 'w1', workoutName: 'Push A' })).toBeNull();
 });

@@ -7,12 +7,16 @@ import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
 import { getRoutineDetail, routineToDraft, saveRoutine } from '../../../../src/db/repositories/routinesRepo';
+import { getSavedWorkout, listSavedWorkouts } from '../../../../src/db/repositories/savedWorkoutsRepo';
+import type { Db } from '../../../../src/db/types';
 import { getSettings } from '../../../../src/db/repositories/settingsRepo';
 import { parseDecimal, parseDuration, parseReps } from '../../../../src/domain/input';
-import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, validateDraft } from '../../../../src/domain/routineDraft';
+import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, refreshDraft, validateDraft, withLibraryNames } from '../../../../src/domain/routineDraft';
 import type { DraftAction, DraftDay, DraftExercise, RoutineDraft } from '../../../../src/domain/routineDraft';
+import { dayFromSaved } from '../../../../src/domain/savedWorkout';
 import type { LoggingType, WeightUnit } from '../../../../src/domain/types';
 import { convertIncrement } from '../../../../src/domain/units';
+import { announce } from '../../../../src/platform/announce';
 import { bumpData, useDbQuery } from '../../../../src/state/dataVersion';
 import { flushAll, useDraftFlush } from '../../../../src/state/draftFlush';
 import { setLeaveGuard } from '../../../../src/state/leaveGuard';
@@ -21,7 +25,7 @@ import { BackLink } from '../../../../src/ui/BackLink';
 import { Button } from '../../../../src/ui/Button';
 import { useRoutineLimit } from '../../../../src/ui/RoutineLimit';
 import { Screen } from '../../../../src/ui/Screen';
-import { afterSheetCloses, ConfirmSheet } from '../../../../src/ui/Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
 import { Body, Display, Label, Num } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
@@ -301,6 +305,66 @@ function DayEditor({ day, index, count, unit, apply, onAddExercise }: DayProps) 
   );
 }
 
+/**
+ * What the editor holds, brought up to date when it regains focus (steps 1 and 2 of the focus order).
+ * 1. A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
+ *    editor). With nothing unsaved here, it is read again as both the saved version and the draft (`reread`), so
+ *    nothing looks unsaved; null when it is gone. Changes not yet saved are kept as they are.
+ * 2. The library: a custom exercise can be deleted, renamed or retyped while the editor is away (Task 6). The draft
+ *    follows it (`refreshDraft`), saying what changed in plain words; the saved copy takes the new names only, so a
+ *    rename made elsewhere never counts as a change here.
+ */
+function readAgain(
+  db: Db,
+  routineId: string | null,
+  saved: RoutineDraft,
+  draft: RoutineDraft,
+): { saved: RoutineDraft | null; draft: RoutineDraft | null; notices: string[]; reread: boolean } {
+  let base = saved;
+  let current = draft;
+  const reread = routineId !== null && !hasChanges(saved, draft);
+  if (reread) {
+    const fresh = routineToDraft(db, routineId);
+    if (fresh === null) return { saved: null, draft: null, notices: [], reread };
+    base = current = fresh;
+  }
+  const lookup = (exerciseId: string) => getExercise(db, exerciseId);
+  const refreshed = refreshDraft(current, lookup, defaultIncrement(getSettings(db)));
+  return { saved: withLibraryNames(base, lookup), draft: refreshed.draft, notices: refreshed.notices, reread };
+}
+
+const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
+
+/** The saved workouts **Add a saved workout** offers, each a row that adds it as a day (R121). */
+function SavedWorkoutSheet({ visible, onPick, onClose }: { visible: boolean; onPick: (savedId: string) => void; onClose: () => void }) {
+  const { colors } = useTheme();
+  const saved = useDbQuery(listSavedWorkouts);
+  return (
+    <Sheet visible={visible} onClose={onClose}>
+      <Display weight={700} accessibilityRole="header" style={{ marginBottom: 8 }}>
+        Add a saved workout
+      </Display>
+      <View style={{ marginBottom: 16 }}>
+        {saved.map((w, i) => (
+          <Pressable
+            key={w.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${w.name}, ${exerciseCount(w.exerciseCount)}`}
+            onPress={() => onPick(w.id)}
+            style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingVertical: 8, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.border, opacity: pressed ? 0.8 : 1 })}
+          >
+            <Body weight={600}>{w.name}</Body>
+            <Body muted style={{ fontSize: 14 }}>
+              {exerciseCount(w.exerciseCount)}
+            </Body>
+          </Pressable>
+        ))}
+      </View>
+      <Button label="Cancel" variant="secondary" onPress={onClose} />
+    </Sheet>
+  );
+}
+
 /** The draft as React state, with a ref that always holds the latest, so Save and Back read what a flush just wrote. */
 function useDraft(initial: RoutineDraft | null) {
   const latest = useRef(initial);
@@ -347,6 +411,10 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
   const pickFor = useRef<string | null>(null);
   const limit = useRoutineLimit();
+  /** What changed in the library while the editor was away, said once it is back (`readAgain`). */
+  const [notices, setNotices] = useState<string[]>([]);
+  const [pickingSaved, setPickingSaved] = useState(false);
+  const hasSaved = useDbQuery(listSavedWorkouts).length > 0;
   const backTo: Href = routineId === null ? '/routines' : `/routines/${routineId}`;
 
   const startOver = (next: RoutineDraft | null) => {
@@ -355,6 +423,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     reset(next);
     setTried(false);
     setSaveFailed(false);
+    setNotices([]);
   };
 
   /** Takes `leave` over when there are changes to lose, opening "Discard changes?"; false lets it go now. */
@@ -370,22 +439,34 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     if (!askBeforeLeaving.current(() => goBack(backTo))) goBack(backTo);
   };
 
+  /**
+   * Brings the draft and the saved copy up to date (`readAgain`). A routine read again clears the last Save's problems;
+   * notices from the last focus go, and new ones are said to the screen reader.
+   */
+  const refresh = useRef(() => {});
+  refresh.current = () => {
+    if (premade || savedRef.current === null || latest.current === null) return;
+    const next = readAgain(db, routineId, savedRef.current, latest.current);
+    if (next.saved !== savedRef.current) {
+      savedRef.current = next.saved;
+      setSaved(next.saved);
+    }
+    if (next.draft !== latest.current) reset(next.draft);
+    if (next.reread) {
+      setTried(false);
+      setSaveFailed(false);
+    }
+    setNotices(next.notices);
+    for (const notice of next.notices) announce(notice);
+  };
+
   useFocusEffect(
     useCallback(() => {
-      // In this order: (1) read the routine again if nothing is unsaved, (2) add what the picker chose, (3) a library
-      // re-check (another branch adds it here).
-      // 1. A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
-      // editor). With nothing unsaved here, read it again as the saved version, so nothing looks unsaved, and clear the
-      // last Save's notices; changes not yet saved are kept as they are.
-      if (routineId !== null && !premade && !unsaved(savedRef.current, latest.current)) {
-        const fresh = routineToDraft(db, routineId);
-        savedRef.current = fresh;
-        setSaved(fresh);
-        reset(fresh);
-        setTried(false);
-        setSaveFailed(false);
-      }
-      // 2. The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
+      // In this order: (1) read the routine again if nothing is unsaved, (2) re-check the library, both in `readAgain`,
+      // then (3) add what the picker chose. The re-read must see the draft before the pick makes it unsaved, and the
+      // pick was just read from the library, so it needs no re-check.
+      refresh.current();
+      // 3. The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
       const exerciseId = usePendingPick.getState().take();
       const dayKey = pickFor.current;
       pickFor.current = null;
@@ -398,7 +479,6 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
           increment: defaultIncrement(getSettings(db)),
         });
       }
-      // 3. (Another branch adds the library re-check here.)
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const back = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(() => goBack(backTo)));
       return () => {
@@ -445,6 +525,17 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     router.push('/pick-exercise?mode=routine');
   };
 
+  const openSaved = () => {
+    flushAll();
+    setPickingSaved(true);
+  };
+
+  const addSaved = (savedId: string) => {
+    setPickingSaved(false);
+    const saved = getSavedWorkout(db, savedId);
+    if (saved) apply({ type: 'addDayFromSaved', day: dayFromSaved(saved, defaultIncrement(getSettings(db))) });
+  };
+
   const write = () => {
     const current = latest.current;
     if (current === null) return;
@@ -487,11 +578,22 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         </Field>
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Days</Label>
+      {notices.length > 0 ? (
+        // Said to the screen reader when they appear (`announce`).
+        <View style={{ gap: 4, marginBottom: 8 }}>
+          {notices.map((notice, i) => (
+            <Body key={i} muted>
+              {notice}
+            </Body>
+          ))}
+        </View>
+      ) : null}
       <View style={{ gap: 16 }}>
         {draft.days.map((day, index) => (
           <DayEditor key={day.key} day={day} index={index} count={draft.days.length} unit={unit} apply={apply} onAddExercise={addExercise} />
         ))}
         <Button label="+ Add day" variant="secondary" onPress={() => apply({ type: 'addDay' })} />
+        {hasSaved ? <Button label="Add a saved workout" variant="secondary" onPress={openSaved} /> : null}
       </View>
       <View style={{ marginTop: 32, gap: 16 }}>
         {problems.length > 0 ? (
@@ -520,6 +622,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         }}
         onCancel={() => setPendingLeave(null)}
       />
+      <SavedWorkoutSheet visible={pickingSaved} onPick={addSaved} onClose={() => setPickingSaved(false)} />
       {limit.sheets}
     </Screen>
   );

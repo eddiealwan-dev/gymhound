@@ -1,3 +1,5 @@
+// Types only: savedWorkout.ts imports `clampRule` from here, so a value import back would be a cycle.
+import type { DayFromSaved } from './savedWorkout';
 import type { LoggingType, WeightUnit } from './types';
 
 /**
@@ -22,6 +24,11 @@ export type DraftExercise = {
   incrementUnit: WeightUnit;
   /** Forms a superset with the exercise after it. Always false on a day's last exercise. */
   supersetWithNext: boolean;
+  /**
+   * The first next weight of a new row, in the unit it was logged in: a day made from a saved workout starts at the
+   * easiest working load (R121). `saveRoutine` writes it for new rows only; rows already saved keep their own.
+   */
+  startWeight?: { weight: number; unit: WeightUnit } | null;
 };
 
 export type DraftDay = {
@@ -54,6 +61,8 @@ export type DraftAction =
   | { type: 'rename'; name: string }
   /** A blank or missing name becomes "Day {n}" for its place, or the lowest "Day {n}" not in use. */
   | { type: 'addDay'; name?: string }
+  /** A day made from a saved workout (`dayFromSaved`). A blank name becomes "Day {n}"; a name in use gets " 2" (or " 3"…). */
+  | { type: 'addDayFromSaved'; day: DayFromSaved }
   | { type: 'renameDay'; dayKey: string; name: string }
   | { type: 'moveDay'; dayKey: string; dir: Dir }
   | { type: 'deleteDay'; dayKey: string }
@@ -222,6 +231,17 @@ function newDayName(days: DraftDay[]): string {
   return `Day ${n}`;
 }
 
+/** `name` trimmed for a new day, or "Day {n}" when blank; when a day is already called that, " 2" (then " 3"…) is added. */
+function freeDayName(days: DraftDay[], name: string): string {
+  const wanted = name.trim();
+  if (wanted === '') return newDayName(days);
+  const taken = new Set(days.map(dayLabel));
+  if (!taken.has(wanted)) return wanted;
+  let n = 2;
+  while (taken.has(`${wanted} ${n}`)) n++;
+  return `${wanted} ${n}`;
+}
+
 /** The new exercise list of a day for an exercise action, or null when nothing changes. */
 function exercisesAfter(day: DraftDay, action: DraftAction, draft: RoutineDraft): DraftExercise[] | null {
   const list = day.exercises;
@@ -281,6 +301,24 @@ export function draftReducer(draft: RoutineDraft, action: DraftAction): RoutineD
       const day: DraftDay = { key: `new:${draft.nextKey}`, id: null, name, exercises: [] };
       return { ...draft, days: [...draft.days, day], nextKey: draft.nextKey + 1 };
     }
+    case 'addDayFromSaved': {
+      let nextKey = draft.nextKey;
+      const key = () => `new:${nextKey++}`;
+      const dayKey = key();
+      const exercises = action.day.exercises.map((e) => ({
+        key: key(),
+        id: null,
+        exerciseId: e.exerciseId,
+        name: e.name,
+        loggingType: e.loggingType,
+        ...clampRule({ setCount: e.setCount, repMin: e.repMin, repMax: e.repMax, increment: e.increment }),
+        incrementUnit: e.incrementUnit,
+        supersetWithNext: e.supersetWithNext,
+        startWeight: e.startWeight,
+      }));
+      const day: DraftDay = { key: dayKey, id: null, name: freeDayName(draft.days, action.day.name), exercises: unlinkLast(exercises) };
+      return { ...draft, days: [...draft.days, day], nextKey };
+    }
     case 'renameDay': {
       if (!draft.days.some((d) => d.key === action.dayKey)) return draft;
       return { ...draft, days: draft.days.map((d) => (d.key === action.dayKey ? { ...d, name: action.name } : d)) };
@@ -305,4 +343,73 @@ export function draftReducer(draft: RoutineDraft, action: DraftAction): RoutineD
       };
     }
   }
+}
+
+/**
+ * The draft brought up to date with the exercise library when the editor regains focus: a custom exercise can be
+ * deleted, renamed or retyped elsewhere while an unsaved draft holds it. `lookup` gives an exercise's name and logging
+ * type, or null when it is gone. A deleted exercise leaves its day (as Remove does); a retyped one keeps its row and
+ * superset link but starts its rule over for the new type, with `increment` (the display unit's default) as Add
+ * exercise does; a renamed one takes the new name. `notices` says what changed, in plain words; the same draft comes
+ * back when nothing did.
+ */
+export function refreshDraft(
+  draft: RoutineDraft,
+  lookup: (exerciseId: string) => Pick<LibraryExercise, 'name' | 'loggingType'> | null,
+  increment: { value: number; unit: WeightUnit },
+): { draft: RoutineDraft; notices: string[] } {
+  const notices: string[] = [];
+  let next = draft;
+  draft.days.forEach((day, index) => {
+    for (const e of day.exercises) {
+      const now = lookup(e.exerciseId);
+      if (now === null) {
+        notices.push(`${e.name} was deleted, so it's gone from ${dayLabel(day, index)}.`);
+        next = draftReducer(next, { type: 'removeExercise', dayKey: day.key, exerciseKey: e.key });
+        continue;
+      }
+      if (now.loggingType === e.loggingType && now.name === e.name) continue;
+      const retyped = now.loggingType !== e.loggingType;
+      if (retyped) notices.push(`${now.name} changed how it's logged, so its sets and reps start over.`);
+      const updated: DraftExercise = retyped
+        ? {
+            ...e,
+            name: now.name,
+            loggingType: now.loggingType,
+            ...STARTING_SCHEME[now.loggingType],
+            increment: NO_LOAD.includes(now.loggingType) ? 0 : increment.value,
+            incrementUnit: increment.unit,
+            // A start weight was for the old type's load.
+            ...(e.startWeight ? { startWeight: null } : {}),
+          }
+        : { ...e, name: now.name };
+      next = {
+        ...next,
+        days: next.days.map((d) => (d.key === day.key ? { ...d, exercises: d.exercises.map((x) => (x.key === e.key ? updated : x)) } : d)),
+      };
+    }
+  });
+  return { draft: next, notices };
+}
+
+/**
+ * The draft with each exercise's current name from the library (`lookup`), and nothing else changed: a rename made
+ * elsewhere is not a change of the editor's. The same draft when no name changed; an exercise `lookup` can't find keeps
+ * its name.
+ */
+export function withLibraryNames(draft: RoutineDraft, lookup: (exerciseId: string) => Pick<LibraryExercise, 'name'> | null): RoutineDraft {
+  let changed = false;
+  const days = draft.days.map((day) => {
+    let dayChanged = false;
+    const exercises = day.exercises.map((e) => {
+      const name = lookup(e.exerciseId)?.name;
+      if (name === undefined || name === e.name) return e;
+      dayChanged = true;
+      return { ...e, name };
+    });
+    if (!dayChanged) return day;
+    changed = true;
+    return { ...day, exercises };
+  });
+  return changed ? { ...draft, days } : draft;
 }

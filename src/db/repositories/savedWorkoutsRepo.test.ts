@@ -7,6 +7,7 @@ import type { Db } from '../types';
 import {
   deleteSavedWorkout,
   getSavedWorkout,
+  hasDoneSets,
   listSavedWorkouts,
   rememberSavedWorkout,
   renameSavedWorkout,
@@ -376,5 +377,16 @@ describe('rememberSavedWorkout (at finish)', () => {
     tick(db, active(db, BENCH).sets[1].id, 300, 1, NOW + DAY + 1);
     discardWorkout(db, id);
     expect(getSavedWorkout(db, savedId)).toEqual(before);
+  });
+});
+
+describe('hasDoneSets', () => {
+  it('is true for a workout with a done set, false with none or for no such workout', () => {
+    const db = seededDb();
+    const id = finishedPushA(db);
+    expect(hasDoneSets(db, id)).toBe(true);
+    db.update(sets).set({ done: false }).run();
+    expect(hasDoneSets(db, id)).toBe(false);
+    expect(hasDoneSets(db, 'no-such-workout')).toBe(false);
   });
 });

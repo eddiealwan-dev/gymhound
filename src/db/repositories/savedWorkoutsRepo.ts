@@ -237,3 +237,16 @@ export function rememberSavedWorkout(db: Db, workoutId: string): void {
     db.update(savedWorkouts).set({ updatedAt: workout.finishedAt }).where(eq(savedWorkouts.id, saved.id)).run();
   }
 }
+
+/** Whether a workout has any done set: Save as a workout has something to keep (`saveWorkoutAs` refuses otherwise). */
+export function hasDoneSets(db: Db, workoutId: string): boolean {
+  return (
+    db
+      .select({ id: sets.id })
+      .from(sets)
+      .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
+      .where(and(eq(workoutExercises.workoutId, workoutId), eq(sets.done, true)))
+      .limit(1)
+      .get() !== undefined
+  );
+}
