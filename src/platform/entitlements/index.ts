@@ -1,42 +1,66 @@
-import type { Db } from '../../db/types';
-import { createFreeOnlyEntitlements } from './freeOnly';
-import type { FreeOnlyEntitlements } from './freeOnly';
-
-export { debugUnlockAllowed } from './freeOnly';
-export type { FreeOnlyEntitlements } from './freeOnly';
-
 /**
- * What the user is entitled to. Only GymHound Pro exists; until it can be bought (phase 5) the free-only
- * implementation answers, and the debug unlock in Settings turns Pro on for testing where it is allowed (R88, §9).
+ * What the user is entitled to: GymHound Pro, or not. Three implementations answer behind one interface, chosen once at
+ * startup by §9's order (R133, `select.ts`): RevenueCat outside Expo Go when a store key is set; else the debug unlock
+ * where it is allowed; else free-only. Screens use `entitlementsFor(db)` (one object per app, R126) or the hooks.
  */
+
+export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'failed';
+export type RestoreResult = 'restored' | 'none' | 'unavailable' | 'failed';
+
+/** A subscription's billing period (R157): `{ count: 3, unit: 'month' }` renews every 3 months. */
+export type StorePeriod = { count: number; unit: 'day' | 'week' | 'month' | 'year' };
+
+/** The store's product, as the store words it. `period` is null only for a one-time purchase. */
+export type StoreOffer = { priceString: string; period: StorePeriod | null };
+
 export interface Entitlements {
-  /** Whether Pro is on now. */
+  /** Whether Pro is on now. Synchronous: never waits on the network (R135). */
   isPro(): boolean;
-  /** Calls `onChange` whenever `isPro()` may have changed. Returns the unsubscribe. Fits React's `useSyncExternalStore`. */
+  /**
+   * Calls `onChange` whenever `isPro()`, `isDebugPro()`, `offer()` or `canPurchase()` may have changed. Returns the
+   * unsubscribe. Fits React's `useSyncExternalStore`.
+   */
   subscribe(onChange: () => void): () => void;
-  /** Buys Pro. Until Pro exists there is nothing to buy. */
-  purchase(): Promise<'unavailable'>;
-  /** Restores an earlier purchase: true when one was found. */
-  restore(): Promise<boolean>;
+  /** Whether a store is configured and its `default` offering has a package to buy. */
+  canPurchase(): boolean;
+  /** The package Unlock would buy, or null when there is none (yet). */
+  offer(): StoreOffer | null;
+  /** Buys Pro (R136). */
+  purchase(): Promise<PurchaseResult>;
+  /** Restores an earlier purchase (R136). */
+  restore(): Promise<RestoreResult>;
 }
+
+export type EntitlementsKind = 'free' | 'debug' | 'revenuecat';
+
+export type AppEntitlements = Entitlements & {
+  kind: EntitlementsKind;
+  /** On only where the debug unlock is allowed; a no-op elsewhere. Kept for Settings → Developer (R126). */
+  setDebugUnlock(on: boolean): void;
+  /** Whether Pro is on only because of the debug unlock (Settings says "for testing"). */
+  isDebugPro(): boolean;
+  /** Stops listening to the app and the store. The app keeps one object for its lifetime; tests and `entitlementsFor` call it. */
+  dispose(): void;
+};
 
 /**
- * A new entitlements object: free-only until Pro exists. Screens use `entitlementsFor`, so they share one and its
- * listeners hear the Settings switch.
+ * The narrow adapter over the RevenueCat SDK: only what GymHound calls. `revenuecatSdk.native.ts` maps the real
+ * package; tests pass a fake. `purchase` rejects with `{ userCancelled: true }` when the user cancels.
  */
-export function createEntitlements(db: Db): FreeOnlyEntitlements {
-  return createFreeOnlyEntitlements(db);
-}
+export type PurchasesSdk = {
+  configure(apiKey: string): void;
+  getCustomerInfo(): Promise<{ activeEntitlements: string[] }>;
+  onCustomerInfo(listener: (info: { activeEntitlements: string[] }) => void): () => void;
+  /** The `default` offering's first package, or null when there is none. */
+  getDefaultPackage(): Promise<{ id: string; priceString: string; period: StoreOffer['period'] } | null>;
+  purchase(packageId: string): Promise<{ activeEntitlements: string[] }>;
+  restore(): Promise<{ activeEntitlements: string[] }>;
+};
 
-/** The app's one entitlements object and the database it reads, made on first use. */
-let shared: { db: Db; entitlements: FreeOnlyEntitlements } | null = null;
-
-/**
- * The app's entitlements, one per app (R126): every screen gets the same object, so when Settings' "Unlock Pro for
- * testing" calls `setDebugUnlock`, what subscribed on another screen hears it. The app opens one database; another one
- * (a test's) gets a fresh object.
- */
-export function entitlementsFor(db: Db): FreeOnlyEntitlements {
-  if (shared === null || shared.db !== db) shared = { db, entitlements: createEntitlements(db) };
-  return shared.entitlements;
-}
+export { debugUnlockAllowed, createDebugEntitlements } from './debug';
+export { createFreeOnlyEntitlements } from './freeOnly';
+export { createRevenueCatEntitlements, DEFAULT_OFFERING, PRO_ENTITLEMENT } from './revenuecat';
+export { loadPurchasesSdk } from './revenuecatSdk';
+export { createEntitlements, entitlementsFor, selectKind } from './select';
+export { useEntitlementsState, useIsPro } from './useIsPro';
+export { isExpoGo, revenueCatApiKey } from '../runtime';
