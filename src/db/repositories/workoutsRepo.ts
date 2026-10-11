@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import { gearFor, planInUnit } from '../../domain/plates';
-import { computeOutcome } from '../../domain/progression';
+import { computeOutcome, type Outcome } from '../../domain/progression';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { convertIncrement } from '../../domain/units';
@@ -173,13 +173,23 @@ export function getNextDayTitle(db: Db, workoutId: string): string | null {
   return dayTitle(next.routineName, next.dayName);
 }
 
+/** One exercise's outcome as `storeOutcomes` stored it, with the routine slot it came from (null when none). */
+export type StoredOutcome = {
+  routineExerciseId: string | null;
+  exerciseId: string;
+  outcome: Outcome;
+  nextWeight: number | null;
+  nextUnit: WeightUnit | null;
+};
+
 /**
- * Runs the rule (spec 7.3, 18.7) on each exercise of the workout: stores its working weight, outcome and next weight,
- * and, unless the outcome is `no_rule`, writes the next weight to the routine exercise it came from, if that slot still
- * holds the same exercise (R74). "Marked" is the exercise flagged Something off. Barbell raises round with the bar and
- * plates in Settings for the working unit.
+ * Runs the rule (spec 7.3, 18.7) on each exercise of the workout, in position order, and stores its working weight,
+ * outcome and next weight on the workout exercise. It writes nothing else: the routine slots are the caller's (finish
+ * writes them from this workout, a history edit re-reads the newest finished workout of each slot). "Marked" is the
+ * exercise flagged Something off. Each exercise uses its own rule snapshot and planned weight; barbell raises round
+ * with the bar and plates in Settings now, for the working unit.
  */
-function writeOutcomes(db: Db, workoutId: string): void {
+export function storeOutcomes(db: Db, workoutId: string): StoredOutcome[] {
   const settings = getSettings(db);
   const gear = { lb: gearFor('lb', settings), kg: gearFor('kg', settings) };
   const rows = db
@@ -189,6 +199,7 @@ function writeOutcomes(db: Db, workoutId: string): void {
     .where(eq(workoutExercises.workoutId, workoutId))
     .orderBy(asc(workoutExercises.position))
     .all();
+  const stored: StoredOutcome[] = [];
   for (const { we, loggingType, equipment } of rows) {
     const exerciseSets = db
       .select({
@@ -223,11 +234,29 @@ function writeOutcomes(db: Db, workoutId: string): void {
       })
       .where(eq(workoutExercises.id, we.id))
       .run();
-    if (we.routineExerciseId !== null && result.outcome !== 'no_rule') {
+    stored.push({
+      routineExerciseId: we.routineExerciseId,
+      exerciseId: we.exerciseId,
+      outcome: result.outcome,
+      nextWeight: result.nextWeight,
+      nextUnit: result.nextUnit,
+    });
+  }
+  return stored;
+}
+
+/**
+ * Runs the rule on the workout (`storeOutcomes`) and, unless an outcome is `no_rule`, writes its next weight to the
+ * routine exercise it came from, if that slot still holds the same exercise (R74). At finish the workout is the newest
+ * finished one of each of its slots, so its own outcomes are the slots' next weights (7.3).
+ */
+function writeOutcomes(db: Db, workoutId: string): void {
+  for (const o of storeOutcomes(db, workoutId)) {
+    if (o.routineExerciseId !== null && o.outcome !== 'no_rule') {
       // Only while the routine slot still holds this exercise (R74).
       db.update(routineExercises)
-        .set({ nextWeight: result.nextWeight, nextWeightUnit: result.nextUnit })
-        .where(and(eq(routineExercises.id, we.routineExerciseId), eq(routineExercises.exerciseId, we.exerciseId)))
+        .set({ nextWeight: o.nextWeight, nextWeightUnit: o.nextUnit })
+        .where(and(eq(routineExercises.id, o.routineExerciseId), eq(routineExercises.exerciseId, o.exerciseId)))
         .run();
     }
   }
