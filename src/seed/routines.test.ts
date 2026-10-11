@@ -1,3 +1,4 @@
+import { V1_ROUTINES } from '../db/testing/v1Routines';
 import { groupsOutsideBand, MAJOR_GROUPS, weeklyFrequencyByGroup } from '../domain/programVolume';
 import type { MajorGroup } from '../domain/programVolume';
 import { LIBRARY_EXERCISES } from './library.generated';
@@ -88,6 +89,29 @@ describe('the eight programs', () => {
   });
 });
 
+/**
+ * Version 1 rows that a continuing program no longer has, each with its reason. Every other version 1 row keeps its id
+ * (its day and its exercise), so its next weight survives the upgrade. None today.
+ */
+const DROPPED_V1_ROWS: Readonly<Record<string, string>> = {};
+
+describe('continuity with version 1', () => {
+  const continuing = V1_ROUTINES.filter((r) => PREMADE_ORDER.includes(r.id));
+  const v1Rows = continuing.flatMap((r) => r.days.flatMap(([slug, , rows]) => rows.map(([e]) => `${r.id}:${slug}:${e}`)));
+  const rows = new Set(SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises.map((e) => `${r.id}:${d.slug}:${e.exercise}`))));
+
+  it('keeps every version 1 row of the four continuing programs on its own day, but the ones listed with a reason', () => {
+    expect(continuing.map((r) => r.id)).toEqual(['premade-fullbody-3', 'premade-upperlower-4', 'premade-ppl-6', 'premade-dumbbell-3']);
+    expect(v1Rows.filter((id) => !rows.has(id) && !(id in DROPPED_V1_ROWS))).toEqual([]);
+  });
+
+  it('lists only version 1 rows that really are gone, each with a reason', () => {
+    for (const [id, reason] of Object.entries(DROPPED_V1_ROWS)) {
+      expect([id, v1Rows.includes(id), rows.has(id), reason.length > 10]).toEqual([id, true, false, true]);
+    }
+  });
+});
+
 describe('weekly volume and frequency (§18.8 R87, R93)', () => {
   it.each(VOLUME_CHECKED.map((p) => [p.name, p.id]))(
     '%s gives each major group about 10 to 20 working sets a week: 8 to 24, shoulders capped on side and rear delts',
@@ -147,6 +171,34 @@ describe('what each program is built from', () => {
     const kinds = entries(program('premade-fullbody-3')).map((e) => exercise(e.exercise).equipment);
     expect(kinds.filter((k) => k === 'barbell' || k === 'dumbbell').length).toBeGreaterThan(kinds.length / 2);
     expect(program('premade-fullbody-3').days).toHaveLength(3);
+  });
+
+  it('4-day upper/lower trains the side delts with a lateral raise on both upper days', () => {
+    for (const day of program('premade-upperlower-4').days.filter((d) => d.name.startsWith('Upper'))) {
+      expect([day.name, day.exercises.some((e) => exercise(e.exercise).primaryMuscles.includes('side_delts'))]).toEqual([day.name, true]);
+    }
+  });
+
+  it('Push/pull/legs curls the hamstrings on both legs days', () => {
+    for (const day of program('premade-ppl-6').days.filter((d) => d.name.startsWith('Legs'))) {
+      const curl = day.exercises.some((e) => exercise(e.exercise).primaryMuscles.includes('hamstrings') && exercise(e.exercise).pattern === 'isolation');
+      expect([day.name, curl]).toEqual([day.name, true]);
+    }
+  });
+
+  it('Calisthenics pulls vertically and horizontally every day', () => {
+    for (const day of program('premade-calisthenics-3').days) {
+      const patterns = day.exercises.map((e) => exercise(e.exercise).pattern);
+      expect([day.name, patterns.includes('vertical_pull'), patterns.includes('horizontal_pull')]).toEqual([day.name, true, true]);
+    }
+  });
+
+  it('Calisthenics trains the hamstrings with a Nordic one day and platform hamstring slides the other', () => {
+    const hamstringDays = program('premade-calisthenics-3').days.map((d) =>
+      d.exercises.filter((e) => exercise(e.exercise).primaryMuscles.includes('hamstrings')).map((e) => e.exercise),
+    );
+    expect(hamstringDays.flat().sort()).toEqual(['fedb-floor-glute-ham-raise', 'fedb-platform-hamstring-slides']);
+    expect(hamstringDays.filter((ids) => ids.length > 0)).toHaveLength(2);
   });
 
   it('Dumbbell full body uses only dumbbells and bodyweight', () => {
