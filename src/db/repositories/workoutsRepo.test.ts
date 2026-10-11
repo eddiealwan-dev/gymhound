@@ -7,6 +7,7 @@ import { mondayOf, toLocalDate } from '../../domain/dates';
 import { formatPrevious } from '../../domain/setEntry';
 import { computeStreak } from '../../domain/streak';
 import { dayTitle } from '../../domain/upNext';
+import type { WeightUnit } from '../../domain/types';
 import { totalVolume } from '../../domain/volume';
 import { runSeed } from '../../seed/seed';
 import {
@@ -25,7 +26,7 @@ import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
 import { ensureSettings, getSettings, setSetting } from './settingsRepo';
-import { addExerciseToWorkout, replaceExercise, setExerciseMark } from './workoutEditRepo';
+import { addExerciseToWorkout, replaceExercise, setExerciseMark, setOverride } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
   clearRestEndsAtIf,
@@ -513,10 +514,10 @@ describe('finishWorkout runs the rule (7.3, 18.7)', () => {
   const BENCH = `${PUSH_A}:barbell-bench-press`;
   const OHP = `${PUSH_A}:barbell-overhead-press`;
 
-  /** Stores `weight` lb as the routine exercise's next weight, so the next start plans it. */
-  function plan(db: Db, routineExerciseId: string, weight: number): void {
+  /** Stores `weight` as the routine exercise's next weight, so the next start plans it. */
+  function plan(db: Db, routineExerciseId: string, weight: number, unit: WeightUnit = 'lb'): void {
     db.update(routineExercises)
-      .set({ nextWeight: weight, nextWeightUnit: 'lb' })
+      .set({ nextWeight: weight, nextWeightUnit: unit })
       .where(eq(routineExercises.id, routineExerciseId))
       .run();
   }
@@ -604,15 +605,69 @@ describe('finishWorkout runs the rule (7.3, 18.7)', () => {
 
   it('drops an exercise with no ticks and leaves its routine next weight untouched', () => {
     const db = seededDb();
-    plan(db, OHP, 95);
+    // A plan in kg while Settings shows lb: the start plans it in lb, so had the rule run on OHP before the drop,
+    // its no_sets outcome would write that lb plan back over the 40 kg.
+    plan(db, OHP, 40, 'kg');
     const before = db.select().from(routineExercises).all().filter((r) => r.id !== BENCH);
     const id = benchDay(db, 135, [8, 8, 8, 8]);
+    expect(rawWorkoutExercise(db, id, 'barbell-overhead-press').plannedUnit).toBe('lb');
     finishWorkout(db, id, NOW + HOUR);
 
     const kept = db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all();
     expect(kept.map((e) => [e.exerciseId, e.outcome])).toEqual([['barbell-bench-press', 'raised']]);
-    expect(routineExercise(db, OHP)).toMatchObject({ nextWeight: 95, nextWeightUnit: 'lb' });
+    expect(routineExercise(db, OHP)).toMatchObject({ nextWeight: 40, nextWeightUnit: 'kg' });
     expect(db.select().from(routineExercises).all().filter((r) => r.id !== BENCH)).toEqual(before);
+  });
+
+  it("ignores today's override: a flagged exercise holds the plan, not the override", () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const id = benchDay(db, 150, [8, 8, 8, 8]);
+    const benchId = getActiveWorkoutView(db)!.exercises[0].id;
+    setOverride(db, benchId, 150, 'lb');
+    setExerciseMark(db, benchId, 'pain');
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      overrideWeight: 150,
+      workingWeight: 150,
+      outcome: 'held_marked',
+      nextWeight: 135,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb' });
+  });
+
+  it('rounds a barbell raise with the plates in Settings: without 2.5 lb plates, 135 goes to 145', () => {
+    const db = seededDb();
+    setSetting(db, 'platesLb', { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1 });
+    const id = benchDay(db, 135, [8, 8, 8, 8]);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      outcome: 'raised',
+      nextWeight: 145,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 145, nextWeightUnit: 'lb' });
+  });
+
+  it('a timed exercise has no rule: no_rule, and its routine next weight is kept', () => {
+    const db = seededDb();
+    const PLANK = 'premade-fullbody-3:a:plank';
+    plan(db, PLANK, 25);
+    const id = startWorkoutFromDay(db, 'premade-fullbody-3:a', NOW);
+    const plankIndex = getActiveWorkoutView(db)!.exercises.findIndex((e) => e.exerciseId === 'plank');
+    tickSet(db, setIds(db, plankIndex)[0], { weight: null, reps: null, durationS: 60, distance: null }, 'lb', NOW + 60_000, 'mi');
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'plank')).toMatchObject({
+      routineExerciseId: PLANK,
+      outcome: 'no_rule',
+      workingWeight: null,
+      nextWeight: null,
+    });
+    expect(routineExercise(db, PLANK)).toMatchObject({ nextWeight: 25, nextWeightUnit: 'lb' });
   });
 
   it('an empty workout has no rule: no_rule with the working weight, no next weight, and no routine row changes', () => {

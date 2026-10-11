@@ -4,6 +4,7 @@ import type { DayMark, Equipment, ExerciseMark, LoggingType, WeightUnit } from '
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { ruleOf } from './ruleSnapshot';
 
 export type SetView = PrevSet & {
   id: string;
@@ -166,20 +167,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       showRpe: we.showRpe,
       note,
       restSeconds,
-      rule:
-        we.ruleSetCount !== null &&
-        we.ruleRepMin !== null &&
-        we.ruleRepMax !== null &&
-        we.ruleIncrement !== null &&
-        we.ruleIncrementUnit !== null
-          ? {
-              setCount: we.ruleSetCount,
-              repMin: we.ruleRepMin,
-              repMax: we.ruleRepMax,
-              increment: we.ruleIncrement,
-              incrementUnit: we.ruleIncrementUnit,
-            }
-          : null,
+      rule: ruleOf(we),
       plannedWeight: we.plannedWeight,
       plannedUnit: we.plannedUnit,
       overrideWeight: we.overrideWeight,

@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import { gearFor, planInUnit } from '../../domain/plates';
-import { computeOutcome, type OutcomeInput } from '../../domain/progression';
+import { computeOutcome } from '../../domain/progression';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { convertIncrement } from '../../domain/units';
@@ -18,6 +18,7 @@ import {
   workouts,
 } from '../schema';
 import type { Db } from '../types';
+import { ruleOf } from './ruleSnapshot';
 import { getSettings } from './settingsRepo';
 
 /** Raised when a workout is started while another one is still active. */
@@ -183,27 +184,6 @@ export function getNextDayTitle(db: Db, workoutId: string): string | null {
   return dayTitle(next.routineName, next.dayName);
 }
 
-/** The rule snapshot of a workout exercise, or null when it has no rule (no routine exercise, or ad hoc). */
-function ruleSnapshot(we: typeof workoutExercises.$inferSelect): OutcomeInput['rule'] {
-  if (
-    we.routineExerciseId === null ||
-    we.ruleSetCount === null ||
-    we.ruleRepMin === null ||
-    we.ruleRepMax === null ||
-    we.ruleIncrement === null ||
-    we.ruleIncrementUnit === null
-  ) {
-    return null;
-  }
-  return {
-    setCount: we.ruleSetCount,
-    repMin: we.ruleRepMin,
-    repMax: we.ruleRepMax,
-    increment: we.ruleIncrement,
-    incrementUnit: we.ruleIncrementUnit,
-  };
-}
-
 /**
  * Runs the rule (spec 7.3, 18.7) on each exercise of the workout: stores its working weight, outcome and next weight,
  * and, unless the outcome is `no_rule`, writes the next weight to the routine exercise it came from. "Marked" is the
@@ -233,7 +213,8 @@ function writeOutcomes(db: Db, workoutId: string): void {
       .where(eq(sets.workoutExerciseId, we.id))
       .all();
     const result = computeOutcome({
-      rule: ruleSnapshot(we),
+      // No routine exercise means no rule (7.3 step 3), whatever the row snapshotted.
+      rule: we.routineExerciseId === null ? null : ruleOf(we),
       plannedWeight: we.plannedWeight,
       plannedUnit: we.plannedUnit,
       loggingType,
