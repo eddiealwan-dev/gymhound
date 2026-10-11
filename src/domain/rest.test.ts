@@ -14,6 +14,8 @@ import {
   restRowPhase,
   restTrackFraction,
   restWaitsFor,
+  supersetRestLine,
+  supersetRestSource,
   RING_WINDOW_MS,
   shouldStartRestAfterTick,
   spokenRest,
@@ -267,28 +269,46 @@ describe('spokenRest and tickAnnouncement: what VoiceOver says after a tick', ()
   });
 });
 
-describe('restWaitsFor: the exercise a superset rest waits for (R100)', () => {
+describe('restWaitsFor and supersetRestSource: the exercise a superset rest waits for (R100, R101)', () => {
   const list = [
-    { id: 'a', name: 'Bench press', position: 1, supersetGroup: 1 },
-    { id: 'b', name: 'Ab roller', position: 2, supersetGroup: 1 },
-    { id: 'c', name: 'Squat', position: 3, supersetGroup: null },
-    { id: 'd', name: 'Row', position: 4, supersetGroup: 2 },
-    { id: 'e', name: 'Curl', position: 5, supersetGroup: 2 },
-    { id: 'f', name: 'Plank', position: 6, supersetGroup: 2 },
+    { id: 'a', name: 'Bench press', position: 1, supersetGroup: 1, restSeconds: null },
+    { id: 'b', name: 'Ab roller', position: 2, supersetGroup: 1, restSeconds: null },
+    { id: 'c', name: 'Squat', position: 3, supersetGroup: null, restSeconds: null },
+    { id: 'd', name: 'Row', position: 4, supersetGroup: 2, restSeconds: null },
+    { id: 'e', name: 'Curl', position: 5, supersetGroup: 2, restSeconds: null },
+    { id: 'f', name: 'Plank', position: 6, supersetGroup: 2, restSeconds: 0 },
   ];
 
-  it('names the last member of the superset for every other member', () => {
-    expect(list.map((e) => restWaitsFor(list, e.id))).toEqual(['Ab roller', null, null, 'Plank', 'Plank', null]);
+  it('the source is the last member of the superset, for every other member', () => {
+    expect(list.map((e) => supersetRestSource(list, e.id)?.id ?? null)).toEqual(['b', null, null, 'f', 'f', null]);
+  });
+
+  it('names the last member, but only when its rest (its own, else the Settings rest) is not Off (R100 review)', () => {
+    expect(list.map((e) => restWaitsFor(list, e.id, 120))).toEqual(['Ab roller', null, null, null, null, null]);
+    expect(restWaitsFor(list, 'a', 0)).toBeNull();
+    const own = list.map((e) => (e.id === 'b' ? { ...e, restSeconds: 60 } : e));
+    expect(restWaitsFor(own, 'a', 0)).toBe('Ab roller');
   });
 
   it('judges the last member by position, as shouldStartRestAfterTick does', () => {
     const shuffled = [list[1], list[0]];
-    expect(restWaitsFor(shuffled, 'a')).toBe('Ab roller');
-    expect(restWaitsFor(shuffled, 'b')).toBeNull();
+    expect(restWaitsFor(shuffled, 'a', 120)).toBe('Ab roller');
+    expect(restWaitsFor(shuffled, 'b', 120)).toBeNull();
   });
 
   it('is null for an exercise that is not in the list', () => {
-    expect(restWaitsFor(list, 'zz')).toBeNull();
+    expect(supersetRestSource(list, 'zz')).toBeNull();
+    expect(restWaitsFor(list, 'zz', 120)).toBeNull();
+  });
+});
+
+describe('supersetRestLine: the Rest time panel of a member that is not last (R101)', () => {
+  it("says the rest comes after the last member, with that member's rest time", () => {
+    expect(supersetRestLine('Ab roller', 90)).toBe('Rest comes after Ab roller, using its rest time.');
+  });
+
+  it("says there is no rest when that member's rest time is Off", () => {
+    expect(supersetRestLine('Ab roller', 0)).toBe('No rest after Ab roller: its rest time is Off.');
   });
 });
 

@@ -420,8 +420,10 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       expect(text.props.allowFontScaling).not.toBe(false);
       // The alert icon leads, inside the text, so it wraps and scales with it; VoiceOver hears only the words.
       const children = ([] as unknown[]).concat(text.props.children);
-      const first = children[0] as { props?: { name?: string } };
+      const first = children[0] as { props?: { name?: string; allowFontScaling?: boolean } };
       expect(first.props?.name).toBe('alert-circle-outline');
+      // Ionicons turns font scaling off by default; this one grows with the line's text.
+      expect(first.props?.allowFontScaling).toBe(true);
       expect(children.indexOf(line)).toBeGreaterThan(0);
       expect(text.props.accessibilityLabel).toBe(line);
     });
@@ -1472,7 +1474,10 @@ describe('ExerciseBlock: the form demo (R86)', () => {
     const nameText = byLabel(tree, SHOW_FORM).find((n) => n.type === Text && ([] as unknown[]).concat(n.props.children).includes('Bench Press'));
     const cue = nameText.find((n) => n.props.testID === 'form-demo-cue' && n.props.name === 'information-circle-outline');
     expect(cue.props.size).toBe(16);
-    expect(([] as unknown[]).concat(nameText.props.children)[1]).toBe(' ');
+    // A no-break space, so the glyph never sits alone on a line (R94 review).
+    expect(([] as unknown[]).concat(nameText.props.children)[1]).toBe('\u00A0');
+    // Ionicons turns font scaling off by default; inside the name it grows with the phone's text size, as the name does.
+    expect(cue.props.allowFontScaling).toBe(true);
   });
 
   it('tapping the name saves what is typed, puts the keyboard away, then opens the demo for its exercise (R29)', () => {
@@ -1539,6 +1544,14 @@ describe('ExerciseBlock: a superset says so in words (R100)', () => {
     expect(drawn.indexOf(label)).toBeLessThan(drawn.indexOf(byLabel(tree, 'Show form for Bench Press')));
   });
 
+  it("sits clear of the name's reach above it, so a tap on the label never opens the form demo (R100 review)", () => {
+    const tree = mount(bench([set('s0', 0)]), undefined, null, { inSuperset: true, supersetLabel: LABEL });
+
+    const [label] = texts(tree, 'Superset');
+    const nameSlop = byLabel(tree, 'Show form for Bench Press').props.hitSlop as { top: number };
+    expect(StyleSheet.flatten(label.props.style).marginBottom).toBeGreaterThanOrEqual(nameSlop.top);
+  });
+
   it('shows no label on the other members, or outside a superset', () => {
     expect(texts(mount(bench([set('s0', 0)]), undefined, null, { inSuperset: true }), 'Superset')).toHaveLength(0);
     expect(texts(mount(bench([set('s0', 0)])), 'Superset')).toHaveLength(0);
@@ -1560,6 +1573,15 @@ describe('ExerciseBlock: a superset says so in words (R100)', () => {
   it('shows no such line when the last tick was in another exercise, or when this one ends the superset', () => {
     expect(texts(mount(twoTicked(), undefined, null, { restWaitsFor: 'Ab roller', latestTickedSetId: 'elsewhere' }), 'Rest after Ab roller')).toHaveLength(0);
     expect(shownText(mount(twoTicked(), undefined, null, { latestTickedSetId: 's1' })).some((t) => t.startsWith('Rest after'))).toBe(false);
+  });
+
+  it('shows no line while a rest is running anywhere in the workout, so two rests never seem to show (R100 review)', () => {
+    const tree = mount(twoTicked(), { restEndsAt: 60_000, restSetId: 'in-another-exercise' }, null, {
+      restWaitsFor: 'Ab roller',
+      latestTickedSetId: 's1',
+    });
+
+    expect(texts(tree, 'Rest after Ab roller')).toHaveLength(0);
   });
 
   it('a rest running under that set wins: the countdown shows, not the line', () => {

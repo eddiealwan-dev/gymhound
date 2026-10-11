@@ -1537,4 +1537,14 @@ describe("the ab roller rest: 'set a rest timer on ab roller, ticked a set, no r
     // VoiceOver hears which exercise the rest waits for (R100).
     expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged. Rest after Barbell bench press.');
   });
+
+  it("promises no rest mid-superset when the last member's rest is Off (R100 review)", () => {
+    setExerciseRest(db, BENCH, 0);
+    startFromDay(db, routineDay([AB_ROLLER, BENCH], true));
+
+    expect(tickAbRoller()).toBe(true);
+
+    expect(restEndsAt()).toBeNull();
+    expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged.');
+  });
 });

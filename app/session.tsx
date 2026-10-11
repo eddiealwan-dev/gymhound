@@ -337,7 +337,7 @@ export default function Session() {
                   ? `Superset of ${listNames(workout.exercises.filter((e) => e.supersetGroup === ex.supersetGroup).map((e) => e.name))}`
                   : null
               }
-              restWaitsFor={restWaitsFor(workout.exercises, ex.id)}
+              restWaitsFor={restWaitsFor(workout.exercises, ex.id, restSeconds)}
               latestTickedSetId={lastTicked}
               restEndsAt={restEndsAt}
               restSetId={restSetId}

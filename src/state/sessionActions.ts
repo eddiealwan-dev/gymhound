@@ -105,7 +105,7 @@ export function tick(
     const change = restAfterTick(view.exercises, ex.id, now, length);
     applyRest(db, view.id, change, settings.restBell, set.id);
     if (change.kind === 'start') restStarted = length;
-    waitsFor = restWaitsFor(view.exercises, ex.id);
+    waitsFor = restWaitsFor(view.exercises, ex.id, settings.restSeconds);
   }
   bumpData();
   announce(tickAnnouncement(row.label, restStarted, waitsFor));

@@ -356,7 +356,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       {line !== null ? (
         // Full text colour at body size, led by an alert icon inside the text so it wraps and scales with it; never red (R99).
         <Body accessibilityLiveRegion="polite" accessibilityLabel={line} style={{ marginBottom: 4 }}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.text} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.text} allowFontScaling />
           {' '}
           {line}
         </Body>

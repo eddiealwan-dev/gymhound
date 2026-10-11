@@ -39,19 +39,42 @@ export function shouldStartRestAfterTick(
 }
 
 /**
- * The exercise the rest waits for after a tick of this one (R100): the last member of its superset, by position, when
- * the exercise is in a superset and is not that member. Null otherwise, when a tick starts the rest itself.
+ * The exercise whose tick starts the rest after a tick of this one: the last member of its superset, by position, when
+ * the exercise is in a superset and is not that member (as `shouldStartRestAfterTick` judges). Its rest time sets the
+ * length (R101). Null otherwise, when a tick of this exercise starts the rest itself.
  */
-export function restWaitsFor(
-  exercises: { id: string; name: string; position: number; supersetGroup: number | null }[],
+export function supersetRestSource<T extends { id: string; position: number; supersetGroup: number | null }>(
+  exercises: T[],
   workoutExerciseId: string,
-): string | null {
+): T | null {
   const ticked = exercises.find((e) => e.id === workoutExerciseId);
   if (!ticked || ticked.supersetGroup === null) return null;
   const last = exercises
     .filter((e) => e.supersetGroup === ticked.supersetGroup)
     .reduce((a, b) => (b.position > a.position ? b : a));
-  return last.id === ticked.id ? null : last.name;
+  return last.id === ticked.id ? null : last;
+}
+
+/**
+ * The exercise the rest waits for after a tick of this one (R100): the `supersetRestSource`, named, when its rest (its
+ * own, else `settingsRestSeconds`) is not Off. Null otherwise, so nothing promises a rest that won't come.
+ */
+export function restWaitsFor(
+  exercises: { id: string; name: string; position: number; supersetGroup: number | null; restSeconds: number | null }[],
+  workoutExerciseId: string,
+  settingsRestSeconds: number,
+): string | null {
+  const source = supersetRestSource(exercises, workoutExerciseId);
+  if (source === null || restLengthFor(source.restSeconds, settingsRestSeconds) <= 0) return null;
+  return source.name;
+}
+
+/**
+ * What the Rest time panel of a superset member that is not last says (R101): the rest comes after the last member,
+ * at that member's rest time (`lengthSeconds`, resolved), or there is none when that is Off.
+ */
+export function supersetRestLine(name: string, lengthSeconds: number): string {
+  return lengthSeconds > 0 ? `Rest comes after ${name}, using its rest time.` : `No rest after ${name}: its rest time is Off.`;
 }
 
 /** The set ticked last in the workout (the latest `completedAt` of a done set), or null with nothing ticked (R100). */

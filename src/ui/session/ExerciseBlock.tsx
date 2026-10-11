@@ -80,6 +80,9 @@ type Props = {
  */
 export const NAME_ROW_HIT_SLOP = { top: 10, bottom: 10, left: 6, right: 6 };
 
+/** How far the name's target reaches above and below its 26pt line: a 44pt target, as ⋯ has. */
+const NAME_HIT_SLOP = { top: 9, bottom: 9 };
+
 /** The space between the count, + Note and Something off, and between the name row's two columns. */
 const NAME_ROW_GAP = 12;
 
@@ -252,7 +255,8 @@ export function ExerciseBlock({
       */}
       {supersetLabel !== null ? (
         // The bar alone said nothing about what it means (R100): a quiet word beside it, on the superset's first block.
-        <Body muted weight={500} accessibilityLabel={supersetLabel} style={{ fontSize: 13, marginBottom: 2 }}>
+        // It ends where the name's reach above it (`NAME_HIT_SLOP`) begins, so a tap on it never opens the form demo.
+        <Body muted weight={500} accessibilityLabel={supersetLabel} style={{ fontSize: 13, marginBottom: NAME_HIT_SLOP.top }}>
           Superset
         </Body>
       ) : null}
@@ -266,7 +270,7 @@ export function ExerciseBlock({
             accessibilityRole="button"
             accessibilityLabel={`Show form for ${ex.name}`}
             onPress={openDemo}
-            hitSlop={{ top: 9, bottom: 9 }}
+            hitSlop={NAME_HIT_SLOP}
             style={({ pressed }) => ({
               flexShrink: 1,
               flexBasis: 'auto',
@@ -279,8 +283,10 @@ export function ExerciseBlock({
             {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
             <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
               {ex.name}
-              {' '}
-              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} />
+              {/* A no-break space, so the glyph never sits alone on a line (R94). */}
+              {'\u00A0'}
+              {/* Ionicons turns font scaling off by default: the glyph grows with the name. */}
+              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} allowFontScaling />
             </Display>
           </Pressable>
           <View
@@ -438,8 +444,9 @@ export function ExerciseBlock({
                   upText={upText}
                   onOpenRest={onOpenRest}
                 />
-              ) : restWaitsFor !== null && row.set.id === latestTickedSetId ? (
+              ) : restWaitsFor !== null && row.set.id === latestTickedSetId && restEndsAt === null ? (
                 // A tick mid-superset starts no rest: where the rest row would be, a quiet line says when it comes (R100).
+                // Not while a rest runs anywhere (the rest watcher clears its end at zero), so two rests never seem to show.
                 <Body muted style={{ fontSize: 14, paddingVertical: 6 }}>
                   {restAfterLine(restWaitsFor)}
                 </Body>
