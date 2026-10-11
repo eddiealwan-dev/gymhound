@@ -66,9 +66,11 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * Ticks a set. `entered` is what the user typed or had stored (null for a field left empty); today's target and the
  * placeholders fill the gaps (spec 8.4): last time's set, else today's own values carried from the set above (spec
  * 18.6), so the tick records what the row shows (R48). Returns false, changing nothing, when a field the logging type
- * needs still has no value; the row says which one (spec 18.6). `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when
- * left out: a weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged
- * (spec 7.1), and a weight from the target or a placeholder is recorded in the unit in Settings, which they are in.
+ * needs still has no value; the row says which one (spec 18.6).
+ * `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when left out: a
+ * weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged (spec 7.1), and a
+ * weight from the target or a placeholder is recorded in the unit in Settings, which they are in. A distance from a
+ * placeholder is already in the distance unit in Settings, which the tick records it in.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
  * or the exercise is in a superset and is not the last member of its round. The screen reader is then told the set and the
  * rest: "Set 2 logged. Rest 2 minutes."
@@ -76,7 +78,7 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
 export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues, enteredUnit?: WeightUnit): boolean {
   const settings = getSettings(db);
   const { unit, distanceUnit } = settings;
-  const row = buildRows(ex, unit, gearFor(unit, settings)).find((r) => r.set.id === set.id);
+  const row = buildRows(ex, unit, gearFor(unit, settings), distanceUnit).find((r) => r.set.id === set.id);
   if (!row) return false;
   const values = resolveTick({ loggingType: ex.loggingType, entered, target: row.target, placeholders: row.placeholders });
   if (values === null) return false;
@@ -137,8 +139,12 @@ function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boo
   }
 }
 
-/** The -15s button: the running rest ends 15 seconds sooner, or is skipped when that would end it. */
+/**
+ * The -15s button: the running rest ends 15 seconds sooner, or is skipped when that would end it. A rest already over is
+ * left alone: the rest watcher still rings for it, and its row still holds "Rest's up".
+ */
 export function restMinus15(db: Db, workoutId: string, endsAt: number): void {
+  if (endsAt <= Date.now()) return;
   applyRest(db, workoutId, restAfterMinus15(endsAt, Date.now()), getSettings(db).restBell);
   bumpData();
 }
@@ -149,8 +155,12 @@ export function restPlus15(db: Db, workoutId: string, endsAt: number): void {
   bumpData();
 }
 
-/** The Skip button: ends the rest now and cancels its notification. */
-export function restSkip(db: Db, workoutId: string): void {
+/**
+ * The Skip button: ends the rest that ends at `endsAt` now and cancels its notification. A rest already over is left
+ * alone, as with -15s.
+ */
+export function restSkip(db: Db, workoutId: string, endsAt: number): void {
+  if (endsAt <= Date.now()) return;
   applyRest(db, workoutId, { kind: 'skip' }, false);
   bumpData();
 }

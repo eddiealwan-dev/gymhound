@@ -95,6 +95,10 @@ export function ConfirmSheet({
   onConfirm,
   onCancel,
 }: ConfirmSheetProps) {
+  const confirm = { key: 'confirm', label: confirmLabel, onPress: onConfirm };
+  const cancel = { key: 'cancel', label: cancelLabel, onPress: onCancel };
+  /** The primary answer first. */
+  const answers = primary === 'cancel' ? [cancel, confirm] : [confirm, cancel];
   return (
     <Sheet visible={visible} onClose={onCancel}>
       <Display weight={700} style={{ marginBottom: body ? 8 : 16 }}>
@@ -105,17 +109,11 @@ export function ConfirmSheet({
           {body}
         </Body>
       ) : null}
-      {primary === 'cancel' ? (
-        <View style={{ gap: 8 }}>
-          <Button label={cancelLabel} onPress={onCancel} />
-          <Button label={confirmLabel} onPress={onConfirm} variant="secondary" />
-        </View>
-      ) : (
-        <View style={{ gap: 8 }}>
-          <Button label={confirmLabel} onPress={onConfirm} />
-          <Button label={cancelLabel} onPress={onCancel} variant="secondary" />
-        </View>
-      )}
+      <View style={{ gap: 8 }}>
+        {answers.map(({ key, label, onPress }, i) => (
+          <Button key={key} label={label} onPress={onPress} variant={i === 0 ? 'primary' : 'secondary'} />
+        ))}
+      </View>
     </Sheet>
   );
 }

@@ -221,7 +221,12 @@ describe("carryAbove (spec 18.6: today's own values)", () => {
       P(2, 'working', 62.5, null, { weightUnit: 'kg' }),
       P(3, 'working', null, null),
     ];
-    expect(carryAbove(c, 3)).toEqual({ weight: 62.5, weightUnit: 'kg', reps: 8, durationS: null, distance: null });
+    expect(carryAbove(c, 3)).toEqual({ weight: 62.5, weightUnit: 'kg', reps: 8, durationS: null, distance: null, distanceUnit: null });
+  });
+
+  it('carries a distance with the unit it was logged in', () => {
+    const c = [P(0, 'working', null, null, { distance: 5, distanceUnit: 'km', durationS: 1500 }), P(1, 'working', null, null)];
+    expect(carryAbove(c, 1)).toMatchObject({ distance: 5, distanceUnit: 'km', durationS: 1500 });
   });
 
   it('never carries across types', () => {
@@ -234,7 +239,7 @@ describe("carryAbove (spec 18.6: today's own values)", () => {
 });
 
 describe('placeholdersFor with a carry', () => {
-  const carried: Carried = { weight: 60, weightUnit: 'kg', reps: 8, durationS: null, distance: null };
+  const carried: Carried = { weight: 60, weightUnit: 'kg', reps: 8, durationS: null, distance: null, distanceUnit: null };
 
   it("carries today's weight, and today's reps only when there is no rule", () => {
     expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'weighted', unit: 'kg', carried })).toEqual({
@@ -265,13 +270,30 @@ describe('placeholdersFor with a carry', () => {
   });
 
   it('timed: the rule seconds win, else the carried time', () => {
-    const timed: Carried = { weight: null, weightUnit: null, reps: null, durationS: 45, distance: null };
+    const timed: Carried = { weight: null, weightUnit: null, reps: null, durationS: 45, distance: null, distanceUnit: null };
     expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'timed', carried: timed })).toEqual({ ...none, durationS: 45 });
     expect(placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'timed', carried: timed })).toEqual({ ...none, durationS: 60 });
   });
 
+  it('converts a carried distance logged in another distance unit to the entry unit, to 2 decimals', () => {
+    const run: Carried = { weight: null, weightUnit: null, reps: null, durationS: 1500, distance: 5, distanceUnit: 'km' };
+    const at = (distanceUnit?: 'm' | 'km' | 'mi') =>
+      placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'distance_time', distanceUnit, carried: run }).distance;
+    expect(at('mi')).toBe(3.11);
+    expect(at('m')).toBe(5000);
+    expect(at('km')).toBe(5);
+    // With no entry unit it is left as logged.
+    expect(at()).toBe(5);
+  });
+
+  it('converts a previous distance logged in another distance unit to the entry unit', () => {
+    const last: PrevSet = { ...prev, weight: null, weightUnit: null, reps: null, durationS: 120, distance: 400, distanceUnit: 'm' };
+    expect(placeholdersFor({ previous: last, ruleRepMax: null, loggingType: 'distance_time', distanceUnit: 'km' }).distance).toBe(0.4);
+    expect(placeholdersFor({ previous: last, ruleRepMax: null, loggingType: 'distance_time', distanceUnit: 'm' }).distance).toBe(400);
+  });
+
   it('bodyweight plus never carries a 0 load', () => {
-    const bw: Carried = { weight: 0, weightUnit: 'lb', reps: 10, durationS: null, distance: null };
+    const bw: Carried = { weight: 0, weightUnit: 'lb', reps: 10, durationS: null, distance: null, distanceUnit: null };
     expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'bodyweight_plus', unit: 'lb', carried: bw })).toEqual({
       ...none,
       reps: 10,

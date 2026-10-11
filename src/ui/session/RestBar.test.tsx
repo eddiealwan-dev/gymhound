@@ -48,7 +48,7 @@ describe('the rest bar, for a rest no set row can show (R41)', () => {
 
     expect(restPlus15).toHaveBeenCalledWith('db', 'w1', endsAt);
     expect(restMinus15).toHaveBeenCalledWith('db', 'w1', endsAt);
-    expect(restSkip).toHaveBeenCalledWith('db', 'w1');
+    expect(restSkip).toHaveBeenCalledWith('db', 'w1', endsAt);
   });
 
   it('wraps its row with large text', () => {

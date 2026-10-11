@@ -47,11 +47,12 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
   const db = useDb();
   const { colors } = useTheme();
   const [panel, setPanel] = useState<Panel>(initialPanel ?? 'menu');
-  // It opens on `initialPanel`, set in the render in which it opens, so its first frame is already right.
+  // It opens on `initialPanel`, set in the render in which it opens, so its first frame is already right. Closing leaves
+  // the panel alone, so a sheet fades out showing what it showed (not the ⋯ menu).
   const [openFor, setOpenFor] = useState(exerciseId);
   if (openFor !== exerciseId) {
     setOpenFor(exerciseId);
-    if (openFor === null && exerciseId !== null) setPanel(initialPanel ?? 'menu');
+    if (exerciseId !== null) setPanel(initialPanel ?? 'menu');
   }
   const ex = exercises.find((e) => e.id === exerciseId) ?? null;
   const superset = ex ? supersetAction(exercises, ex.id) : 'hidden';
@@ -59,10 +60,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
   const defaultLabel = `Default (${restLabel(settingsRest)})`;
   const currentRest = ex === null || ex.restSeconds === null ? defaultLabel : restLabel(ex.restSeconds);
 
-  const close = () => {
-    setPanel('menu');
-    onClose();
-  };
+  const close = () => onClose();
 
   /** Saves the exercise's own rest (null for Default). A rest already running keeps its end. */
   const chooseRest = (seconds: number | null) => {

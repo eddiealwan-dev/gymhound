@@ -25,9 +25,9 @@ const restingStyle = (tree: ReactTestRenderer) => pressableOf(tree).props.style(
 const labelOf = (tree: ReactTestRenderer) => tree.root.findByType(Text);
 
 describe('Button', () => {
-  it('compact is 36pt tall with a 4pt hitSlop, for a 44pt target', () => {
+  it('compact is 36pt tall and at least 44pt wide with a 4pt hitSlop, for a 44pt target', () => {
     const tree = render(<Button label="+ Set" variant="quiet" size="compact" onPress={jest.fn()} />);
-    expect(restingStyle(tree)).toMatchObject({ minHeight: 36, paddingHorizontal: 12, borderRadius: 18 });
+    expect(restingStyle(tree)).toMatchObject({ minHeight: 36, minWidth: 44, paddingHorizontal: 12, borderRadius: 18 });
     expect(pressableOf(tree).props.hitSlop).toBe(4);
     expect(StyleSheet.flatten(labelOf(tree).props.style).fontSize).toBe(15);
   });
@@ -42,6 +42,17 @@ describe('Button', () => {
     expect(restingStyle(tree)).toMatchObject({ minHeight: 48, paddingHorizontal: 20, borderRadius: 12, borderColor: '#2e2a23' });
     expect(pressableOf(tree).props.hitSlop).toBeUndefined();
     expect(StyleSheet.flatten(labelOf(tree).props.style).fontSize).toBe(16);
+  });
+
+  it('compact primary is filled with text and labelled in bg, with no outline', () => {
+    const tree = render(<Button label="Done" size="compact" onPress={jest.fn()} />);
+    expect(restingStyle(tree)).toMatchObject({ minHeight: 36, backgroundColor: '#f1ece2', borderColor: 'transparent' });
+    expect(StyleSheet.flatten(labelOf(tree).props.style)).toMatchObject({ color: '#100f0c', fontSize: 15 });
+  });
+
+  it("a default Button's label follows the phone's text size with no cap", () => {
+    const tree = render(<Button label="Finish" onPress={jest.fn()} />);
+    expect(labelOf(tree).props.maxFontSizeMultiplier).toBeUndefined();
   });
 
   it('passes accessibilityLabel and maxFontSizeMultiplier through', () => {

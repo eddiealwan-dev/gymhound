@@ -444,6 +444,25 @@ function tickSetOf(e: number, i: number): boolean {
   return tick(db, ex, ex.sets[i], VALUES);
 }
 
+describe('tick records a carried distance in the entry distance unit', () => {
+  it('a distance carried from a set logged in km is recorded in mi, as the row shows it', () => {
+    startFromDay(db, PUSH_A);
+    setSetting(db, 'distanceUnit', 'mi');
+    const ex = activeView().exercises[0];
+    // The bench press's sets, read as a distance exercise whose first set was logged in km.
+    const run = {
+      ...ex,
+      loggingType: 'distance_time' as const,
+      rule: null,
+      sets: [{ ...ex.sets[0], done: true, distance: 5, distanceUnit: 'km' as const, durationS: 1500 }, ...ex.sets.slice(1)],
+    };
+
+    expect(tick(db, run, run.sets[1], NOTHING)).toBe(true);
+
+    expect(reread(run.sets[1].id)).toMatchObject({ distance: 3.11, distanceUnit: 'mi', durationS: 1500 });
+  });
+});
+
 describe('tick starts the rest timer', () => {
   it('stores the end time (the Settings length from now) and starts the surface with the bell setting', () => {
     startFromDay(db, PUSH_A);
@@ -687,6 +706,20 @@ describe('restMinus15', () => {
     expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
     expect(mockSurface.update).not.toHaveBeenCalled();
   });
+
+  it('does nothing once the rest is over, so the rest watcher still rings and the row still holds', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+    const before = version();
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(activeView().restSetId).toBe(activeView().exercises[0].sets[0].id);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before);
+  });
 });
 
 describe('restPlus15', () => {
@@ -770,11 +803,25 @@ describe('restSkip', () => {
     tickSetOf(0, 0);
     const before = version();
 
-    restSkip(db, workoutId());
+    restSkip(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBeNull();
     expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
     expect(version()).toBe(before + 1);
+  });
+
+  it('does nothing once the rest is over, so the rest watcher still rings and the row still holds', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+    const before = version();
+
+    restSkip(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(activeView().restSetId).toBe(activeView().exercises[0].sets[0].id);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before);
   });
 });
 
@@ -881,7 +928,7 @@ describe('restSetId: the set that started the rest', () => {
   it('is cleared by Skip, and by a -15s that skips', () => {
     startFromDay(db, PUSH_A);
     tickSetOf(0, 0);
-    restSkip(db, workoutId());
+    restSkip(db, workoutId(), NOW + 120_000);
     expect(restSetId()).toBeNull();
 
     tickSetOf(0, 1);

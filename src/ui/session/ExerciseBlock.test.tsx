@@ -80,27 +80,32 @@ type Rest = { restEndsAt: number | null; restSetId: string | null; restUp?: { se
 function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(
-      <ExerciseBlock
-        workoutId="w1"
-        ex={ex}
-        unit="lb"
-        gear={{ bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } }}
-        distanceUnit="mi"
-        onOpenMenu={() => {}}
-        inSuperset={false}
-        joinsNext={false}
-        restEndsAt={rest.restEndsAt}
-        restSetId={rest.restSetId}
-        restUp={rest.restUp ?? null}
-        upText="Rest's up · Set 3 next"
-        settingsRestSeconds={120}
-        onOpenRest={() => {}}
-        nextSetId={nextSetId}
-      />,
-    );
+    tree = create(block(ex, rest, nextSetId));
   });
   return tree;
+}
+
+/** The block as the session screen draws it. */
+function block(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null) {
+  return (
+    <ExerciseBlock
+      workoutId="w1"
+      ex={ex}
+      unit="lb"
+      gear={{ bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } }}
+      distanceUnit="mi"
+      onOpenMenu={() => {}}
+      inSuperset={false}
+      joinsNext={false}
+      restEndsAt={rest.restEndsAt}
+      restSetId={rest.restSetId}
+      restUp={rest.restUp ?? null}
+      upText="Rest's up · Set 3 next"
+      settingsRestSeconds={120}
+      onOpenRest={() => {}}
+      nextSetId={nextSetId}
+    />
+  );
 }
 
 /** The element with this accessibility label that can be pressed or typed into. */
@@ -423,6 +428,21 @@ describe('ExerciseBlock: the countdown under its set (Task 26, R41)', () => {
     const tree = mount(threeSets(), { restEndsAt: null, restSetId: null, restUp: { setId: 'other-exercise-s1', endsAt: Date.now() } });
 
     expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+
+  it('keeps the countdown through +15s, and starts a new one (with the length chosen since) when its set is ticked again', () => {
+    const tickedAt = (completedAt: number) =>
+      bench([set('s0', 0), set('s1', 1, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt }), set('s2', 2)]);
+    const endsAt = Date.now() + 90_000;
+    const tree = mount(tickedAt(1), { restEndsAt: endsAt, restSetId: 's1' });
+    const first = tree.root.findByType(RestInline);
+
+    act(() => tree.update(block(tickedAt(1), { restEndsAt: endsAt + 15_000, restSetId: 's1' })));
+    // Compared by identity: a test instance does not print.
+    expect(tree.root.findByType(RestInline) === first).toBe(true);
+
+    act(() => tree.update(block(tickedAt(2), { restEndsAt: endsAt + 30_000, restSetId: 's1' })));
+    expect(tree.root.findByType(RestInline) === first).toBe(false);
   });
 
   it("times the track by the exercise's own rest", () => {

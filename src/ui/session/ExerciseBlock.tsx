@@ -89,7 +89,7 @@ export function ExerciseBlock({
   const { colors } = useTheme();
   const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
   // Each row's previous is worked out once for the whole block.
-  const rows = buildRows(ex, unit, gear);
+  const rows = buildRows(ex, unit, gear, distanceUnit);
   const progress = exerciseProgress(ex);
   const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
   /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
@@ -245,7 +245,7 @@ export function ExerciseBlock({
       </View>
 
       <View style={{ gap: 2 }}>
-        {rows.map((row) => {
+        {rows.map((row, i) => {
           const restEnd = restUnder(row.set.id);
           return (
             <Fragment key={row.set.id}>
@@ -267,7 +267,16 @@ export function ExerciseBlock({
                 isNext={row.set.id === nextSetId}
               />
               {restEnd !== null ? (
-                <RestInline workoutId={workoutId} endsAt={restEnd} lengthSeconds={restLength} upText={upText} onOpenRest={onOpenRest} />
+                // A new tick of this set starts a new rest, with a new row that takes the length chosen since (the row
+                // keeps the length it started with, through +15s and a new choice from the countdown).
+                <RestInline
+                  key={String(ex.sets[i].completedAt)}
+                  workoutId={workoutId}
+                  endsAt={restEnd}
+                  lengthSeconds={restLength}
+                  upText={upText}
+                  onOpenRest={onOpenRest}
+                />
               ) : null}
             </Fragment>
           );
