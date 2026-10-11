@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { AccessibilityInfo, Text, TextInput, View } from 'react-native';
+import { useRef, useState, type ReactElement } from 'react';
+import { TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteEntry, type FoodEntry, updateEntryServings, updateQuickAdd } from '../../db/repositories/foodLogRepo';
 import { type EntryTotals, fuelNumber, type MacroInput, parseQuickAdd, parseServings, rescaleEntry, servingsText } from '../../domain/fuel';
@@ -9,23 +9,10 @@ import { bumpData } from '../../state/dataVersion';
 import { BodyField, CheckLine } from '../body/BodyLog';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
+import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
-
-/** A sheet title as ConfirmSheet draws it (Display 700); VoiceOver moves to it when it appears. */
-function SheetTitle({ children }: { children: string }) {
-  const { colors } = useTheme();
-  const ref = useRef<Text>(null);
-  useEffect(() => {
-    if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
-  }, []);
-  return (
-    <Text ref={ref} accessibilityRole="header" style={{ fontFamily: fonts.display700, fontSize: 28, color: colors.text, marginBottom: 16 }}>
-      {children}
-    </Text>
-  );
-}
 
 /** "300 kcal · 60 g protein". */
 function kcalProtein(t: EntryTotals, locale: string): string {

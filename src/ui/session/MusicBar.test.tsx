@@ -2,6 +2,7 @@ import { AccessibilityInfo, Animated, Keyboard, Linking, Platform, Text, View } 
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { setSetting } from '../../db/repositories/settingsRepo';
+import { announce as announceMock } from '../../platform/announce';
 import { MUSIC_APPS } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
@@ -16,6 +17,7 @@ jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../db/repositories/settingsRepo', () => ({ setSetting: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({ bumpData: jest.fn() }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
+jest.mock('../../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -192,8 +194,8 @@ describe('the music bar slides up (Task 26, spec §18.4)', () => {
 });
 
 describe('the music bar with a screen reader (G5)', () => {
-  // React Native's own Jest mock, which `jest.restoreAllMocks` leaves alone: its calls are cleared before each test.
-  const announce = jest.mocked(AccessibilityInfo.announceForAccessibility);
+  // A module mock, which `jest.restoreAllMocks` leaves alone: its calls are cleared before each test.
+  const announce = jest.mocked(announceMock);
 
   beforeEach(() => announce.mockClear());
 

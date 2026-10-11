@@ -48,7 +48,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 const mockFlushAll = jest.fn();
 jest.mock('../state/draftFlush', () => ({ flushAll: () => mockFlushAll() }));
 jest.mock('./ThemeProvider', () => {

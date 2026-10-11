@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { AccessibilityInfo, Text, View } from 'react-native';
+import { useRef, useState, type ReactElement } from 'react';
+import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { logFood } from '../../db/repositories/foodLogRepo';
 import { entryTotals, type FoodPerServing, fuelNumber, parseServings, servingsText } from '../../domain/fuel';
@@ -8,9 +8,8 @@ import { bumpData } from '../../state/dataVersion';
 import { deviceLocale } from '../body/BodyLog';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
+import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
-import { fonts } from '../theme';
-import { useTheme } from '../ThemeProvider';
 import { FuelField } from './MacroFields';
 
 /** The servings chips (R141), with what VoiceOver says for each. */
@@ -24,20 +23,6 @@ const CHIPS = [
 /** "{kcal} kcal · {protein} g protein", each rounded once (R156). */
 export function kcalProteinText(t: { kcal: number; proteinG: number }, locale?: string): string {
   return `${fuelNumber(t.kcal, locale)} kcal · ${fuelNumber(t.proteinG, locale)} g protein`;
-}
-
-/** A sheet title as ConfirmSheet draws it (Display 700); VoiceOver moves to it when the sheet opens. */
-function SheetTitle({ children }: { children: string }) {
-  const { colors } = useTheme();
-  const ref = useRef<Text>(null);
-  useEffect(() => {
-    if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
-  }, []);
-  return (
-    <Text ref={ref} accessibilityRole="header" style={{ fontFamily: fonts.display700, fontSize: 28, color: colors.text, marginBottom: 4 }}>
-      {children}
-    </Text>
-  );
 }
 
 type ContentProps = {
@@ -78,7 +63,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
 
   return (
     <>
-      <SheetTitle>{food.name}</SheetTitle>
+      <SheetTitle marginBottom={4}>{food.name}</SheetTitle>
       <Body muted style={{ marginBottom: 16 }}>{`${food.servingLabel}${grams}`}</Body>
       <View style={{ gap: 12, marginBottom: 24 }}>
         <FuelField label="Servings" value={draft} onChangeText={change} onSubmit={add} numeric error={invalid ? 'Check this number' : undefined} />

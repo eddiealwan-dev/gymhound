@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteWater, logWater, setWaterGoal, type WaterEntry } from '../../db/repositories/waterRepo';
 import { dayTitle } from '../../domain/dates';
@@ -10,8 +10,8 @@ import { bumpData } from '../../state/dataVersion';
 import { BodyField, CheckLine } from '../body/BodyLog';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
+import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
-import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
 
 export type WaterSheetMode = 'other' | 'goal' | 'entries';
@@ -26,20 +26,6 @@ export function waterDayPhrase(localDate: string, today: string, locale: string)
 /** What VoiceOver hears after water is added: "Added 250 ml. 1,250 ml today." (fl oz said in full). */
 export function waterAddedMessage(addedMl: number, totalMl: number, unit: WaterUnit, dayPhrase: string, locale: string): string {
   return `Added ${formatWaterSpoken(addedMl, unit, locale)}. ${formatWaterSpoken(totalMl, unit, locale)} ${dayPhrase}.`;
-}
-
-/** A sheet title as ConfirmSheet draws it (Display 700); VoiceOver moves to it when the sheet opens. */
-function SheetTitle({ children }: { children: string }) {
-  const { colors } = useTheme();
-  const ref = useRef<Text>(null);
-  useEffect(() => {
-    if (ref.current) AccessibilityInfo.sendAccessibilityEvent(ref.current, 'focus');
-  }, []);
-  return (
-    <Text ref={ref} accessibilityRole="header" style={{ fontFamily: fonts.display700, fontSize: 28, color: colors.text, marginBottom: 16 }}>
-      {children}
-    </Text>
-  );
 }
 
 /** A number field in the unit, its unit beside it, and "Check this number" under it when it needs another look. */
