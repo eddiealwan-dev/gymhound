@@ -10,6 +10,14 @@ export function csvField(value: CsvValue): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+/**
+ * Free text with an apostrophe in front when it starts with `=` `+` `-` `@`, a tab or a CR, which Excel and Google
+ * Sheets would read as a formula (OWASP's CSV injection advice). Other text is returned as it is.
+ */
+export function neutraliseFormula(text: string): string {
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+}
+
 /** A whole CSV file: a UTF-8 BOM (so Excel reads it as UTF-8), then the header and the rows, joined with CRLF. */
 export function toCsv(header: readonly string[], rows: CsvValue[][]): string {
   return `﻿${[header, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n')}`;
@@ -108,11 +116,13 @@ export type WorkoutCsvSet = {
  * The CSV rows for done sets, in the order given (by start time, then exercise position, then set position), with
  * one value per `WORKOUT_CSV_COLUMNS` entry. `set_number` is the set's 1-based rank among the sets of its own type in
  * that workout exercise, the rule the previous result matches by. Each time is written at the offset `offsetAt`
- * gives for that instant.
+ * gives for that instant. The free text (workout, routine, routine day, exercise and note) goes through
+ * `neutraliseFormula`; numbers, ids, codes and times are left as they are.
  */
 export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (epochMs: number) => number): CsvValue[][] {
   const seen = new Map<string, number>();
   const iso = (ms: number | null) => (ms === null ? null : isoWithOffset(ms, offsetAt(ms)));
+  const text = (value: string | null) => (value === null ? null : neutraliseFormula(value));
   return sets.map((s) => {
     const key = `${s.workoutExerciseId}\u0000${s.setType}`;
     const setNumber = (seen.get(key) ?? 0) + 1;
@@ -122,11 +132,11 @@ export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (e
       s.localDate,
       iso(s.startedAt),
       iso(s.finishedAt),
-      s.workoutName,
-      s.routineName,
-      s.routineDayName,
+      text(s.workoutName),
+      text(s.routineName),
+      text(s.routineDayName),
       s.dayMark,
-      s.exerciseName,
+      text(s.exerciseName),
       s.exerciseId,
       setNumber,
       s.setType,
@@ -138,7 +148,7 @@ export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (e
       s.distance,
       s.distanceUnit,
       prKinds(s.prFlags),
-      s.exerciseNote,
+      text(s.exerciseNote),
     ];
   });
 }

@@ -1,4 +1,13 @@
-import { buildWorkoutCsvRows, csvField, isoWithOffset, prKinds, toCsv, WORKOUT_CSV_COLUMNS, type WorkoutCsvSet } from './csv';
+import {
+  buildWorkoutCsvRows,
+  csvField,
+  isoWithOffset,
+  neutraliseFormula,
+  prKinds,
+  toCsv,
+  WORKOUT_CSV_COLUMNS,
+  type WorkoutCsvSet,
+} from './csv';
 
 describe('csvField', () => {
   it('leaves a plain field alone', () => {
@@ -27,6 +36,30 @@ describe('csvField', () => {
     expect(csvField(82.5)).toBe('82.5');
     expect(csvField(0)).toBe('0');
     expect(csvField(-3)).toBe('-3');
+  });
+});
+
+describe('neutraliseFormula (R47)', () => {
+  it('prefixes an apostrophe to text that starts with - + = or @', () => {
+    expect(neutraliseFormula('- elbows in')).toBe("'- elbows in");
+    expect(neutraliseFormula('+5 lb next time')).toBe("'+5 lb next time");
+    expect(neutraliseFormula('=ok')).toBe("'=ok");
+    expect(neutraliseFormula('@home')).toBe("'@home");
+  });
+
+  it('prefixes text that starts with a tab or a carriage return', () => {
+    expect(neutraliseFormula('\tslow down')).toBe("'\tslow down");
+    expect(neutraliseFormula('\rslow down')).toBe("'\rslow down");
+  });
+
+  it('leaves other text and empty text alone', () => {
+    expect(neutraliseFormula('elbows in')).toBe('elbows in');
+    expect(neutraliseFormula('elbows in - slow')).toBe('elbows in - slow');
+    expect(neutraliseFormula('')).toBe('');
+  });
+
+  it('still lets csvField quote a guarded value that holds a comma', () => {
+    expect(csvField(neutraliseFormula('- a, b'))).toBe(`"'- a, b"`);
   });
 });
 
@@ -171,5 +204,40 @@ describe('buildWorkoutCsvRows', () => {
 
     expect(row[2]).toBe('2026-10-10T10:00:00.000-04:00');
     expect(row[3]).toBe('2026-10-10T10:00:00.000-05:00');
+  });
+
+  it('guards the free-text columns against formulas, and leaves numbers, ids and codes alone (R47)', () => {
+    const [row] = buildWorkoutCsvRows(
+      [
+        {
+          ...base,
+          workoutName: '=Push',
+          routineName: '+PPL',
+          routineDayName: '@gym',
+          exerciseName: '-Dips',
+          exerciseId: '-dips',
+          weight: -20,
+          exerciseNote: '- elbows in, slow',
+        },
+      ],
+      () => 0,
+    );
+
+    expect(row[4]).toBe("'=Push");
+    expect(row[5]).toBe("'+PPL");
+    expect(row[6]).toBe("'@gym");
+    expect(row[8]).toBe("'-Dips");
+    expect(row[9]).toBe('-dips');
+    expect(row[12]).toBe(-20);
+    expect(row[20]).toBe("'- elbows in, slow");
+    expect(toCsv(WORKOUT_CSV_COLUMNS, [row]).split('\r\n')[1].endsWith(`,"'- elbows in, slow"`)).toBe(true);
+  });
+
+  it('keeps a null routine, routine day and note empty, and plain text as it is', () => {
+    const [row] = buildWorkoutCsvRows([{ ...base, routineName: null, routineDayName: null, exerciseNote: null }], () => 0);
+    const [plain] = buildWorkoutCsvRows([{ ...base, exerciseNote: 'elbows in' }], () => 0);
+
+    expect([row[5], row[6], row[20]]).toEqual([null, null, null]);
+    expect([plain[4], plain[8], plain[20]]).toEqual(['Push A', 'Bench press', 'elbows in']);
   });
 });
