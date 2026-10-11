@@ -1,4 +1,7 @@
 import {
+  BODY_CSV_COLUMNS,
+  type BodyCsvEntry,
+  buildBodyCsvRows,
   buildFoodCsvRows,
   buildWorkoutCsvRows,
   csvField,
@@ -309,5 +312,76 @@ describe('buildFoodCsvRows', () => {
     const rows = buildFoodCsvRows([entry({ name: 'B' }), entry({ name: 'A' })], () => 0);
 
     expect(rows.map((r) => r[2])).toEqual(['B', 'A']);
+  });
+});
+
+describe('BODY_CSV_COLUMNS (R183)', () => {
+  it('is date, measured_at, kind, value, unit', () => {
+    expect(BODY_CSV_COLUMNS.join(', ')).toBe('date, measured_at, kind, value, unit');
+  });
+});
+
+describe('buildBodyCsvRows (R183)', () => {
+  const at = Date.UTC(2026, 9, 10, 13, 5, 7, 250);
+  const entry = (over: Partial<BodyCsvEntry> = {}): BodyCsvEntry => ({
+    localDate: '2026-10-10',
+    measuredAt: at,
+    kind: 'bodyweight',
+    value: 181.4,
+    unit: 'lb',
+    ...over,
+  });
+
+  it('writes the date, the time with its offset, the stored kind, the value as stored and its unit', () => {
+    expect(buildBodyCsvRows([entry(), entry({ kind: 'body_fat', value: 18.25, unit: '%' })], () => -300)).toEqual([
+      ['2026-10-10', '2026-10-10T08:05:07.250-05:00', 'bodyweight', 181.4, 'lb'],
+      ['2026-10-10', '2026-10-10T08:05:07.250-05:00', 'body_fat', 18.25, '%'],
+    ]);
+  });
+
+  it("asks for the offset at each entry's own time", () => {
+    const offsetAt = jest.fn(() => 60);
+
+    buildBodyCsvRows([entry()], offsetAt);
+
+    expect(offsetAt).toHaveBeenCalledWith(at);
+  });
+
+  it('keeps each entry in the unit it was logged in', () => {
+    const rows = buildBodyCsvRows([entry({ value: 82.3, unit: 'kg' }), entry({ localDate: '2026-10-11', measuredAt: at + 86_400_000 })], () => 0);
+
+    expect(rows.map((r) => [r[3], r[4]])).toEqual([
+      [82.3, 'kg'],
+      [181.4, 'lb'],
+    ]);
+  });
+
+  it('orders by date, then the time measured, then kind in the Body order, whatever order it is given', () => {
+    const rows = buildBodyCsvRows(
+      [
+        entry({ localDate: '2026-10-11', measuredAt: at + 86_400_000, kind: 'waist', unit: 'in', value: 33 }),
+        entry({ kind: 'body_fat', unit: '%', value: 18 }),
+        entry({ kind: 'neck', unit: 'in', value: 15 }),
+        entry({ kind: 'waist', unit: 'in', value: 32.5 }),
+        entry({ measuredAt: at - 60_000, kind: 'thighs', unit: 'in', value: 24 }),
+        entry(),
+        entry({ localDate: '2026-10-09', measuredAt: at + 2 * 86_400_000 }),
+      ],
+      () => 0,
+    );
+
+    expect(rows.map((r) => `${r[0]} ${r[2]}`)).toEqual([
+      '2026-10-09 bodyweight',
+      '2026-10-10 thighs',
+      '2026-10-10 bodyweight',
+      '2026-10-10 waist',
+      '2026-10-10 neck',
+      '2026-10-10 body_fat',
+      '2026-10-11 waist',
+    ]);
+  });
+
+  it('is empty with no entries', () => {
+    expect(buildBodyCsvRows([], () => 0)).toEqual([]);
   });
 });

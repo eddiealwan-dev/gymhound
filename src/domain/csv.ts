@@ -1,3 +1,4 @@
+import { BODY_KINDS, type BodyKind, type BodyUnit } from './body';
 import type { DistanceUnit, ExerciseMark, SetType, WeightUnit } from './types';
 
 /** One CSV field before quoting. Null is an empty field. */
@@ -194,4 +195,30 @@ export function buildFoodCsvRows(entries: readonly FoodCsvEntry[], offsetAt: (ep
     twoDecimals(e.carbsG),
     twoDecimals(e.fatG),
   ]);
+}
+
+/**
+ * The columns of `gymhound-body-YYYY-MM-DD.csv`, in order (R183): bodyweight and the measurements in one file. `kind`
+ * is the stored kind (`bodyweight`, `waist`, …, `body_fat`); `value` and `unit` are as logged.
+ */
+export const BODY_CSV_COLUMNS = ['date', 'measured_at', 'kind', 'value', 'unit'] as const;
+
+/** One bodyweight or measurement entry, in the unit it was logged in. */
+export type BodyCsvEntry = { localDate: string; measuredAt: number; kind: BodyKind; value: number; unit: BodyUnit };
+
+/**
+ * The body CSV rows, one per entry, by date, then the time measured, then kind in `BODY_KINDS` order (whatever order
+ * they are given), with one value per `BODY_CSV_COLUMNS` entry. `measured_at` is written at the offset `offsetAt`
+ * gives for that instant; the value is written as stored, in the unit it was logged in (§7.1).
+ */
+export function buildBodyCsvRows(entries: readonly BodyCsvEntry[], offsetAt: (epochMs: number) => number): CsvValue[][] {
+  const rank = (kind: BodyKind) => BODY_KINDS.indexOf(kind);
+  return [...entries]
+    .sort(
+      (a, b) =>
+        (a.localDate < b.localDate ? -1 : a.localDate > b.localDate ? 1 : 0) ||
+        a.measuredAt - b.measuredAt ||
+        rank(a.kind) - rank(b.kind),
+    )
+    .map((e) => [e.localDate, isoWithOffset(e.measuredAt, offsetAt(e.measuredAt)), e.kind, e.value, e.unit]);
 }

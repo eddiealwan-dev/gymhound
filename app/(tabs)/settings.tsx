@@ -14,7 +14,7 @@ import { formatWeight } from '../../src/domain/units';
 import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
 import { debugUnlockAllowed, entitlementsFor, useEntitlementsState } from '../../src/platform/entitlements';
-import { exportFoodCsv, exportWorkoutsCsv } from '../../src/platform/exportFiles';
+import { exportBodyCsv, exportFoodCsv, exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
@@ -518,21 +518,22 @@ function BackupsSection() {
   );
 }
 
-/** The two exports: what each button says and runs, and its line when there is nothing to export. */
+/** The three exports: what each button says and runs, and its line when there is nothing to export. */
 const EXPORTS = {
   workouts: { label: 'Export workouts (CSV)', run: exportWorkoutsCsv, empty: 'No finished workouts yet.' },
   food: { label: 'Export food (CSV)', run: exportFoodCsv, empty: 'No food logged yet.' },
+  body: { label: 'Export body (CSV)', run: exportBodyCsv, empty: 'No body entries yet.' },
 } as const;
 
 type ExportKind = keyof typeof EXPORTS;
 
 /**
- * The finished workouts and the food log as CSV files (spec §11) through the share sheet, to open in Numbers or Excel.
- * The food CSV is free and stays after Pro lapses (§9, R153). Phone app only, like Backups. A muted line under the
- * button pressed says when there is nothing to export or the share sheet couldn't open, and the screen reader is told
- * it. The line belongs to the data version it was shown at, so a write since (a finished workout, a logged food) drops
- * it. While an export runs, both buttons are faded and presses are ignored, so a second tap as the share sheet opens
- * doesn't start a second export.
+ * The finished workouts, the food log and the body entries as CSV files (spec §11, R183) through the share sheet, to
+ * open in Numbers or Excel. The food CSV is free and stays after Pro lapses (§9, R153); the body CSV is free. Phone
+ * app only, like Backups. A muted line under the button pressed says when there is nothing to export or the share
+ * sheet couldn't open, and the screen reader is told it. The line belongs to the data version it was shown at, so a
+ * write since (a finished workout, a logged food) drops it. While an export runs, all three buttons are faded and
+ * presses are ignored, so a second tap as the share sheet opens doesn't start a second export.
  */
 function ExportSection() {
   const db = useDb();
