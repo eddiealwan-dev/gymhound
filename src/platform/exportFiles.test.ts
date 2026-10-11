@@ -1,14 +1,15 @@
 /** @jest-environment node */
 import * as Sharing from 'expo-sharing';
-import { foodCsvRows, workoutCsvRows } from '../db/repositories/exportRepo';
+import { addBodyEntry } from '../db/repositories/bodyRepo';
+import { bodyCsvRows, foodCsvRows, workoutCsvRows } from '../db/repositories/exportRepo';
 import { logQuickAdd } from '../db/repositories/foodLogRepo';
 import { setSetting } from '../db/repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
-import { FOOD_CSV_COLUMNS, toCsv, WORKOUT_CSV_COLUMNS } from '../domain/csv';
-import { exportFoodCsv, exportWorkoutsCsv } from './exportFiles';
+import { BODY_CSV_COLUMNS, FOOD_CSV_COLUMNS, toCsv, WORKOUT_CSV_COLUMNS } from '../domain/csv';
+import { exportBodyCsv, exportFoodCsv, exportWorkoutsCsv } from './exportFiles';
 
 /** What the code did to files, in order: each file made, with its options, and each write with its content. */
 const mockFileEvents: { op: 'new' | 'create' | 'write'; uri: string; arg?: unknown }[] = [];
@@ -181,5 +182,71 @@ describe('exportFoodCsv (§11, R153)', () => {
     jest.mocked(Sharing.shareAsync).mockRejectedValueOnce(new Error('share sheet failed'));
 
     await expect(exportFoodCsv(withOneEntry(), NOW)).rejects.toThrow('share sheet failed');
+  });
+});
+
+describe('exportBodyCsv (R183)', () => {
+  const BODY_URI = 'file:///data/Containers/%2540anonymous%252Fgymhound-1234/Library/Caches/gymhound-body-2026-10-10.csv';
+
+  /** A seeded database with a waist and a bodyweight logged at the same moment on Oct 10. */
+  function withTwoEntries(): Db {
+    const db = seededDb();
+    const at = new Date(2026, 9, 10, 7, 0).getTime();
+    addBodyEntry(db, 'waist', 32.5, 'in', at);
+    addBodyEntry(db, 'bodyweight', 180.2, 'lb', at);
+    return db;
+  }
+
+  it('writes the body CSV to the cache folder, named for the local date, replacing a same-day file', async () => {
+    const db = withTwoEntries();
+
+    await expect(exportBodyCsv(db, NOW)).resolves.toBe('shared');
+
+    expect(mockFileEvents.filter((e) => e.op !== 'new')).toEqual([
+      { op: 'create', uri: BODY_URI, arg: { overwrite: true } },
+      { op: 'write', uri: BODY_URI, arg: toCsv([...BODY_CSV_COLUMNS], bodyCsvRows(db)) },
+    ]);
+  });
+
+  it('writes the BOM, the header and one row per entry, bodyweight before waist', async () => {
+    await exportBodyCsv(withTwoEntries(), NOW);
+
+    const content = mockFileEvents.find((e) => e.op === 'write')!.arg as string;
+    const lines = content.split('\r\n');
+    expect(lines[0]).toBe('\uFEFFdate,measured_at,kind,value,unit');
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toMatch(/^2026-10-10,2026-10-10T07:00:00\.000[+-]\d\d:\d\d,bodyweight,180\.2,lb$/);
+    expect(lines[2]).toMatch(/^2026-10-10,2026-10-10T07:00:00\.000[+-]\d\d:\d\d,waist,32\.5,in$/);
+  });
+
+  it('opens the share sheet for that file as a CSV called GymHound body', async () => {
+    await exportBodyCsv(withTwoEntries(), NOW);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(BODY_URI, {
+      mimeType: 'text/csv',
+      UTI: 'public.comma-separated-values-text',
+      dialogTitle: 'GymHound body',
+    });
+  });
+
+  it('returns empty, with no file and no share sheet, when nothing is logged', async () => {
+    await expect(exportBodyCsv(withOneWorkout(), NOW)).resolves.toBe('empty');
+
+    expect(mockFileEvents).toEqual([]);
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable, writing nothing, when the phone cannot share', async () => {
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(false);
+
+    await expect(exportBodyCsv(withTwoEntries(), NOW)).resolves.toBe('unavailable');
+
+    expect(mockFileEvents).toEqual([]);
+  });
+
+  it('passes a failure to share to the caller', async () => {
+    jest.mocked(Sharing.shareAsync).mockRejectedValueOnce(new Error('share sheet failed'));
+
+    await expect(exportBodyCsv(withTwoEntries(), NOW)).rejects.toThrow('share sheet failed');
   });
 });

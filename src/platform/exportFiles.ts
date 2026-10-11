@@ -1,8 +1,8 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { foodCsvRows, workoutCsvRows } from '../db/repositories/exportRepo';
+import { bodyCsvRows, foodCsvRows, workoutCsvRows } from '../db/repositories/exportRepo';
 import type { Db } from '../db/types';
-import { FOOD_CSV_COLUMNS, toCsv, WORKOUT_CSV_COLUMNS, type CsvValue } from '../domain/csv';
+import { BODY_CSV_COLUMNS, FOOD_CSV_COLUMNS, toCsv, WORKOUT_CSV_COLUMNS, type CsvValue } from '../domain/csv';
 import { toLocalDate } from '../domain/dates';
 import { fileUri, pathFromUri } from './snapshots/fileUri';
 
@@ -12,7 +12,7 @@ import { fileUri, pathFromUri } from './snapshots/fileUri';
  * nothing either way. A failure to write or to share rejects.
  */
 async function shareCsv(
-  kind: 'workouts' | 'food',
+  kind: 'workouts' | 'food' | 'body',
   header: readonly string[],
   rows: CsvValue[][],
   now: number,
@@ -57,4 +57,16 @@ export async function exportWorkoutsCsv(db: Db, now: number): Promise<'shared' |
  */
 export async function exportFoodCsv(db: Db, now: number): Promise<'shared' | 'empty' | 'unavailable'> {
   return shareCsv('food', FOOD_CSV_COLUMNS, foodCsvRows(db), now, 'GymHound food');
+}
+
+/**
+ * Writes `gymhound-body-YYYY-MM-DD.csv` (R183) the same way, one row per bodyweight or measurement entry, each in the
+ * unit it was logged in. Free.
+ * - 'empty': nothing is logged; no file is written.
+ * - 'unavailable': the phone cannot share; no file is written.
+ * - 'shared': the share sheet opened.
+ * A failure to write or to share rejects.
+ */
+export async function exportBodyCsv(db: Db, now: number): Promise<'shared' | 'empty' | 'unavailable'> {
+  return shareCsv('body', BODY_CSV_COLUMNS, bodyCsvRows(db), now, 'GymHound body');
 }

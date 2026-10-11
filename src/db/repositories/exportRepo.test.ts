@@ -1,12 +1,13 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
-import { FOOD_CSV_COLUMNS, WORKOUT_CSV_COLUMNS } from '../../domain/csv';
+import { BODY_CSV_COLUMNS, FOOD_CSV_COLUMNS, WORKOUT_CSV_COLUMNS } from '../../domain/csv';
 import { toLocalDate } from '../../domain/dates';
 import { sets, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
+import { addBodyEntry } from './bodyRepo';
 import { setExerciseNote } from './exercisesRepo';
-import { foodCsvRows, workoutCsvRows } from './exportRepo';
+import { bodyCsvRows, foodCsvRows, workoutCsvRows } from './exportRepo';
 import { logFood, logQuickAdd } from './foodLogRepo';
 import { getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, addWarmupSet, setExerciseMark } from './workoutEditRepo';
@@ -269,5 +270,51 @@ describe('foodCsvRows (§11, R153)', () => {
 
     expect(getSettings(db).proCached).toBe(false);
     expect(foodCsvRows(db)).toHaveLength(1);
+  });
+});
+
+describe('bodyCsvRows (R183)', () => {
+  const bcol = (name: (typeof BODY_CSV_COLUMNS)[number]) => BODY_CSV_COLUMNS.indexOf(name);
+  /** Local times on the device, so each entry's date is that day. */
+  const at = (day: number, hour: number) => new Date(2026, 9, day, hour, 0).getTime();
+
+  it('is empty with nothing logged', () => {
+    expect(bodyCsvRows(seededDb())).toEqual([]);
+  });
+
+  it('writes bodyweight and measurements together, by date, then time, then kind in the Body order', () => {
+    const db = seededDb();
+    addBodyEntry(db, 'waist', 81.5, 'cm', at(10, 8));
+    addBodyEntry(db, 'bodyweight', 180.2, 'lb', at(10, 8));
+    addBodyEntry(db, 'body_fat', 17.5, '%', at(9, 21));
+    addBodyEntry(db, 'bodyweight', 82, 'kg', at(10, 7));
+
+    const rows = bodyCsvRows(db);
+
+    expect(rows.map((r) => [r[bcol('date')], r[bcol('kind')], r[bcol('value')], r[bcol('unit')]])).toEqual([
+      ['2026-10-09', 'body_fat', 17.5, '%'],
+      ['2026-10-10', 'bodyweight', 82, 'kg'],
+      ['2026-10-10', 'bodyweight', 180.2, 'lb'],
+      ['2026-10-10', 'waist', 81.5, 'cm'],
+    ]);
+    expect(rows.every((r) => r.length === BODY_CSV_COLUMNS.length)).toBe(true);
+  });
+
+  it('writes the time measured at the offset given', () => {
+    const db = seededDb();
+    addBodyEntry(db, 'bodyweight', 180, 'lb', Date.UTC(2026, 9, 10, 13, 0));
+
+    expect(bodyCsvRows(db, () => -300)).toEqual([['2026-10-10', '2026-10-10T08:00:00.000-05:00', 'bodyweight', 180, 'lb']]);
+  });
+
+  it('defaults to the device offset at each time', () => {
+    const db = seededDb();
+    const measuredAt = at(10, 8);
+    addBodyEntry(db, 'neck', 15.25, 'in', measuredAt);
+
+    const value = bodyCsvRows(db)[0][bcol('measured_at')] as string;
+
+    expect(new Date(value).getTime()).toBe(measuredAt);
+    expect(value.startsWith('2026-10-10T08:00:00.000')).toBe(true);
   });
 });
