@@ -65,17 +65,19 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   }, [reduced]);
 
   const frame = { aspectRatio: 3 / 2, borderRadius: 12, overflow: 'hidden' as const, backgroundColor: colors.surfaceRaised };
+  // Neither photo is a stop for the screen reader, so it never lands on the hidden one: the frame is (review of R86).
   const photo = (which: 0 | 1) => ({
     source: photos[which],
-    accessible: true,
-    accessibilityLabel: `${name}, ${which === 0 ? 'start' : 'end'} position`,
+    testID: which === 0 ? 'form-demo-start' : 'form-demo-end',
+    accessible: false,
     accessibilityIgnoresInvertColors: true,
     resizeMode: 'contain' as const,
   });
+  const described = { accessible: true, accessibilityRole: 'image' as const, accessibilityLabel: `${name}, start and end positions` };
 
   if (reduced) {
     return (
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View {...described} style={{ flexDirection: 'row', gap: 8 }}>
         <View style={[frame, { flex: 1 }]}>
           <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
         </View>
@@ -86,7 +88,7 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
     );
   }
   return (
-    <View style={frame}>
+    <View {...described} style={frame}>
       <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
       <Image {...photo(1)} style={[StyleSheet.absoluteFill, { opacity: endShown ? 1 : 0, backgroundColor: colors.surfaceRaised }]} />
     </View>

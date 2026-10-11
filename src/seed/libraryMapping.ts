@@ -131,7 +131,7 @@ export const LEGACY_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   'pike-push-up': [
     'Start in a push-up position, then walk your feet in and lift your hips so your body makes an upside-down V.',
-    'Bend your elbows to lower the top of your head toward the floor between your hands.',
+    'Bend your elbows to lower the top of your head to a point slightly in front of your hands, so your head and hands make a triangle.',
     'Keep your hips high and your elbows angled back, not flared out.',
     'Press back up until your arms are straight.',
   ],

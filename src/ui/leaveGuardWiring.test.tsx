@@ -20,14 +20,19 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
+/** Guards set by a test, removed after it even when an assertion fails, so none leaks into the next test. */
+const guards: (() => void)[] = [];
+
 /** A guard like the routine editor's while it holds changes: it keeps the move to make after "Discard". */
 function guardHoldingChanges() {
   const held: (() => void)[] = [];
-  const remove = setLeaveGuard((leave) => {
-    held.push(leave);
-    return true;
-  });
-  return { held, remove };
+  guards.push(
+    setLeaveGuard((leave) => {
+      held.push(leave);
+      return true;
+    }),
+  );
+  return { held };
 }
 
 function pressLabelled(tree: ReactTestRenderer, label: string) {
@@ -36,6 +41,10 @@ function pressLabelled(tree: ReactTestRenderer, label: string) {
 }
 
 beforeEach(() => jest.clearAllMocks());
+
+afterEach(() => {
+  while (guards.length > 0) guards.pop()!();
+});
 
 describe('the dock asks the screen it leaves (R89)', () => {
   const navigation = { emit: jest.fn(() => ({ defaultPrevented: false })), navigate: jest.fn() };
@@ -68,7 +77,7 @@ describe('the dock asks the screen it leaves (R89)', () => {
   });
 
   it('while a screen holds changes, the tab waits for its answer', () => {
-    const { held, remove } = guardHoldingChanges();
+    const { held } = guardHoldingChanges();
     const tree = mountDock();
 
     pressLabelled(tree, 'History');
@@ -77,7 +86,6 @@ describe('the dock asks the screen it leaves (R89)', () => {
 
     act(() => held[0]());
     expect(navigation.navigate).toHaveBeenCalledWith('history/index', undefined);
-    remove();
   });
 });
 
@@ -99,7 +107,7 @@ describe("the header's Settings button asks the screen it leaves (R89)", () => {
   });
 
   it('while a screen holds changes, Settings waits for its answer', () => {
-    const { held, remove } = guardHoldingChanges();
+    const { held } = guardHoldingChanges();
     const tree = mountHeader();
 
     pressLabelled(tree, 'Settings');
@@ -108,6 +116,5 @@ describe("the header's Settings button asks the screen it leaves (R89)", () => {
 
     act(() => held[0]());
     expect(router.push).toHaveBeenCalledWith('/settings');
-    remove();
   });
 });

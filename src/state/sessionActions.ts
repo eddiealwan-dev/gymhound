@@ -32,7 +32,7 @@ import {
 } from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
-import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, tickAnnouncement, type RestChange } from '../domain/rest';
+import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import type { DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
@@ -76,7 +76,8 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * keeps its unit, and one from a placeholder, already in the distance unit in Settings, is recorded in that.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
  * or the exercise is in a superset and is not the last member of its round. The screen reader is then told the set and the
- * rest: "Set 2 logged. Rest 2 minutes."
+ * rest: "Set 2 logged. Rest 2 minutes.", or mid-superset the exercise the rest waits for: "Set 2 logged. Rest after
+ * Ab roller." (R100).
  */
 export function tick(
   db: Db,
@@ -98,14 +99,16 @@ export function tick(
   tickSet(db, set.id, values, weightUnit, now, tickedDistanceUnit);
   const view = getActiveWorkoutView(db);
   let restStarted: number | null = null;
+  let waitsFor: string | null = null;
   if (view) {
     const length = restLengthFor(ex.restSeconds, settings.restSeconds);
     const change = restAfterTick(view.exercises, ex.id, now, length);
     applyRest(db, view.id, change, settings.restBell, set.id);
     if (change.kind === 'start') restStarted = length;
+    waitsFor = restWaitsFor(view.exercises, ex.id, settings.restSeconds);
   }
   bumpData();
-  announce(tickAnnouncement(row.label, restStarted));
+  announce(tickAnnouncement(row.label, restStarted, waitsFor));
   return true;
 }
 

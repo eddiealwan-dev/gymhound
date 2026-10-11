@@ -27,6 +27,13 @@ export function joinsNextInSuperset(exercises: Linked[], id: string): boolean {
   return group !== null && exercises[index + 1]?.supersetGroup === group;
 }
 
+/** Whether the exercise opens a run of exercises sharing a superset: its block carries the "Superset" label (R100). */
+export function startsSuperset(exercises: Linked[], id: string): boolean {
+  const index = exercises.findIndex((e) => e.id === id);
+  const group = exercises[index]?.supersetGroup ?? null;
+  return group !== null && exercises[index - 1]?.supersetGroup !== group;
+}
+
 /**
  * Whether Reorder's up or down changes anything. A block is one exercise outside a superset, or the run of
  * consecutive exercises sharing a superset group, and moves as a whole (`moveExercise`).

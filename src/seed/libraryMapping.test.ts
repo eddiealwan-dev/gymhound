@@ -301,6 +301,21 @@ describe('LEGACY_SOURCE', () => {
   });
 });
 
+describe('LEGACY_STEPS (R95)', () => {
+  it('holds steps only for existing exercises with no free-exercise-db source', () => {
+    for (const id of Object.keys(LEGACY_STEPS)) {
+      expect(SEED_EXERCISES.some((e) => e.id === id)).toBe(true);
+      expect(LEGACY_SOURCE[id]).toBeNull();
+    }
+  });
+
+  it('has the pike push-up lower the head to a point just in front of the hands, a tripod (review of R95)', () => {
+    expect(LEGACY_STEPS['pike-push-up'][1]).toBe(
+      'Bend your elbows to lower the top of your head to a point slightly in front of your hands, so your head and hands make a triangle.',
+    );
+  });
+});
+
 describe('buildLibrary', () => {
   let library: LibraryExercise[];
   let byId: Map<string, LibraryExercise>;

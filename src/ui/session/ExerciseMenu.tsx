@@ -9,7 +9,7 @@ import { formatRest } from '../../domain/dates';
 import { parseDecimal } from '../../domain/input';
 import { MARK_LABELS } from '../../domain/labels';
 import { gearFor } from '../../domain/plates';
-import { REST_CHOICES } from '../../domain/rest';
+import { REST_CHOICES, restLengthFor, supersetRestLine, supersetRestSource } from '../../domain/rest';
 import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
 import { HAS_LOAD, round2, targetFor } from '../../domain/setTable';
 import type { ExerciseMark } from '../../domain/types';
@@ -176,6 +176,12 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
   const { restSeconds: settingsRest, unit } = useDbQuery(getSettings);
   const defaultLabel = `Default (${restLabel(settingsRest)})`;
   const currentRest = ex === null || ex.restSeconds === null ? defaultLabel : restLabel(ex.restSeconds);
+  /**
+   * Mid-superset, the rest comes after the last member at that member's rest time, whatever is chosen here (R101). The
+   * choices stay: they apply whenever this exercise isn't mid-superset.
+   */
+  const source = ex ? supersetRestSource(exercises, ex.id) : null;
+  const supersetLine = source === null ? null : supersetRestLine(source.name, restLengthFor(source.restSeconds, settingsRest));
 
   const close = () => onClose();
 
@@ -280,9 +286,14 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
             <Display weight={700} numberOfLines={1}>
               Rest time
             </Display>
-            <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+            <Body muted numberOfLines={1} style={{ marginBottom: supersetLine === null ? 12 : 4 }}>
               {ex?.name ?? ''}
             </Body>
+            {supersetLine !== null ? (
+              <Body muted style={{ fontSize: 14, marginBottom: 12 }}>
+                {supersetLine}
+              </Body>
+            ) : null}
             <View style={{ gap: 8 }}>
               <Button
                 label={defaultLabel}

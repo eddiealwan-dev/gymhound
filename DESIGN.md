@@ -228,7 +228,7 @@ Flat by default. Depth is three tonal steps (bg, surface, surfaceRaised) separat
 
 ## Shapes
 
-Softly squared. Cards and sheets take 16px corners; regular buttons and segmented wells 12px; rows that tint (a done set, the rest row) 10px; selected segments 9px so they nest inside a 12px well with 4px padding; set fields and the set-number chip 8px. Compact pills are fully rounded (18px on a 36px height). The tick is a 40px circle, and the header's Settings button a 40px circle. A superset is a 3px bar in the text colour running down the left edge of its members, the only straight-edged accent in the system.
+Softly squared. Cards and sheets take 16px corners; regular buttons and segmented wells 12px; rows that tint (a done set, the rest row) 10px; selected segments 9px so they nest inside a 12px well with 4px padding; set fields and the set-number chip 8px. Compact pills are fully rounded (18px on a 36px height). The tick is a 40px circle, and the header's Settings button a 40px circle. A superset is a 3px bar in the text colour running down the left edge of its members, the only straight-edged accent in the system. Its first block carries a quiet muted "Superset" label (Inter 500, 13px) above the name, beside the bar, so the bar is never the only sign (R100).
 
 ## Components
 
@@ -261,6 +261,7 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 - **Suggested set field:** no fill, 1px dashed Strong Seam edge, Ghost text in Barlow 600 at 20px. A suggestion never looks like a value.
 - **Entered set field:** surface fill, 1px solid Strong Seam edge, text in Barlow 800 at 20px.
 - **Invalid:** a 2px muted bottom edge and the line "Check this number" above the row. Never red.
+- **Needed (a tick tapped before it was ready):** the field it asks for takes the same 2px muted bottom edge, and the line ("Add a weight to tick") sits above the row in the text colour at body size, led by an alert-circle-outline icon inside the text. The tap buzzes a warning and focuses nothing, so the keyboard stays down and the person taps the field (R99). "Check this number" draws the same way. Never red.
 - **Focus:** the platform caret and keyboard; fields keep returnKeyType "done".
 
 ### Navigation
