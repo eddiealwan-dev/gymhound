@@ -1,5 +1,7 @@
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { Outcome } from '../../domain/progression';
+import { dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
+import type { RoutineDraft } from '../../domain/routineDraft';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/routines';
 import { newId } from '../ids';
@@ -12,6 +14,14 @@ export class PremadeRoutineError extends Error {
   constructor() {
     super('Premade routines are read-only.');
     this.name = 'PremadeRoutineError';
+  }
+}
+
+/** Raised when a draft that does not validate is saved. `errors` is `validateDraft`'s list, in the editor's words. */
+export class InvalidDraftError extends Error {
+  constructor(readonly errors: string[]) {
+    super(errors.join(' '));
+    this.name = 'InvalidDraftError';
   }
 }
 
@@ -232,6 +242,156 @@ export function deleteRoutine(db: Db, routineId: string): void {
     tx.delete(routineDays).where(eq(routineDays.routineId, routineId)).run();
     tx.delete(routines).where(eq(routines.id, routineId)).run();
     if (getSettings(tx).activeRoutineId === routineId) setActiveRoutine(tx, null);
+  });
+}
+
+/** A routine as the editor's draft, every row keyed by its id; null when it does not exist. */
+export function routineToDraft(db: Db, routineId: string): RoutineDraft | null {
+  const detail = getRoutineDetail(db, routineId);
+  if (!detail) return null;
+  return {
+    id: detail.id,
+    name: detail.name,
+    nextKey: 1,
+    days: detail.days.map((day) => {
+      const links = linksFromGroups(day.exercises.map((e) => e.supersetGroup));
+      return {
+        key: day.id,
+        id: day.id,
+        name: day.name,
+        exercises: day.exercises.map((e, i) => ({
+          key: e.id,
+          id: e.id,
+          exerciseId: e.exerciseId,
+          name: e.name,
+          loggingType: e.loggingType,
+          setCount: e.setCount,
+          repMin: e.repMin,
+          repMax: e.repMax,
+          increment: e.increment,
+          incrementUnit: e.incrementUnit,
+          supersetWithNext: links[i],
+        })),
+      };
+    }),
+  };
+}
+
+/**
+ * Where the rotation points once the days are saved: the day that was up next, at its new place; if it was deleted,
+ * the first day after it (wrapping) that stays; 0 when none stays.
+ */
+function nextDayIndexAfter(oldDayIds: string[], nextDayIndex: number, newIndexById: Map<string, number>): number {
+  for (let step = 0; step < oldDayIds.length; step++) {
+    const id = oldDayIds[(nextDayIndex + step) % oldDayIds.length];
+    const index = newIndexById.get(id);
+    if (index !== undefined) return index;
+  }
+  return 0;
+}
+
+/**
+ * Saves the editor's draft in one transaction (R89) and returns the routine's id. A new draft becomes a routine of
+ * your own, created at `now`. Otherwise days and exercises that still exist in the routine are updated in place by id,
+ * so an exercise that stays keeps its next weight (unless its slot now holds another exercise, R74); new rows get
+ * uuids and removed ones are deleted. Positions and superset groups are renumbered from the draft's order, names are
+ * trimmed, and the day up next stays up next. Workouts are never touched, a workout in progress included. Throws
+ * `InvalidDraftError` for a draft that does not validate and `PremadeRoutineError` for a premade, changing nothing.
+ * The free limit is the caller's to check before a new routine (`canAddRoutine`).
+ */
+export function saveRoutine(db: Db, draft: RoutineDraft, now: number): string {
+  const errors = validateDraft(draft);
+  if (errors.length > 0) throw new InvalidDraftError(errors);
+
+  return db.transaction((tx) => {
+    const name = draft.name.trim();
+    let routineId: string;
+    let nextDayIndex = 0;
+    if (draft.id === null) {
+      routineId = newId();
+      tx.insert(routines).values({ id: routineId, name, isPremade: false, nextDayIndex: 0, createdAt: now }).run();
+    } else {
+      const routine = tx.select().from(routines).where(eq(routines.id, draft.id)).get();
+      if (!routine) throw new Error(`No routine with id ${draft.id}.`);
+      if (routine.isPremade) throw new PremadeRoutineError();
+      routineId = routine.id;
+      nextDayIndex = routine.nextDayIndex;
+    }
+
+    const oldDayIds = tx
+      .select({ id: routineDays.id })
+      .from(routineDays)
+      .where(eq(routineDays.routineId, routineId))
+      .orderBy(asc(routineDays.position), asc(routineDays.id))
+      .all()
+      .map((d) => d.id);
+    const oldExercises = new Map(
+      (oldDayIds.length === 0
+        ? []
+        : tx
+            .select({ id: routineExercises.id, exerciseId: routineExercises.exerciseId })
+            .from(routineExercises)
+            .where(inArray(routineExercises.routineDayId, oldDayIds))
+            .all()
+      ).map((e) => [e.id, e.exerciseId]),
+    );
+
+    // Only this routine's own rows are updated in place, each once; any other id is saved as a new row.
+    const kept = new Set<string>();
+    const keep = (id: string | null, existing: (id: string) => boolean): string | null => {
+      if (id === null || kept.has(id) || !existing(id)) return null;
+      kept.add(id);
+      return id;
+    };
+
+    const newIndexById = new Map<string, number>();
+    draft.days.forEach((day, position) => {
+      const dayName = dayLabel(day, position);
+      let dayId = keep(day.id, (id) => oldDayIds.includes(id));
+      if (dayId === null) {
+        dayId = newId();
+        tx.insert(routineDays).values({ id: dayId, routineId, name: dayName, position }).run();
+      } else {
+        tx.update(routineDays).set({ name: dayName, position }).where(eq(routineDays.id, dayId)).run();
+        newIndexById.set(dayId, position);
+      }
+
+      const groups = supersetGroups(day.exercises);
+      day.exercises.forEach((e, index) => {
+        const rule = {
+          routineDayId: dayId,
+          exerciseId: e.exerciseId,
+          position: index,
+          supersetGroup: groups[index],
+          setCount: e.setCount,
+          repMin: e.repMin,
+          repMax: e.repMax,
+          increment: e.increment,
+          incrementUnit: e.incrementUnit,
+        };
+        const rowId = keep(e.id, (id) => oldExercises.has(id));
+        if (rowId === null) {
+          tx.insert(routineExercises).values({ id: newId(), ...rule }).run();
+          return;
+        }
+        // A slot that now holds another exercise starts its progress afresh (R74).
+        const progress = oldExercises.get(rowId) === e.exerciseId ? {} : { nextWeight: null, nextWeightUnit: null };
+        tx.update(routineExercises).set({ ...rule, ...progress }).where(eq(routineExercises.id, rowId)).run();
+      });
+    });
+
+    const removedExercises = [...oldExercises.keys()].filter((id) => !kept.has(id));
+    if (removedExercises.length > 0) tx.delete(routineExercises).where(inArray(routineExercises.id, removedExercises)).run();
+    const removedDays = oldDayIds.filter((id) => !kept.has(id));
+    if (removedDays.length > 0) {
+      tx.delete(routineExercises).where(inArray(routineExercises.routineDayId, removedDays)).run();
+      tx.delete(routineDays).where(inArray(routineDays.id, removedDays)).run();
+    }
+
+    const upNextIndex =
+      oldDayIds.length === 0 ? 0 : nextDayIndexAfter(oldDayIds, nextDayIndex % oldDayIds.length, newIndexById);
+    tx.update(routines).set({ name, nextDayIndex: upNextIndex }).where(eq(routines.id, routineId)).run();
+    return routineId;
   });
 }
 

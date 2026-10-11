@@ -1,7 +1,9 @@
 /** @jest-environment node */
 import { and, asc, eq, inArray } from 'drizzle-orm';
+import { draftReducer, hasChanges, newDraft } from '../../domain/routineDraft';
+import type { DraftAction, LibraryExercise, RoutineDraft } from '../../domain/routineDraft';
 import { canAddRoutine } from '../../domain/routineLimit';
-import type { ExerciseMark } from '../../domain/types';
+import type { ExerciseMark, WeightUnit } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
@@ -14,6 +16,8 @@ import {
   getUpNext,
   listRoutines,
   PremadeRoutineError,
+  routineToDraft,
+  saveRoutine,
   setActiveRoutine,
   userRoutineCount,
 } from './routinesRepo';
@@ -536,5 +540,360 @@ describe('deleteRoutine (R90)', () => {
     setActiveRoutine(db, PPL);
     expect(() => deleteRoutine(db, 'no-such-routine')).not.toThrow();
     expect(getSettings(db).activeRoutineId).toBe(PPL);
+  });
+});
+
+const BENCH: LibraryExercise = { id: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted' };
+const ROW: LibraryExercise = { id: 'barbell-row', name: 'Barbell row', loggingType: 'weighted' };
+const CURL: LibraryExercise = { id: 'dumbbell-curl', name: 'Dumbbell curl', loggingType: 'weighted' };
+const SQUAT: LibraryExercise = { id: 'barbell-back-squat', name: 'Barbell back squat', loggingType: 'weighted' };
+const PLANK: LibraryExercise = { id: 'plank', name: 'Plank', loggingType: 'timed' };
+
+type Step = DraftAction | ((d: RoutineDraft) => DraftAction);
+
+/** Applies each step in turn; a step may read the draft so far to find its keys. */
+function edit(draft: RoutineDraft, ...steps: Step[]): RoutineDraft {
+  return steps.reduce((d, step) => draftReducer(d, typeof step === 'function' ? step(d) : step), draft);
+}
+
+const LB5: { value: number; unit: WeightUnit } = { value: 5, unit: 'lb' };
+const add = (day: number, exercise: LibraryExercise, increment = LB5): Step => (d) => ({
+  type: 'addExercise',
+  dayKey: d.days[day].key,
+  exercise,
+  increment,
+});
+const onExercise = (day: number, index: number, action: object): Step => (d) =>
+  ({ dayKey: d.days[day].key, exerciseKey: d.days[day].exercises[index].key, ...action }) as DraftAction;
+const onDay = (day: number, action: object): Step => (d) => ({ dayKey: d.days[day].key, ...action }) as DraftAction;
+
+/** A new routine "My split": Upper (bench and row as a superset, curl) and Lower (squat, plank). */
+function mySplit(): RoutineDraft {
+  return edit(
+    newDraft(),
+    { type: 'rename', name: ' My split ' },
+    { type: 'addDay', name: 'Upper' },
+    { type: 'addDay', name: 'Lower' },
+    add(0, BENCH),
+    add(0, ROW),
+    add(0, CURL, { value: 2.5, unit: 'kg' }),
+    add(1, SQUAT),
+    add(1, PLANK),
+    onExercise(0, 0, { type: 'toggleSuperset' }),
+  );
+}
+
+/** The exercises of a routine as [exercise id, position, superset group] per day, by day name. */
+function shapeOf(db: Db, routineId: string) {
+  return rowsOf(db, routineId).map(({ day, exercises }) => [
+    day.name,
+    day.position,
+    exercises.map((e) => [e.exerciseId, e.position, e.supersetGroup]),
+  ]);
+}
+
+/** Every workout exercise and set of a workout, as stored. */
+function workoutRows(db: Db, workoutId: string) {
+  const rows = db
+    .select()
+    .from(workoutExercises)
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .orderBy(asc(workoutExercises.position))
+    .all();
+  return {
+    workout: db.select().from(workouts).where(eq(workouts.id, workoutId)).get(),
+    exercises: rows,
+    sets: db
+      .select()
+      .from(sets)
+      .where(inArray(sets.workoutExerciseId, rows.map((e) => e.id)))
+      .orderBy(asc(sets.id))
+      .all(),
+  };
+}
+
+describe('saveRoutine (R89)', () => {
+  it('saves a new draft as your own routine, created now, with its days and exercises in order', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+
+    expect(db.select().from(routines).where(eq(routines.id, id)).get()).toEqual({
+      id,
+      name: 'My split',
+      isPremade: false,
+      nextDayIndex: 0,
+      createdAt: NOW,
+    });
+    expect(shapeOf(db, id)).toEqual([
+      ['Upper', 0, [['barbell-bench-press', 0, 1], ['barbell-row', 1, 1], ['dumbbell-curl', 2, null]]],
+      ['Lower', 1, [['barbell-back-squat', 0, null], ['plank', 1, null]]],
+    ]);
+    const rows = rowsOf(db, id).flatMap((d) => d.exercises);
+    expect(rows.map((e) => [e.setCount, e.repMin, e.repMax, e.increment, e.incrementUnit, e.nextWeight])).toEqual([
+      [3, 8, 12, 5, 'lb', null],
+      [3, 8, 12, 5, 'lb', null],
+      [3, 8, 12, 2.5, 'kg', null],
+      [3, 8, 12, 5, 'lb', null],
+      [3, 30, 60, 0, 'lb', null],
+    ]);
+    // Every row has a fresh uuid.
+    for (const rowId of [...rowsOf(db, id).map((d) => d.day.id), ...rows.map((e) => e.id)]) {
+      expect(rowId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    }
+  });
+
+  it('a new routine counts toward the free limit', () => {
+    const db = seededDb();
+    expect(canAddRoutine(userRoutineCount(db), false)).toBe(true);
+    const id = saveRoutine(db, mySplit(), NOW);
+    expect(listRoutines(db).find((r) => r.id === id)).toMatchObject({ name: 'My split', isPremade: false, dayCount: 2 });
+    expect(userRoutineCount(db)).toBe(1);
+    expect(canAddRoutine(userRoutineCount(db), false)).toBe(false);
+    expect(canAddRoutine(userRoutineCount(db), true)).toBe(true);
+  });
+
+  it('a day may hold the same exercise twice', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, edit(mySplit(), add(1, SQUAT)), NOW);
+    const lower = rowsOf(db, id)[1].exercises;
+    expect(lower.map((e) => e.exerciseId)).toEqual(['barbell-back-squat', 'plank', 'barbell-back-squat']);
+    expect(new Set(lower.map((e) => e.id)).size).toBe(3);
+  });
+
+  it('routineToDraft loads a routine for the editor, and saving it unchanged changes nothing', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const before = rowsOf(db, id);
+
+    const draft = routineToDraft(db, id)!;
+    expect(draft.id).toBe(id);
+    expect(draft.name).toBe('My split');
+    expect(draft.days.map((d) => [d.id, d.name])).toEqual(before.map((d) => [d.day.id, d.day.name]));
+    expect(draft.days[0].exercises.map((e) => [e.id, e.name, e.loggingType, e.supersetWithNext])).toEqual([
+      [before[0].exercises[0].id, 'Barbell bench press', 'weighted', true],
+      [before[0].exercises[1].id, 'Barbell row', 'weighted', false],
+      [before[0].exercises[2].id, 'Dumbbell curl', 'weighted', false],
+    ]);
+    expect(hasChanges(draft, routineToDraft(db, id)!)).toBe(false);
+
+    expect(saveRoutine(db, draft, NOW + HOUR)).toBe(id);
+    expect(rowsOf(db, id)).toEqual(before);
+    expect(db.select().from(routines).where(eq(routines.id, id)).get()!.createdAt).toBe(NOW);
+  });
+
+  it('routineToDraft is null for a routine that does not exist', () => {
+    expect(routineToDraft(seededDb(), 'no-such-routine')).toBeNull();
+  });
+
+  it('an exercise that stays keeps its id and next weight while its rule changes', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const benchId = rowsOf(db, id)[0].exercises[0].id;
+    db.update(routineExercises).set({ nextWeight: 60, nextWeightUnit: 'kg' }).where(eq(routineExercises.id, benchId)).run();
+
+    const draft = edit(
+      routineToDraft(db, id)!,
+      onExercise(0, 0, {
+        type: 'updateExercise',
+        patch: { setCount: 5, repMin: 3, repMax: 5, increment: 10, incrementUnit: 'lb' },
+      }),
+      { type: 'rename', name: 'Renamed' },
+    );
+    saveRoutine(db, draft, NOW + HOUR);
+
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, benchId)).get()).toMatchObject({
+      setCount: 5,
+      repMin: 3,
+      repMax: 5,
+      increment: 10,
+      incrementUnit: 'lb',
+      nextWeight: 60,
+      nextWeightUnit: 'kg',
+    });
+    expect(getRoutineDetail(db, id)!.name).toBe('Renamed');
+  });
+
+  it('a slot whose exercise changed starts its progress afresh (R74)', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const benchId = rowsOf(db, id)[0].exercises[0].id;
+    db.update(routineExercises).set({ nextWeight: 60, nextWeightUnit: 'kg' }).where(eq(routineExercises.id, benchId)).run();
+
+    const draft = routineToDraft(db, id)!;
+    draft.days[0].exercises[0] = { ...draft.days[0].exercises[0], exerciseId: 'incline-dumbbell-press' };
+    saveRoutine(db, draft, NOW + HOUR);
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, benchId)).get()).toMatchObject({
+      exerciseId: 'incline-dumbbell-press',
+      nextWeight: null,
+      nextWeightUnit: null,
+    });
+  });
+
+  it('deletes removed exercises and days, gives added ones new ids, and renumbers positions', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const [upper, lower] = rowsOf(db, id);
+
+    const draft = edit(
+      routineToDraft(db, id)!,
+      onExercise(0, 1, { type: 'removeExercise' }),
+      onDay(1, { type: 'deleteDay' }),
+      { type: 'addDay', name: 'Arms' },
+      add(1, CURL),
+      onExercise(0, 1, { type: 'moveExercise', dir: 'up' }),
+    );
+    saveRoutine(db, draft, NOW + HOUR);
+
+    expect(shapeOf(db, id)).toEqual([
+      ['Upper', 0, [['dumbbell-curl', 0, null], ['barbell-bench-press', 1, null]]],
+      ['Arms', 1, [['dumbbell-curl', 0, null]]],
+    ]);
+    const after = rowsOf(db, id);
+    expect(after[0].day.id).toBe(upper.day.id);
+    expect(after[0].exercises.map((e) => e.id)).toEqual([upper.exercises[2].id, upper.exercises[0].id]);
+    const removedIds = [upper.exercises[1].id, ...lower.exercises.map((e) => e.id)];
+    expect(db.select().from(routineExercises).where(inArray(routineExercises.id, removedIds)).all()).toEqual([]);
+    expect(db.select().from(routineDays).where(eq(routineDays.id, lower.day.id)).get()).toBeUndefined();
+    expect(after[1].day.id).not.toBe(lower.day.id);
+  });
+
+  it('editing the active routine updates Up next', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    setActiveRoutine(db, id);
+    expect(getUpNext(db)!.exercises.map((e) => e.exerciseId)).toEqual(['barbell-bench-press', 'barbell-row', 'dumbbell-curl']);
+
+    saveRoutine(
+      db,
+      edit(
+        routineToDraft(db, id)!,
+        onExercise(0, 0, { type: 'updateExercise', patch: { setCount: 5 } }),
+        add(0, SQUAT),
+        onDay(0, { type: 'renameDay', name: 'Upper body' }),
+      ),
+      NOW + HOUR,
+    );
+    const upNext = getUpNext(db)!;
+    expect(upNext.dayName).toBe('Upper body');
+    expect(upNext.exercises.map((e) => [e.exerciseId, e.setCount])).toEqual([
+      ['barbell-bench-press', 5],
+      ['barbell-row', 3],
+      ['dumbbell-curl', 3],
+      ['barbell-back-squat', 3],
+    ]);
+  });
+
+  it('reordering days keeps the same day up next', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, edit(mySplit(), { type: 'addDay', name: 'Arms' }, add(2, CURL)), NOW);
+    setActiveRoutine(db, id);
+    db.update(routines).set({ nextDayIndex: 1 }).where(eq(routines.id, id)).run();
+    expect(getUpNext(db)!.dayName).toBe('Lower');
+
+    const reordered = edit(
+      routineToDraft(db, id)!,
+      onDay(2, { type: 'moveDay', dir: 'up' }),
+      onDay(1, { type: 'moveDay', dir: 'up' }),
+    );
+    saveRoutine(db, reordered, NOW + HOUR);
+    expect(rowsOf(db, id).map((d) => d.day.name)).toEqual(['Arms', 'Upper', 'Lower']);
+    expect(getUpNext(db)!.dayName).toBe('Lower');
+  });
+
+  it('when the day up next is deleted, the day after it is up next', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, edit(mySplit(), { type: 'addDay', name: 'Arms' }, add(2, CURL)), NOW);
+    setActiveRoutine(db, id);
+    db.update(routines).set({ nextDayIndex: 1 }).where(eq(routines.id, id)).run();
+
+    saveRoutine(db, edit(routineToDraft(db, id)!, onDay(1, { type: 'deleteDay' })), NOW + HOUR);
+    expect(getUpNext(db)!.dayName).toBe('Arms');
+
+    // The last day deleted while up next wraps to the first.
+    saveRoutine(db, edit(routineToDraft(db, id)!, onDay(1, { type: 'deleteDay' })), NOW + 2 * HOUR);
+    expect(getUpNext(db)!.dayName).toBe('Upper');
+  });
+
+  it('never touches a workout in progress from that routine', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    setActiveRoutine(db, id);
+    const upperId = rowsOf(db, id)[0].day.id;
+    const workoutId = startWorkoutFromDay(db, upperId, NOW);
+    const before = workoutRows(db, workoutId);
+
+    saveRoutine(
+      db,
+      edit(
+        routineToDraft(db, id)!,
+        onExercise(0, 0, { type: 'removeExercise' }),
+        onExercise(0, 0, { type: 'updateExercise', patch: { setCount: 6, repMin: 1, repMax: 3 } }),
+        onDay(0, { type: 'renameDay', name: 'Upper body' }),
+        onDay(1, { type: 'deleteDay' }),
+      ),
+      NOW + HOUR,
+    );
+    expect(workoutRows(db, workoutId)).toEqual(before);
+
+    // It still finishes: the removed slot just takes no next weight.
+    const benchSets = before.sets.filter((s) => s.workoutExerciseId === before.exercises[0].id);
+    tickSet(db, benchSets[0].id, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', NOW + 60_000, 'mi');
+    expect(() => finishWorkout(db, workoutId, NOW + HOUR)).not.toThrow();
+  });
+
+  it('refuses a premade, changing nothing', () => {
+    const db = seededDb();
+    const before = rowsOf(db, PPL);
+    const draft = edit(
+      routineToDraft(db, PPL)!,
+      { type: 'rename', name: 'Mine now' },
+      onExercise(0, 0, { type: 'removeExercise' }),
+    );
+    expect(() => saveRoutine(db, draft, NOW)).toThrow(PremadeRoutineError);
+    expect(getRoutineDetail(db, PPL)!.name).toBe('Push/pull/legs');
+    expect(rowsOf(db, PPL)).toEqual(before);
+  });
+
+  it('refuses a draft that does not validate, or a routine that no longer exists, writing nothing', () => {
+    const db = seededDb();
+    expect(() => saveRoutine(db, newDraft(), NOW)).toThrow('Give the routine a name.');
+    expect(() => saveRoutine(db, { ...mySplit(), id: 'no-such-routine' }, NOW)).toThrow();
+    expect(userRoutineCount(db)).toBe(0);
+  });
+
+  it('is one transaction: a failure part way leaves the routine as it was', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const before = rowsOf(db, id);
+    const draft = edit(
+      routineToDraft(db, id)!,
+      { type: 'rename', name: 'Half saved' },
+      onDay(1, { type: 'deleteDay' }),
+      add(0, { id: 'no-such-exercise', name: 'Nothing', loggingType: 'weighted' }),
+    );
+    expect(() => saveRoutine(db, draft, NOW + HOUR)).toThrow();
+    expect(getRoutineDetail(db, id)!.name).toBe('My split');
+    expect(rowsOf(db, id)).toEqual(before);
+  });
+
+  it("a row id from another routine is saved as a new row, leaving the other routine's row alone", () => {
+    const db = seededDb();
+    const id = saveRoutine(db, mySplit(), NOW);
+    const draft = routineToDraft(db, id)!;
+    const premadeBench = `${PUSH_A}:barbell-bench-press`;
+    const stolen: RoutineDraft = {
+      ...draft,
+      days: draft.days.map((d, i) =>
+        i === 0 ? { ...d, exercises: d.exercises.map((e, j) => (j === 0 ? { ...e, id: premadeBench } : e)) } : d,
+      ),
+    };
+    saveRoutine(db, stolen, NOW + HOUR);
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, premadeBench)).get()!.routineDayId).toBe(PUSH_A);
+    expect(rowsOf(db, id)[0].exercises[0].id).not.toBe(premadeBench);
+    expect(shapeOf(db, id)[0]).toEqual([
+      'Upper',
+      0,
+      [['barbell-bench-press', 0, 1], ['barbell-row', 1, 1], ['dumbbell-curl', 2, null]],
+    ]);
   });
 });
