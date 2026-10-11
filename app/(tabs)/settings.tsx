@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
@@ -10,7 +10,7 @@ import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../..
 import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
-import { bumpData, useDbQuery } from '../../src/state/dataVersion';
+import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
@@ -358,11 +358,16 @@ function BackupsSection() {
 
 /**
  * The finished workouts as a CSV (spec §11) through the share sheet, to open in Numbers or Excel. Phone app only, like
- * Backups. A muted line says when there is nothing to export or the share sheet couldn't open.
+ * Backups. A muted line says when there is nothing to export or the share sheet couldn't open. The line belongs to the
+ * data version it was shown at, so a write since (a finished workout) drops it. While an export runs, the button is
+ * faded and presses are ignored, so a second tap as the share sheet opens doesn't start a second export.
  */
 function ExportSection() {
   const db = useDb();
-  const [message, setMessage] = useState<string | null>(null);
+  const version = useDataVersion((state) => state.version);
+  const [message, setMessage] = useState<{ text: string; version: number } | null>(null);
+  const exporting = useRef(false);
+  const [busy, setBusy] = useState(false);
   return (
     <View style={{ gap: 8, marginTop: 24 }}>
       <Body weight={600} muted>
@@ -375,15 +380,25 @@ function ExportSection() {
           <Button
             label="Export workouts (CSV)"
             variant="secondary"
+            disabled={busy}
             onPress={() => {
+              if (exporting.current) return;
+              exporting.current = true;
+              setBusy(true);
               setMessage(null);
-              exportWorkoutsCsv(db, Date.now()).then(
-                (result) => setMessage(result === 'empty' ? 'No finished workouts yet.' : result === 'unavailable' ? SHARE_FAILED : null),
-                () => setMessage(SHARE_FAILED),
-              );
+              const show = (text: string | null) => setMessage(text === null ? null : { text, version });
+              exportWorkoutsCsv(db, Date.now())
+                .then(
+                  (result) => show(result === 'empty' ? 'No finished workouts yet.' : result === 'unavailable' ? SHARE_FAILED : null),
+                  () => show(SHARE_FAILED),
+                )
+                .finally(() => {
+                  exporting.current = false;
+                  setBusy(false);
+                });
             }}
           />
-          {message !== null ? <Body muted>{message}</Body> : null}
+          {message !== null && message.version === version ? <Body muted>{message.text}</Body> : null}
         </>
       )}
     </View>

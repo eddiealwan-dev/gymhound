@@ -25,7 +25,11 @@ jest.mock('../state/backup', () => ({
   snapshotFolderReport: () => null,
   shareFile: jest.fn(),
 }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
+jest.mock('../state/dataVersion', () => ({
+  useDbQuery: (query: (db: unknown) => unknown) => query('db'),
+  useDataVersion: (select: (state: { version: number }) => unknown) => select({ version: 0 }),
+  bumpData: jest.fn(),
+}));
 jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {

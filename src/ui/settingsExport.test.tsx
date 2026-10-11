@@ -4,6 +4,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
 import { exportWorkoutsCsv } from '../platform/exportFiles';
 import { shareFile } from '../state/backup';
+import { bumpData } from '../state/dataVersion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -30,7 +31,12 @@ jest.mock('../state/backup', () => ({
   snapshotFolderReport: () => null,
   shareFile: jest.fn(() => Promise.resolve()),
 }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
+jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+// The real data version store, so a test can bump it as a finish does.
+jest.mock('../state/dataVersion', () => ({
+  ...jest.requireActual('../state/dataVersion'),
+  useDbQuery: (query: (db: unknown) => unknown) => query('db'),
+}));
 jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -156,6 +162,45 @@ describe('Settings: Export (Task 27)', () => {
 
     const message = tree.root.findAllByType(Text).find((n) => n.props.children === 'No finished workouts yet.')!;
     expect(message.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]));
+  });
+
+  it('ignores a second press while the first export is still running, and takes presses again once it ends', async () => {
+    let finish!: (result: 'shared') => void;
+    jest.mocked(exportWorkoutsCsv).mockReturnValueOnce(new Promise((resolve) => (finish = resolve))).mockResolvedValueOnce('shared');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+    await press(tree, EXPORT);
+
+    expect(exportWorkoutsCsv).toHaveBeenCalledTimes(1);
+    expect(button(tree, EXPORT).props.disabled).toBe(true);
+
+    await act(async () => finish('shared'));
+    expect(button(tree, EXPORT).props.disabled).toBe(false);
+
+    await press(tree, EXPORT);
+    expect(exportWorkoutsCsv).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes presses again after an export that throws', async () => {
+    jest.mocked(exportWorkoutsCsv).mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce('shared');
+    const tree = mount();
+
+    await press(tree, EXPORT);
+    await press(tree, EXPORT);
+
+    expect(exportWorkoutsCsv).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the nothing-to-export line once the data changes, as when a workout is finished', async () => {
+    jest.mocked(exportWorkoutsCsv).mockResolvedValue('empty');
+    const tree = mount();
+    await press(tree, EXPORT);
+    expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.']);
+
+    act(() => bumpData());
+
+    expect(exportLines(tree)).toEqual([EXPORT]);
   });
 
   it('has no export button on web, only the phone-app line', () => {

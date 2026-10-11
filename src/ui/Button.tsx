@@ -10,10 +10,12 @@ type Props = {
   variant?: Variant;
   /** For one choice among several: whether it is the current one, which the screen reader then says. */
   selected?: boolean;
+  /** Ignores presses and shows faded; the screen reader says it is dimmed. */
+  disabled?: boolean;
 };
 
 /** Primary is filled with `text` and labelled in `bg`. Secondary is outlined. Quiet has no chrome. */
-export function Button({ label, onPress, variant = 'primary', selected }: Props) {
+export function Button({ label, onPress, variant = 'primary', selected, disabled = false }: Props) {
   const { colors } = useTheme();
   const fill = variant === 'primary' ? colors.text : 'transparent';
   const border = variant === 'secondary' ? colors.border : 'transparent';
@@ -22,6 +24,7 @@ export function Button({ label, onPress, variant = 'primary', selected }: Props)
     <Pressable
       accessibilityRole="button"
       accessibilityState={selected === undefined ? undefined : { selected }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 48,
@@ -32,7 +35,7 @@ export function Button({ label, onPress, variant = 'primary', selected }: Props)
         backgroundColor: fill,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: pressed ? 0.8 : 1,
+        opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
       })}
     >
       <Body weight={600} style={{ color: labelColor }}>
