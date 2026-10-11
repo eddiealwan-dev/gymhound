@@ -28,11 +28,11 @@ import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
   clearRestEndsAtIf,
-  countUntickedWithValues,
   discardWorkout,
   finishWorkout,
   getActiveRest,
   getActiveWorkoutId,
+  getNextDayTitle,
   NothingTickedError,
   setRestEndsAt,
   startEmptyWorkout,
@@ -585,22 +585,61 @@ describe('Up next only advances on a finished day', () => {
   });
 });
 
-describe('countUntickedWithValues', () => {
-  it('counts only unticked sets that have a value', () => {
+describe('getNextDayTitle', () => {
+  it("names the active routine's day after the workout's day", () => {
     const db = seededDb();
+    setActiveRoutine(db, PPL);
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
-    expect(countUntickedWithValues(db, id)).toBe(0);
+    expect(getNextDayTitle(db, id)).toBe('Pull A');
+  });
 
-    const [typed, , ticked] = setIds(db);
-    db.update(sets).set({ weight: 135 }).where(eq(sets.id, typed)).run();
-    tick(db, ticked, 135, 8, NOW + 1_000);
-    // One typed but unticked, one blank, one ticked.
-    expect(countUntickedWithValues(db, id)).toBe(1);
+  it('wraps from the last day to the first', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startWorkoutFromDay(db, 'premade-ppl-6:legs-b', NOW);
+    expect(getNextDayTitle(db, id)).toBe('Push A');
+  });
 
-    // Any of the four value fields counts, and an un-ticked set keeps its values.
-    db.update(sets).set({ durationS: 45 }).where(eq(sets.id, setIds(db, 1)[0])).run();
-    untickSet(db, ticked);
-    expect(countUntickedWithValues(db, id)).toBe(3);
+  it('puts the routine name before a one- or two-character day name', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, FIVE_B, NOW);
+    expect(getNextDayTitle(db, id)).toBe('5×5 A');
+  });
+
+  it('is null for a day of a routine that is not the active one', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(getNextDayTitle(db, id)).toBeNull();
+  });
+
+  it('is null for an empty workout and for an unknown workout', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startEmptyWorkout(db, NOW);
+    expect(getNextDayTitle(db, id)).toBeNull();
+    expect(getNextDayTitle(db, 'no-such-workout')).toBeNull();
+  });
+
+  it('is null when the day was deleted after the workout started', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    db.delete(routines).where(eq(routines.id, PPL)).run();
+    expect(getNextDayTitle(db, id)).toBeNull();
+  });
+
+  it('names the day finish moves Up next to', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    const preview = getNextDayTitle(db, id);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(getUpNext(db)!.dayName).toBe(preview);
+    expect(nextDayIndex(db, PPL)).toBe(1);
   });
 });
 

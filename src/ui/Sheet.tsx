@@ -75,12 +75,26 @@ type ConfirmSheetProps = {
   body?: string;
   confirmLabel: string;
   cancelLabel: string;
+  /** Which answer is the primary button, drawn first. Default 'confirm'; 'cancel' when cancelling is the safe answer. */
+  primary?: 'confirm' | 'cancel';
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-/** A question with two answers. The confirm button is primary; cancelling, or dismissing the sheet, calls `onCancel`. */
-export function ConfirmSheet({ visible, title, body, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmSheetProps) {
+/**
+ * A question with two answers. The primary answer comes first and the other second as secondary: confirm by default,
+ * or cancel with `primary="cancel"`. Cancelling, or dismissing the sheet, calls `onCancel`.
+ */
+export function ConfirmSheet({
+  visible,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  primary = 'confirm',
+  onConfirm,
+  onCancel,
+}: ConfirmSheetProps) {
   return (
     <Sheet visible={visible} onClose={onCancel}>
       <Display weight={700} style={{ marginBottom: body ? 8 : 16 }}>
@@ -91,10 +105,17 @@ export function ConfirmSheet({ visible, title, body, confirmLabel, cancelLabel, 
           {body}
         </Body>
       ) : null}
-      <View style={{ gap: 8 }}>
-        <Button label={confirmLabel} onPress={onConfirm} />
-        <Button label={cancelLabel} onPress={onCancel} variant="secondary" />
-      </View>
+      {primary === 'cancel' ? (
+        <View style={{ gap: 8 }}>
+          <Button label={cancelLabel} onPress={onCancel} />
+          <Button label={confirmLabel} onPress={onConfirm} variant="secondary" />
+        </View>
+      ) : (
+        <View style={{ gap: 8 }}>
+          <Button label={confirmLabel} onPress={onConfirm} />
+          <Button label={cancelLabel} onPress={onCancel} variant="secondary" />
+        </View>
+      )}
     </Sheet>
   );
 }

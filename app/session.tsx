@@ -5,10 +5,11 @@ import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { getSettings } from '../src/db/repositories/settingsRepo';
-import { countUntickedWithValues } from '../src/db/repositories/workoutsRepo';
+import { getNextDayTitle } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { finishCheck, finishConfirm, type FinishConfirm } from '../src/domain/finishCheck';
 import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
@@ -40,13 +41,8 @@ function readSession(db: Db) {
   return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp };
 }
 
-/** Whether any set of the workout in progress is ticked, read from the database now (not from what was last rendered). */
-function anySetTicked(db: Db): boolean {
-  return getActiveWorkoutView(db)?.exercises.some((ex) => ex.sets.some((set) => set.done)) ?? false;
-}
-
 /** The question open over the session, if any. Only one at a time. */
-type Ask = 'nothing_ticked' | 'unticked' | 'discard' | 'finish_failed';
+type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed';
 
 /** The music apps this phone can have. None on web, so the web build shows no music button. */
 const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
@@ -124,8 +120,8 @@ export default function Session() {
   /** The exercise whose ⋯ menu is open. */
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
-  /** How many sets are typed but not ticked, for the question about them. Kept after the question closes so its text does not change while it fades. */
-  const [untickedCount, setUntickedCount] = useState(0);
+  /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
+  const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
   /** How tall the bars docked at the bottom are (0 with none), so the content can scroll clear of them. */
   const [dockHeight, setDockHeight] = useState(0);
 
@@ -177,20 +173,24 @@ export default function Session() {
     router.replace(`/finish/${workout.id}`);
   };
 
-  /** Saves what is typed, then checks the workout in the database: nothing ticked, sets typed but not ticked, or ready. */
+  /**
+   * Saves what is typed, then reads the workout from the database (not from what was last rendered): with nothing
+   * ticked it says so; with every set ticked it finishes; otherwise it asks first, since unticked sets will be dropped.
+   */
   const onFinish = () => {
     flushAll();
-    if (!anySetTicked(db)) {
+    const view = getActiveWorkoutView(db);
+    const check = view === null ? null : finishCheck(view.exercises);
+    if (view === null || check === null || check.done === 0) {
       setAsk('nothing_ticked');
       return;
     }
-    const count = countUntickedWithValues(db, workout.id);
-    if (count > 0) {
-      setUntickedCount(count);
-      setAsk('unticked');
-    } else {
+    if (check.done === check.total) {
       finishNow();
+      return;
     }
+    setFinishAsk(finishConfirm(view.name, check, getNextDayTitle(db, view.id)));
+    setAsk('confirm_finish');
   };
 
   const onDiscard = () => {
@@ -279,11 +279,14 @@ export default function Session() {
         </Display>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
+      {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer. */}
       <ConfirmSheet
-        visible={ask === 'unticked'}
-        title={`${untickedCount} sets aren't ticked. They won't count.`}
+        visible={ask === 'confirm_finish'}
+        title={finishAsk?.title ?? ''}
+        body={finishAsk?.body}
         confirmLabel="Finish anyway"
         cancelLabel="Keep logging"
+        primary={finishAsk?.safeDefault ? 'cancel' : 'confirm'}
         onConfirm={finishNow}
         onCancel={() => setAsk(null)}
       />

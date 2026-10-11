@@ -17,7 +17,7 @@ import { RestBar } from './RestBar';
 
 type Workout = { id: string; name: string; startedAt: number; restEndsAt: number | null; restSetId: string | null; exercises: unknown[] };
 
-const EXERCISES = [{ id: 'we1', exerciseId: 'bench', supersetGroup: null, sets: [{ id: 's1' }, { id: 's2' }] }];
+const EXERCISES = [{ id: 'we1', exerciseId: 'bench', name: 'Barbell bench press', supersetGroup: null, sets: [{ id: 's1' }, { id: 's2' }] }];
 const mockState: { workout: Workout; musicApp: MusicAppId | null } = {
   workout: { id: 'w1', name: 'Push A', startedAt: 1_000, restEndsAt: null, restSetId: null, exercises: EXERCISES },
   musicApp: null,
@@ -37,7 +37,7 @@ jest.mock('../../db/repositories/settingsRepo', () => ({
     if (key === 'musicApp') mockState.musicApp = value as MusicAppId | null;
   }),
 }));
-jest.mock('../../db/repositories/workoutsRepo', () => ({ countUntickedWithValues: () => 0 }));
+jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
   useDbQuery: () => ({ workout: mockState.workout, unit: 'kg', distanceUnit: 'km', musicApp: mockState.musicApp }),
