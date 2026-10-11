@@ -133,6 +133,23 @@ describe('a new exercise (R108)', () => {
     expect(radio(tree, 'Weight and reps').props.accessibilityState).toEqual({ checked: true });
   });
 
+  it('tells VoiceOver which equipment is selected and which logging type is checked', () => {
+    const tree = mount();
+    /** The drawn view VoiceOver reads for a control, by its label. */
+    const drawn = (label: string) =>
+      tree.root.findAll((n) => typeof n.type === 'string' && typeof n.props.onClick === 'function' && (n.props.accessibilityLabel === label || n.findAll((c) => c.props.children === label).length > 0))[0];
+    expect(drawn('Dumbbell').props.accessibilityState).toMatchObject({ selected: false });
+    tap(tree, 'Dumbbell');
+    expect(drawn('Dumbbell').props.accessibilityState).toMatchObject({ selected: true });
+    expect(drawn('Barbell').props.accessibilityState).toMatchObject({ selected: false });
+
+    expect(drawn('Time').props.accessibilityRole).toBe('radio');
+    expect(drawn('Time').props.accessibilityState).toMatchObject({ checked: false });
+    act(() => radio(tree, 'Time').props.onPress());
+    expect(drawn('Time').props.accessibilityState).toMatchObject({ checked: true });
+    expect(drawn('Weight and reps').props.accessibilityState).toMatchObject({ checked: false });
+  });
+
   it('chooses no equipment for you (R128)', () => {
     const tree = mount();
     for (const label of ['Barbell', 'Dumbbell', 'Other']) expect(button(tree, label).props.selected).toBe(false);
