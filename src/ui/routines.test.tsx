@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Routines from '../../app/(tabs)/routines/index';
@@ -109,5 +110,35 @@ describe('Routines: Set active (R80, Round 5)', () => {
     act(() => void jest.advanceTimersByTime(400));
     expect(router.push).toHaveBeenCalledWith('/session');
     expect(setActiveRoutine).not.toHaveBeenCalled();
+  });
+});
+
+describe('Routines: the list (design pass)', () => {
+  it('Set active is a compact secondary pill, a 44pt target with its hit slop', () => {
+    const tree = mount();
+
+    const [setActive] = buttons(tree, 'Set active');
+    expect(setActive.props).toMatchObject({ variant: 'secondary', size: 'compact' });
+  });
+
+  it('the routine in use shows a tick and "Active" with no edge or fill, so it never reads as a button, and never in red', () => {
+    const tree = mount();
+
+    const mark = tree.root.findAll((n) => n.props.accessibilityLabel === 'Active' && n.props.accessible === true)[0];
+    expect(mark).toBeDefined();
+    expect(mark.props.accessibilityRole).toBeUndefined();
+    const style = StyleSheet.flatten(mark.props.style);
+    expect(style.borderWidth).toBeUndefined();
+    expect(style.backgroundColor).toBeUndefined();
+    expect(shownText(tree)).toContain('Active');
+    expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
+  });
+
+  it('"Premade" is the group heading', () => {
+    const tree = mount();
+
+    const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Premade')[0];
+    expect(heading.props.accessibilityRole).toBe('header');
+    expect(StyleSheet.flatten(heading.props.style)).toMatchObject({ textTransform: 'uppercase', fontSize: 14, color: '#a39d90' });
   });
 });

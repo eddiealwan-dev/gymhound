@@ -174,7 +174,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 ### Neutral
 - **Iron Black / Chalk Paper** (bg-dark / bg-light): the page, the header, the dock and the session header.
 - **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row, entered set fields and the selected bar choice.
-- **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars, the Active badge.
+- **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars.
 - **Seam** (border-dark / border-light): card, sheet and dock edges, the set-number chip, regular secondary buttons.
 - **Strong Seam** (border-strong-dark / border-strong-light): set-field edges and compact pill outlines only. It holds 3:1 on bg, surface and surfaceRaised.
 - **Chalk / Ink** (text-dark / text-light): text, primary-button fill, tick fill, the progress line, the superset bar, the selected segment.
@@ -203,7 +203,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, upper case, muted): the state label on Train's cards (UP NEXT, IN PROGRESS).
+- **Label** (Inter 600, 14px, 0.5 tracking, upper case, muted; `Label` in src/ui/Text.tsx, read as a heading): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Routines (PREMADE).
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
 
 ### Named Rules
@@ -237,7 +237,9 @@ Plain, confident and quiet about it.
 - **Shape:** gently rounded rectangle (12px) at 48pt, or a full pill (18px) at 36pt for compact.
 - **Primary:** filled with the text colour, labelled in the background colour, Inter 600 16px, 20px side padding. One per sheet or card.
 - **Secondary:** transparent with a 1px border (Seam at regular size, Strong Seam at compact size), labelled in the text colour.
-- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout).
+- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout). A row of quiet buttons steps back by their 12px padding so the first label lines up with the content edge.
+- **Compact for a row's own action:** an action that belongs to one row of a list (Set active on a routine, the rest pills, Finish in the session header) is a compact secondary pill; full-size buttons are for a card's or a sheet's main answers.
+- **A state is not a button:** a row's current state (the routine in use) is a text-colour checkmark and a word, with no edge or fill.
 - **Pressed / disabled:** pressed drops opacity to 0.8; disabled to 0.4 and ignores presses.
 
 ### Cards / Containers
