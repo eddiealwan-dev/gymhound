@@ -1,4 +1,8 @@
+import { setName } from './setEntry';
+
 const MINUS_15_MS = 15_000;
+/** What +15s adds to the running rest. */
+export const PLUS_15_MS = 15_000;
 
 /**
  * Whole seconds left on the rest timer, rounded up so it never shows 0:00 while still running.
@@ -16,6 +20,11 @@ export function minus15(endsAt: number, now: number): number | null {
   return shortened > now ? shortened : null;
 }
 
+/** The new end time after tapping +15s. */
+export function plus15(endsAt: number): number {
+  return endsAt + PLUS_15_MS;
+}
+
 /**
  * Whether ticking a set starts the rest timer (spec 8.4): always, unless the exercise is in a
  * superset and is not the last member of its round.
@@ -29,12 +38,14 @@ export function shouldStartRestAfterTick(
   return exercises.every((e) => e.supersetGroup !== ticked.supersetGroup || e.position <= ticked.position);
 }
 
-/** What a tick, -15s or Skip does to the rest timer. The caller writes `rest_ends_at` and calls the rest surface to match. */
+/** What a tick, -15s, +15s or Skip does to the rest timer. The caller writes `rest_ends_at` and calls the rest surface to match. */
 export type RestChange =
   /** Start a rest that ends at `endsAt`. */
   | { kind: 'start'; endsAt: number }
   /** The running rest now ends earlier, at `endsAt`. */
   | { kind: 'shorten'; endsAt: number }
+  /** The running rest now ends later, at `endsAt`. */
+  | { kind: 'extend'; endsAt: number }
   /** End the rest now, without ringing. */
   | { kind: 'skip' }
   | { kind: 'none' };
@@ -54,6 +65,46 @@ export function restAfterTick(
 export function restAfterMinus15(endsAt: number, now: number): RestChange {
   const shortened = minus15(endsAt, now);
   return shortened === null ? { kind: 'skip' } : { kind: 'shorten', endsAt: shortened };
+}
+
+/** Tapping +15s: the running rest ends 15 seconds later. A rest already over stays over. */
+export function restAfterPlus15(endsAt: number, now: number): RestChange {
+  return endsAt > now ? { kind: 'extend', endsAt: plus15(endsAt) } : { kind: 'none' };
+}
+
+/** How long the rest row holds "Rest's up" after the end, before it goes. */
+export const REST_UP_MS = 10_000;
+
+/**
+ * What the rest row under its set shows at `now` (spec 18.6): the countdown while time is left (whole seconds, rounded
+ * up), "Rest's up" for `REST_UP_MS` from the end, then nothing.
+ */
+export function restRowPhase(endsAt: number, now: number): { kind: 'running'; remaining: number } | { kind: 'up' } | { kind: 'gone' } {
+  const remaining = restRemainingSeconds(endsAt, now);
+  if (remaining !== null) return { kind: 'running', remaining };
+  return now - endsAt < REST_UP_MS ? { kind: 'up' } : { kind: 'gone' };
+}
+
+/** The share of the rest track still drawn: the time left of the rest's length, within 0 and 1. Full when the length is unknown. */
+export function restTrackFraction(remainingSeconds: number, lengthSeconds: number): number {
+  if (!Number.isFinite(lengthSeconds) || lengthSeconds <= 0) return 1;
+  return Math.min(1, Math.max(0, remainingSeconds / lengthSeconds));
+}
+
+const unitWord = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** A rest length in words, for the screen reader: "2 minutes", "1 minute 30 seconds", "45 seconds". */
+export function spokenRest(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) return unitWord(rest, 'second');
+  return rest === 0 ? unitWord(minutes, 'minute') : `${unitWord(minutes, 'minute')} ${unitWord(rest, 'second')}`;
+}
+
+/** What VoiceOver says after a tick: "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when the tick started no rest. */
+export function tickAnnouncement(setLabel: string, restSeconds: number | null): string {
+  const logged = `${setName(setLabel)} logged.`;
+  return restSeconds === null ? logged : `${logged} Rest ${spokenRest(restSeconds)}.`;
 }
 
 /** How long after the end the watcher still rings. Later than this, the app was away and the notification already rang. */

@@ -19,6 +19,7 @@ jest.mock('../../state/sessionActions', () => ({
   setExerciseRest: jest.fn(),
   setRpeShown: jest.fn(),
   toggleSuperset: jest.fn(),
+  restPlus15: jest.fn(),
 }));
 jest.mock('../../db/repositories/settingsRepo', () => ({
   getSettings: () => ({
@@ -32,8 +33,33 @@ jest.mock('../../db/repositories/settingsRepo', () => ({
   setSetting: jest.fn(),
 }));
 jest.mock('../../state/dataVersion', () => ({ useDbQuery: (query: (db: unknown) => unknown) => query('db'), bumpData: jest.fn() }));
+/**
+ * What each sheet drew, render by render, open or not: a closed Modal still shows its content while it fades on a phone,
+ * though the test renderer draws nothing for it. Each entry is the sheet's titles and button labels.
+ */
+const mockSheetFrames: { visible: boolean; text: string[] }[] = [];
+jest.mock('../Sheet', () => {
+  const actual = jest.requireActual('../Sheet');
+  const textIn = (node: unknown, out: string[]): string[] => {
+    if (typeof node === 'string') out.push(node);
+    else if (Array.isArray(node)) node.forEach((n) => textIn(n, out));
+    else if (node && typeof node === 'object' && 'props' in node) {
+      const props = (node as { props: { label?: unknown; children?: unknown } }).props;
+      if (typeof props.label === 'string') out.push(props.label);
+      textIn(props.children, out);
+    }
+    return out;
+  };
+  return {
+    ...actual,
+    Sheet: (props: { visible: boolean; children: unknown }) => {
+      mockSheetFrames.push({ visible: props.visible, text: textIn(props.children, []) });
+      return actual.Sheet(props);
+    },
+  };
+});
 jest.mock('../ThemeProvider', () => {
-  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
+  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
@@ -95,6 +121,7 @@ const afterSheetCloses = () => act(() => void jest.advanceTimersByTime(400));
 
 beforeEach(() => {
   jest.useFakeTimers();
+  mockSheetFrames.length = 0;
   jest.mocked(router.push).mockClear();
   onClose.mockClear();
 });
@@ -331,5 +358,93 @@ describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
     press(tree, 'Default (2:00)');
 
     expect(setExerciseRest).toHaveBeenCalledWith('db', 'barbell-bench-press', null);
+  });
+});
+
+describe('ExerciseMenu: opened from the countdown (spec 18.6)', () => {
+  /** Opens the menu as the session screen does: the ⋯ button with no panel, the countdown with 'rest'. */
+  let open: (panel?: 'menu' | 'rest') => void = () => {};
+
+  function OpenHost({ ex }: { ex: WorkoutExerciseView }) {
+    const [menuFor, setMenuFor] = useState<{ panel?: 'menu' | 'rest' } | null>(null);
+    open = (panel) => setMenuFor({ panel });
+    return (
+      <ExerciseMenu
+        exercises={[ex]}
+        exerciseId={menuFor === null ? null : ex.id}
+        initialPanel={menuFor?.panel}
+        onClose={() => {
+          onClose();
+          setMenuFor(null);
+        }}
+      />
+    );
+  }
+
+  it('opens straight on the rest choices', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<OpenHost ex={withRest(90)} />);
+    });
+    expect(shownText(tree)).toEqual([]);
+
+    act(() => open('rest'));
+
+    const shown = shownText(tree);
+    expect(shown).toEqual(expect.arrayContaining(['Rest time', 'Bench Press', 'Default (2:00)', '1:30']));
+    expect(shown).not.toContain('Reorder');
+
+    press(tree, 'Cancel');
+    act(() => open());
+
+    expect(shownText(tree)).toContain('Reorder');
+    expect(shownText(tree)).not.toContain('Rest time');
+  });
+
+  /** What the menu's own sheet (the one with Reorder or the rest choices) drew, frame by frame. */
+  const menuFrames = () => mockSheetFrames.filter((f) => f.text.includes('Reorder') || f.text.includes('Rest time'));
+
+  it('draws the rest choices from its first frame', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<OpenHost ex={withRest(90)} />);
+    });
+    mockSheetFrames.length = 0;
+
+    act(() => open('rest'));
+
+    const shown = menuFrames().filter((f) => f.visible);
+    expect(shown.length).toBeGreaterThan(0);
+    for (const frame of shown) {
+      expect(frame.text).toContain('Rest time');
+      expect(frame.text).not.toContain('Reorder');
+    }
+    expect(shownText(tree)).toContain('Rest time');
+  });
+
+  it.each(['1:30', 'Cancel'])('closes on %s without switching back to the menu while it fades', (label) => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<OpenHost ex={withRest(90)} />);
+    });
+    act(() => open('rest'));
+    mockSheetFrames.length = 0;
+
+    press(tree, label);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+    const closing = menuFrames();
+    expect(closing.length).toBeGreaterThan(0);
+    for (const frame of closing) expect(frame.text).not.toContain('Reorder');
+  });
+
+  it('opens on the rest choices when it mounts open on them', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ExerciseMenu exercises={[withRest(null)]} exerciseId="we1" initialPanel="rest" onClose={onClose} />);
+    });
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Rest time', 'Default (2:00)']));
   });
 });

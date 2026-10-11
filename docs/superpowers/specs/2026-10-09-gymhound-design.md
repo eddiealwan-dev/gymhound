@@ -392,6 +392,10 @@ Settings offers Light, Dark or System, with System the default.
 | text | #f1ece2 | #15130f |
 | textMuted | #a39d90 | #6b665c |
 | red | #E10600 | #E10600 |
+| textFaint | #6d675c | #8f897d |
+| borderStrong | #736c60 | #8a8478 |
+
+`textFaint` is for suggested values in set fields and `borderStrong` for set-field edges and compact pill outlines (§18.6).
 
 - **Red** is used only for the GYMHOUND wordmark, the active tab, and PR marks. Primary buttons use the `text` colour filled with `bg`-coloured labels. Ticks use the `text` colour.
 - **Wordmark:** "GYMHOUND", Barlow Condensed ExtraBold, uppercase, tight tracking (−0.5), one line. It is a logo, so it keeps a fixed size when the phone's text size is turned up. All other text in the app follows the phone's text size.
@@ -411,6 +415,8 @@ Settings offers Light, Dark or System, with System the default.
 - **Not allowed:** quotes, flames, skulls.
 
 ### 8.3 Train
+> Revised by §18.6: Up next now comes straight after the date.
+
 In order:
 1. **Greeting:** "GOOD MORNING", "GOOD AFTERNOON" or "GOOD EVENING" (05:00–11:59, 12:00–16:59, 17:00–04:59), and below it the date in huge uppercase condensed type, for example "FRI 9 OCT". The date is formatted for the device locale.
 2. **Resume:** shown only if a workout is active. It shows the workout name, elapsed time, sets done, and a **Resume** button.
@@ -432,6 +438,8 @@ In order:
 **Starting a workout while another is active** is blocked by a sheet: "Finish or discard the workout in progress first." with **Resume**.
 
 ### 8.4 Session
+> Revised by §18.6: the header, the note, the add buttons, prefill and the tick, the rest row, and the Finish confirm.
+
 - **Header:**
   - **Back**, which leaves the workout active and returns to Train.
   - The workout name.
@@ -826,13 +834,13 @@ The owner's report is kept in the build log. Where this section and an earlier o
 
 ### 18.2 Phase 1 patch (on `phase-1`, before the merge)
 - **Remove a set:** the set-type sheet (tap the set number) gets **Remove set**. Long-press stays.
-- **Add a warmup:** **+ Add warmup** beside **+ Add set** inserts a warmup after the exercise's existing warmups and before its first other set.
+- **Add a warmup:** **+ Add warmup** beside **+ Add set** inserts a warmup after the exercise's existing warmups and before its first other set. (Labels superseded by §18.6: **+ Set** and **+ Warmup**.)
 - **More than one workout a day:** works. Each finished workout keeps its own row, and the streak and This week count them.
 - **Back on Routines:** a visible back control returns to Train. The dock's Train tab stays the home button.
 - **Units and bar:** Settings gets Units (lb or kg, and mi or km) and Bar (Standard 45 lb / 20 kg, Women's 35 lb / 15 kg, Technique 15 lb / 5 kg, or a custom weight) for each unit. Switching the unit follows 7.1.
 - **Plate calculator** (the ⋯ menu, barbell exercises): bar plus plates per side for a target weight, using the Settings bar and plates (7.7).
 - **Rest per exercise:** the ⋯ menu gets **Rest time**. It belongs to the exercise, like its note, and follows it everywhere. **Off** turns rest off for that exercise, and **Default** uses the Settings length.
-- **Rest under the set:** while a rest runs, its countdown, **−15s** and **Skip** also show under the set that started it. (Superseded by §18.4: the bottom bar is now only a fallback.)
+- **Rest under the set:** while a rest runs, its countdown, **−15s** and **Skip** also show under the set that started it. (Superseded by §18.4: the bottom bar is now only a fallback. §18.6 adds **+15s**.)
 - **Music in Expo Go:** a music button in the session header opens a sheet with buttons that open Apple Music (iPhone only), Spotify and Audible. Not in the browser build. Real controls stay in phase 7 (§17.3). Audible on iPhone only ever gets the open button.
 
 ### 18.3 Folded into later phases
@@ -886,3 +894,109 @@ The check gave 33 pass, 2 fail and 4 skipped. The owner decided the following. W
   - Phone builds only. The food CSV stays with Fuel (phase 5).
   - Until phase 2 and phase 4, `day_mark` is the workout's stored mark and `pr` lists the kinds in `pr_flags`, which may be empty.
 - **Bells:** "each level needs to be a little louder". The bundled bells gain about 3 dB more average loudness, with the peak still at −1 dBFS and the tone kept clean. The 25/50/75/100% steps keep their meaning.
+
+### 18.6 Polish pass after the UX review (2026-10-10)
+The owner picked the seven highest-impact items from the UX review and approved the Train reorder and **+15s**. The plan is `docs/superpowers/plans/2026-10-10-gymhound-polish.md`. Where this section and an earlier one disagree, this section wins.
+
+- **Colour tokens:** `textFaint` and `borderStrong` join the §8.2 table.
+  - Both read at 3:1 or better on `bg` and `surface`, and `borderStrong` also on `surfaceRaised`.
+  - The review's light `textFaint` (#9a9386) measured 2.75:1 on `bg`, so #8f897d replaces it.
+- **Train leads with today's workout** (replaces the order in §8.3):
+  1. The greeting and date, unchanged.
+  2. One of three cards:
+     - **Up next**, when no workout is active and a routine is:
+       - The eyebrow "UP NEXT", then the title "{routine} · {day}".
+       - One line: "First time on this day." or "Last time: {date} · {mark}".
+       - A filled **Start {day}**, for example "Start Upper A". A day whose name has one or two characters reads "Start {routine} {day}", for example "Start 5×5 A".
+       - One line per exercise: the name on the left, and the scheme and load on the right ("4×5–8 · 60 kg").
+       - A loadable exercise with no weight shows "—" when another exercise that day has a weight.
+       - When no exercise has a weight, the rows show no load, and the line under the title ends "Pick weights as you go." The words "pick a weight" are gone.
+       - A quiet **Change routine ›** at the foot of the card opens Routines.
+     - **No routine:** one card reads "No routine yet. Pick one and Train will line up your next workout.", with a filled **Choose a routine** and an outlined **Start empty workout**.
+     - **In progress:** the Resume card, with the eyebrow "IN PROGRESS". Resume is the only filled button. Start empty workout and Up next are hidden.
+       - Round 4: the same quiet **Change routine ›** sits at the foot of the Resume card, under Resume, so Routines is reachable while a workout runs.
+  3. Streak and This week.
+  4. An outlined **Start empty workout**, in the Up next state only.
+  5. The footer.
+  - The "Finish or discard the workout in progress first." sheet stays as a guard against a stale screen or a double tap. Its **Resume** opens the session once the sheet has closed.
+  - Not in this pass: warmer zero-state captions, and showing Up next loads in the display unit (§7.1).
+- **Carry today's values** (adds to §8.4 Prefill):
+  - A set with no matching previous set takes today's own values as placeholders.
+    - Each field comes from the nearest set above it of the same type, ticked or typed and saved, converted to the entry unit.
+    - Typed 62.5 on set 3 carries to set 4.
+  - Today's target still wins for the weight, and real history wins for the whole row.
+  - `rep_max` (reps or seconds) wins over carried reps or time.
+  - Bodyweight plus never carries a 0 load.
+  - The Previous column never shows a carried value.
+  - What a set shows is what its tick logs. A value typed in another row carries once that row is left.
+- **A tick that is not ready says why** (replaces "the tick stays disabled" in §8.4):
+  - The tick keeps a full-strength dashed ring and stays pressable.
+  - The tick's column is 44pt wide, with the 40pt ring centred in it. Its tap area reaches 4pt above, below and right of the ring but not left, so a tap just left of the ring never lands on the reps field (R67).
+  - A tap ticks nothing. It focuses the missing field, shows a muted line under the row and gives a warning haptic. The line is "Add a weight to tick", "Add reps to tick", "Add a time to tick" or "Add a distance to tick".
+  - Round 4 (the phone gave no buzz and the keyboard opened on reps):
+    - The haptic comes first, before anything moves the keyboard, which can swallow it. It is a heavy impact (`Haptics.impactAsync(Heavy)`), distinct from the tick's light one, in place of the warning notification.
+    - The field to focus is the first missing one in column order (weight before reps). It is focused once the row has drawn its line, so nothing that tap re-renders (the line, or a blur that saves another field) comes after the focus.
+    - The line is also announced (`announce`), since VoiceOver does not read a live region on iOS. "Check this number" is announced the same way.
+  - A number that needs another look shows "Check this number" instead.
+  - The line names the field that is missing now, which a value carried from the set above can change after the tap. Typing in the row clears the line until the next tap.
+  - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").
+- **Finish confirm** (replaces "{n} sets aren't ticked" in §8.4):
+  - Finish first saves whatever is typed, then reads the workout.
+  - Nothing ticked: the "Nothing is ticked yet." sheet, as before.
+  - Every set ticked: Finish goes straight through.
+  - Otherwise a sheet asks first (R57, Round 4):
+    - When whole exercises have no tick, the title names them: "{names} has nothing logged" or "{names} have nothing logged". Up to three names are listed in full; more read "A, B and {n} more".
+    - Otherwise the title is "Finish {workout}?".
+    - The body is "{done} of {total} sets done. Incomplete sets won't count, and Up next moves to {day}." The Up next part appears only when the workout's routine is the active routine. Otherwise the body ends "Incomplete sets won't count."
+    - The word "Unticked" is not used in this sheet.
+  - The buttons are **Keep logging** and **Finish anyway**. Keep logging is the filled default when a whole exercise has no tick. Otherwise Finish anyway is.
+  - Counts include warmups. An exercise with no sets is never listed.
+  - Finish anyway finishes once the sheet has gone (R55). Until then, a second tap on Finish anyway, Finish or Discard does nothing. If the finish fails or is refused, they work again.
+  - Finish puts the keyboard away first, since it can open a sheet.
+- **Session header** (replaces the §8.4 Header; §18.1 already dropped the day-mark chip):
+  - Back, then the workout name with a muted line under it, "{done}/{total} sets · {elapsed}". A workout with no sets shows only the time.
+  - Then Music (phones only) and a small outlined **Finish**.
+  - The bottom Finish is gone. Add exercise and Discard stay at the bottom.
+  - A 2pt text-colour line along the header's bottom edge fills with the share of sets ticked.
+  - The name, the line under it and the Finish label stop growing at 1.3× the phone's text size, so the header stays one row. This is the only exception to §8.2's text-size rule besides the wordmark.
+  - Round 4 (the header clipped at the bottom and right at the largest text):
+    - At 1.3× the name and the line under it need about 55pt, which left under 1pt in the 56pt row, and the 2pt progress line was drawn over the bottom of the row. The row now has 4pt above and below its text, so the header grows instead, and the progress line has its own 2pt strip under the row.
+    - The header has no fixed height. Back and Music are 44pt and never shrink; the name column takes what is left and truncates.
+    - The line under the name is two parts in a row, read as one label: the count ("5/18 sets") shrinks and truncates first, and the time (" · 24:10") is never cut.
+    - Music has 8pt to Finish, so their 4pt hit slops never overlap.
+  - Each exercise block shows a muted "{done}/{total}" before ⋯.
+  - The next set to do has a bolder tick ring (2.5pt, text colour). It is the first unticked set in workout order. In a superset, it is in the member with the fewest ticked sets, with the earlier member winning a tie.
+- **Suggested values look like suggestions:**
+  - Today's target and every placeholder (from last time, the rule or a carry) draw with no fill, a dashed `borderStrong` outline, `textFaint` and Barlow 600.
+    - VoiceOver adds the hint "Suggested. Tick the set to log it.", except on a ticked set, where a tap on the tick would untick it.
+  - A typed, saved or ticked value draws solid: a `surface` fill, a `borderStrong` outline, the `text` colour and Barlow 800.
+  - A cleared weight field on a row with a target shows the target as its placeholder, which is what the tick logs. A ticked set does too: leaving the weight blank takes the tick off, and the open row then shows the target.
+- **Slimmer exercise blocks** (replaces the always-open note in §8.4 and the §18.2 button labels):
+  - An empty note shows a quiet **+ Note** with a pencil in the name row. It opens the note field, focused.
+  - A saved note shows in full as a muted line under the name. Tap it to edit.
+  - The note saves when the field is left and on every flush (R29). A blank note clears it.
+  - **+ Set**, then **+ Warmup**, as quiet compact buttons (36pt, with 44pt targets) on one line under the table. They behave as §18.2 says.
+    - Compact buttons (these and the rest pills) are at least 44pt wide.
+- **Rest row as a live timer** (replaces the countdown line in §8.4):
+  - Under its set, the row shows:
+    - a small REST label over the countdown, in Barlow 800 at 32pt;
+    - a 3pt text-colour track that drains;
+    - outlined pills **−15s**, **+15s** and **Skip**.
+  - With large text the three pills wrap together under the countdown, 8pt apart, and wrap among themselves when one line cannot hold all three.
+  - The track keeps the length the rest started with: +15s or a new choice from the countdown does not rescale it.
+  - If you leave the session and come back mid-rest, the track uses the exercise's current rest length.
+  - The row has a `surface` fill and a `borderStrong` edge, so it never looks like a done set.
+  - +15s moves the end and reschedules the notification, as −15s does. Once the rest has ended it does nothing.
+  - −15s and Skip, like +15s, do nothing once the rest has ended.
+  - Tapping the countdown opens this exercise's rest choices. A choice sets future rests. The running rest keeps its end.
+  - At zero the row reads "Rest's up · Set {n} next" for 10 seconds, or until a set is ticked.
+    - The Rest's up row keeps the running row's height, so the sets below don't move.
+    - It reads "Warmup next" (or "Drop set" or "Failure set") for those types, and the exercise's name when the next set is in another exercise. With nothing left, it reads just "Rest's up".
+    - Round 4: it names another exercise only after the last set of this one. While the exercise holding the rest (in a superset, its run) has a set left, it names that set, or in a superset the member whose turn it is. Once it is done, it names the workout's next set (which may be an earlier exercise left open).
+    - Skip shows nothing.
+  - **VoiceOver:**
+    - A tick announces "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when no rest starts.
+    - The bell announces "Rest over".
+    - On iOS every announcement is said half a second later, so VoiceOver reading the tapped tick again does not cut it off.
+    - The countdown reads as a duration: "Rest, 1 minute 45 seconds left". The bottom bar's countdown does too.
+  - The fallback bottom bar (R41) gets +15s and the same pills.

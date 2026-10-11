@@ -1,7 +1,8 @@
 import { Keyboard, ScrollView, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { Sheet } from './Sheet';
+import { Button } from './Button';
+import { ConfirmSheet, Sheet } from './Sheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -12,7 +13,7 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 20, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./ThemeProvider', () => {
-  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
+  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
@@ -104,5 +105,65 @@ describe('Sheet: VoiceOver can close it without acting (F3)', () => {
 
     act(() => modal.props.onAccessibilityEscape());
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ConfirmSheet: which answer is the primary one', () => {
+  const onConfirm = jest.fn();
+  const onCancel = jest.fn();
+
+  beforeEach(() => {
+    onConfirm.mockClear();
+    onCancel.mockClear();
+  });
+
+  function confirmSheet(primary?: 'confirm' | 'cancel'): ReactTestRenderer {
+    let tree!: ReactTestRenderer;
+    act(() => {
+      tree = create(
+        <ConfirmSheet
+          visible
+          title="Finish Push A?"
+          confirmLabel="Finish anyway"
+          cancelLabel="Keep logging"
+          primary={primary}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />,
+      );
+    });
+    return tree;
+  }
+
+  /** The buttons in the order they are drawn, each with its variant (a Button with none is primary). */
+  const buttons = (tree: ReactTestRenderer) =>
+    tree.root.findAllByType(Button).map((b) => [b.props.label, b.props.variant ?? 'primary']);
+
+  it('puts confirm first as the primary button by default', () => {
+    expect(buttons(confirmSheet())).toEqual([
+      ['Finish anyway', 'primary'],
+      ['Keep logging', 'secondary'],
+    ]);
+  });
+
+  it("with primary 'cancel', puts cancel first as the primary button and confirm second", () => {
+    const tree = confirmSheet('cancel');
+    expect(buttons(tree)).toEqual([
+      ['Keep logging', 'primary'],
+      ['Finish anyway', 'secondary'],
+    ]);
+
+    const [cancel, confirm] = tree.root.findAllByType(Button);
+    act(() => cancel.props.onPress());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    act(() => confirm.props.onPress());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('still cancels from the backdrop', () => {
+    const tree = confirmSheet('cancel');
+    act(() => backdrop(tree).props.onPress());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });

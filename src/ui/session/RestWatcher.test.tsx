@@ -22,6 +22,7 @@ jest.mock('../../state/sessionActions', () => ({
     // The write clears the stored end, and the version bump makes the screen read it again.
     if (mockState.rest) mockState.rest = { ...mockState.rest, restEndsAt: null };
   }),
+  restPlus15: jest.fn(),
 }));
 jest.mock('../../platform/restTimer/bell', () => ({
   playBell: jest.fn((sound: string) => {
@@ -29,6 +30,9 @@ jest.mock('../../platform/restTimer/bell', () => ({
     return Promise.resolve();
   }),
 }));
+// What VoiceOver is told; kept apart from `mockCalls` so the haptic, bell and clear order reads as before.
+const mockAnnounce = jest.fn((_text: string) => {});
+jest.mock('../../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
 jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success' },
   notificationAsync: jest.fn((type: string) => {
@@ -71,6 +75,7 @@ beforeEach(() => {
   }) as unknown as typeof AppState.addEventListener);
   setCurrentState('active');
   mockCalls.length = 0;
+  mockAnnounce.mockClear();
   mockState.rest = { workoutId: 'w1', restEndsAt: null };
   mockState.bell = true;
   mockState.sound = 'chime';
@@ -114,6 +119,21 @@ describe('RestWatcher: the rest ends with a haptic and a bell wherever the user 
     advance(5_000);
     expect(mockCalls).toHaveLength(3);
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('announces Rest over once when a watched rest runs out', () => {
+    mockState.rest = { workoutId: 'w1', restEndsAt: NOW + 2_000 };
+    mount();
+
+    advance(1_000);
+    expect(mockAnnounce).not.toHaveBeenCalled();
+
+    advance(1_500);
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
+    expect(mockAnnounce).toHaveBeenCalledWith('Rest over');
+
+    advance(5_000);
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
   });
 
   it('rings once even if the cleared rest is not read back yet', () => {
@@ -182,6 +202,7 @@ describe('RestWatcher: the rest ends with a haptic and a bell wherever the user 
     advance(500);
 
     expect(mockCalls).toEqual([ended(-30_000)]);
+    expect(mockAnnounce).not.toHaveBeenCalled();
   });
 
   it('does not ring late: after the phone was away past the window it clears quietly', () => {
@@ -218,6 +239,7 @@ describe('RestWatcher: the rest ends with a haptic and a bell wherever the user 
       advance(250);
 
       expect(mockCalls).toEqual([ended(5_000)]);
+      expect(mockAnnounce).not.toHaveBeenCalled();
     });
 
     it('does not ring if the clock fires in the background right at the end (iOS runs timers for a moment after leaving)', () => {

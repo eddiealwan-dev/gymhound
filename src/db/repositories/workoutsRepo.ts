@@ -1,9 +1,10 @@
-import { and, asc, count, eq, inArray, isNotNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import { planInUnit } from '../../domain/plates';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { convertIncrement } from '../../domain/units';
+import { dayTitle } from '../../domain/upNext';
 import { newId } from '../ids';
 import {
   exerciseNotes,
@@ -79,14 +80,21 @@ export function startEmptyWorkout(db: Db, now: number): string {
 export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): string {
   return db.transaction((tx) => {
     assertNoActiveWorkout(tx);
-    const day = tx.select().from(routineDays).where(eq(routineDays.id, routineDayId)).get();
-    if (!day) throw new Error(`No routine day with id ${routineDayId}.`);
+    const row = tx
+      .select({ day: routineDays, routineName: routines.name })
+      .from(routineDays)
+      .innerJoin(routines, eq(routines.id, routineDays.routineId))
+      .where(eq(routineDays.id, routineDayId))
+      .get();
+    if (!row) throw new Error(`No routine day with id ${routineDayId}.`);
+    const { day, routineName } = row;
 
     const workoutId = newId();
     tx.insert(workouts)
       .values({
         id: workoutId,
-        name: day.name,
+        // Named as Train names the day ("5×5 A", R56); a finished workout keeps the name it was stored with.
+        name: dayTitle(routineName, day.name),
         routineId: day.routineId,
         routineDayId: day.id,
         status: 'active',
@@ -136,21 +144,42 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
   });
 }
 
-/** How many sets are not ticked but already have a weight, reps, duration or distance typed in. */
-export function countUntickedWithValues(db: Db, workoutId: string): number {
-  const row = db
-    .select({ n: count() })
-    .from(sets)
-    .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
-    .where(
-      and(
-        eq(workoutExercises.workoutId, workoutId),
-        eq(sets.done, false),
-        or(isNotNull(sets.weight), isNotNull(sets.reps), isNotNull(sets.durationS), isNotNull(sets.distance)),
-      ),
-    )
+/**
+ * The day after `routineDayId` in its routine's rotation: the index the routine's pointer moves to, wrapping from the
+ * last day to the first, with that day's name and the routine's. Null when the day no longer exists.
+ */
+function dayAfter(
+  db: Db,
+  routineDayId: string,
+): { routineId: string; nextIndex: number; routineName: string; dayName: string } | null {
+  const day = db
+    .select({ routineId: routineDays.routineId, routineName: routines.name })
+    .from(routineDays)
+    .innerJoin(routines, eq(routines.id, routineDays.routineId))
+    .where(eq(routineDays.id, routineDayId))
     .get();
-  return row?.n ?? 0;
+  if (!day) return null;
+  const days = db
+    .select({ id: routineDays.id, name: routineDays.name })
+    .from(routineDays)
+    .where(eq(routineDays.routineId, day.routineId))
+    .orderBy(asc(routineDays.position))
+    .all();
+  const nextIndex = (days.findIndex((d) => d.id === routineDayId) + 1) % days.length;
+  return { routineId: day.routineId, nextIndex, routineName: day.routineName, dayName: days[nextIndex].name };
+}
+
+/**
+ * What Up next will show once this workout is finished: the title of its routine's day after this one ("Pull A",
+ * "5×5 A"). Null for an unknown or empty workout, a day deleted since it started, or a routine that is not the active
+ * one, since Up next shows only the active routine.
+ */
+export function getNextDayTitle(db: Db, workoutId: string): string | null {
+  const workout = db.select({ routineDayId: workouts.routineDayId }).from(workouts).where(eq(workouts.id, workoutId)).get();
+  if (!workout || workout.routineDayId === null) return null;
+  const next = dayAfter(db, workout.routineDayId);
+  if (next === null || next.routineId !== getSettings(db).activeRoutineId) return null;
+  return dayTitle(next.routineName, next.dayName);
 }
 
 /**
@@ -203,22 +232,9 @@ export function finishWorkout(db: Db, workoutId: string, now: number): void {
       .run();
 
     // The routine or day may have been deleted since the workout started; then there is no rotation to move.
-    const day =
-      workout.routineDayId === null
-        ? undefined
-        : tx.select().from(routineDays).where(eq(routineDays.id, workout.routineDayId)).get();
-    if (day) {
-      const days = tx
-        .select({ id: routineDays.id })
-        .from(routineDays)
-        .where(eq(routineDays.routineId, day.routineId))
-        .orderBy(asc(routineDays.position))
-        .all();
-      const index = days.findIndex((d) => d.id === day.id);
-      tx.update(routines)
-        .set({ nextDayIndex: (index + 1) % days.length })
-        .where(eq(routines.id, day.routineId))
-        .run();
+    const next = workout.routineDayId === null ? null : dayAfter(tx, workout.routineDayId);
+    if (next) {
+      tx.update(routines).set({ nextDayIndex: next.nextIndex }).where(eq(routines.id, next.routineId)).run();
     }
   });
 }

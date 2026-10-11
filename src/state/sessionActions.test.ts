@@ -32,6 +32,7 @@ import {
   replaceWith,
   restEnded,
   restMinus15,
+  restPlus15,
   restSkip,
   saveNote,
   setExerciseRest,
@@ -54,6 +55,10 @@ const mockSurface = {
 };
 jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
+// What VoiceOver is told. Its own module is a thin wrapper over AccessibilityInfo.
+const mockAnnounce = jest.fn((_text: string) => {});
+jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+
 // The snapshot writes a file on the phone and does nothing on web. Tests watch the calls (its own tests are in backup.test.ts).
 const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
 jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
@@ -70,6 +75,7 @@ beforeEach(() => {
   mockSurface.update.mockClear();
   mockSurface.cancel.mockClear();
   mockSnapshot.mockClear();
+  mockAnnounce.mockClear();
 });
 
 afterEach(() => {
@@ -218,6 +224,27 @@ describe('tick', () => {
     expect(tick(db, ex, ex.sets[2], NOTHING)).toBe(false);
   });
 
+  it("ticks set 2 on the weight carried from set 1, with the rule's reps (first run)", () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+    tick(db, ex, ex.sets[0], { weight: 135, reps: 6, durationS: null, distance: null });
+
+    const fresh = bench();
+    expect(tick(db, fresh, fresh.sets[1], NOTHING)).toBe(true);
+
+    expect(reread(fresh.sets[1].id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb', reps: 8 });
+  });
+
+  it('a typed, unticked weight carries to the next set', () => {
+    startFromDay(db, PUSH_A);
+    commitSetField(db, bench().sets[2].id, { weight: 140, weightUnit: 'lb' });
+
+    const fresh = bench();
+    expect(tick(db, fresh, fresh.sets[3], NOTHING)).toBe(true);
+
+    expect(reread(fresh.sets[3].id)).toMatchObject({ done: true, weight: 140, reps: 8 });
+  });
+
   it('returns false and writes nothing when a field the type needs has no value and no placeholder', () => {
     startFromDay(db, PUSH_A);
     const ex = bench();
@@ -283,8 +310,8 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     switchDisplayUnit(db, 'kg');
 
     const { ex, row } = benchRow(0);
-    expect(valueText(row, 'weight', 'kg')).toBe('135 lb');
-    const reading = readRow(row, {}, 'kg');
+    expect(valueText(row, 'weight', 'kg', 'mi')).toBe('135 lb');
+    const reading = readRow(row, {}, 'kg', 'mi');
     expect(tick(db, ex, row.set, reading.entered, reading.weightUnit)).toBe(true);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb' });
   });
@@ -295,7 +322,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     switchDisplayUnit(db, 'kg');
 
     const { ex, row } = benchRow(0);
-    const reading = readRow(row, { weight: '60' }, 'kg');
+    const reading = readRow(row, { weight: '60' }, 'kg', 'mi');
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
 
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
@@ -310,7 +337,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
 
     const { row } = benchRow(0);
     expect(row.set).toMatchObject({ done: true, weight: 100, weightUnit: 'kg' });
-    expect(valueText(row, 'weight', 'lb')).toBe('100 kg');
+    expect(valueText(row, 'weight', 'lb', 'mi')).toBe('100 kg');
   });
 
   it('prefills a 135 lb planned bench as 60 after a switch to kg, not 61.23, and ticks 60 kg', () => {
@@ -321,8 +348,8 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
 
     const { ex, row } = benchRow(0);
     expect(row.target).toBe(60);
-    expect(valueText(row, 'weight', 'kg')).toBe('60');
-    const reading = readRow(row, {}, 'kg');
+    expect(valueText(row, 'weight', 'kg', 'mi')).toBe('60');
+    const reading = readRow(row, {}, 'kg', 'mi');
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
   });
@@ -416,6 +443,63 @@ function tickSetOf(e: number, i: number): boolean {
   const ex = activeView().exercises[e];
   return tick(db, ex, ex.sets[i], VALUES);
 }
+
+describe('tick records a carried distance in the entry distance unit', () => {
+  it('a distance carried from a set logged in km is recorded in mi, as the row shows it', () => {
+    startFromDay(db, PUSH_A);
+    setSetting(db, 'distanceUnit', 'mi');
+    const ex = activeView().exercises[0];
+    // The bench press's sets, read as a distance exercise whose first set was logged in km.
+    const run = {
+      ...ex,
+      loggingType: 'distance_time' as const,
+      rule: null,
+      sets: [{ ...ex.sets[0], done: true, distance: 5, distanceUnit: 'km' as const, durationS: 1500 }, ...ex.sets.slice(1)],
+    };
+
+    expect(tick(db, run, run.sets[1], NOTHING)).toBe(true);
+
+    expect(reread(run.sets[1].id)).toMatchObject({ distance: 3.11, distanceUnit: 'mi', durationS: 1500 });
+  });
+});
+
+describe('a distance unit switch mid-workout: a typed or saved distance keeps its unit, as a weight does', () => {
+  /** The bench press's first set read as a distance exercise, as the session shows it now, in the units in Settings. */
+  function runRow() {
+    const settings = getSettings(db);
+    const ex = { ...activeView().exercises[0], loggingType: 'distance_time' as const, rule: null };
+    return { ex, settings, row: buildRows(ex, settings.unit, gearFor(settings.unit, settings), settings.distanceUnit)[0] };
+  }
+
+  /** Saves 5 km on the first set, then switches the distance unit to mi. */
+  function fiveKmThenMiles() {
+    startFromDay(db, PUSH_A);
+    setSetting(db, 'distanceUnit', 'km');
+    commitSetField(db, activeView().exercises[0].sets[0].id, fieldPatch('distance', 5, 'lb', 'km'));
+    setSetting(db, 'distanceUnit', 'mi');
+  }
+
+  it('ticks 5 saved in km before a switch to mi as 5 km, as the row shows it', () => {
+    fiveKmThenMiles();
+
+    const { ex, settings, row } = runRow();
+    expect(valueText(row, 'distance', settings.unit, settings.distanceUnit)).toBe('5 km');
+    const reading = readRow(row, { durationS: '25:00' }, settings.unit, settings.distanceUnit);
+    expect(tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit)).toBe(true);
+
+    expect(reread(row.set.id)).toMatchObject({ done: true, distance: 5, distanceUnit: 'km', durationS: 1500 });
+  });
+
+  it('ticks a distance typed after the switch in mi', () => {
+    fiveKmThenMiles();
+
+    const { ex, settings, row } = runRow();
+    const reading = readRow(row, { distance: '3', durationS: '25:00' }, settings.unit, settings.distanceUnit);
+    expect(tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit)).toBe(true);
+
+    expect(reread(row.set.id)).toMatchObject({ done: true, distance: 3, distanceUnit: 'mi', durationS: 1500 });
+  });
+});
 
 describe('tick starts the rest timer', () => {
   it('stores the end time (the Settings length from now) and starts the surface with the bell setting', () => {
@@ -660,6 +744,95 @@ describe('restMinus15', () => {
     expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
     expect(mockSurface.update).not.toHaveBeenCalled();
   });
+
+  it('does nothing once the rest is over, so the rest watcher still rings and the row still holds', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+    const before = version();
+
+    restMinus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(activeView().restSetId).toBe(activeView().exercises[0].sets[0].id);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before);
+  });
+});
+
+describe('restPlus15', () => {
+  it('moves the end 15 seconds later and reschedules', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 10_000);
+    const before = version();
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 135_000);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before + 1);
+  });
+
+  it('passes the bell setting on', () => {
+    setSetting(db, 'restBell', false);
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false);
+  });
+
+  it('does nothing once the rest is over', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(mockSurface.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('tick tells VoiceOver what it logged', () => {
+  it('a tick announces the set and the rest', () => {
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged. Rest 2 minutes.');
+  });
+
+  it('names the set alone when the rest is Off', () => {
+    setExerciseRest(db, BENCH, 0);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged.');
+  });
+
+  it('says the rest length in words', () => {
+    setSetting(db, 'restSeconds', 90);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged. Rest 1 minute 30 seconds.');
+  });
+
+  it('announces nothing when the tick is refused', () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+
+    expect(tick(db, ex, ex.sets[0], { weight: null, reps: 8, durationS: null, distance: null })).toBe(false);
+
+    expect(mockAnnounce).not.toHaveBeenCalled();
+  });
 });
 
 describe('restSkip', () => {
@@ -668,11 +841,25 @@ describe('restSkip', () => {
     tickSetOf(0, 0);
     const before = version();
 
-    restSkip(db, workoutId());
+    restSkip(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBeNull();
     expect(mockSurface.cancel).toHaveBeenCalledTimes(1);
     expect(version()).toBe(before + 1);
+  });
+
+  it('does nothing once the rest is over, so the rest watcher still rings and the row still holds', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+    const before = version();
+
+    restSkip(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(activeView().restSetId).toBe(activeView().exercises[0].sets[0].id);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before);
   });
 });
 
@@ -766,10 +953,20 @@ describe('restSetId: the set that started the rest', () => {
     expect(restSetId()).toBe(setId(0, 0));
   });
 
+  it('the rest stays under its set through +15s', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 135_000);
+    expect(restSetId()).toBe(setId(0, 0));
+  });
+
   it('is cleared by Skip, and by a -15s that skips', () => {
     startFromDay(db, PUSH_A);
     tickSetOf(0, 0);
-    restSkip(db, workoutId());
+    restSkip(db, workoutId(), NOW + 120_000);
     expect(restSetId()).toBeNull();
 
     tickSetOf(0, 1);

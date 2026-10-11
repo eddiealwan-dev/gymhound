@@ -17,7 +17,7 @@ import { RestBar } from './RestBar';
 
 type Workout = { id: string; name: string; startedAt: number; restEndsAt: number | null; restSetId: string | null; exercises: unknown[] };
 
-const EXERCISES = [{ id: 'we1', exerciseId: 'bench', supersetGroup: null, sets: [{ id: 's1' }, { id: 's2' }] }];
+const EXERCISES = [{ id: 'we1', exerciseId: 'bench', name: 'Barbell bench press', supersetGroup: null, sets: [{ id: 's1' }, { id: 's2' }] }];
 const mockState: { workout: Workout; musicApp: MusicAppId | null } = {
   workout: { id: 'w1', name: 'Push A', startedAt: 1_000, restEndsAt: null, restSetId: null, exercises: EXERCISES },
   musicApp: null,
@@ -37,20 +37,20 @@ jest.mock('../../db/repositories/settingsRepo', () => ({
     if (key === 'musicApp') mockState.musicApp = value as MusicAppId | null;
   }),
 }));
-jest.mock('../../db/repositories/workoutsRepo', () => ({ countUntickedWithValues: () => 0 }));
+jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
-  useDbQuery: () => ({ workout: mockState.workout, unit: 'kg', distanceUnit: 'km', musicApp: mockState.musicApp }),
+  useDbQuery: () => ({ workout: mockState.workout, unit: 'kg', distanceUnit: 'km', musicApp: mockState.musicApp, restSeconds: 120 }),
   bumpData: jest.fn(),
 }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
-jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn() }));
+jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../../state/useNow', () => ({ useNow: () => 2_000 }));
 jest.mock('./ExerciseBlock', () => ({ ExerciseBlock: () => null }));
 jest.mock('./ExerciseMenu', () => ({ ExerciseMenu: () => null }));
 jest.mock('./RestBar', () => ({ RestBar: () => null }));
 jest.mock('../ThemeProvider', () => {
-  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
+  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
@@ -73,7 +73,7 @@ const buttonLabels = (tree: ReactTestRenderer) => tree.root.findAllByType(Button
 const dock = (tree: ReactTestRenderer): ReactTestInstance =>
   tree.root.findAll((n) => n.type === View && typeof n.props.onLayout === 'function')[0];
 
-/** The bottom padding of the scrolling content: what keeps Finish clear of the bars. */
+/** The bottom padding of the scrolling content: what keeps Discard workout, now the last thing on the page, clear of the bars. */
 const contentPaddingBottom = (tree: ReactTestRenderer): number => {
   const content = tree.root.findByType(ScrollView).findAll((n) => n.type === View && n.props.style?.maxWidth === 512)[0];
   return content.props.style.paddingBottom;

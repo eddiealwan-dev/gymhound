@@ -1,13 +1,21 @@
 import {
   minus15,
+  plus15,
+  PLUS_15_MS,
   REST_CHOICES,
+  REST_UP_MS,
   restLengthFor,
   restAfterMinus15,
+  restAfterPlus15,
   restAfterTick,
   restPhase,
   restRemainingSeconds,
+  restRowPhase,
+  restTrackFraction,
   RING_WINDOW_MS,
   shouldStartRestAfterTick,
+  spokenRest,
+  tickAnnouncement,
   wasAwayAt,
 } from './rest';
 
@@ -185,5 +193,69 @@ describe('REST_CHOICES and restLengthFor: rest per exercise (Task 21)', () => {
 
   it('falls back on the Settings rest when the exercise has none', () => {
     expect(restLengthFor(null, 120)).toBe(120);
+  });
+});
+
+describe('plus15 and restAfterPlus15: +15s (spec 18.6)', () => {
+  it('moves the end 15 seconds later', () => {
+    expect(PLUS_15_MS).toBe(15_000);
+    expect(plus15(now + 60_000)).toBe(now + 75_000);
+  });
+
+  it('extends the running rest by 15 seconds, however little is left', () => {
+    expect(restAfterPlus15(now + 60_000, now)).toEqual({ kind: 'extend', endsAt: now + 75_000 });
+    expect(restAfterPlus15(now + 1_000, now)).toEqual({ kind: 'extend', endsAt: now + 16_000 });
+  });
+
+  it('does nothing once the rest is over', () => {
+    expect(restAfterPlus15(now, now)).toEqual({ kind: 'none' });
+    expect(restAfterPlus15(now - 1, now)).toEqual({ kind: 'none' });
+  });
+});
+
+describe("restRowPhase: the rest row counts down, holds Rest's up, then goes (spec 18.6)", () => {
+  it('counts down in whole seconds, rounded up', () => {
+    expect(restRowPhase(now + 105_000, now)).toEqual({ kind: 'running', remaining: 105 });
+    expect(restRowPhase(now + 500, now)).toEqual({ kind: 'running', remaining: 1 });
+  });
+
+  it("holds Rest's up for 10 seconds from the end", () => {
+    expect(REST_UP_MS).toBe(10_000);
+    expect(restRowPhase(now, now)).toEqual({ kind: 'up' });
+    expect(restRowPhase(now, now + 9_999)).toEqual({ kind: 'up' });
+  });
+
+  it('is gone after that', () => {
+    expect(restRowPhase(now, now + REST_UP_MS)).toEqual({ kind: 'gone' });
+  });
+});
+
+describe('restTrackFraction: how much of the track is left', () => {
+  it('is the share of the rest left, kept within 0 and 1', () => {
+    expect(restTrackFraction(60, 120)).toBe(0.5);
+    expect(restTrackFraction(135, 120)).toBe(1);
+    expect(restTrackFraction(0, 120)).toBe(0);
+  });
+
+  it('is full when the length is unknown', () => {
+    expect(restTrackFraction(30, 0)).toBe(1);
+    expect(restTrackFraction(30, NaN)).toBe(1);
+  });
+});
+
+describe('spokenRest and tickAnnouncement: what VoiceOver says after a tick', () => {
+  it('says a rest length in words', () => {
+    expect(spokenRest(120)).toBe('2 minutes');
+    expect(spokenRest(60)).toBe('1 minute');
+    expect(spokenRest(90)).toBe('1 minute 30 seconds');
+    expect(spokenRest(150)).toBe('2 minutes 30 seconds');
+    expect(spokenRest(45)).toBe('45 seconds');
+    expect(spokenRest(1)).toBe('1 second');
+  });
+
+  it('names the set, then the rest it started, if any', () => {
+    expect(tickAnnouncement('2', 120)).toBe('Set 2 logged. Rest 2 minutes.');
+    expect(tickAnnouncement('2', null)).toBe('Set 2 logged.');
+    expect(tickAnnouncement('W', 90)).toBe('Warmup logged. Rest 1 minute 30 seconds.');
   });
 });

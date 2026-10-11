@@ -1,8 +1,15 @@
-import { convertIncrement, convertWeight, defaultUnitFor, formatWeight, roundToHalf, sameWeight, toKg } from './units';
+import { convertDistance, convertIncrement, convertWeight, defaultUnitFor, formatWeight, roundToHalf, sameWeight, toKg } from './units';
 
 describe('units', () => {
   it('converts pounds to kilograms', () => {
     expect(toKg(100, 'lb')).toBeCloseTo(45.359237, 6);
+  });
+
+  it('converts between distance units', () => {
+    expect(convertDistance(5, 'km', 'mi')).toBeCloseTo(3.10686, 5);
+    expect(convertDistance(1, 'mi', 'm')).toBeCloseTo(1609.344, 3);
+    expect(convertDistance(400, 'm', 'km')).toBeCloseTo(0.4, 10);
+    expect(convertDistance(3, 'km', 'km')).toBe(3);
   });
 
   it('converts between weight units', () => {

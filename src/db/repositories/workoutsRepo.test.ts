@@ -6,6 +6,7 @@ import path from 'node:path';
 import { mondayOf, toLocalDate } from '../../domain/dates';
 import { formatPrevious } from '../../domain/setEntry';
 import { computeStreak } from '../../domain/streak';
+import { dayTitle } from '../../domain/upNext';
 import { totalVolume } from '../../domain/volume';
 import { runSeed } from '../../seed/seed';
 import {
@@ -23,16 +24,16 @@ import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
-import { ensureSettings, setSetting } from './settingsRepo';
+import { ensureSettings, getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
   clearRestEndsAtIf,
-  countUntickedWithValues,
   discardWorkout,
   finishWorkout,
   getActiveRest,
   getActiveWorkoutId,
+  getNextDayTitle,
   NothingTickedError,
   setRestEndsAt,
   startEmptyWorkout,
@@ -101,6 +102,16 @@ describe('startWorkoutFromDay', () => {
     expect(v.exercises[0].sets.map((s) => [s.setType, s.done, s.weight])).toEqual(
       Array(4).fill(['working', false, null]),
     );
+  });
+
+  it("names the workout as Train does: the routine's name before a one- or two-character day (R56)", () => {
+    const db = seededDb();
+    const five = startWorkoutFromDay(db, FIVE_B, NOW);
+    expect(db.select().from(workouts).where(eq(workouts.id, five)).get()!.name).toBe('5×5 B');
+    discardWorkout(db, five);
+
+    const push = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(db.select().from(workouts).where(eq(workouts.id, push)).get()!.name).toBe('Push A');
   });
 
   it('copies the day, the exercise order, supersets and the rest of the view', () => {
@@ -585,22 +596,65 @@ describe('Up next only advances on a finished day', () => {
   });
 });
 
-describe('countUntickedWithValues', () => {
-  it('counts only unticked sets that have a value', () => {
+describe('getNextDayTitle', () => {
+  it("names the active routine's day after the workout's day", () => {
     const db = seededDb();
+    setActiveRoutine(db, PPL);
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
-    expect(countUntickedWithValues(db, id)).toBe(0);
+    expect(getNextDayTitle(db, id)).toBe('Pull A');
+  });
 
-    const [typed, , ticked] = setIds(db);
-    db.update(sets).set({ weight: 135 }).where(eq(sets.id, typed)).run();
-    tick(db, ticked, 135, 8, NOW + 1_000);
-    // One typed but unticked, one blank, one ticked.
-    expect(countUntickedWithValues(db, id)).toBe(1);
+  it('wraps from the last day to the first', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startWorkoutFromDay(db, 'premade-ppl-6:legs-b', NOW);
+    expect(getNextDayTitle(db, id)).toBe('Push A');
+  });
 
-    // Any of the four value fields counts, and an un-ticked set keeps its values.
-    db.update(sets).set({ durationS: 45 }).where(eq(sets.id, setIds(db, 1)[0])).run();
-    untickSet(db, ticked);
-    expect(countUntickedWithValues(db, id)).toBe(3);
+  it('puts the routine name before a one- or two-character day name', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, FIVE_B, NOW);
+    expect(getNextDayTitle(db, id)).toBe('5×5 A');
+  });
+
+  it('is null for a day of a routine that is not the active one', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(getNextDayTitle(db, id)).toBeNull();
+  });
+
+  it('is null for an empty workout and for an unknown workout', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startEmptyWorkout(db, NOW);
+    expect(getNextDayTitle(db, id)).toBeNull();
+    expect(getNextDayTitle(db, 'no-such-workout')).toBeNull();
+  });
+
+  it('is null when the day was deleted after the workout started', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    // Only the day goes: its routine is still the active one.
+    db.delete(routineDays).where(eq(routineDays.id, PUSH_A)).run();
+    expect(getSettings(db).activeRoutineId).toBe(PPL);
+    expect(getNextDayTitle(db, id)).toBeNull();
+  });
+
+  it('names the day finish moves Up next to, as the Up next card titles it', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, FIVE_A, NOW);
+    const preview = getNextDayTitle(db, id);
+    tick(db, setIds(db)[0], 135, 5, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    const upNext = getUpNext(db)!;
+    expect(preview).toBe(dayTitle(upNext.routineName, upNext.dayName));
+    expect(preview).toBe('5×5 B');
+    expect(nextDayIndex(db, 'premade-5x5-3')).toBe(1);
   });
 });
 

@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import { getLocales } from 'expo-localization';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getUpNext } from '../../src/db/repositories/routinesRepo';
 import type { UpNext } from '../../src/db/repositories/routinesRepo';
@@ -10,18 +11,18 @@ import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { ActiveWorkoutExistsError } from '../../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getTrainingDates, getVolumeSetsSince } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
-import { formatElapsed, formatTrainDate, fromLocalDate, greetingFor, mondayOf, toLocalDate } from '../../src/domain/dates';
-import { DAY_MARK_LABELS, formatRepScheme } from '../../src/domain/labels';
+import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } from '../../src/domain/dates';
+import { formatRepScheme } from '../../src/domain/labels';
 import { computeStreak } from '../../src/domain/streak';
 import type { WeightUnit } from '../../src/domain/types';
-import { formatWeight } from '../../src/domain/units';
+import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
-import { Sheet } from '../../src/ui/Sheet';
+import { afterSheetCloses, Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
@@ -56,24 +57,33 @@ function Card({ children }: { children: ReactNode }) {
   );
 }
 
-/** The workout in progress, with an elapsed clock that ticks every second. */
+/** A small upper-case label over a card's title: "UP NEXT", "IN PROGRESS". */
+function Eyebrow({ children }: { children: string }) {
+  return (
+    <Body weight={600} muted style={{ fontSize: 14, letterSpacing: 0.5 }}>
+      {children}
+    </Body>
+  );
+}
+
+/**
+ * The workout in progress, with an elapsed clock that ticks every second, and the quiet Change routine at its foot, as
+ * on Up next: Routines stays one tap away while a workout runs (Round 4).
+ */
 function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: number; setsDone: number }) {
   const now = useNow(1000);
   return (
-    <View style={{ marginTop: 16 }}>
-      <Card>
-        <Body weight={600} muted style={{ fontSize: 14 }}>
-          Resume
-        </Body>
-        <Display weight={800} style={{ fontSize: 32, marginTop: 4 }}>
-          {name}
-        </Display>
-        <Body muted style={{ marginBottom: 16, fontVariant: ['tabular-nums'] }}>
-          {`${formatElapsed(now - startedAt)} · ${setsDone} ${setsDone === 1 ? 'set' : 'sets'} done`}
-        </Body>
-        <Button label="Resume" onPress={openSession} />
-      </Card>
-    </View>
+    <Card>
+      <Eyebrow>IN PROGRESS</Eyebrow>
+      <Display weight={800} style={{ fontSize: 32, marginTop: 4 }}>
+        {name}
+      </Display>
+      <Body muted style={{ marginBottom: 16, fontVariant: ['tabular-nums'] }}>
+        {`${formatElapsed(now - startedAt)} · ${setsDone} ${setsDone === 1 ? 'set' : 'sets'} done`}
+      </Body>
+      <Button label="Resume" onPress={openSession} />
+      <ChangeRoutineLink />
+    </Card>
   );
 }
 
@@ -111,70 +121,83 @@ function volumeNumber(n: number, unit: WeightUnit, locale: string): string {
   return text.slice(0, text.length - unit.length - 1);
 }
 
-/** The next day of the active routine, or a prompt to pick one. */
-function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext | null; locale: string; onStart: (dayId: string) => void }) {
+/** A quiet link at the foot of the Up next and Resume cards that opens Routines. */
+function ChangeRoutineLink() {
   const { colors } = useTheme();
-  if (upNext === null) {
-    return (
-      <Card>
-        <Body style={{ marginBottom: 16 }}>{"Pick a routine to see what's up next."}</Body>
-        <Button label="Routines" variant="secondary" onPress={() => router.push('/routines')} />
-      </Card>
-    );
-  }
-  const { lastTime } = upNext;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Change routine"
+      hitSlop={4}
+      onPress={() => router.push('/routines')}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 4,
+        minHeight: 44,
+        marginTop: 4,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <Body weight={600}>Change routine</Body>
+      <Ionicons name="chevron-forward" size={18} color={colors.text} />
+    </Pressable>
+  );
+}
+
+/** The next day of the active routine: its name, when it was last done, a button that starts it, and its exercises. */
+function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: string; onStart: (dayId: string) => void }) {
+  const dayHasWeight = upNextDayHasWeight(upNext.exercises);
   return (
     <Card>
-      <Display weight={700} style={{ fontSize: 24 }}>
+      <Eyebrow>UP NEXT</Eyebrow>
+      <Display weight={700} style={{ fontSize: 24, marginTop: 4 }}>
         {`${upNext.routineName} · ${upNext.dayName}`}
       </Display>
-      <Body muted style={{ fontSize: 14, marginBottom: 8 }}>
-        {lastTime === null
-          ? 'First time on this day.'
-          : `Last time: ${formatTrainDate(fromLocalDate(lastTime.localDate), locale)} · ${DAY_MARK_LABELS[lastTime.dayMark]}`}
+      <Body muted style={{ fontSize: 14 }}>
+        {upNextSubtitle(upNext.lastTime, upNextNeedsWeights(upNext.exercises), locale)}
       </Body>
-      {upNext.exercises.map((exercise, index) => {
-        // Timed and distance exercises carry no weight, so there is nothing to pick.
-        const hasLoad = exercise.loggingType !== 'timed' && exercise.loggingType !== 'distance_time';
-        const load =
-          exercise.nextWeight !== null && exercise.nextWeightUnit !== null
-            ? formatWeight(exercise.nextWeight, exercise.nextWeightUnit)
-            : 'pick a weight';
+      <View style={{ marginTop: 16, marginBottom: 8 }}>
+        <Button label={startDayLabel(upNext.routineName, upNext.dayName)} onPress={() => onStart(upNext.dayId)} />
+      </View>
+      {upNext.exercises.map((exercise) => {
+        const load = upNextLoad(exercise, dayHasWeight);
+        const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+        // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
+        // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
+        // pushes the scheme to the right edge.
         return (
-          <View
-            key={exercise.routineExerciseId}
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: 12,
-              paddingVertical: 10,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-            }}
-          >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Body weight={600}>{exercise.name}</Body>
-              <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
-                {formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType)}
-              </Body>
-            </View>
-            {hasLoad ? (
-              <Body weight={exercise.nextWeight === null ? 400 : 600} muted={exercise.nextWeight === null} style={{ flexShrink: 0, fontVariant: ['tabular-nums'] }}>
-                {load}
-              </Body>
-            ) : null}
+          <View key={exercise.routineExerciseId} style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, paddingVertical: 8 }}>
+            <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+            <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
+              {load === null ? scheme : `${scheme} · ${load}`}
+            </Body>
           </View>
         );
       })}
-      <View style={{ marginTop: 8 }}>
-        <Button label="Start this" onPress={() => onStart(upNext.dayId)} />
+      <ChangeRoutineLink />
+    </Card>
+  );
+}
+
+/** No routine is active: a way to choose one, or to start a workout without one. */
+function NoRoutineCard({ onStartEmpty }: { onStartEmpty: () => void }) {
+  return (
+    <Card>
+      <Body style={{ marginBottom: 16 }}>No routine yet. Pick one and Train will line up your next workout.</Body>
+      <View style={{ gap: 8 }}>
+        <Button label="Choose a routine" onPress={() => router.push('/routines')} />
+        <Button label="Start empty workout" variant="secondary" onPress={onStartEmpty} />
       </View>
     </Card>
   );
 }
 
-/** Train: today's date, the streak and the week's volume, ways to start a workout, and what is up next (or the workout in progress). */
+/**
+ * Train: today's date, then the workout in progress, what is up next, or a way to choose a routine; then the streak
+ * and the week's volume, and, under Up next, a way to start an empty workout.
+ */
 export default function Train() {
   const db = useDb();
   const { colors } = useTheme();
@@ -205,6 +228,7 @@ export default function Train() {
     }
     openSession();
   };
+  const startEmptyWorkout = () => begin(() => startEmpty(db));
 
   return (
     <Screen footer>
@@ -215,21 +239,24 @@ export default function Train() {
         {formatTrainDate(new Date(now), locale)}
       </Display>
 
-      {active !== null ? <ResumeCard name={active.name} startedAt={active.startedAt} setsDone={active.setsDone} /> : null}
+      <View style={{ marginTop: 16 }}>
+        {active !== null ? (
+          <ResumeCard name={active.name} startedAt={active.startedAt} setsDone={active.setsDone} />
+        ) : upNext !== null ? (
+          <UpNextCard upNext={upNext} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
+        ) : (
+          <NoRoutineCard onStartEmpty={startEmptyWorkout} />
+        )}
+      </View>
 
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
         <StatCard label="Streak" value={`${streak}`} caption={streak === 1 ? 'day' : 'days'} />
         <StatCard label="This week" value={volumeNumber(weekVolume, unit, locale)} caption={`${unit} moved`} />
       </View>
 
-      <View style={{ gap: 8, marginTop: 16 }}>
-        <Button label="Start empty" onPress={() => begin(() => startEmpty(db))} />
-        <Button label="Routines" variant="secondary" onPress={() => router.push('/routines')} />
-      </View>
-
-      {active === null ? (
+      {active === null && upNext !== null ? (
         <View style={{ marginTop: 16 }}>
-          <UpNextCard upNext={upNext} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
+          <Button label="Start empty workout" variant="secondary" onPress={startEmptyWorkout} />
         </View>
       ) : null}
 
@@ -239,7 +266,7 @@ export default function Train() {
           label="Resume"
           onPress={() => {
             setBlocked(false);
-            openSession();
+            afterSheetCloses(openSession);
           }}
         />
       </Sheet>
