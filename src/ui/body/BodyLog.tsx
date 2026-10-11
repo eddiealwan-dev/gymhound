@@ -5,7 +5,7 @@ import { useDb } from '../../db/DbProvider';
 import { addBodyEntry } from '../../db/repositories/bodyRepo';
 import { BODY_LABELS, dailySeries, formatBodyValue, parseBodyValue } from '../../domain/body';
 import type { BodyEntry, BodyKind, BodyUnit } from '../../domain/body';
-import { chartSummary, formatChartDate, pointsInRange } from '../../domain/chart';
+import { chartSummary, formatChartDate, pointsInRange, rangeChange } from '../../domain/chart';
 import type { ChartRange } from '../../domain/chart';
 import { fromLocalDate } from '../../domain/dates';
 import { announce } from '../../platform/announce';
@@ -196,7 +196,8 @@ export function RangeChips({ value, onChange }: { value: ChartRange; onChange: (
 
 /**
  * A kind's chart (R116) with its range chips, 3M first: each day's latest entry converted to `unit` (R112, R115). With
- * no entries at all it draws nothing (the screen says so); with none in the range it says so under the chips.
+ * no entries at all it draws nothing (the screen says so); with none in the range it says so under the chips. Under the
+ * chart, the change across the range in muted words (R175): "Down 2 cm since Aug 3."
  */
 export function BodyChart({
   kind,
@@ -215,6 +216,8 @@ export function BodyChart({
   if (entries.length === 0) return null;
   const points = pointsInRange(dailySeries(entries, unit), range, today);
   const format = (v: number) => formatBodyValue(v, unit);
+  // R175: the change across the range in words, under the chart; none with fewer than two days.
+  const change = rangeChange(points, format, locale);
   return (
     <View style={{ gap: 12 }}>
       {points.length === 0 ? (
@@ -222,6 +225,7 @@ export function BodyChart({
       ) : (
         <LineChart points={points} formatValue={format} locale={locale} accessibilityLabel={`${BODY_LABELS[kind]}. ${chartSummary(points, format, locale)}`} />
       )}
+      {change !== null ? <Body muted>{change}</Body> : null}
       <RangeChips value={range} onChange={setRange} />
     </View>
   );

@@ -188,3 +188,99 @@ describe('LineChart', () => {
     expect(values).not.toContain('#E10600');
   });
 });
+
+describe('LineChart marks (R173)', () => {
+  const marked = [
+    { localDate: '2026-08-03', value: 180 },
+    { localDate: '2026-09-01', value: 178.5, hollow: true, label: 'Rough sleep' },
+    { localDate: '2026-10-10', value: 186, label: 'Stall' },
+  ];
+  const labelText = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Text).find((t) => t.props.children === label);
+
+  it('an unmarked series draws exactly as before', () => {
+    const tree = render(<LineChart points={pts} formatValue={(v) => `${v} lb`} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    layOut(tree);
+    expect(tree.toJSON()).toMatchSnapshot();
+  });
+
+  it('draws a hollow point as a ring in the text colour filled with the card colour, and the rest as dots', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    const dots = tree.root.findAllByType(Circle);
+    expect(dots).toHaveLength(3);
+    expect(dots[1].props).toMatchObject({ r: 3.5, stroke: '#f1ece2', strokeWidth: 1.5, fill: '#1a1814' });
+    expect(dots[0].props).toMatchObject({ r: 2, fill: '#f1ece2' });
+    expect(dots[2].props).toMatchObject({ r: 2, fill: '#f1ece2' });
+  });
+
+  it('fills a hollow point with dotFill', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" dotFill="#100f0c" accessibilityLabel="Bench" />);
+    layOut(tree);
+    expect(tree.root.findAllByType(Circle)[1].props.fill).toBe('#100f0c');
+  });
+
+  it('writes each placed label in the chart label style, 6pt over its dot', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    const dots = tree.root.findAllByType(Circle);
+    for (const [label, i] of [['Rough sleep', 1], ['Stall', 2]] as const) {
+      const text = labelText(tree, label)!;
+      expect(text).toBeDefined();
+      const style = StyleSheet.flatten(text.props.style);
+      expect(style).toMatchObject({ fontFamily: 'Inter_400Regular', fontSize: 12, color: '#a39d90', fontVariant: ['tabular-nums'], position: 'absolute' });
+      expect(text.props.numberOfLines).toBe(1);
+      expect((style.top as number) + (style.height as number)).toBeCloseTo(dots[i].props.cy - dots[i].props.r - 6, 6);
+    }
+  });
+
+  it('centres a label over its dot once measured, and keeps it inside the plot', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 300);
+    const dots = tree.root.findAllByType(Circle);
+    const measure = (label: string, width: number) =>
+      act(() => labelText(tree, label)!.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width, height: 16 } } }));
+    measure('Rough sleep', 70);
+    const middle = StyleSheet.flatten(labelText(tree, 'Rough sleep')!.props.style);
+    expect(middle.left).toBeCloseTo(dots[1].props.cx - 35, 6);
+    expect(middle.opacity ?? 1).toBe(1);
+    // The newest point sits at the right edge: its label ends there instead of running off.
+    measure('Stall', 30);
+    const last = StyleSheet.flatten(labelText(tree, 'Stall')!.props.style);
+    expect(last.left).toBe(300 - 30);
+  });
+
+  it('hides a label until it is measured, so it never shows in the wrong place', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    expect(StyleSheet.flatten(labelText(tree, 'Stall')!.props.style).opacity).toBe(0);
+  });
+
+  it('skips a label too close to a newer one', () => {
+    const close = [
+      { localDate: '2026-10-01', value: 180, hollow: true, label: 'Pain' },
+      { localDate: '2026-10-02', value: 181, label: 'Stall' },
+      { localDate: '2026-10-30', value: 182 },
+    ];
+    const tree = render(<LineChart points={close} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree, 300);
+    expect(labelText(tree, 'Stall')).toBeDefined();
+    expect(labelText(tree, 'Pain')).toBeUndefined();
+  });
+
+  it('keeps a label line clear above the top tick when a label is placed', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    const lines = tree.root.findAllByType(Line).map((l) => l.props.y1);
+    // Half a line, then one label line and its rise over a ring (6 + 4).
+    expect(Math.min(...lines)).toBe(8 + 16 + 10);
+    expect(Math.max(...lines)).toBe(172);
+  });
+
+  it('never uses red', () => {
+    const tree = render(<LineChart points={marked} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
+    layOut(tree);
+    const values = allPropValues(tree.root).map((s) => s.toUpperCase());
+    expect(values).toContain('#F1ECE2');
+    expect(values).not.toContain('#E10600');
+  });
+});

@@ -264,6 +264,21 @@ describe('Stats: Body (R114)', () => {
     addBodyEntry(mockDb, 'bodyweight', 180, 'lb', NOW - 3_600_000);
     expect(chartPoints(mount(<Stats />))).toEqual([{ localDate: '2026-10-11', value: 180 }]);
   });
+
+  it('says the change across the range under the chart, in the chart unit (R175)', () => {
+    addBodyEntry(mockDb, 'bodyweight', 190, 'lb', NOW - 200 * DAY);
+    addBodyEntry(mockDb, 'bodyweight', 186, 'lb', NOW - 30 * DAY);
+    addBodyEntry(mockDb, 'bodyweight', 184, 'lb', NOW - DAY);
+    const tree = mount(<Stats />);
+    expect(shownText(tree)).toContain('Down 2 lb since Sep 11.');
+    press(tree, '1Y, last year');
+    expect(shownText(tree)).toContain('Down 6 lb since Mar 25.');
+  });
+
+  it('says no change line with one point in the range', () => {
+    addBodyEntry(mockDb, 'bodyweight', 186, 'lb', NOW - DAY);
+    expect(shownText(mount(<Stats />)).some((s) => / since /.test(s))).toBe(false);
+  });
 });
 
 describe('a body detail (/body/[kind], R114, R115)', () => {
@@ -284,6 +299,14 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     expect(found).toEqual(rows);
     expect(chartPoints(tree).map((p) => p.localDate)).toEqual(['2026-10-09', '2026-10-10', '2026-10-11']);
     expect(chartPoints(tree)[0].value).toBeCloseTo(34.016, 2);
+  });
+
+  it('says a measurement\'s change under its chart, converted to the chart unit (R175)', () => {
+    mockKind = 'waist';
+    setSetting(mockDb, 'unit', 'kg');
+    addBodyEntry(mockDb, 'waist', 88, 'cm', NOW - 69 * DAY);
+    addBodyEntry(mockDb, 'waist', 86, 'cm', NOW - DAY);
+    expect(shownText(mount(<BodyDetail />))).toContain('Down 2 cm since Aug 3.');
   });
 
   it('logs a new entry from the detail', () => {
