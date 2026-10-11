@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { AccessibilityInfo, Image, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -9,6 +10,7 @@ import { FormDemo } from './FormDemo';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
@@ -68,7 +70,20 @@ const SIDE_PLANK: ExerciseDetail = {
   instructions: [],
 };
 
-const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK];
+/** One of your own: no photos, no steps. */
+const MINE: ExerciseDetail = {
+  ...BENCH,
+  id: 'c0ffee00-0000-4000-8000-000000000001',
+  name: 'Landmine press',
+  aliases: [],
+  primaryMuscles: ['front_delts'],
+  secondaryMuscles: ['triceps'],
+  isCustom: true,
+  instructions: [],
+  sourceId: null,
+};
+
+const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK, MINE];
 
 let reduceMotion: boolean;
 /** What the phone told the sheet about Reduce Motion changing, so a test can change it. */
@@ -358,5 +373,32 @@ describe('the form demo: the photos and the screen reader (review of R86)', () =
     expect(photos(tree)).toHaveLength(2);
     // Both photos sit inside it.
     expect(frames[0].findAll((n) => n.type === Image)).toHaveLength(2);
+  });
+});
+
+describe('the form demo of your own exercise', () => {
+  it('says there are no steps and offers Edit exercise', async () => {
+    const tree = await open(MINE.id);
+    expect(texts(tree)).toEqual(['Landmine press', 'Shoulders · Triceps', 'No steps for your own exercise.', 'Edit exercise', 'Close']);
+    expect(buttons(tree, 'Edit exercise')[0].props.variant).toBe('secondary');
+  });
+
+  it('Edit exercise closes the demo, then opens the editor once the sheet has gone', async () => {
+    const onClose = jest.fn();
+    jest.mocked(router.push).mockClear();
+    const tree = await open(MINE.id, onClose);
+    act(() => buttons(tree, 'Edit exercise')[0].props.onPress());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: MINE.id } });
+  });
+
+  it('a library exercise offers no Edit exercise', async () => {
+    for (const id of ['wall-sit', 'barbell-bench-press']) {
+      const tree = await open(id);
+      expect(buttons(tree, 'Edit exercise')).toHaveLength(0);
+      expect(texts(tree)).not.toContain('No steps for your own exercise.');
+    }
   });
 });
