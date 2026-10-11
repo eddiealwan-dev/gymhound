@@ -456,6 +456,14 @@ describe('the routine editor: your own routine', () => {
     }
   });
 
+  it("name fields may shrink below the width a web text field asks for, so a day's buttons stay on its card", () => {
+    const tree = mount('mine');
+
+    for (const label of ['Routine name', 'Day 1 name']) {
+      expect(StyleSheet.flatten(field(tree, label).props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+    }
+  });
+
   it('on the web, where a text field is 20 characters wide whatever it holds, a number field is sized to its number', () => {
     jest.replaceProperty(Platform, 'OS', 'web');
     const tree = mount('mine');

@@ -147,6 +147,8 @@ function NameField({ value, label, onChangeText, fill }: { value: string; label:
       returnKeyType="done"
       style={{
         flex: 1,
+        // A web text field asks for 20 characters' width; without this it pushed a day's buttons off its card.
+        minWidth: 0,
         minHeight: 48,
         paddingHorizontal: 12,
         borderRadius: 10,
