@@ -2,7 +2,7 @@
 import { getSettings, setSetting } from '../../db/repositories/settingsRepo';
 import { seededDb } from '../../db/testing/fixtures';
 import { createFreeOnlyEntitlements, debugUnlockAllowed } from './freeOnly';
-import { createEntitlements } from './index';
+import { createEntitlements, entitlementsFor } from './index';
 
 const globals = globalThis as { __DEV__?: boolean };
 const originalDev = globals.__DEV__;
@@ -107,6 +107,17 @@ describe('createEntitlements', () => {
 
     entitlements.setDebugUnlock(true);
     expect(entitlements.isPro()).toBe(true);
+    expect(seen).toEqual([true]);
+  });
+
+  it('entitlementsFor gives one object per database, so the Settings switch reaches every screen (R126)', () => {
+    const db = seededDb();
+    const shared = entitlementsFor(db);
+    expect(entitlementsFor(db)).toBe(shared);
+
+    const seen: boolean[] = [];
+    shared.subscribe(() => seen.push(true));
+    entitlementsFor(db).setDebugUnlock(true);
     expect(seen).toEqual([true]);
   });
 });

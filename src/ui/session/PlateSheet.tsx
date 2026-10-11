@@ -34,10 +34,10 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
 
   return (
     <>
-      <Display weight={700} numberOfLines={1}>
+      <Display weight={700}>
         Plate calculator
       </Display>
-      <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+      <Body muted style={{ marginBottom: 12 }}>
         {ex.name}
       </Body>
       <View style={{ gap: 8 }}>

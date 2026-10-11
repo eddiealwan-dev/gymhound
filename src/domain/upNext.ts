@@ -104,9 +104,13 @@ export function upNextSubtitle(lastTime: { localDate: string } | null, needsWeig
   return `${lastTime === null ? when : `${when}.`} Pick weights as you go.`;
 }
 
-/** The day's name, or "{routine} {day}" when the day's name has 1 or 2 characters ("5×5 A"). Task 4 uses it. */
+/**
+ * The day's name, or "{routine} {day}" when the day's name says nothing alone (R56): one or two characters ("5×5 A"),
+ * or "Day 1", the name the routine editor gives a day left unnamed ("My split Day 1"). Train's Start button, the
+ * workout's stored name and the next day after Finish all use it.
+ */
 export function dayTitle(routineName: string, dayName: string): string {
-  return [...dayName].length <= 2 ? `${routineName} ${dayName}` : dayName;
+  return [...dayName].length <= 2 || /^Day \d+$/.test(dayName) ? `${routineName} ${dayName}` : dayName;
 }
 
 /** The label of the button that starts the day: "Start Upper A", "Start 5×5 A". */

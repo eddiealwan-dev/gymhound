@@ -149,6 +149,92 @@ export const LEGACY_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/**
+ * Glitches in free-exercise-db's steps, fixed as the library is built (after the final Phase 3 review): stray step
+ * numbers left in the text, "You" for "Your", and calorie claims. Each replaces `from`, found exactly once among the
+ * source's steps, with `to`; a step left empty is dropped, as are the source's own empty steps.
+ */
+export const STEP_FIXES: readonly { sourceId: string; from: string; to: string }[] = [
+  // Stray step numbers.
+  { sourceId: 'Smith_Machine_Pistol_Squat', from: 'by extending your legs. 3', to: 'by extending your legs.' },
+  { sourceId: 'Wind_Sprints', from: 'or your legs. 3', to: 'or your legs.' },
+  { sourceId: 'Close-Grip_Front_Lat_Pulldown', from: '6. Repeat this motion', to: 'Repeat this motion' },
+  // "You" for "Your".
+  { sourceId: 'Pallof_Press', from: 'You core', to: 'Your core' },
+  { sourceId: 'Pallof_Press_With_Rotation', from: 'You core', to: 'Your core' },
+  { sourceId: 'Cable_Russian_Twists', from: 'You hands', to: 'Your hands' },
+  { sourceId: 'Axle_Deadlift', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Car_Deadlift', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Deadlift_with_Chains', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Deficit_Deadlift', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Reverse_Band_Deadlift', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Rickshaw_Deadlift', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Standing_Olympic_Plate_Hand_Squeeze', from: 'You feet', to: 'Your feet' },
+  { sourceId: 'Front_Cable_Raise', from: 'until you arm', to: 'until your arm' },
+  { sourceId: 'Front_Dumbbell_Raise', from: 'until you arm', to: 'until your arm' },
+  { sourceId: 'Front_Two-Dumbbell_Raise', from: 'until you arms', to: 'until your arms' },
+  { sourceId: 'One-Arm_Side_Laterals', from: 'until you arm', to: 'until your arm' },
+  { sourceId: 'Seated_Side_Lateral_Raise', from: 'until you arms', to: 'until your arms' },
+  { sourceId: 'Side_Lateral_Raise', from: 'until you arms', to: 'until your arms' },
+  { sourceId: 'Iliotibial_Tract-SMR', from: 'from you hip', to: 'from your hip' },
+  // Calorie claims.
+  {
+    sourceId: 'Skating',
+    from: ' A 150 lb person will typically burn about 175 calories in 30 minutes skating at a comfortable pace, similar to brisk walking.',
+    to: '',
+  },
+  {
+    sourceId: 'Jogging_Treadmill',
+    from: ' A 150 lb person will burn almost 250 calories jogging for 30 minutes, compared to more than 450 calories running.',
+    to: '',
+  },
+  { sourceId: 'Running_Treadmill', from: ' A 150 lb person will burn over 450 calories running 8 miles per hour for 30 minutes.', to: '' },
+  {
+    sourceId: 'Walking_Treadmill',
+    from: " Being an activity of lower intensity, walking doesn't burn as many calories as some other activities, but still provides great benefit.",
+    to: '',
+  },
+  {
+    sourceId: 'Walking_Treadmill',
+    from: ' A 150 lb person will burn about 175 calories walking 4 miles per hour for 30 minutes, compared to 450 calories running twice as fast.',
+    to: '',
+  },
+  {
+    sourceId: 'Recumbent_Bike',
+    from: ' A 150 lb person will burn about 230 calories cycling at a moderate rate for 30 minutes, compared to 450 calories or more running.',
+    to: '',
+  },
+  {
+    sourceId: 'Rope_Jumping',
+    from: ' A 150 lb person will burn about 350 calories jumping rope for 30 minutes, compared to over 450 calories running.',
+    to: '',
+  },
+  {
+    sourceId: 'Stairmaster',
+    from: ' A 150 lb person will typically burn over 300 calories in 30 minutes, compared to about 175 calories walking.',
+    to: '',
+  },
+  { sourceId: 'Step_Mill', from: ' while offering a similar rate of calories burned', to: '' },
+  {
+    sourceId: 'Step_Mill',
+    from: ' A 150 lb person will typically burn over 300 calories in 30 minutes, compared to about 175 calories walking.',
+    to: '',
+  },
+  {
+    sourceId: 'Trail_Running_Walking',
+    from: 'A 150 lb person can burn over 200 calories for 30 minutes walking uphill, compared to 175 on a flat surface. If running the trail, a 150 lb person can burn well over 500 calories in 30 minutes.',
+    to: '',
+  },
+];
+
+/** A source's steps with its `STEP_FIXES` applied and empty steps dropped. */
+export function fixedSteps(source: FedbExercise): string[] {
+  const fixes = STEP_FIXES.filter((f) => f.sourceId === source.id);
+  return source.instructions
+    .map((step) => fixes.reduce((text, f) => text.replace(f.from, f.to), step))
+    .filter((step) => step.trim() !== '');
+}
+
 const EQUIPMENT: Readonly<Record<string, Equipment>> = {
   barbell: 'barbell',
   'e-z curl bar': 'ez_bar',
@@ -409,7 +495,7 @@ export function buildLibrary(src: readonly FedbExercise[], legacy: readonly Lega
       if (!source) throw new Error(`${exercise.id} is linked to ${sourceId}, which free-exercise-db does not have`);
       if (linked.has(sourceId)) throw new Error(`${sourceId} is linked to more than one existing exercise`);
       linked.add(sourceId);
-      instructions = [...source.instructions];
+      instructions = fixedSteps(source);
     }
     out.push({
       id: exercise.id,
@@ -438,7 +524,7 @@ export function buildLibrary(src: readonly FedbExercise[], legacy: readonly Lega
       pattern: mapPattern(e),
       primaryMuscles,
       secondaryMuscles: mapMuscles(e.secondaryMuscles, e).filter((m) => !primaryMuscles.includes(m)),
-      instructions: [...e.instructions],
+      instructions: fixedSteps(e),
     });
   }
 

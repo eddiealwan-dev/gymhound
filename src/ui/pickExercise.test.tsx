@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { FlatList, Image, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { FlatList, Image, Keyboard, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import PickExercise from '../../app/pick-exercise';
@@ -210,6 +210,15 @@ describe('the exercise picker: filter chips (§8.7)', () => {
     for (const b of tree.root.findAllByType(Button)) {
       expect(b.props).toMatchObject({ size: 'compact', variant: 'secondary', selected: false });
     }
+  });
+
+  it('the chip rows keep their height: only the list gives way to the screen, and it takes what is left', () => {
+    const tree = mount();
+    // A ScrollView grows and shrinks by default; beside a long list the rows were squeezed to a sliver.
+    const rows = tree.root.findAllByType(ScrollView).filter((s) => s.props.horizontal === true);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(StyleSheet.flatten(r.props.style)).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+    expect(StyleSheet.flatten(list(tree).props.style)).toMatchObject({ flex: 1 });
   });
 
   it('a chip filters by primary muscle and fills with ink when chosen', () => {

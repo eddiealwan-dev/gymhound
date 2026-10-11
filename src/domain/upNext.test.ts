@@ -217,6 +217,13 @@ describe('dayTitle and startDayLabel', () => {
     expect(dayTitle('PPL', 'B2')).toBe('PPL B2');
   });
 
+  it('puts the routine before a day still named as the editor numbered it, which says nothing alone (R56)', () => {
+    expect(dayTitle('My split', 'Day 1')).toBe('My split Day 1');
+    expect(dayTitle('My split', 'Day 12')).toBe('My split Day 12');
+    expect(dayTitle('My split', 'Day one')).toBe('Day one');
+    expect(dayTitle('My split', 'Leg day 1')).toBe('Leg day 1');
+  });
+
   it('reads Start {day}', () => {
     expect(startDayLabel('Upper/lower', 'Upper A')).toBe('Start Upper A');
     expect(startDayLabel('5×5', 'B')).toBe('Start 5×5 B');
