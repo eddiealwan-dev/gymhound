@@ -94,7 +94,7 @@ export default function Fuel() {
           <Display>Fuel</Display>
           <DayHeader day={day} today={today} locale={locale} trainingDay={target === null ? null : trainingDay} onChange={goTo} />
         </View>
-        <WaterCard localDate={day} />
+        <WaterCard localDate={day} today={today} />
         {!pro ? (
           <ProPitch context="tab" />
         ) : target === null ? (

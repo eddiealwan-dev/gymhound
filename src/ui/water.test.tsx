@@ -100,7 +100,7 @@ describe('the water card (R150)', () => {
     logWater(mockDb, 500, TODAY, NOW - 3_600_000);
     logWater(mockDb, 750, TODAY, NOW);
     logWater(mockDb, 999, '2026-10-10', NOW);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     expect(shownText(tree)[0]).toBe('Water');
     expect(allText(tree)).toContain('1,250 ml of 2,000 ml');
     expect(bar(tree)).toHaveLength(1);
@@ -113,13 +113,13 @@ describe('the water card (R150)', () => {
   it('caps the bar full at the goal', () => {
     setWaterGoal(mockDb, 250);
     logWater(mockDb, 500, TODAY, NOW);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     expect(bar(tree)[0].props.style).toMatchObject({ width: '100%' });
   });
 
   it('with no goal shows the total, no bar and a quiet Set a daily goal', () => {
     logWater(mockDb, 250, TODAY, NOW);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     expect(shownText(tree)).toContain('250 ml');
     expect(allText(tree)).not.toContain(' of ');
     expect(bar(tree)).toHaveLength(0);
@@ -127,13 +127,13 @@ describe('the water card (R150)', () => {
   });
 
   it('shows 0 ml on a day with nothing, and no Entries', () => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     expect(shownText(tree)).toContain('0 ml');
     expect(allText(tree)).not.toContain('Entries');
   });
 
   it('offers +250 ml, +500 ml and Other to a kg user, each with a VoiceOver label', () => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     const t = shownText(tree);
     expect(t).toEqual(expect.arrayContaining(['+250 ml', '+500 ml', 'Other']));
     expect(pressables(tree, 'Add 250 ml of water').length).toBeGreaterThan(0);
@@ -145,7 +145,7 @@ describe('the water card (R150)', () => {
     setSetting(mockDb, 'unit', 'lb');
     setWaterGoal(mockDb, toMl(64, 'fl_oz'));
     logWater(mockDb, toMl(40, 'fl_oz'), TODAY, NOW - 60_000);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     expect(shownText(tree)).toEqual(expect.arrayContaining(['+8 fl oz', '+16 fl oz']));
     expect(allText(tree)).toContain('40 fl oz of 64 fl oz');
     press(tree, 'Add 8 fluid ounces of water');
@@ -158,7 +158,7 @@ describe('the water card (R150)', () => {
 
   it('a pill logs for today and says the new total', () => {
     logWater(mockDb, 1000, TODAY, NOW - 60_000);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Add 250 ml of water');
     expect(listWater(mockDb, TODAY).map((e) => e.amountMl)).toEqual([1000, 250]);
     expect(listWater(mockDb, TODAY)[1].loggedAt).toBe(NOW);
@@ -168,17 +168,25 @@ describe('the water card (R150)', () => {
   });
 
   it('a pill logs for the day the card shows, even an earlier one', () => {
-    const tree = mount(<WaterCard localDate="2026-10-10" />);
+    const tree = mount(<WaterCard localDate="2026-10-10" today={TODAY} />);
     press(tree, 'Add 500 ml of water');
     expect(listWater(mockDb, TODAY)).toEqual([]);
     expect(listWater(mockDb, '2026-10-10').map((e) => e.amountMl)).toEqual([500]);
     expect(mockAnnounce).toHaveBeenCalledWith('Added 500 ml. 500 ml yesterday.');
   });
 
+  it("names the day from Fuel's today, not a clock of its own", () => {
+    // Past midnight, before Fuel has noticed: the card still says the day as Fuel's header does.
+    jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 12, 0, 5, 0).getTime());
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
+    press(tree, 'Add 500 ml of water');
+    expect(mockAnnounce).toHaveBeenCalledWith('Added 500 ml. 500 ml today.');
+  });
+
   it('draws nothing in red', () => {
     setWaterGoal(mockDb, 2000);
     logWater(mockDb, 250, TODAY, NOW);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Water entries');
     expect(JSON.stringify(tree.toJSON()).toUpperCase()).not.toContain('#E10600');
   });
@@ -186,7 +194,7 @@ describe('the water card (R150)', () => {
 
 describe('Other', () => {
   it('adds an amount typed in the unit, for the card day', () => {
-    const tree = mount(<WaterCard localDate="2026-10-10" />);
+    const tree = mount(<WaterCard localDate="2026-10-10" today={TODAY} />);
     press(tree, 'Add another amount of water');
     expect(shownText(tree)).toContain('Add water');
     type(tree, 'Amount, ml', '330');
@@ -197,7 +205,7 @@ describe('Other', () => {
   });
 
   it.each(['', 'abc', '0', '5000'])('shows "Check this number" for "%s" and adds nothing', (text) => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Add another amount of water');
     type(tree, 'Amount, ml', text);
     press(tree, 'Add');
@@ -211,7 +219,7 @@ describe('Other', () => {
 
   it('takes fl oz from a lb user, with a comma', () => {
     setSetting(mockDb, 'unit', 'lb');
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Add another amount of water');
     type(tree, 'Amount, fluid ounces', '12,5');
     press(tree, 'Add');
@@ -219,7 +227,7 @@ describe('Other', () => {
   });
 
   it('Cancel adds nothing', () => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Add another amount of water');
     type(tree, 'Amount, ml', '330');
     press(tree, 'Cancel');
@@ -230,7 +238,7 @@ describe('Other', () => {
 
 describe('the daily goal', () => {
   it('Set a daily goal opens the goal sheet and saves it', () => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Set a daily goal');
     expect(shownText(tree)).toContain('Daily water goal');
     // No goal yet, so nothing to clear.
@@ -243,7 +251,7 @@ describe('the daily goal', () => {
   });
 
   it('refuses a goal out of bounds', () => {
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Set a daily goal');
     type(tree, 'Daily water goal, ml', '100');
     press(tree, 'Save');
@@ -254,7 +262,7 @@ describe('the daily goal', () => {
 
   it('tapping the goal opens it with the goal in the field, and Clear goal clears it', () => {
     setWaterGoal(mockDb, 2000);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, '0 ml of 2,000 ml');
     expect(field(tree, 'Daily water goal, ml')!.props.value).toBe('2000');
     press(tree, 'Clear goal');
@@ -264,7 +272,7 @@ describe('the daily goal', () => {
 
   it('a lb user sets the goal in fl oz', () => {
     setSetting(mockDb, 'unit', 'lb');
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Set a daily goal');
     type(tree, 'Daily water goal, fluid ounces', '64');
     press(tree, 'Save');
@@ -274,7 +282,7 @@ describe('the daily goal', () => {
 
   it('Cancel keeps the goal', () => {
     setWaterGoal(mockDb, 2000);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, '0 ml of 2,000 ml');
     type(tree, 'Daily water goal, ml', '3000');
     press(tree, 'Cancel');
@@ -286,7 +294,7 @@ describe('Entries', () => {
   it('says fluid ounces to VoiceOver on Delete', () => {
     setSetting(mockDb, 'unit', 'lb');
     logWater(mockDb, toMl(8, 'fl_oz'), TODAY, new Date(2026, 9, 11, 8, 14).getTime());
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Water entries');
     expect(shownText(tree)).toContain('8 fl oz');
     const del = tree.root.findAll((n) => typeof n.props.onPress === 'function' && /^Delete 8 fluid ounces at 8:14\sAM$/.test(n.props.accessibilityLabel ?? ''));
@@ -299,7 +307,7 @@ describe('Entries', () => {
     const at1030 = new Date(2026, 9, 11, 10, 30).getTime();
     logWater(mockDb, 250, TODAY, at814);
     logWater(mockDb, 500, TODAY, at1030);
-    const tree = mount(<WaterCard localDate={TODAY} />);
+    const tree = mount(<WaterCard localDate={TODAY} today={TODAY} />);
     press(tree, 'Water entries');
     expect(shownText(tree)).toContain('Water today');
     const text = allText(tree);
@@ -315,7 +323,7 @@ describe('Entries', () => {
 
   it('closes when the last entry is deleted, and Entries goes', () => {
     logWater(mockDb, 250, '2026-10-10', NOW);
-    const tree = mount(<WaterCard localDate="2026-10-10" />);
+    const tree = mount(<WaterCard localDate="2026-10-10" today={TODAY} />);
     press(tree, 'Water entries');
     expect(shownText(tree)).toContain('Water yesterday');
     // An earlier day's entries were logged later, so their time says nothing: just the amount.
@@ -330,7 +338,7 @@ describe('Entries', () => {
 
 describe('the day in words, as Fuel says it', () => {
   it('says an older day by its weekday and date', () => {
-    const tree = mount(<WaterCard localDate="2026-10-09" />);
+    const tree = mount(<WaterCard localDate="2026-10-09" today={TODAY} />);
     press(tree, 'Add 250 ml of water');
     expect(mockAnnounce).toHaveBeenCalledWith('Added 250 ml. 250 ml on Fri, Oct 9.');
     press(tree, 'Water entries');
