@@ -877,7 +877,7 @@ Added by the owner on 2026-10-09:
   - Photos: "GymHound uses your photos only for exercise pictures you choose."
   - Camera: "GymHound uses the camera only to take an exercise picture."
   - The camera is asked for on the first **Take photo**. Choosing a photo asks for nothing: the phone's own picker hands over only the photo chosen.
-  - Photos only, never video, so no microphone access is needed. The final review asked for the plugin's `microphonePermission: false`; at c535b84 it is not set yet.
+  - Photos only, never video, so no microphone access is needed. The image picker plugin sets `microphonePermission: false`, so no microphone prompt is added on iOS and Android's `RECORD_AUDIO` is removed.
 - **Your own photos:** cropped 3:2 (iOS's picker crops square, so GymHound crops again) and saved 720 px wide as JPEG at 0.7 in `exercise-photos/` (§6 `exercise_photos`, §17.2).
 - **Share a personal best:** the card is captured as a 1080 × 1350 PNG into the app's cache (the temporary folder) and handed only to the share sheet; on iOS it is released once the sheet is done, and Android's are cleared by the capture module. Nothing is written anywhere else and nothing is uploaded.
 - None of this exists in the browser build: no photo controls, no Share pill.

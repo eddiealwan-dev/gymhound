@@ -29,7 +29,8 @@
         "expo-image-picker",
         {
           "photosPermission": "GymHound uses your photos only for exercise pictures you choose.",
-          "cameraPermission": "GymHound uses the camera only to take an exercise picture."
+          "cameraPermission": "GymHound uses the camera only to take an exercise picture.",
+          "microphonePermission": false
         }
       ]
     ],
