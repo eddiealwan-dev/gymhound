@@ -3,8 +3,10 @@ import { Fragment, useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
-import type { Gear } from '../../domain/plates';
+import { MARK_LABELS } from '../../domain/labels';
+import { planInUnit, type Gear } from '../../domain/plates';
 import { restLengthFor } from '../../domain/rest';
+import { lastSummary, ruleSentence, todaysRead } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
@@ -62,8 +64,9 @@ const BLOCK_GAP = 28;
 
 /**
  * One exercise: its name, how many of its sets are ticked, + Note when it has no note, its ⋯ menu, the saved note as a
- * muted line under the name (tapping it, or + Note, opens the note field), the set table with each set's last result
- * beside the inputs, and the compact + Set and + Warmup buttons. The next set to do has the bolder tick ring.
+ * muted line under the name (tapping it, or + Note, opens the note field), "Something off: {Reason}" when it is flagged,
+ * the rule and today's read (spec 7.4), the set table with each set's last result beside the inputs, and the compact
+ * + Set and + Warmup buttons. The next set to do has the bolder tick ring.
  * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
  * started it, and holds "Rest's up" there for a moment after it runs out.
@@ -91,6 +94,19 @@ export function ExerciseBlock({
   // Each row's previous is worked out once for the whole block.
   const rows = buildRows(ex, unit, gear, distanceUnit);
   const progress = exerciseProgress(ex);
+  /** A plan or an override in the unit shown, as the set table shows today's target (`planInUnit`, spec 7.1). */
+  const shown = (weight: number | null, from: WeightUnit | null) =>
+    weight === null ? null : { weight: planInUnit(weight, from ?? unit, unit, ex.equipment === 'barbell', gear.bar, gear.plates), unit };
+  const read = todaysRead({
+    rule: ex.rule,
+    loggingType: ex.loggingType,
+    planned: shown(ex.plannedWeight, ex.plannedUnit),
+    override: shown(ex.overrideWeight, ex.overrideUnit),
+    mark: ex.mark,
+    equipment: ex.equipment,
+    gear,
+  });
+  const sentence = ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last: lastSummary(ex.previous) });
   const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
   /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
   const restUnder = (setId: string): number | null => {
@@ -228,6 +244,16 @@ export function ExerciseBlock({
           </Body>
         </Pressable>
       ) : null}
+
+      {/* No text-size caps: both wrap. */}
+      {ex.mark ? (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {`Something off: ${MARK_LABELS[ex.mark]}`}
+        </Body>
+      ) : null}
+      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+        {read === null ? sentence : `${sentence} ${read}`}
+      </Body>
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (

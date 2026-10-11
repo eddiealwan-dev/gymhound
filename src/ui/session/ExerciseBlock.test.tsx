@@ -932,6 +932,107 @@ describe('ExerciseBlock: the note (UX item 6, R29)', () => {
   });
 });
 
+describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () => {
+  /** 3 sets of 5–8 at 185 lb planned, add 5 lb. */
+  const ruled = (over: Partial<WorkoutExerciseView> = {}): WorkoutExerciseView => ({
+    ...bench([set('s0', 0)]),
+    rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' },
+    plannedWeight: 185,
+    plannedUnit: 'lb',
+    ...over,
+  });
+  const RULE = 'If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.';
+  const prev = (over: Partial<SetView>) => {
+    const { id: _id, rpe: _rpe, done: _done, completedAt: _completedAt, ...p } = set('p', over.position ?? 0, over);
+    return p;
+  };
+  /** Last time: 3 sets of 8 at 135 lb. */
+  const LAST_135 = [0, 1, 2].map((position) => prev({ position, weight: 135, weightUnit: 'lb', reps: 8 }));
+
+  it('shows the rule then the read as one muted 14pt paragraph, under the name and the note, above the set table', () => {
+    const tree = mount(ruled({ note: SAVED }));
+    const line = `${RULE} Hit 8s on a normal day and next time is 190 lb.`;
+
+    const text = textNode(tree, line);
+    expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+    // No caps: it wraps at any text size.
+    expect(text.props.numberOfLines).toBeUndefined();
+    expect(text.props.maxFontSizeMultiplier).toBeUndefined();
+    const shown = shownText(tree);
+    expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf(SAVED));
+    expect(shown.indexOf(SAVED)).toBeLessThan(shown.indexOf(line));
+    expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('SET'));
+    expect(shown.filter((s) => s.startsWith('Something off'))).toEqual([]);
+  });
+
+  it('a flagged exercise shows "Something off: {Reason}" on its own muted line, and the read holds the plan (R61)', () => {
+    const tree = mount(ruled({ mark: 'rough_sleep' }));
+    const line = `${RULE} Hit 8s on a normal day and next time is 190 lb. Rough sleep today, so 185 lb holds.`;
+
+    const flag = textNode(tree, 'Something off: Rough sleep');
+    expect(StyleSheet.flatten(flag.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+    expect(flag.props.numberOfLines).toBeUndefined();
+    textNode(tree, line);
+    const shown = shownText(tree);
+    expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf('Something off: Rough sleep'));
+    expect(shown.indexOf('Something off: Rough sleep')).toBeLessThan(shown.indexOf(line));
+    expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('SET'));
+  });
+
+  it('an override reads as set by you, and a flag still holds the plan, not the override', () => {
+    textNode(mount(ruled({ overrideWeight: 175, overrideUnit: 'lb' })), `${RULE} Today is set to 175 lb by you. The rule still says 185 lb.`);
+    textNode(
+      mount(ruled({ overrideWeight: 175, overrideUnit: 'lb', mark: 'pain' })),
+      `${RULE} Today is set to 175 lb by you. Pain today, so 185 lb holds.`,
+    );
+  });
+
+  it('with no plan yet, says to pick a starting weight', () => {
+    textNode(mount(ruled({ plannedWeight: null, plannedUnit: null })), `${RULE} Pick a starting weight. Next time builds from it.`);
+  });
+
+  it("reads a plan in the other unit as the set table's target does, in the unit shown", () => {
+    // 80 kg is 176.4 lb, which the lb plates load as 175; 2.5 kg is 5 lb.
+    const tree = mount(ruled({ rule: { setCount: 3, repMin: 5, repMax: 8, increment: 2.5, incrementUnit: 'kg' }, plannedWeight: 80, plannedUnit: 'kg' }));
+    textNode(tree, `${RULE} Hit 8s on a normal day and next time is 180 lb.`);
+  });
+
+  it('shows no read for a timed hold, a distance or an increment of 0', () => {
+    const plank = mount(
+      ruled({
+        loggingType: 'timed',
+        equipment: 'bodyweight',
+        rule: { setCount: 3, repMin: 30, repMax: 60, increment: 0, incrementUnit: 'lb' },
+        plannedWeight: null,
+        plannedUnit: null,
+        previous: [0, 1, 2].map((position) => prev({ position, durationS: 60 })),
+      }),
+    );
+    textNode(plank, "Last time: 3 × 60 s. Timed holds don't go up automatically.");
+
+    const run = mount(
+      ruled({
+        loggingType: 'distance_time',
+        equipment: 'bodyweight',
+        rule: null,
+        plannedWeight: null,
+        plannedUnit: null,
+        previous: [prev({ distance: 5, distanceUnit: 'km', durationS: 1530 })],
+      }),
+    );
+    textNode(run, 'Last time: 5 km in 25:30.');
+
+    const flat = mount(ruled({ rule: { setCount: 3, repMin: 5, repMax: 8, increment: 0, incrementUnit: 'lb' }, mark: 'sick' }));
+    textNode(flat, "No weight to add. Beat last time's reps.");
+    textNode(flat, 'Something off: Sick');
+  });
+
+  it("an exercise with no rule shows last time, or that it's the first time", () => {
+    textNode(mount({ ...bench([set('s0', 0)]), previous: LAST_135 }), 'No rule here. Last time: 3 × 8 at 135 lb.');
+    textNode(mount(bench([set('s0', 0)])), 'First time logging this.');
+  });
+});
+
 describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
   /** The add buttons, in the order they are drawn. */
   const addButtons = (tree: ReactTestRenderer) =>
