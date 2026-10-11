@@ -728,6 +728,17 @@ function workoutRows(db: Db, workoutId: string) {
 }
 
 describe('saveRoutine (R89)', () => {
+  it('a day left unnamed is stored as "Day 1", and a workout from it is named "{routine} Day 1" (R56)', () => {
+    const db = seededDb();
+    const id = saveRoutine(db, edit(newDraft(), { type: 'rename', name: 'My split' }, { type: 'addDay' }, add(0, BENCH)), NOW);
+    const [day] = rowsOf(db, id);
+    expect(day.day.name).toBe('Day 1');
+
+    const workoutId = startWorkoutFromDay(db, day.day.id, NOW);
+
+    expect(db.select().from(workouts).where(eq(workouts.id, workoutId)).get()!.name).toBe('My split Day 1');
+  });
+
   it('saves a new draft as your own routine, created now, with its days and exercises in order', () => {
     const db = seededDb();
     const id = saveRoutine(db, mySplit(), NOW);

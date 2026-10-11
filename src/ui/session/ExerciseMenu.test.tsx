@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { TextInput } from 'react-native';
+import { Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { Button } from '../Button';
@@ -738,5 +738,37 @@ describe('ExerciseMenu: the Rest panel of a superset member that is not last (R1
 
     const alone = openRest([{ ...exercise(), restSeconds: null } as unknown as WorkoutExerciseView], 'we1');
     expect(shownText(alone).some((t) => t.startsWith('Rest comes after') || t.startsWith('No rest after'))).toBe(false);
+  });
+});
+
+describe('ExerciseMenu: a long name wraps in every sheet', () => {
+  const LONG = 'Alternating dumbbell incline bench press with a pause at the bottom';
+  /** The texts on screen cut to a number of lines; none should be. */
+  const clipped = (tree: ReturnType<typeof create>) =>
+    tree.root.findAllByType(Text).filter((t) => t.props.numberOfLines !== undefined).map((t) => t.props.children);
+
+  it.each([
+    ['the menu', []],
+    ['Reorder', ['Reorder']],
+    ['Rest time', ['Rest time · Default (2:00)']],
+    ['Something off', ['Something off']],
+  ])('%s', (_panel, steps) => {
+    const tree = mount(today({ name: LONG }));
+    for (const step of steps) press(tree, step);
+
+    expect(shownText(tree)).toContain(LONG);
+    expect(clipped(tree)).toEqual([]);
+  });
+
+  it.each([
+    ['Plate calculator', 'Plate calculator'],
+    ["Today's weight", "Override today's weight"],
+  ])('%s', (_sheet, menuLabel) => {
+    const tree = mount(today({ name: LONG }));
+    press(tree, menuLabel);
+    afterSheetCloses();
+
+    expect(shownText(tree)).toContain(LONG);
+    expect(clipped(tree)).toEqual([]);
   });
 });

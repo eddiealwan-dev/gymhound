@@ -38,6 +38,15 @@ export const lightColors: Colors = {
   red: '#E10600',
 };
 
+/**
+ * A switch's colours, as DESIGN.md has them (R131): on, a text-colour track under a background-colour thumb; off, a
+ * borderStrong track (3:1 on the page in both themes), so the off state is as visible as the on state. Each track reads
+ * on the page and the card, and the thumb on each track, at 3:1 or more.
+ */
+export function switchColors(colors: Colors): { thumb: string; trackOn: string; trackOff: string } {
+  return { thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong };
+}
+
 export type Scheme = 'light' | 'dark';
 
 /** The stored preference wins. `system` follows the device and falls back to light when the device has no answer. */

@@ -156,11 +156,14 @@ describe('Settings: the page (design pass)', () => {
     expect(StyleSheet.flatten(helper.props.style)).toMatchObject({ color: '#a39d90' });
   });
 
-  it('the bell switch keeps a visible track when off: borderStrong, not border', () => {
+  it('the bell switch keeps a visible track when off: borderStrong, not border; on, text under a bg thumb (R131)', () => {
     const tree = mount();
 
-    const toggle = tree.root.findByType(Switch);
+    const toggle = tree.root.findAllByType(Switch).find((s) => s.props.accessibilityLabel === 'Bell at the end')!;
     expect(toggle.props.trackColor).toEqual({ false: '#736c60', true: '#f1ece2' });
     expect(toggle.props.ios_backgroundColor).toBe('#736c60');
+    expect(toggle.props.thumbColor).toBe('#100f0c');
+    // The web colours an on thumb from activeThumbColor; the same colour, so the web matches the phone.
+    expect(toggle.props.activeThumbColor).toBe('#100f0c');
   });
 });

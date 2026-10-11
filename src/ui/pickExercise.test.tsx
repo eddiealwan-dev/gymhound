@@ -1,11 +1,14 @@
 import { router } from 'expo-router';
-import { FlatList, Image, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { FlatList, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import PickExercise from '../../app/pick-exercise';
+import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import type { ExerciseRow } from '../db/repositories/exercisesRepo';
+import { photoFileExists } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
+import { useCreatedExercise } from '../state/createdExercise';
 import { usePendingPick } from '../state/pendingPick';
 import { addExercise, replaceWith } from '../state/sessionActions';
 import { Button } from './Button';
@@ -16,14 +19,31 @@ import { FormDemo } from './FormDemo';
 let mockParams: { mode?: string; workoutExerciseId?: string };
 let mockRows: ExerciseRow[];
 
-jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), canGoBack: jest.fn(() => true), replace: jest.fn() },
-  useLocalSearchParams: () => mockParams,
-}));
+/** The picker's latest focus effect: a test plays the editor closing over it by focusing it again. */
+const mockFocus: { effect: (() => void | (() => void)) | null } = { effect: null };
+
+jest.mock('expo-router', () => {
+  const { useEffect } = jest.requireActual<typeof import('react')>('react');
+  return {
+    router: { back: jest.fn(), canGoBack: jest.fn(() => true), replace: jest.fn(), push: jest.fn() },
+    useLocalSearchParams: () => mockParams,
+    useFocusEffect: (effect: () => void | (() => void)) => {
+      useEffect(() => {
+        mockFocus.effect = effect;
+        return effect() ?? undefined;
+      }, [effect]);
+    },
+  };
+});
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRows }));
+jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRows, useDataVersion: () => 0 }));
+jest.mock('../db/repositories/exercisePhotosRepo', () => ({ getOwnPhotos: jest.fn() }));
+jest.mock('../platform/exercisePhotoFiles', () => ({
+  photoFileExists: jest.fn(),
+  photoUri: (name: string) => `file:///documents/exercise-photos/${name}`,
+}));
 jest.mock('../state/sessionActions', () => ({ addExercise: jest.fn(), replaceWith: jest.fn() }));
 // Its own tests cover what it shows; here, which exercise it is opened for is what the tests read.
 jest.mock('./FormDemo', () => ({ FormDemo: () => null }));
@@ -80,7 +100,10 @@ const drawnRows = (tree: ReactTestRenderer) =>
 
 const texts = (node: ReactTestInstance) => node.findAll((n) => n.type === Text).map((t) => t.props.children);
 
+const originalOS = Platform.OS;
+
 afterEach(() => {
+  Platform.OS = originalOS;
   for (const tree of mounted.splice(0)) act(() => tree.unmount());
   jest.useRealTimers();
 });
@@ -91,9 +114,13 @@ beforeEach(() => {
   mockParams = { mode: 'add' };
   mockRows = LIBRARY_ROWS;
   usePendingPick.setState({ exerciseId: null });
+  useCreatedExercise.setState({ id: null });
   jest.mocked(router.back).mockClear();
+  jest.mocked(router.push).mockClear();
   jest.mocked(addExercise).mockClear();
   jest.mocked(replaceWith).mockClear();
+  jest.mocked(getOwnPhotos).mockReset().mockReturnValue({ start: null, end: null });
+  jest.mocked(photoFileExists).mockReset().mockReturnValue(true);
 });
 
 describe('the exercise picker: every exercise (§18.8)', () => {
@@ -137,6 +164,38 @@ describe('the exercise picker: every exercise (§18.8)', () => {
     expect(tile).toHaveLength(1);
   });
 
+  it('shows your own start photo where none is bundled (R111)', () => {
+    jest.mocked(getOwnPhotos).mockImplementation((_db, id) => (id === 'wall-sit' ? { start: 'wall-sit-start-1.jpg', end: null } : { start: null, end: null }));
+    const tree = mount();
+    search(tree, 'wall sit');
+
+    const photo = row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image);
+    expect(photo).toHaveLength(1);
+    expect(photo[0].props.source).toEqual({ uri: 'file:///documents/exercise-photos/wall-sit-start-1.jpg' });
+    expect(StyleSheet.flatten(photo[0].props.style)).toMatchObject({ width: 44, height: 44 });
+    expect(photo[0].props.resizeMethod).toBe('resize');
+  });
+
+  it('keeps the empty tile when your own photo file has gone, and on web', () => {
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: null });
+    jest.mocked(photoFileExists).mockReturnValue(false);
+    let tree = mount();
+    search(tree, 'wall sit');
+    expect(row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image)).toHaveLength(0);
+
+    jest.mocked(photoFileExists).mockReturnValue(true);
+    Platform.OS = 'web';
+    tree = mount();
+    search(tree, 'wall sit');
+    expect(row(tree, 'Wall sit, Bodyweight, Quads').findAllByType(Image)).toHaveLength(0);
+  });
+
+  it('never looks for your own photos for an exercise with bundled ones', () => {
+    const tree = mount();
+    search(tree, 'barbell bench press');
+    expect(jest.mocked(getOwnPhotos).mock.calls.some(([, id]) => id === 'barbell-bench-press')).toBe(false);
+  });
+
   it('names each of several primary muscles on its row', () => {
     const tree = mount();
     search(tree, 'barbell row');
@@ -176,7 +235,8 @@ describe('the exercise picker: search (§8.7)', () => {
 describe('the exercise picker: filter chips (§8.7)', () => {
   it('has a chip for each muscle, the delts as one Shoulders, and one for each kind of equipment', () => {
     const tree = mount();
-    const labels = tree.root.findAllByType(Button).map((b) => b.props.label);
+    const chips = tree.root.findAllByType(Button).filter((b) => b.props.label !== 'New exercise');
+    const labels = chips.map((b) => b.props.label);
     expect(labels).toEqual([
       'Chest',
       'Shoulders',
@@ -207,9 +267,18 @@ describe('the exercise picker: filter chips (§8.7)', () => {
       'Foam roller',
       'Other',
     ]);
-    for (const b of tree.root.findAllByType(Button)) {
+    for (const b of chips) {
       expect(b.props).toMatchObject({ size: 'compact', variant: 'secondary', selected: false });
     }
+  });
+
+  it('the chip rows keep their height: only the list gives way to the screen, and it takes what is left', () => {
+    const tree = mount();
+    // A ScrollView grows and shrinks by default; beside a long list the rows were squeezed to a sliver.
+    const rows = tree.root.findAllByType(ScrollView).filter((s) => s.props.horizontal === true);
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(StyleSheet.flatten(r.props.style)).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+    expect(StyleSheet.flatten(list(tree).props.style)).toMatchObject({ flex: 1 });
   });
 
   it('a chip filters by primary muscle and fills with ink when chosen', () => {
@@ -334,5 +403,89 @@ describe('the exercise picker: the info button (R86)', () => {
     } finally {
       dismiss.mockRestore();
     }
+  });
+});
+
+describe('the exercise picker: your own exercises (R110)', () => {
+  const CUSTOM: ExerciseRow = {
+    id: 'c0ffee00-0000-4000-8000-000000000001',
+    name: 'Landmine press',
+    aliases: [],
+    primaryMuscles: ['front_delts'],
+    secondaryMuscles: [],
+    equipment: 'barbell',
+    pattern: 'isolation',
+    loggingType: 'weighted',
+    isCustom: true,
+  };
+
+  it('a custom row ends its subline with Custom', () => {
+    mockRows = [...LIBRARY_ROWS, CUSTOM];
+    const tree = mount();
+    search(tree, 'landmine press');
+    expect(texts(row(tree, 'Landmine press, Barbell, Shoulders, Custom'))).toEqual(['Landmine press', 'Barbell · Shoulders · Custom']);
+  });
+
+  it('New exercise opens the editor with the search text as its name, after putting the keyboard away', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    try {
+      const tree = mount();
+      search(tree, '  landmine ');
+      act(() => chip(tree, 'New exercise').props.onPress());
+      expect(dismiss).toHaveBeenCalled();
+      expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: 'new', name: 'landmine', from: 'picker' } });
+      expect(addExercise).not.toHaveBeenCalled();
+    } finally {
+      dismiss.mockRestore();
+    }
+  });
+
+  it('add: back in focus after Save, it adds the exercise just made to the workout and closes', () => {
+    const tree = mount();
+    act(() => useCreatedExercise.getState().set(CUSTOM.id));
+    act(() => void mockFocus.effect?.());
+    expect(addExercise).toHaveBeenCalledWith('db', CUSTOM.id);
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(useCreatedExercise.getState().id).toBeNull();
+    expect(tree).toBeTruthy();
+  });
+
+  it('replace: swaps in the exercise just made', () => {
+    mockParams = { mode: 'replace', workoutExerciseId: 'we1' };
+    mount();
+    act(() => useCreatedExercise.getState().set(CUSTOM.id));
+    act(() => void mockFocus.effect?.());
+    expect(replaceWith).toHaveBeenCalledWith('db', 'we1', CUSTOM.id);
+  });
+
+  it('routine: hands the exercise just made to the routine editor', () => {
+    mockParams = { mode: 'routine' };
+    mount();
+    act(() => useCreatedExercise.getState().set(CUSTOM.id));
+    act(() => void mockFocus.effect?.());
+    expect(usePendingPick.getState().exerciseId).toBe(CUSTOM.id);
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('back in focus with nothing made (the editor was closed), it stays open', () => {
+    mount();
+    act(() => void mockFocus.effect?.());
+    expect(addExercise).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it('lets the form demo offer Edit exercise, except for a routine, whose unsaved draft may hold the exercise', () => {
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(true);
+    mockParams = { mode: 'replace', workoutExerciseId: 'we1' };
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(true);
+    mockParams = { mode: 'routine' };
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(false);
+  });
+
+  it('drops an exercise left over from an earlier picker when it opens, choosing nothing', () => {
+    useCreatedExercise.getState().set('stale');
+    mount();
+    expect(addExercise).not.toHaveBeenCalled();
+    expect(useCreatedExercise.getState().id).toBeNull();
   });
 });

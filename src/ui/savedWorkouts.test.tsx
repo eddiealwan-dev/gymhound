@@ -37,7 +37,7 @@ jest.mock('../db/repositories/savedWorkoutsRepo', () => ({
   renameSavedWorkout: jest.fn(),
   deleteSavedWorkout: jest.fn(),
 }));
-jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => false }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => false }) }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {

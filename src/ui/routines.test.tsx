@@ -25,7 +25,7 @@ jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: string) => u
 jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(() => mockRoutines), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
 // The saved workouts group has its own tests (savedWorkouts.test.tsx).
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
-jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => mockPro }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {

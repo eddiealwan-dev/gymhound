@@ -1,58 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { listExercises, type ExerciseRow } from '../src/db/repositories/exercisesRepo';
-import { equipmentLabel, muscleLabel, primaryMusclesLabel } from '../src/domain/labels';
+import { EQUIPMENT_ORDER, equipmentLabel, MUSCLE_ORDER, muscleLabel, primaryMusclesLabel } from '../src/domain/labels';
 import { filterExercises, searchExercises } from '../src/domain/search';
 import type { Equipment, Muscle } from '../src/domain/types';
+import { useCreatedExercise } from '../src/state/createdExercise';
 import { useDbQuery } from '../src/state/dataVersion';
 import { usePendingPick } from '../src/state/pendingPick';
 import { addExercise, replaceWith } from '../src/state/sessionActions';
 import { Button } from '../src/ui/Button';
-import { exercisePhotos } from '../src/ui/exercisePhotos';
+import { useExercisePhotos } from '../src/ui/exercisePhotos';
 import { FormDemo } from '../src/ui/FormDemo';
 import { Body, Display } from '../src/ui/Text';
 import { fonts } from '../src/ui/theme';
 import { useTheme } from '../src/ui/ThemeProvider';
 
 /** The muscle chips, head to toe. The three delts are one chip, Shoulders, as they read everywhere (`muscleLabel`). */
-const MUSCLE_CHIPS: Muscle[] = [
-  'chest',
-  'front_delts',
-  'lats',
-  'upper_back',
-  'traps',
-  'biceps',
-  'triceps',
-  'forearms',
-  'abs',
-  'obliques',
-  'lower_back',
-  'glutes',
-  'quads',
-  'hamstrings',
-  'adductors',
-  'calves',
-];
+const MUSCLE_CHIPS: readonly Muscle[] = MUSCLE_ORDER.filter((m) => m !== 'side_delts' && m !== 'rear_delts');
 
 /** The equipment chips: the six since phase 1, then the ones the library brings (R85). */
-const EQUIPMENT_CHIPS: Equipment[] = [
-  'barbell',
-  'dumbbell',
-  'cable',
-  'machine',
-  'kettlebell',
-  'bodyweight',
-  'ez_bar',
-  'band',
-  'medicine_ball',
-  'exercise_ball',
-  'foam_roller',
-  'other',
-];
+const EQUIPMENT_CHIPS: readonly Equipment[] = EQUIPMENT_ORDER;
 
 /** Closes the picker. With nothing to go back to (the page was opened by address, or reloaded), it lands on Train. */
 function close() {
@@ -80,6 +51,8 @@ function ChipRow<T extends string>({
       horizontal
       showsHorizontalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      // A ScrollView grows and shrinks by default: beside the long list it was squeezed to a sliver, cutting the chips.
+      style={{ flexGrow: 0, flexShrink: 0 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 4, gap: 8 }}
     >
       {values.map((value) => (
@@ -96,10 +69,10 @@ function ChipRow<T extends string>({
   );
 }
 
-/** The start photo at 44pt, or the same tile without one, so every name lines up. */
+/** The start photo at 44pt (bundled, else your own, R111), or the same tile without one, so every name lines up. */
 function Thumbnail({ exercise }: { exercise: ExerciseRow }) {
   const { colors } = useTheme();
-  const photos = exercisePhotos(exercise.id);
+  const photos = useExercisePhotos(exercise.id);
   const tile = { width: 44, height: 44, borderRadius: 8, backgroundColor: colors.surfaceRaised };
   // resizeMethod="resize": Android decodes the photo at the tile's size, not its own, so a long list stays light on memory.
   if (photos) return <Image source={photos[0]} resizeMode="cover" resizeMethod="resize" accessibilityIgnoresInvertColors style={tile} />;
@@ -111,7 +84,7 @@ function Thumbnail({ exercise }: { exercise: ExerciseRow }) {
 }
 
 /**
- * A row: the start photo, the name, and "{Equipment} · {Primary muscle}", then an info button. Tapping the row chooses
+ * A row: the start photo, the name, and "{Equipment} · {Primary muscle}" (then " · Custom" for your own), then an info button. Tapping the row chooses
  * the exercise; the info button opens its form demo instead (R86). They are two targets side by side, so the screen
  * reader reaches each.
  */
@@ -127,11 +100,12 @@ const ExerciseOption = memo(function ExerciseOption({
   const { colors } = useTheme();
   const equipment = equipmentLabel(exercise.equipment);
   const muscles = primaryMusclesLabel(exercise.primaryMuscles);
+  const custom = exercise.isCustom ? ' · Custom' : '';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${exercise.name}, ${equipment}, ${muscles}`}
+        accessibilityLabel={`${exercise.name}, ${equipment}, ${muscles}${exercise.isCustom ? ', Custom' : ''}`}
         accessibilityHint="Chooses this exercise"
         onPress={() => onChoose(exercise.id)}
         style={({ pressed }) => ({
@@ -151,7 +125,7 @@ const ExerciseOption = memo(function ExerciseOption({
         <View style={{ flex: 1, minWidth: 0 }}>
           <Body weight={600}>{exercise.name}</Body>
           <Body muted style={{ fontSize: 14 }}>
-            {`${equipment} · ${muscles}`}
+            {`${equipment} · ${muscles}${custom}`}
           </Body>
         </View>
       </Pressable>
@@ -179,7 +153,8 @@ const ExerciseOption = memo(function ExerciseOption({
  * workout; `mode=replace` with a `workoutExerciseId` swaps it in for that exercise; `mode=routine` hands it to the routine
  * editor through `usePendingPick` (§18.8). Search matches names, aliases, primary muscles and equipment, and chips filter
  * by a muscle and by equipment (spec 8.7). The whole library is one virtualized list. Each row's info button opens the
- * exercise's form demo (R86).
+ * exercise's form demo (R86). **New exercise** opens the custom exercise editor with the search text as the name; back
+ * in focus, the picker chooses the exercise just saved as if its row was tapped (R110).
  */
 export default function PickExercise() {
   const db = useDb();
@@ -216,6 +191,28 @@ export default function PickExercise() {
     },
     [db, forRoutine, replacing, workoutExerciseId],
   );
+
+  /** `choose` as last drawn, for the focus effect, which stays the same. */
+  const chooseRef = useRef(choose);
+  chooseRef.current = choose;
+  /** Whether the picker has had its first focus, which is its opening. */
+  const opened = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      const created = useCreatedExercise.getState().take();
+      // At opening, anything waiting was left by an earlier picker and is dropped.
+      if (!opened.current) {
+        opened.current = true;
+        return;
+      }
+      if (created !== null) chooseRef.current(created);
+    }, []),
+  );
+
+  const newExercise = () => {
+    Keyboard.dismiss();
+    router.push({ pathname: '/exercise/[id]', params: { id: 'new', name: query.trim(), from: 'picker' } });
+  };
 
   /** The exercise whose form demo is open, or null. */
   const [demoFor, setDemoFor] = useState<string | null>(null);
@@ -272,6 +269,9 @@ export default function PickExercise() {
             }}
           />
         </View>
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingTop: 4 }}>
+          <Button label="New exercise" variant="secondary" size="compact" onPress={newExercise} />
+        </View>
         <ChipRow values={MUSCLE_CHIPS} label={muscleLabel} chosen={muscle} onChoose={setMuscle} />
         <ChipRow values={EQUIPMENT_CHIPS} label={equipmentLabel} chosen={equipment} onChoose={setEquipment} />
         <FlatList
@@ -284,7 +284,8 @@ export default function PickExercise() {
           windowSize={11}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          style={{ marginTop: 4 }}
+          // The list takes the height left under the chips, and is the one thing that gives way.
+          style={{ flex: 1, marginTop: 4 }}
           contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
           ListEmptyComponent={
             <Body muted style={{ textAlign: 'center', padding: 24 }}>
@@ -293,7 +294,8 @@ export default function PickExercise() {
           }
         />
       </View>
-      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} />
+      {/* A routine's unsaved draft may hold the exercise, so it is not edited from here (review of R110). */}
+      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} canEdit={!forRoutine} />
     </View>
   );
 }

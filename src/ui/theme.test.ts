@@ -1,4 +1,4 @@
-import { darkColors, fonts, lightColors, resolveScheme } from './theme';
+import { darkColors, fonts, lightColors, resolveScheme, switchColors } from './theme';
 
 /** WCAG relative luminance of a `#rrggbb` colour. */
 function luminance(hex: string): number {
@@ -54,6 +54,19 @@ describe('theme', () => {
   it('field edges read at 3:1 or more', () => {
     for (const c of [darkColors, lightColors]) {
       for (const g of [c.bg, c.surface, c.surfaceRaised]) expect(ratio(c.borderStrong, g)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("a switch keeps DESIGN.md's colours (R131): on, a text track under a bg thumb; off, a borderStrong track", () => {
+    for (const colors of [darkColors, lightColors]) {
+      const { thumb, trackOn, trackOff } = switchColors(colors);
+      expect({ thumb, trackOn, trackOff }).toEqual({ thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong });
+      // Each track reads on the page and the card, and the thumb on each track, at 3:1 or more; never red.
+      for (const track of [trackOn, trackOff]) {
+        for (const page of [colors.bg, colors.surface]) expect(ratio(track, page)).toBeGreaterThanOrEqual(3);
+        expect(ratio(thumb, track)).toBeGreaterThanOrEqual(3);
+      }
+      expect([thumb, trackOn, trackOff]).not.toContain(colors.red);
     }
   });
 

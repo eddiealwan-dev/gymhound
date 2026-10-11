@@ -1,18 +1,29 @@
-import { AccessibilityInfo, Image, StyleSheet, Text } from 'react-native';
+import { router } from 'expo-router';
+import { AccessibilityInfo, Image, Platform, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { getExercise } from '../db/repositories/exercisesRepo';
+import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { Button } from './Button';
 import { FormDemo } from './FormDemo';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/exercisesRepo', () => ({ getExercise: jest.fn() }));
+jest.mock('../db/repositories/exercisePhotosRepo', () => ({ getOwnPhotos: jest.fn(), setOwnPhoto: jest.fn() }));
+jest.mock('../platform/exercisePhotoFiles', () => ({
+  pickPhoto: jest.fn(),
+  saveExercisePhoto: jest.fn(),
+  deleteExercisePhotoFile: jest.fn(),
+  photoFileExists: () => true,
+  photoUri: (name: string) => `file:///documents/exercise-photos/${name}`,
+}));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -68,7 +79,22 @@ const SIDE_PLANK: ExerciseDetail = {
   instructions: [],
 };
 
-const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK];
+/** One of your own: no photos, no steps. */
+const MINE: ExerciseDetail = {
+  ...BENCH,
+  id: 'c0ffee00-0000-4000-8000-000000000001',
+  name: 'Landmine press',
+  aliases: [],
+  primaryMuscles: ['front_delts'],
+  secondaryMuscles: ['triceps'],
+  isCustom: true,
+  instructions: [],
+  sourceId: null,
+};
+
+const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK, MINE];
+
+const originalOS = Platform.OS;
 
 let reduceMotion: boolean;
 /** What the phone told the sheet about Reduce Motion changing, so a test can change it. */
@@ -79,6 +105,7 @@ beforeEach(() => {
   reduceMotion = false;
   reduceMotionChanged = null;
   jest.mocked(getExercise).mockReset().mockImplementation((_db, id) => ALL.find((e) => e.id === id) ?? null);
+  jest.mocked(getOwnPhotos).mockReset().mockReturnValue({ start: null, end: null });
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockImplementation(() => Promise.resolve(reduceMotion));
   jest.spyOn(AccessibilityInfo, 'addEventListener').mockImplementation(((event: string, handler: (on: boolean) => void) => {
     if (event === 'reduceMotionChanged') reduceMotionChanged = handler;
@@ -87,6 +114,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Platform.OS = originalOS;
   jest.restoreAllMocks();
   jest.useRealTimers();
 });
@@ -110,6 +138,9 @@ const photo = (tree: ReactTestRenderer, which: 'start' | 'end'): ReactTestInstan
 };
 const photos = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === Image);
 const opacity = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style).opacity;
+/** The labels of the photo frames the screen reader lands on. */
+const stopsIn = (tree: ReactTestRenderer) =>
+  tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessible === true && n.props.accessibilityRole === 'image' && n.findAll((m) => m.type === Image && m.props.testID?.startsWith('form-demo')).length > 0).map((n) => n.props.accessibilityLabel);
 const START = 'start';
 const END = 'end';
 
@@ -322,7 +353,7 @@ describe('the form demo without photos (R86)', () => {
     const tree = await open('fedb-kettlebell-halo');
 
     expect(photos(tree)).toHaveLength(0);
-    expect(texts(tree)).toEqual(['Kettlebell halo', 'Shoulders', '1', 'Hold the bell by its horns.', '2', 'Circle it around your head.', 'Close']);
+    expect(texts(tree)).toEqual(['Kettlebell halo', 'Shoulders', '1', 'Hold the bell by its horns.', '2', 'Circle it around your head.', 'Start photo', 'Add', 'End photo', 'Add', 'Close']);
     act(() => void jest.advanceTimersByTime(5000));
     expect(jest.getTimerCount()).toBe(0);
   });
@@ -331,7 +362,7 @@ describe('the form demo without photos (R86)', () => {
     const tree = await open('wall-sit');
 
     expect(photos(tree)).toHaveLength(0);
-    expect(texts(tree)).toEqual(['Wall sit', 'Quads · Glutes', 'Close']);
+    expect(texts(tree)).toEqual(['Wall sit', 'Quads · Glutes', 'Start photo', 'Add', 'End photo', 'Add', 'Close']);
   });
 });
 
@@ -358,5 +389,94 @@ describe('the form demo: the photos and the screen reader (review of R86)', () =
     expect(photos(tree)).toHaveLength(2);
     // Both photos sit inside it.
     expect(frames[0].findAll((n) => n.type === Image)).toHaveLength(2);
+  });
+});
+
+describe('the form demo of your own exercise', () => {
+  it('says there are no steps and offers Edit exercise', async () => {
+    const tree = await open(MINE.id);
+    expect(texts(tree)).toEqual(['Landmine press', 'Shoulders · Triceps', 'No steps for your own exercise.', 'Edit exercise', 'Start photo', 'Add', 'End photo', 'Add', 'Close']);
+    expect(buttons(tree, 'Edit exercise')[0].props.variant).toBe('secondary');
+  });
+
+  it('Edit exercise closes the demo, then opens the editor once the sheet has gone', async () => {
+    const onClose = jest.fn();
+    jest.mocked(router.push).mockClear();
+    const tree = await open(MINE.id, onClose);
+    act(() => buttons(tree, 'Edit exercise')[0].props.onPress());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(router.push).not.toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: MINE.id } });
+  });
+
+  it('offers no Edit exercise when it may not be edited from here (the picker for a routine)', async () => {
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<FormDemo exerciseId={MINE.id} onClose={() => {}} canEdit={false} />);
+    });
+    expect(buttons(tree, 'Edit exercise')).toHaveLength(0);
+    expect(texts(tree)).toContain('No steps for your own exercise.');
+  });
+
+  it('a library exercise offers no Edit exercise', async () => {
+    for (const id of ['wall-sit', 'barbell-bench-press']) {
+      const tree = await open(id);
+      expect(buttons(tree, 'Edit exercise')).toHaveLength(0);
+      expect(texts(tree)).not.toContain('No steps for your own exercise.');
+    }
+  });
+});
+
+describe('the form demo: your own photos (R111)', () => {
+  const ownStart = { uri: 'file:///documents/exercise-photos/wall-sit-start-1.jpg' };
+  const ownEnd = { uri: 'file:///documents/exercise-photos/wall-sit-end-1.jpg' };
+
+  it('shows your own start and end photos, swapping as the bundled ones do (R98)', async () => {
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: 'wall-sit-end-1.jpg' });
+    const tree = await open('wall-sit');
+
+    expect(photo(tree, START).props.source).toEqual(ownStart);
+    expect(photo(tree, END).props.source).toEqual(ownEnd);
+    expect(opacity(photo(tree, END))).toBe(0);
+    act(() => void jest.advanceTimersByTime(1200));
+    expect(opacity(photo(tree, END))).toBe(1);
+    expect(stopsIn(tree)).toEqual(['Wall sit, start and end positions']);
+  });
+
+  it('shows a single photo still, in the same frame', async () => {
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: null });
+    const tree = await open('wall-sit');
+
+    expect(photos(tree).filter((p) => p.props.testID?.startsWith('form-demo'))).toHaveLength(1);
+    expect(photo(tree, START).props.source).toEqual(ownStart);
+    act(() => void jest.advanceTimersByTime(5000));
+    expect(jest.getTimerCount()).toBe(0);
+    expect(stopsIn(tree)).toEqual(['Wall sit, photo']);
+  });
+
+  it('offers Add for each photo where none are bundled, and Replace and Remove for one that is set', async () => {
+    let tree = await open('wall-sit');
+    expect(buttons(tree, 'Add')).toHaveLength(2);
+
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: null });
+    tree = await open(MINE.id);
+    expect(buttons(tree, 'Replace')).toHaveLength(1);
+    expect(buttons(tree, 'Remove')).toHaveLength(1);
+    expect(buttons(tree, 'Add')).toHaveLength(1);
+  });
+
+  it('offers no photo controls where photos are bundled: they are never replaced', async () => {
+    const tree = await open('barbell-bench-press');
+    for (const label of ['Add', 'Replace', 'Remove']) expect(buttons(tree, label)).toHaveLength(0);
+    expect(getOwnPhotos).not.toHaveBeenCalled();
+  });
+
+  it('offers no photo controls, and shows no own photos, on web', async () => {
+    Platform.OS = 'web';
+    jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: 'wall-sit-end-1.jpg' });
+    const tree = await open('wall-sit');
+    expect(photos(tree)).toHaveLength(0);
+    for (const label of ['Add', 'Replace', 'Remove']) expect(buttons(tree, label)).toHaveLength(0);
   });
 });

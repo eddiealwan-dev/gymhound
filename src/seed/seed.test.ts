@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { createCustomExercise, deleteCustomExercise } from '../db/repositories/customExercisesRepo';
 import { getRestSeconds, setRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
 import { duplicateRoutine, getRoutineDetail, setActiveRoutine } from '../db/repositories/routinesRepo';
@@ -247,9 +248,24 @@ describe('runSeed', () => {
     expect(routineExercise(db, 'premade-calisthenics-3:a:push-up').increment).toBe(0);
   });
 
+  it('version 4 brings the fixed imported steps to a phone seeded at version 3', () => {
+    const { db } = createTestDb();
+    runSeed(db, 1234);
+    const old = ['Stand.', 'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs. 3'];
+    db.update(exercises).set({ instructions: old }).where(eq(exercises.id, 'fedb-smith-machine-pistol-squat')).run();
+    setSetting(db, 'seedVersion', 3);
+
+    runSeed(db, 5678);
+
+    expect(exercise(db, 'fedb-smith-machine-pistol-squat').instructions[1]).toBe(
+      'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs.',
+    );
+    expect(getSettings(db).seedVersion).toBe(4);
+  });
+
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(3);
+    expect(SEED_VERSION).toBe(4);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
@@ -336,6 +352,25 @@ describe('runSeed', () => {
     expect(exercise(db, 'custom-1')).toMatchObject({ name: 'My lift', isCustom: true });
     expect(db.select().from(routines).where(eq(routines.id, 'mine')).get()).toMatchObject({ name: 'Mine', isPremade: false });
     expect(rowCounts(db)).toMatchObject({ exercises: LIBRARY_EXERCISES.length + 1, routines: 9 });
+  });
+
+  it('leaves your own exercises untouched, an archived one included (R108, R109)', () => {
+    const db = seededDb('us');
+    const input = { primaryMuscles: ['front_delts' as const], secondaryMuscles: [], equipment: 'barbell' as const, loggingType: 'weighted_time' as const };
+    const kept = createCustomExercise(db, { ...input, name: 'Landmine carry' }, 7);
+    const archived = createCustomExercise(db, { ...input, name: 'Zercher carry' }, 8);
+    db.insert(routines).values({ id: 'mine', name: 'Mine', isPremade: false, nextDayIndex: 0, createdAt: 8 }).run();
+    db.insert(routineDays).values({ id: 'mine:a', routineId: 'mine', name: 'A', position: 0 }).run();
+    db.insert(routineExercises)
+      .values({ id: 'mine:a:1', routineDayId: 'mine:a', exerciseId: archived, position: 0, setCount: 3, repMin: 20, repMax: 40, increment: 5, incrementUnit: 'lb' })
+      .run();
+    expect(deleteCustomExercise(db, archived)).toBe('archived');
+    const before = [exercise(db, kept), exercise(db, archived)];
+
+    reseed(db, 5000);
+
+    expect([exercise(db, kept), exercise(db, archived)]).toEqual(before);
+    expect(exercise(db, archived)).toMatchObject({ isCustom: true, archived: true, pattern: 'carry' });
   });
 
   it('runs in one transaction: a failure part-way leaves nothing behind', () => {

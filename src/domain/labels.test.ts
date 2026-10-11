@@ -1,4 +1,15 @@
-import { equipmentLabel, formatRepScheme, MARK_LABELS, muscleLabel, musclesLine, primaryMusclesLabel } from './labels';
+import {
+  EQUIPMENT_ORDER,
+  equipmentLabel,
+  formatRepScheme,
+  LOGGING_TYPE_LABELS,
+  MARK_LABELS,
+  MUSCLE_ORDER,
+  muscleChoiceLabel,
+  muscleLabel,
+  musclesLine,
+  primaryMusclesLabel,
+} from './labels';
 import type { Muscle } from './types';
 
 describe('MARK_LABELS', () => {
@@ -124,5 +135,38 @@ describe('musclesLine', () => {
   it('is the primary muscles alone when there are no others', () => {
     expect(musclesLine(['abs'], [])).toBe('Abs');
     expect(musclesLine(['front_delts'], ['side_delts'])).toBe('Shoulders');
+  });
+});
+
+describe('LOGGING_TYPE_LABELS', () => {
+  it('names each logging type for the custom exercise editor (R108)', () => {
+    expect(LOGGING_TYPE_LABELS).toEqual({
+      weighted: 'Weight and reps',
+      bodyweight_plus: 'Bodyweight plus weight',
+      assisted: 'Assisted',
+      timed: 'Time',
+      weighted_time: 'Weight and time',
+      distance_time: 'Distance and time',
+    });
+  });
+});
+
+describe('muscleChoiceLabel', () => {
+  it('names the three delts apart, for choosing a muscle; the rest read as muscleLabel', () => {
+    expect(muscleChoiceLabel('front_delts')).toBe('Front delts');
+    expect(muscleChoiceLabel('side_delts')).toBe('Side delts');
+    expect(muscleChoiceLabel('rear_delts')).toBe('Rear delts');
+    for (const m of MUSCLE_ORDER.filter((m) => !m.endsWith('_delts'))) expect(muscleChoiceLabel(m)).toBe(muscleLabel(m));
+  });
+});
+
+describe('MUSCLE_ORDER and EQUIPMENT_ORDER', () => {
+  it('list every muscle head to toe and every kind of equipment once', () => {
+    expect(MUSCLE_ORDER).toHaveLength(18);
+    expect(new Set(MUSCLE_ORDER).size).toBe(18);
+    expect(MUSCLE_ORDER.slice(0, 4)).toEqual(['chest', 'front_delts', 'side_delts', 'rear_delts']);
+    expect(EQUIPMENT_ORDER).toHaveLength(12);
+    expect(EQUIPMENT_ORDER[0]).toBe('barbell');
+    expect(EQUIPMENT_ORDER[11]).toBe('other');
   });
 });

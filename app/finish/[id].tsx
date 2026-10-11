@@ -12,6 +12,7 @@ import { formatVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { FinishPrs } from '../../src/ui/finish/FinishPrs';
+import { PbCardHost } from '../../src/ui/finish/PbCardHost';
 import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -64,44 +65,47 @@ export default function FinishSummary() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ flexGrow: 1, width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 32, paddingBottom: 16 }}>
-          {summary === null ? (
-            <Body style={{ marginBottom: 16 }}>That workout isn't here.</Body>
-          ) : (
-            <>
-              <Display weight={800} accessibilityRole="header" style={{ fontSize: 56, lineHeight: 60 }}>
-                WORKOUT DONE
-              </Display>
-              <Display weight={700} style={{ fontSize: 28, marginBottom: 24, color: colors.textMuted }}>
-                {summary.name}
-              </Display>
-              <Figure caption="Duration" label="Duration" value={formatElapsed(summary.durationMs)} />
-              <Figure caption="Volume" label="Volume" value={formatVolume(summary.volume, unit, deviceLocale())} />
-              <Figure
-                caption="Logged"
-                label="Sets logged"
-                value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
-              />
-              {summary.next.length > 0 && (
-                <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  {summary.next.map((n, i) => (
-                    <Body key={i}>{finishLine(n)}</Body>
-                  ))}
-                </View>
-              )}
-              <FinishPrs workoutId={id} summary={summary} />
-            </>
-          )}
-          <View style={{ flex: 1, minHeight: 24 }} />
-          {summary !== null && <SaveAsWorkout workoutId={id} workoutName={summary.name} />}
-          <Button label={summary === null ? 'Back to Train' : 'Done'} onPress={goToTrain} />
-        </View>
-      </ScrollView>
+      {/* The personal best card is drawn first, under the scroll view, which paints over it (R106). */}
+      <PbCardHost locale={deviceLocale()}>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: colors.bg }}
+          contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ flexGrow: 1, width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 32, paddingBottom: 16 }}>
+            {summary === null ? (
+              <Body style={{ marginBottom: 16 }}>That workout isn't here.</Body>
+            ) : (
+              <>
+                <Display weight={800} accessibilityRole="header" style={{ fontSize: 56, lineHeight: 60 }}>
+                  WORKOUT DONE
+                </Display>
+                <Display weight={700} style={{ fontSize: 28, marginBottom: 24, color: colors.textMuted }}>
+                  {summary.name}
+                </Display>
+                <Figure caption="Duration" label="Duration" value={formatElapsed(summary.durationMs)} />
+                <Figure caption="Volume" label="Volume" value={formatVolume(summary.volume, unit, deviceLocale())} />
+                <Figure
+                  caption="Logged"
+                  label="Sets logged"
+                  value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
+                />
+                {summary.next.length > 0 && (
+                  <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    {summary.next.map((n, i) => (
+                      <Body key={i}>{finishLine(n)}</Body>
+                    ))}
+                  </View>
+                )}
+                <FinishPrs workoutId={id} summary={summary} />
+              </>
+            )}
+            <View style={{ flex: 1, minHeight: 24 }} />
+            {summary !== null && <SaveAsWorkout workoutId={id} workoutName={summary.name} />}
+            <Button label={summary === null ? 'Back to Train' : 'Done'} onPress={goToTrain} />
+          </View>
+        </ScrollView>
+      </PbCardHost>
     </View>
   );
 }
