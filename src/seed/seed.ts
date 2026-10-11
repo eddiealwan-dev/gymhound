@@ -2,8 +2,10 @@ import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import type { Settings } from '../db/repositories/settingsRepo';
-import { exercises, routineDays, routineExercises, routines } from '../db/schema';
+import { exercises, foods, routineDays, routineExercises, routines } from '../db/schema';
 import type { Db } from '../db/types';
+import { loadSeedFoods } from './foods';
+import type { SeedFood } from './foods';
 import type { LibraryExercise } from './libraryMapping';
 import { SEED_ROUTINES } from './routines';
 import type { SeedIncrement } from './routines';
@@ -12,9 +14,9 @@ export { PREMADE_ORDER } from './routines';
 
 /**
  * Bump this when the bundled data changes. `runSeed` re-applies the seed once per version.
- * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`).
+ * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`). 5: about 300 foods from USDA FoodData Central (R139).
  */
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 
 /** The library is about 800 KB of data, so it is loaded only when the seed has to run, never at every start. */
 function loadLibrary(): readonly LibraryExercise[] {
@@ -44,12 +46,35 @@ const REFRESHED = {
 };
 
 /** Rows per statement: hundreds of single upserts are slow, and 50 rows stay well inside SQLite's variable limit. */
-const EXERCISES_PER_STATEMENT = 50;
+const ROWS_PER_STATEMENT = 50;
 
 function upsertExercises(db: Db, now: number, library: readonly LibraryExercise[]): void {
-  for (let start = 0; start < library.length; start += EXERCISES_PER_STATEMENT) {
-    const rows = library.slice(start, start + EXERCISES_PER_STATEMENT).map((e) => ({ ...e, isCustom: false, createdAt: now }));
+  for (let start = 0; start < library.length; start += ROWS_PER_STATEMENT) {
+    const rows = library.slice(start, start + ROWS_PER_STATEMENT).map((e) => ({ ...e, isCustom: false, createdAt: now }));
     db.insert(exercises).values(rows).onConflictDoUpdate({ target: exercises.id, set: REFRESHED }).run();
+  }
+}
+
+/** A re-seed refreshes a bundled food's name, serving and macros, but never `archived`, and never a food of your own. */
+const FOOD_REFRESHED = {
+  name: excluded(foods.name),
+  servingLabel: excluded(foods.servingLabel),
+  servingGrams: excluded(foods.servingGrams),
+  kcal: excluded(foods.kcal),
+  proteinG: excluded(foods.proteinG),
+  carbsG: excluded(foods.carbsG),
+  fatG: excluded(foods.fatG),
+};
+
+function upsertFoods(db: Db, seedFoods: readonly SeedFood[]): void {
+  for (let start = 0; start < seedFoods.length; start += ROWS_PER_STATEMENT) {
+    const rows = seedFoods
+      .slice(start, start + ROWS_PER_STATEMENT)
+      .map((f) => ({ ...f, source: 'bundled' as const, barcode: null, archived: false }));
+    db.insert(foods)
+      .values(rows)
+      .onConflictDoUpdate({ target: foods.id, set: FOOD_REFRESHED, setWhere: eq(foods.source, 'bundled') })
+      .run();
   }
 }
 
@@ -111,9 +136,9 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
 }
 
 /**
- * Upserts the library's exercises and the premade routines by stable id, in one transaction, when the stored
- * `seed_version` is behind `SEED_VERSION`. Exercises are never deleted, and user rows are never touched. A premade
- * that continues loses the days and exercises the seed no longer has (the rest keep their ids and next weights); a
+ * Upserts the library's exercises, the premade routines and the bundled foods by stable id, in one transaction, when
+ * the stored `seed_version` is behind `SEED_VERSION`. Exercises and foods are never deleted, and user rows (your own
+ * foods included) are never touched. A premade that continues loses the days and exercises the seed no longer has (the rest keep their ids and next weights); a
  * premade the seed no longer has is retired with all its rows.
  */
 export function runSeed(db: Db, now: number): void {
@@ -122,6 +147,7 @@ export function runSeed(db: Db, now: number): void {
     if (current.seedVersion >= SEED_VERSION) return;
     upsertExercises(tx, now, loadLibrary());
     upsertRoutines(tx, now, current);
+    upsertFoods(tx, loadSeedFoods());
     setSetting(tx, 'seedVersion', SEED_VERSION);
   });
 }
