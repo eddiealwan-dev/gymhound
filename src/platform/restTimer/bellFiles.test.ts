@@ -8,13 +8,14 @@ const SOUNDS = join(__dirname, '..', '..', '..', 'assets', 'sounds');
 const RATE = 44100;
 
 /**
- * `quietest` is the lowest RMS level (dBFS) over the whole file that passes: the files before Task 26 sat at -17.5 (bell),
- * -17.7 (chime) and -18.4 (ding), and the owner asked for louder, so each must be at least 6 dB above its old level.
+ * `quietest` is the lowest RMS level (dBFS) over the whole file that passes. The files before Task 26 sat at -17.5 (bell),
+ * -17.7 (chime) and -18.4 (ding); Task 26 raised them to -10.39, -9.80 and -11.06. The owner then asked for each level to
+ * be a little louder again (Task 28), so each must be at least 2.5 dB above its Task 26 level.
  */
 const FILES = [
-  { name: 'bell', seconds: 1.0, quietest: -17.49 + 6 },
-  { name: 'chime', seconds: 1.1, quietest: -17.69 + 6 },
-  { name: 'ding', seconds: 0.5, quietest: -18.37 + 6 },
+  { name: 'bell', seconds: 1.0, quietest: -10.39 + 2.5 },
+  { name: 'chime', seconds: 1.1, quietest: -9.8 + 2.5 },
+  { name: 'ding', seconds: 0.5, quietest: -11.06 + 2.5 },
 ] as const;
 
 function read(name: string) {
@@ -59,7 +60,7 @@ describe.each(FILES)('assets/sounds/$name.wav', ({ name, seconds, quietest }) =>
     expect(peak).toBeLessThan(32767);
   });
 
-  it('is at least 6 dB louder (RMS) than before Task 26 (owner: the bell needs to be louder)', () => {
+  it('is at least 2.5 dB louder (RMS) than after Task 26 (owner: each level needs to be a little louder)', () => {
     expect(20 * Math.log10(rms(samples, 0, seconds) / 32767)).toBeGreaterThanOrEqual(quietest);
   });
 

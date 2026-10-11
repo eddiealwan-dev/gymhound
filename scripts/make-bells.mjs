@@ -2,8 +2,8 @@
 // Plain Node with no dependencies. Run it from the project root:  node scripts/make-bells.mjs
 //
 // Each file is 16-bit PCM, mono, 44.1 kHz. The loudest sample sits at -1 dBFS, so nothing clips, and the sound
-// decays exponentially to silence: the envelope falls E_FOLDS e-folds over the file (about -78 dB), and a 5 ms attack
-// keeps the start from clicking.
+// decays to silence: the envelope falls E_FOLDS e-folds over the file (about -78 dB), and a 5 ms attack keeps the start
+// from clicking.
 //
 // The owner found the bell too quiet over a gym, and raising the peak alone gains under 3 dB. So the summed tone goes
 // through a gentle tanh saturation (DRIVE) before it is scaled to the peak: the loud start is rounded off, the ring
@@ -11,6 +11,15 @@
 // each file's RMS level 7 to 8 dB above the earlier, unsaturated ones. tanh is smooth and odd, so it adds no clicks
 // and keeps every zero crossing (and so every pitch). The saturation also lifts the quiet tail, so a raised-cosine
 // fade over the last RELEASE_S seconds takes it smoothly to exactly zero.
+//
+// The owner then asked for each level to be a little louder again (Task 28). A plain slower decay leaves the tail too
+// loud at the end of the file, so the decay is curved instead: the envelope is exp(-E_FOLDS * (t / length) ^ CURVE),
+// which holds the ring near full level for longer and then falls faster, reaching the same -78 dB at the end. The
+// chime's three notes overlap, and where they stack, a rare moment when all three peak together sets the scale for the
+// whole file. So where more than one note's worth of envelope sounds at once, the chord is levelled: divided by the
+// summed envelope raised to CHORD_LEVEL. That is a slow gain change, so it adds no harmonics. The bell and the ding are
+// single notes and never reach it. Together these put each file 2.8 to 3.3 dB above the Task 26 files, with DRIVE
+// unchanged.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,6 +29,8 @@ const RATE = 44100;
 const PEAK_DBFS = -1;
 const PEAK = Math.round(32767 * 10 ** (PEAK_DBFS / 20));
 const E_FOLDS = 9;
+const CURVE = 1.7;
+const CHORD_LEVEL = 0.8;
 const ATTACK_S = 0.005;
 const RELEASE_S = 0.1;
 const DRIVE = 3;
@@ -53,7 +64,10 @@ const SOUNDS = {
 /** The samples for a sound, as 16-bit integers scaled so the loudest is exactly PEAK. */
 function synthesize({ seconds, partials }) {
   const length = Math.round(seconds * RATE);
-  const tau = seconds / E_FOLDS;
+  /** A note's envelope `since` seconds after it starts: the 5 ms attack, then the curved decay. */
+  const envelope = (since) => Math.min(1, since / ATTACK_S) * Math.exp(-E_FOLDS * (since / seconds) ** CURVE);
+  // A note is the partials that start together, so the bell (two partials) is one note and the chime is three.
+  const noteStarts = [...new Set(partials.map(({ start }) => start))];
   const raw = new Float64Array(length);
   let loudest = 0;
   for (let i = 0; i < length; i++) {
@@ -62,10 +76,11 @@ function synthesize({ seconds, partials }) {
     for (const { freq, amp, start } of partials) {
       const since = t - start;
       if (since < 0) continue;
-      sum += amp * Math.min(1, since / ATTACK_S) * Math.exp(-since / tau) * Math.sin(2 * Math.PI * freq * since);
+      sum += amp * envelope(since) * Math.sin(2 * Math.PI * freq * since);
     }
-    raw[i] = sum;
-    loudest = Math.max(loudest, Math.abs(sum));
+    const stacked = noteStarts.reduce((total, start) => (t >= start ? total + envelope(t - start) : total), 0);
+    raw[i] = stacked > 1 ? sum / stacked ** CHORD_LEVEL : sum;
+    loudest = Math.max(loudest, Math.abs(raw[i]));
   }
   // Saturate the tone normalised to 1, so DRIVE means the same for every sound, then fade the tail out.
   const shaped = new Float64Array(length);
