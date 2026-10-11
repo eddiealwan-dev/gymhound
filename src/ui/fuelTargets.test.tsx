@@ -246,11 +246,15 @@ describe('TargetsForm (R145)', () => {
 });
 
 describe('/fuel-targets', () => {
-  it('shows Back to Fuel, Targets, the line on training days and the form prefilled from the stored targets', () => {
+  it('shows Back, Targets, the line on training days and the form prefilled from the stored targets', () => {
     setFuelTargets(mockDb, TARGETS);
     const tree = mount(<FuelTargetsRoute />);
     const t = shownText(tree);
-    expect(t).toEqual(expect.arrayContaining(['Fuel', 'Targets', 'Training days are days you finish a workout. Every other day uses the rest day targets.']));
+    expect(t).toEqual(expect.arrayContaining(['Back', 'Targets', 'Training days are days you finish a workout. Every other day uses the rest day targets.']));
+    // Opened from Fuel or from Settings, so the back link names neither: VoiceOver hears just "Back".
+    expect(t).not.toContain('Fuel');
+    expect(tree.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Back').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Back to'))).toHaveLength(0);
     expect(valueOf(tree, 'Training day, Calories')).toBe('2800');
     expect(t).toContain('Save');
   });
@@ -277,7 +281,7 @@ describe('/fuel-targets', () => {
   it('Back with nothing changed goes back at once', () => {
     setFuelTargets(mockDb, TARGETS);
     const tree = mount(<FuelTargetsRoute />);
-    press(tree, 'Back to Fuel');
+    press(tree, 'Back');
     expect(router.back).toHaveBeenCalledTimes(1);
     expect(shownText(tree)).not.toContain('Discard changes?');
   });
@@ -285,7 +289,7 @@ describe('/fuel-targets', () => {
   it('leaving with changes asks "Discard changes?"; Keep editing stays with them', () => {
     const tree = mount(<FuelTargetsRoute />);
     type(tree, 'Training day, Calories', '2800');
-    press(tree, 'Back to Fuel');
+    press(tree, 'Back');
     expect(shownText(tree)).toEqual(expect.arrayContaining(['Discard changes?', 'Keep editing', 'Discard']));
     expect(router.back).not.toHaveBeenCalled();
     press(tree, 'Keep editing');
@@ -299,7 +303,7 @@ describe('/fuel-targets', () => {
     setFuelTargets(mockDb, TARGETS);
     const tree = mount(<FuelTargetsRoute />);
     type(tree, 'Training day, Calories', '3000');
-    press(tree, 'Back to Fuel');
+    press(tree, 'Back');
     press(tree, 'Discard');
     expect(router.back).not.toHaveBeenCalled();
     act(() => jest.runAllTimers());

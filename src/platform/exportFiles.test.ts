@@ -1,12 +1,14 @@
 /** @jest-environment node */
 import * as Sharing from 'expo-sharing';
-import { workoutCsvRows } from '../db/repositories/exportRepo';
+import { foodCsvRows, workoutCsvRows } from '../db/repositories/exportRepo';
+import { logQuickAdd } from '../db/repositories/foodLogRepo';
+import { setSetting } from '../db/repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
-import { toCsv, WORKOUT_CSV_COLUMNS } from '../domain/csv';
-import { exportWorkoutsCsv } from './exportFiles';
+import { FOOD_CSV_COLUMNS, toCsv, WORKOUT_CSV_COLUMNS } from '../domain/csv';
+import { exportFoodCsv, exportWorkoutsCsv } from './exportFiles';
 
 /** What the code did to files, in order: each file made, with its options, and each write with its content. */
 const mockFileEvents: { op: 'new' | 'create' | 'write'; uri: string; arg?: unknown }[] = [];
@@ -108,5 +110,76 @@ describe('exportWorkoutsCsv', () => {
     jest.mocked(Sharing.shareAsync).mockRejectedValueOnce(new Error('share sheet failed'));
 
     await expect(exportWorkoutsCsv(withOneWorkout(), NOW)).rejects.toThrow('share sheet failed');
+  });
+});
+
+describe('exportFoodCsv (§11, R153)', () => {
+  const FOOD_URI = 'file:///data/Containers/%2540anonymous%252Fgymhound-1234/Library/Caches/gymhound-food-2026-10-10.csv';
+
+  /** A seeded database with one quick add logged on Oct 10. */
+  function withOneEntry(): Db {
+    const db = seededDb();
+    logQuickAdd(db, 'Shake', { kcal: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }, '2026-10-10', new Date(2026, 9, 10, 8, 0).getTime());
+    return db;
+  }
+
+  it('writes the food CSV to the cache folder, named for the local date, replacing a same-day file', async () => {
+    const db = withOneEntry();
+
+    await expect(exportFoodCsv(db, NOW)).resolves.toBe('shared');
+
+    expect(mockFileEvents.filter((e) => e.op !== 'new')).toEqual([
+      { op: 'create', uri: FOOD_URI, arg: { overwrite: true } },
+      { op: 'write', uri: FOOD_URI, arg: toCsv([...FOOD_CSV_COLUMNS], foodCsvRows(db)) },
+    ]);
+  });
+
+  it('writes the BOM, the header and one row per entry', async () => {
+    await exportFoodCsv(withOneEntry(), NOW);
+
+    const content = mockFileEvents.find((e) => e.op === 'write')!.arg as string;
+    const lines = content.split('\r\n');
+    expect(lines[0]).toBe('﻿date,logged_at,name,servings,kcal,protein_g,carbs_g,fat_g');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatch(/^2026-10-10,2026-10-10T08:00:00\.000[+-]\d\d:\d\d,Shake,1,120,24,3,1\.5$/);
+  });
+
+  it('opens the share sheet for that file as a CSV called GymHound food', async () => {
+    await exportFoodCsv(withOneEntry(), NOW);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(FOOD_URI, {
+      mimeType: 'text/csv',
+      UTI: 'public.comma-separated-values-text',
+      dialogTitle: 'GymHound food',
+    });
+  });
+
+  it('returns empty, with no file and no share sheet, when no food is logged', async () => {
+    await expect(exportFoodCsv(withOneWorkout(), NOW)).resolves.toBe('empty');
+
+    expect(mockFileEvents).toEqual([]);
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable, writing nothing, when the phone cannot share', async () => {
+    jest.mocked(Sharing.isAvailableAsync).mockResolvedValue(false);
+
+    await expect(exportFoodCsv(withOneEntry(), NOW)).resolves.toBe('unavailable');
+
+    expect(mockFileEvents).toEqual([]);
+  });
+
+  it('still exports for a lapsed user with entries (§9)', async () => {
+    const db = withOneEntry();
+    setSetting(db, 'proCached', false);
+    setSetting(db, 'proDebugUnlock', false);
+
+    await expect(exportFoodCsv(db, NOW)).resolves.toBe('shared');
+  });
+
+  it('passes a failure to share to the caller', async () => {
+    jest.mocked(Sharing.shareAsync).mockRejectedValueOnce(new Error('share sheet failed'));
+
+    await expect(exportFoodCsv(withOneEntry(), NOW)).rejects.toThrow('share sheet failed');
   });
 });

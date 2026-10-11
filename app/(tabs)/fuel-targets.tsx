@@ -65,7 +65,8 @@ export default function FuelTargets() {
 
   return (
     <Screen>
-      <BackLink label="Fuel" onPress={leave} />
+      {/* Opened from Fuel or from Settings (a hidden tab keeps no reliable "from"), so it names neither. */}
+      <BackLink label="Back" accessibilityLabel="Back" onPress={leave} />
       <Display>Targets</Display>
       {isPro ? (
         <>

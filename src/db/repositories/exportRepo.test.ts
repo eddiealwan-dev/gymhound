@@ -1,12 +1,14 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
-import { WORKOUT_CSV_COLUMNS } from '../../domain/csv';
+import { FOOD_CSV_COLUMNS, WORKOUT_CSV_COLUMNS } from '../../domain/csv';
 import { toLocalDate } from '../../domain/dates';
 import { sets, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setExerciseNote } from './exercisesRepo';
-import { workoutCsvRows } from './exportRepo';
+import { foodCsvRows, workoutCsvRows } from './exportRepo';
+import { logFood, logQuickAdd } from './foodLogRepo';
+import { getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, addWarmupSet, setExerciseMark } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
@@ -202,5 +204,70 @@ describe('workoutCsvRows', () => {
     expect(startedAt.startsWith(toLocalDate(OCT_1))).toBe(true);
     expect(startedAt.endsWith(`${sign}${hhmm}`)).toBe(true);
     expect(new Date(startedAt).getTime()).toBe(OCT_1);
+  });
+});
+
+describe('foodCsvRows (§11, R153)', () => {
+  const EGG = 'fdc-171287';
+  const fcol = (name: (typeof FOOD_CSV_COLUMNS)[number]) => FOOD_CSV_COLUMNS.indexOf(name);
+  /** Local times on the device, so each entry's date is the day it is logged for. */
+  const at = (day: number, hour: number) => new Date(2026, 9, day, hour, 0).getTime();
+
+  it('is empty with no food logged', () => {
+    expect(foodCsvRows(seededDb())).toEqual([]);
+  });
+
+  it('writes one row per entry, by date then the time logged, whatever order they went in', () => {
+    const db = seededDb();
+    logQuickAdd(db, 'Late snack', { kcal: 200, proteinG: 10, carbsG: 20, fatG: 5 }, '2026-10-10', at(10, 21));
+    logFood(db, EGG, 2, '2026-10-10', at(10, 8));
+    // Logged later, for the day before (R148): it still sorts under its own date.
+    logQuickAdd(db, 'Yesterday lunch', { kcal: 600, proteinG: 40, carbsG: 50, fatG: 20 }, '2026-10-09', at(10, 22));
+
+    const rows = foodCsvRows(db);
+
+    expect(rows.map((r) => [r[fcol('date')], r[fcol('name')]])).toEqual([
+      ['2026-10-09', 'Yesterday lunch'],
+      ['2026-10-10', expect.stringMatching(/egg/i)],
+      ['2026-10-10', 'Late snack'],
+    ]);
+    expect(rows.every((r) => r.length === FOOD_CSV_COLUMNS.length)).toBe(true);
+  });
+
+  it("writes the servings and the entry's own totals, and the time logged at the offset given", () => {
+    const db = seededDb();
+    logQuickAdd(db, 'Shake', { kcal: 120.456, proteinG: 24.333, carbsG: 3, fatG: 1.5 }, '2026-10-10', Date.UTC(2026, 9, 10, 13, 0));
+
+    const [row] = foodCsvRows(db, () => -300);
+
+    expect(row).toEqual(['2026-10-10', '2026-10-10T08:00:00.000-05:00', 'Shake', 1, 120.46, 24.33, 3, 1.5]);
+  });
+
+  it('defaults to the device offset at each time', () => {
+    const db = seededDb();
+    const loggedAt = at(10, 8);
+    logFood(db, EGG, 1, '2026-10-10', loggedAt);
+
+    const value = foodCsvRows(db)[0][fcol('logged_at')] as string;
+
+    expect(new Date(value).getTime()).toBe(loggedAt);
+    expect(value.startsWith('2026-10-10T08:00:00.000')).toBe(true);
+  });
+
+  it('neutralises a name that reads as a formula', () => {
+    const db = seededDb();
+    logQuickAdd(db, '=SUM(A1:A9)', { kcal: 1, proteinG: 0, carbsG: 0, fatG: 0 }, '2026-10-10', at(10, 8));
+
+    expect(foodCsvRows(db)[0][fcol('name')]).toBe("'=SUM(A1:A9)");
+  });
+
+  it('exports entries whatever Pro is: a lapsed user keeps the food CSV (§9)', () => {
+    const db = seededDb();
+    logFood(db, EGG, 1, '2026-10-10', at(10, 8));
+    setSetting(db, 'proCached', false);
+    setSetting(db, 'proDebugUnlock', false);
+
+    expect(getSettings(db).proCached).toBe(false);
+    expect(foodCsvRows(db)).toHaveLength(1);
   });
 });

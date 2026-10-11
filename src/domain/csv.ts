@@ -154,3 +154,44 @@ export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (e
     ];
   });
 }
+
+/**
+ * The columns of `gymhound-food-YYYY-MM-DD.csv`, in order (spec §11). The serving label the entry copied (R158) is not
+ * one: the spec's columns are the whole file, and `name` with `servings` already says what was eaten.
+ */
+export const FOOD_CSV_COLUMNS = ['date', 'logged_at', 'name', 'servings', 'kcal', 'protein_g', 'carbs_g', 'fat_g'] as const;
+
+/** One food log entry, with what the food CSV needs: its day, when it was logged, its copied name and its own totals. */
+export type FoodCsvEntry = {
+  localDate: string;
+  loggedAt: number;
+  name: string;
+  servings: number;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+};
+
+/** A number to 2 decimals, never -0: the food CSV keeps the unrounded totals as far as a spreadsheet needs (R156). */
+function twoDecimals(n: number): number {
+  return Math.round((n + Math.sign(n) * Number.EPSILON) * 100) / 100 || 0;
+}
+
+/**
+ * The food CSV rows, one per entry in the order given (by date, then the time logged), with one value per
+ * `FOOD_CSV_COLUMNS` entry. `date` is the day the entry is logged for (R148); `logged_at` is written at the offset
+ * `offsetAt` gives for that instant. The name goes through `neutraliseFormula`; servings and totals keep 2 decimals.
+ */
+export function buildFoodCsvRows(entries: readonly FoodCsvEntry[], offsetAt: (epochMs: number) => number): CsvValue[][] {
+  return entries.map((e) => [
+    e.localDate,
+    isoWithOffset(e.loggedAt, offsetAt(e.loggedAt)),
+    neutraliseFormula(e.name),
+    twoDecimals(e.servings),
+    twoDecimals(e.kcal),
+    twoDecimals(e.proteinG),
+    twoDecimals(e.carbsG),
+    twoDecimals(e.fatG),
+  ]);
+}
