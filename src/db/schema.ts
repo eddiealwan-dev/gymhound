@@ -6,8 +6,11 @@ import type {
   Equipment,
   ExerciseMark,
   LoggingType,
+  MeasurementKind,
+  MeasurementUnit,
   Muscle,
   Pattern,
+  SavedSet,
   SetType,
   WeightUnit,
 } from '../domain/types';
@@ -115,6 +118,9 @@ export const workouts = sqliteTable(
     // Deliberately not a foreign key: the set may be removed while its rest runs.
     restSetId: text('rest_set_id'),
     foodOfferShown: integer('food_offer_shown', { mode: 'boolean' }).notNull().default(false),
+    // The saved workout this one was started from (R119), or null. Deliberately not a foreign key: history must
+    // survive the saved workout being deleted. Added in 0006.
+    savedWorkoutId: text('saved_workout_id'),
   },
   (t) => [
     index('workouts_status_idx').on(t.status),
@@ -204,6 +210,57 @@ export const bodyweight = sqliteTable(
     unit: text('unit').$type<WeightUnit>().notNull(),
   },
   (t) => [index('bodyweight_local_date_idx').on(t.localDate)],
+);
+
+// Body measurements other than bodyweight (R112, R113). Each entry keeps the unit it was logged in. Added in 0006.
+export const measurements = sqliteTable(
+  'measurements',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind').$type<MeasurementKind>().notNull(),
+    localDate: text('local_date').notNull(),
+    measuredAt: integer('measured_at').notNull(),
+    value: real('value').notNull(),
+    unit: text('unit').$type<MeasurementUnit>().notNull(),
+  },
+  (t) => [index('measurements_kind_date_idx').on(t.kind, t.localDate)],
+);
+
+// Your own start and end photos for an exercise with none bundled (R111). File NAMES in the documents folder's
+// `exercise-photos/`, never URIs: iOS moves the app's folder on update. Added in 0006.
+export const exercisePhotos = sqliteTable('exercise_photos', {
+  exerciseId: text('exercise_id')
+    .primaryKey()
+    .references(() => exercises.id),
+  startFile: text('start_file'),
+  endFile: text('end_file'),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// A workout kept to start again (R118). Free and unlimited; never counted as a routine. Added in 0006.
+export const savedWorkouts = sqliteTable('saved_workouts', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const savedWorkoutExercises = sqliteTable(
+  'saved_workout_exercises',
+  {
+    id: text('id').primaryKey(),
+    savedWorkoutId: text('saved_workout_id')
+      .notNull()
+      .references(() => savedWorkouts.id, { onDelete: 'cascade' }),
+    exerciseId: text('exercise_id')
+      .notNull()
+      .references(() => exercises.id),
+    position: integer('position').notNull(),
+    supersetGroup: integer('superset_group'),
+    // The remembered sets, in set order (R118, R120).
+    sets: text('sets', { mode: 'json' }).$type<SavedSet[]>().notNull().default(sql`'[]'`),
+  },
+  (t) => [index('saved_workout_exercises_saved_workout_id_idx').on(t.savedWorkoutId)],
 );
 
 export const foods = sqliteTable('foods', {

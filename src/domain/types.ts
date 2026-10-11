@@ -54,6 +54,23 @@ export type Muscle =
   | 'calves';
 
 export type SetType = 'working' | 'warmup' | 'drop' | 'failure';
+
+/** Body measurements other than bodyweight (phase 4, R113: arms and thighs are one value each). */
+export type MeasurementKind = 'waist' | 'chest' | 'hips' | 'arms' | 'thighs' | 'neck' | 'body_fat';
+/** Lengths follow the weight unit: lb → in, kg → cm (R112). */
+export type LengthUnit = 'in' | 'cm';
+export type MeasurementUnit = LengthUnit | '%';
+
+/** One remembered set of a saved workout's exercise (R118), in the unit it was logged in. */
+export type SavedSet = {
+  setType: SetType;
+  weight: number | null;
+  weightUnit: WeightUnit | null;
+  reps: number | null;
+  durationS: number | null;
+  distance: number | null;
+  distanceUnit: DistanceUnit | null;
+};
 /** Something off (spec 18.7, R60): why an exercise is flagged today. Stored per workout exercise; null is nothing off. */
 export type ExerciseMark = 'rough_sleep' | 'sick' | 'short_on_food' | 'pain' | 'cutting';
 export type DayMark = 'normal' | ExerciseMark;

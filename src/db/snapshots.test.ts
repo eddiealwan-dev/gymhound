@@ -479,7 +479,7 @@ describe('startDatabase', () => {
     expect(finishedIds(result.db)).toEqual(ids);
   });
 
-  it('restores a snapshot taken before migrations 0002 to 0005, and migrates it forward with the finished workout intact (F11)', async () => {
+  it('restores a snapshot taken before migrations 0002 to 0006, and migrates it forward with the finished workout intact (F11)', async () => {
     const { deps, files } = makeDeps();
     const old = livePre0002();
     expect(appliedMigrations(old.db)).toBe(2);
@@ -493,8 +493,9 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(6);
+    expect(appliedMigrations(result.db)).toBe(7);
     expect(tableNames(result.db)).toContain('exercise_prefs');
+    expect(tableNames(result.db)).toEqual(expect.arrayContaining(['measurements', 'exercise_photos', 'saved_workouts', 'saved_workout_exercises']));
     expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
     expect(columnNames(result.db, 'workout_exercises')).toContain('mark');
     expect(result.db.select().from(schema.exercises).where(eq(schema.exercises.id, 'barbell-bench-press')).get()).toMatchObject({
@@ -510,6 +511,7 @@ describe('startDatabase', () => {
       startedAt: NOW,
       finishedAt: NOW + HOUR,
       restSetId: null,
+      savedWorkoutId: null,
     });
     // The current code reads it: bench's last result is the set logged before the migrations.
     expect(getPreviousSets(result.db, 'barbell-bench-press', 'none')).toEqual([

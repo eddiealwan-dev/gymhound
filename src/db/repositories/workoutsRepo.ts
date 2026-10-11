@@ -18,7 +18,9 @@ import {
   workouts,
 } from '../schema';
 import type { Db } from '../types';
+import { writePrFlags } from './prRepo';
 import { ruleOf } from './ruleSnapshot';
+import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
 
 /** Raised when a workout is started while another one is still active. */
@@ -51,7 +53,8 @@ export function getActiveRest(db: Db): { workoutId: string; restEndsAt: number |
   return row ? { workoutId: row.id, restEndsAt: row.restEndsAt } : null;
 }
 
-function assertNoActiveWorkout(db: Db): void {
+/** Throws `ActiveWorkoutExistsError` if a workout is active. Every way of starting a workout calls it first. */
+export function assertNoActiveWorkout(db: Db): void {
   if (getActiveWorkoutId(db) !== null) throw new ActiveWorkoutExistsError();
 }
 
@@ -248,7 +251,8 @@ function writeOutcomes(db: Db, workoutId: string): void {
  * Finishes a workout in one transaction: unticked sets are dropped, then exercises left with no sets, then each
  * remaining exercise keeps a copy of its current note (null when it has none) so later note edits never touch
  * history, and runs the rule (`writeOutcomes`), which writes next time's weight back to the routine. The workout is
- * marked finished with its rest timer cleared, and the routine's rotation moves to the day after this one. Throws
+ * marked finished with its rest timer cleared, its PR flags are written (`writePrFlags`), the saved workout it was
+ * started from remembers today's sets (`rememberSavedWorkout`), and the routine's rotation moves to the day after this one. Throws
  * `NothingTickedError`, changing nothing, if no set is ticked.
  */
 export function finishWorkout(db: Db, workoutId: string, now: number): void {
@@ -295,6 +299,10 @@ export function finishWorkout(db: Db, workoutId: string, now: number): void {
       .set({ status: 'finished', finishedAt: now, restEndsAt: null, restSetId: null })
       .where(eq(workouts.id, workoutId))
       .run();
+
+    // Phase 4 (R102, R123): after the status update, since PR eligibility reads finished workouts (R103).
+    writePrFlags(tx, workoutId);
+    rememberSavedWorkout(tx, workoutId);
 
     // The routine or day may have been deleted since the workout started; then there is no rotation to move.
     const next = workout.routineDayId === null ? null : dayAfter(tx, workout.routineDayId);
