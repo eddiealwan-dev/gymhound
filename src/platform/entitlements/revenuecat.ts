@@ -79,6 +79,16 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
     attempt(() => sdk.getCustomerInfo()).then(apply, () => {});
   };
 
+  /** Asks for the `default` offering's package; a failure keeps the last one. */
+  const loadPackage = () => {
+    packageLoad = attempt(() => sdk.getDefaultPackage()).then(
+      (found) => {
+        if (!disposed) changing(() => (pkg = found ?? null));
+      },
+      () => {},
+    );
+  };
+
   try {
     sdk.configure(apiKey);
     configured = true;
@@ -88,12 +98,7 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
 
   if (configured) {
     refresh();
-    packageLoad = attempt(() => sdk.getDefaultPackage()).then(
-      (found) => {
-        if (!disposed) changing(() => (pkg = found ?? null));
-      },
-      () => {},
-    );
+    loadPackage();
     try {
       cleanups.push(
         sdk.onCustomerInfo((info) => {
@@ -104,7 +109,10 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
       // The store's updates are a nicety; the foreground refresh still runs.
     }
     const foreground = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && !disposed) refresh();
+      if (state === 'active' && !disposed) {
+        refresh();
+        loadPackage();
+      }
     });
     cleanups.push(() => foreground.remove());
   }
@@ -115,6 +123,19 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
     isDebugPro,
     subscribe: listeners.subscribe,
     canPurchase,
+    canRestore: () => configured,
+    refreshOffer() {
+      if (configured && !disposed) loadPackage();
+    },
+    async manageSubscription() {
+      if (!configured) return false;
+      try {
+        await attempt(() => sdk.showManageSubscriptions());
+        return true;
+      } catch {
+        return false;
+      }
+    },
     offer,
     async purchase() {
       if (!configured) return 'unavailable';
@@ -128,8 +149,9 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
         const info = await attempt(() => sdk.purchase(id));
         return apply(info) ? 'purchased' : 'failed';
       } catch (error) {
-        const cancelled = typeof error === 'object' && error !== null && (error as { userCancelled?: unknown }).userCancelled === true;
-        return cancelled ? 'cancelled' : 'failed';
+        const flags = typeof error === 'object' && error !== null ? (error as { userCancelled?: unknown; paymentPending?: unknown }) : {};
+        if (flags.userCancelled === true) return 'cancelled';
+        return flags.paymentPending === true ? 'pending' : 'failed';
       }
     },
     async restore() {

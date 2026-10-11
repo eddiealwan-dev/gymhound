@@ -27,6 +27,7 @@ function fakeSdk(overrides: Partial<PurchasesSdk> = {}) {
     getDefaultPackage: jest.fn<ReturnType<PurchasesSdk['getDefaultPackage']>, []>(async () => MONTHLY),
     purchase: jest.fn<Promise<Info>, [string]>(async () => PRO),
     restore: jest.fn<Promise<Info>, []>(async () => PRO),
+    showManageSubscriptions: jest.fn<Promise<void>, []>(async () => {}),
     ...overrides,
   };
   return { sdk, push: (info: Info) => listener?.(info) };
@@ -138,6 +139,63 @@ describe('RevenueCat entitlements (R135)', () => {
     expect(sdk.getCustomerInfo).not.toHaveBeenCalled();
     await expect(entitlements.purchase()).resolves.toBe('unavailable');
     await expect(entitlements.restore()).resolves.toBe('unavailable');
+    expect(entitlements.canRestore()).toBe(false);
+    entitlements.refreshOffer();
+    expect(sdk.getDefaultPackage).not.toHaveBeenCalled();
+    await expect(entitlements.manageSubscription()).resolves.toBe(false);
+    expect(sdk.showManageSubscriptions).not.toHaveBeenCalled();
+  });
+
+  it('can restore once the store is configured, even with nothing to buy', async () => {
+    const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => null) });
+    const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+    await settle();
+    expect(entitlements.canPurchase()).toBe(false);
+    expect(entitlements.canRestore()).toBe(true);
+  });
+
+  it('loads the offering again when the app comes back to the foreground, so a store that was slow can sell', async () => {
+    const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => Promise.reject(new Error('offline'))) });
+    const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+    await settle();
+    expect(entitlements.canPurchase()).toBe(false);
+    const seen: boolean[] = [];
+    entitlements.subscribe(() => seen.push(entitlements.canPurchase()));
+
+    (sdk.getDefaultPackage as jest.Mock).mockResolvedValueOnce(MONTHLY);
+    appStateHandler?.('active');
+    expect(sdk.getDefaultPackage).toHaveBeenCalledTimes(2);
+    await settle();
+    expect(entitlements.canPurchase()).toBe(true);
+    expect(seen).toEqual([true]);
+  });
+
+  it('refreshOffer() loads the offering again and keeps the last one when the store fails', async () => {
+    const { sdk } = fakeSdk();
+    const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+    await settle();
+    (sdk.getDefaultPackage as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    entitlements.refreshOffer();
+    expect(sdk.getDefaultPackage).toHaveBeenCalledTimes(2);
+    await settle();
+    expect(entitlements.canPurchase()).toBe(true);
+    (sdk.getDefaultPackage as jest.Mock).mockResolvedValueOnce({ ...MONTHLY, priceString: '$5.99' });
+    entitlements.refreshOffer();
+    await settle();
+    expect(entitlements.offer()?.priceString).toBe('$5.99');
+  });
+
+  it('manageSubscription() opens the store page; a failure resolves false and never throws', async () => {
+    const { sdk } = fakeSdk();
+    const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+    await expect(entitlements.manageSubscription()).resolves.toBe(true);
+    expect(sdk.showManageSubscriptions).toHaveBeenCalledTimes(1);
+    (sdk.showManageSubscriptions as jest.Mock).mockRejectedValueOnce(new Error('unsupported'));
+    await expect(entitlements.manageSubscription()).resolves.toBe(false);
+    (sdk.showManageSubscriptions as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('sync');
+    });
+    await expect(entitlements.manageSubscription()).resolves.toBe(false);
   });
 
   it('refreshes customer info when the app comes back to the foreground', async () => {
@@ -232,6 +290,13 @@ describe('RevenueCat entitlements (R135)', () => {
     it('cancelled by the user → cancelled', async () => {
       const { sdk } = fakeSdk({ purchase: jest.fn(async () => Promise.reject({ userCancelled: true })) });
       await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase()).resolves.toBe('cancelled');
+    });
+
+    it('waiting for approval (Ask to Buy, a pending payment) → pending, Pro unchanged', async () => {
+      const { sdk } = fakeSdk({ purchase: jest.fn(async () => Promise.reject({ paymentPending: true })) });
+      const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+      await expect(entitlements.purchase()).resolves.toBe('pending');
+      expect(entitlements.isPro()).toBe(false);
     });
 
     it('any other error → failed, Pro unchanged', async () => {

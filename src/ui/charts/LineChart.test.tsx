@@ -123,11 +123,8 @@ describe('LineChart', () => {
   });
 
   it('pads the plot by half a label line, scaled with the text size, so the top and bottom labels stay inside', () => {
-    const labelColumn = (tree: ReactTestRenderer) =>
-      tree.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.justifyContent === 'space-between' && StyleSheet.flatten(n.props.style)?.alignItems === 'flex-end')[0];
     const tree = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
     layOut(tree);
-    expect(StyleSheet.flatten(labelColumn(tree).props.style)).toMatchObject({ paddingTop: 8, paddingBottom: 8 });
     const lines = tree.root.findAllByType(Line).map((l) => l.props.y1);
     expect(Math.min(...lines)).toBe(8);
     expect(Math.max(...lines)).toBe(172);
@@ -135,10 +132,38 @@ describe('LineChart', () => {
     mockFontScale = 2;
     const big = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
     layOut(big);
-    expect(StyleSheet.flatten(labelColumn(big).props.style)).toMatchObject({ paddingTop: 16, paddingBottom: 16 });
     const bigLines = big.root.findAllByType(Line).map((l) => l.props.y1);
     expect(Math.min(...bigLines)).toBe(16);
     expect(Math.max(...bigLines)).toBe(164);
+  });
+
+  // On the web a label in a zero-height box with overflow hidden (numberOfLines) shrank to nothing, so each label is a
+  // line tall itself, laid out down the column so its middle sits on its tick.
+  it.each([1, 2])('gives each y label a real line height, centred on its tick, at text size %s', (scale) => {
+    mockFontScale = scale;
+    const tree = render(<LineChart points={pts} formatValue={(v) => `${v} lb`} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    layOut(tree);
+    const lineHeight = 16 * scale;
+    const tickYs = tree.root.findAllByType(Line).map((l) => l.props.y1 as number).sort((a, b) => a - b);
+    const column = tree.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.maxWidth === '30%')[0];
+    const columnStyle = StyleSheet.flatten(column.props.style);
+    expect(columnStyle.height).toBe(180);
+    expect(columnStyle.paddingTop ?? 0).toBe(0);
+    const labels = column.findAllByType(Text);
+    expect(labels.map((l) => l.props.children)).toEqual(['186 lb', '184 lb', '182 lb', '180 lb', '178 lb']);
+    // Nothing between the column and a label is zero tall.
+    column.findAll((n) => typeof n.type === 'string').forEach((n) => expect(StyleSheet.flatten(n.props.style)?.height).not.toBe(0));
+    let y = 0;
+    const middles: number[] = [];
+    for (const label of labels) {
+      const style = StyleSheet.flatten(label.props.style);
+      expect(style.height).toBe(lineHeight);
+      y += (style.marginTop as number | undefined) ?? 0;
+      middles.push(y + lineHeight / 2);
+      y += lineHeight;
+    }
+    expect(middles).toHaveLength(tickYs.length);
+    middles.forEach((m, i) => expect(m).toBeCloseTo(tickYs[i], 6));
   });
 
   it('caps the y label column at 30% of the width and shrinks a label to fit on one line', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { hasDoneSets, savedWorkoutOf, saveWorkoutAs } from '../../db/repositories/savedWorkoutsRepo';
@@ -13,7 +13,7 @@ import { Body } from '../Text';
  * The finish summary's **Save as a workout**, or the line saying the saved workout it came from remembers today's sets
  * (R118, R120). Sits just above Done, 16pt over it. The button opens a sheet with the workout's name to keep or
  * change; once saved it becomes the muted line "Saved as {name}.". With nothing done there is nothing to save, so no
- * button. The lines are said to the screen reader as they appear.
+ * button. "Saved as {name}." is said to the screen reader as it appears.
  */
 export function SaveAsWorkout({ workoutId, workoutName }: { workoutId: string; workoutName: string }): ReactElement | null {
   const db = useDb();
@@ -23,10 +23,9 @@ export function SaveAsWorkout({ workoutId, workoutName }: { workoutId: string; w
   const [open, setOpen] = useState(false);
   const [savedAs, setSavedAs] = useState<string | null>(null);
 
+  // Not announced: it is there as the screen opens, and an announcement then talks over the screen's header. VoiceOver
+  // reaches it in order.
   const remembers = from !== null ? `${from.name} remembers today's sets.` : null;
-  useEffect(() => {
-    if (remembers !== null) announce(remembers);
-  }, [remembers]);
 
   const save = (name: string): string | null => {
     const problem = validateSavedName(name);

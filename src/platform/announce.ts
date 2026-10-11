@@ -24,3 +24,18 @@ export function announce(text: string): void {
   if (Platform.OS === 'ios') setTimeout(() => tell(text), IOS_DELAY_MS);
   else tell(text);
 }
+
+/**
+ * Moves VoiceOver or TalkBack to `node` (a sheet's new title, say). React Native Web has no sendAccessibilityEvent, so
+ * calling it there threw and blanked the app; on the web this does nothing, and a missing or failing call never fails
+ * the action.
+ */
+export function focusOn(node: Parameters<typeof AccessibilityInfo.sendAccessibilityEvent>[0] | null | undefined): void {
+  if (Platform.OS === 'web' || !node) return;
+  if (typeof AccessibilityInfo.sendAccessibilityEvent !== 'function') return;
+  try {
+    AccessibilityInfo.sendAccessibilityEvent(node, 'focus');
+  } catch {
+    // no screen reader to move
+  }
+}

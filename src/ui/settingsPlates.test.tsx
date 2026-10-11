@@ -91,6 +91,26 @@ describe('Settings: Plates (Task 5, R107)', () => {
   });
 });
 
+describe('Settings: the segmented choices to VoiceOver', () => {
+  it('are radios in a labelled group, each saying whether it is checked', () => {
+    const tree = mount();
+    const group = (label: string) => tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radiogroup' && n.props.accessibilityLabel === label)[0];
+    const radios = (label: string) =>
+      group(label)
+        .findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radio')
+        .map((n) => [n.findAllByType(Text)[0].props.children, n.props.accessibilityState]);
+    expect(radios('Appearance')).toEqual([
+      ['Light', { checked: false }],
+      ['Dark', { checked: false }],
+      ['System', { checked: true }],
+    ]);
+    expect(radios('Weight')).toEqual([
+      ['lb', { checked: true }],
+      ['kg', { checked: false }],
+    ]);
+  });
+});
+
 describe('Settings: the default increment (spec 8.11, R124)', () => {
   it('offers 2.5, 5 and 10 lb for a lb lifter, with the stored 5 lb selected', () => {
     const tree = mount();

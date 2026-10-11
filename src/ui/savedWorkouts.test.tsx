@@ -40,6 +40,8 @@ jest.mock('../db/repositories/savedWorkoutsRepo', () => ({
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => false }) }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
+const mockAnnounce = jest.fn();
+jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -315,6 +317,25 @@ describe('a saved workout: review round 1', () => {
     expect(shown).toContain('Push A');
     act(() => void jest.advanceTimersByTime(400));
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it("Delete with an unexpected error says Couldn't delete. Try again. in a muted line, tells the screen reader and stays", () => {
+    jest.mocked(deleteSavedWorkout).mockImplementation(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    const tree = mount(<SavedWorkoutScreen />);
+    press(tree, 'Delete');
+    press(tree, 'Delete', 1);
+    act(() => void jest.advanceTimersByTime(400));
+
+    expect(shownText(tree)).not.toContain('Delete Push A?');
+    const line = tree.root.findAll((n) => n.type === Text && n.props.children === "Couldn't delete. Try again.");
+    expect(line).toHaveLength(1);
+    expect(StyleSheet.flatten(line[0].props.style)).toMatchObject({ color: '#a39d90' });
+    expect(mockAnnounce).toHaveBeenCalledWith("Couldn't delete. Try again.");
+    expect(bumpData).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain('Push A');
   });
 
   it('Rename with an unexpected error says "Couldn\'t save. Try again."', () => {
