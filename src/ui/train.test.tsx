@@ -5,6 +5,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import Train from '../../app/(tabs)/index';
 import type { UpNext, UpNextExercise } from '../db/repositories/routinesRepo';
 import { ActiveWorkoutExistsError } from '../db/repositories/workoutsRepo';
+import type { Gear } from '../domain/plates';
 import { startEmpty, startFromDay } from '../state/sessionActions';
 import { Button } from './Button';
 import { Body } from './Text';
@@ -15,6 +16,7 @@ const NOW = new Date(2026, 9, 10, 9, 0).getTime();
 
 type Read = {
   unit: 'kg' | 'lb';
+  gear: Gear;
   active: { name: string; startedAt: number; setsDone: number } | null;
   upNext: UpNext | null;
   trainingDates: string[];
@@ -47,17 +49,34 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const exercise = (id: string, name: string, loggingType: UpNextExercise['loggingType'], setCount: number, repMin: number, repMax: number): UpNextExercise => ({
+const exercise = (
+  id: string,
+  name: string,
+  loggingType: UpNextExercise['loggingType'],
+  equipment: UpNextExercise['equipment'],
+  setCount: number,
+  repMin: number,
+  repMax: number,
+): UpNextExercise => ({
   routineExerciseId: id,
   exerciseId: id,
   name,
   loggingType,
+  equipment,
   setCount,
   repMin,
   repMax,
+  increment: 5,
+  incrementUnit: 'lb',
   nextWeight: null,
   nextWeightUnit: null,
+  lastOutcome: null,
+  lastMark: null,
 });
+
+/** The default bars and plate pairs in Settings. */
+const LB_GEAR: Gear = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } };
+const KG_GEAR: Gear = { bar: 20, plates: { '25': 4, '20': 1, '15': 1, '10': 1, '5': 1, '2.5': 1, '1.25': 1 } };
 
 /** The Upper/lower routine's Upper A day, never done, with no weights yet. */
 const upperA = (): UpNext => ({
@@ -67,11 +86,26 @@ const upperA = (): UpNext => ({
   dayName: 'Upper A',
   lastTime: null,
   exercises: [
-    exercise('re-bench', 'Barbell bench press', 'weighted', 4, 5, 8),
-    exercise('re-row', 'Barbell row', 'weighted', 4, 6, 10),
-    exercise('re-plank', 'Plank', 'timed', 3, 30, 60),
+    exercise('re-bench', 'Barbell bench press', 'weighted', 'barbell', 4, 5, 8),
+    exercise('re-row', 'Barbell row', 'weighted', 'barbell', 4, 6, 10),
+    exercise('re-plank', 'Plank', 'timed', 'bodyweight', 3, 30, 60),
   ],
 });
+
+/** Upper A run once, on WED 7 OCT: the bench was raised to 140 lb, the row held at 135 lb on a flagged Rough sleep. */
+const upperARun = (): UpNext => {
+  const upNext = upperA();
+  const [bench, row, plank] = upNext.exercises;
+  return {
+    ...upNext,
+    lastTime: { localDate: '2026-10-07' },
+    exercises: [
+      { ...bench, nextWeight: 140, nextWeightUnit: 'lb', lastOutcome: 'raised' },
+      { ...row, nextWeight: 135, nextWeightUnit: 'lb', lastOutcome: 'held_marked', lastMark: 'rough_sleep' },
+      { ...plank, lastOutcome: 'no_rule' },
+    ],
+  };
+};
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -110,7 +144,7 @@ const filled = (tree: ReactTestRenderer) =>
     .map((b) => b.props.label);
 
 beforeEach(() => {
-  mockRead = { unit: 'kg', active: null, upNext: upperA(), trainingDates: [], weekVolume: 0 };
+  mockRead = { unit: 'kg', gear: KG_GEAR, active: null, upNext: upperA(), trainingDates: [], weekVolume: 0 };
   jest.mocked(router.push).mockClear();
   jest.mocked(startEmpty).mockReset();
   jest.mocked(startFromDay).mockReset();
@@ -170,6 +204,27 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(all).toContain('4×6–10 · —');
     expect(all).toContain('3×30–60s');
     expect(all).toContain('First time on this day.');
+  });
+
+  it("each row ends with last time's outcome, and the line under the title has no mark (spec 18.7, R69)", () => {
+    mockRead = { ...mockRead, unit: 'lb', gear: LB_GEAR, upNext: upperARun() };
+    const all = lines(mount());
+
+    expect(all).toContain('Last time: WED 7 OCT');
+    expect(all).toContain('4×5–8 · 140 lb · ↑ 5 lb');
+    expect(all).toContain('4×6–10 · 135 lb · held · Rough sleep');
+    // A plank has no rule: nothing to say about last time.
+    expect(all).toContain('3×30–60s');
+  });
+
+  it('a kg user sees the loads and the raise in kg: a 135 lb barbell plan reads 60 kg (R63)', () => {
+    const upNext = upperARun();
+    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 135 };
+    mockRead = { ...mockRead, unit: 'kg', gear: KG_GEAR, upNext };
+    const all = lines(mount());
+
+    expect(all).toContain('4×5–8 · 60 kg · ↑ 2.5 kg');
+    expect(all).toContain('4×6–10 · 60 kg · held · Rough sleep');
   });
 
   it('Start empty workout is outlined and after the stat cards', () => {

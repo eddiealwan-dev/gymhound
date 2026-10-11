@@ -1,14 +1,43 @@
 /** @jest-environment node */
-import { eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
+import type { ExerciseMark } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/seed';
-import { routineDays, routineExercises, routines, workouts } from '../schema';
+import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getSettings } from './settingsRepo';
 import { getUpNext, listRoutines, setActiveRoutine } from './routinesRepo';
+import { setExerciseMark } from './workoutEditRepo';
+import { finishWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 
 const PPL = 'premade-ppl-6';
 const PUSH_A = 'premade-ppl-6:push-a';
+const NOW = new Date(2026, 9, 9, 9, 0).getTime();
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** The workout_exercises row of the bench press in a workout. */
+function benchIn(db: Db, workoutId: string) {
+  return db
+    .select()
+    .from(workoutExercises)
+    .where(and(eq(workoutExercises.workoutId, workoutId), eq(workoutExercises.exerciseId, 'barbell-bench-press')))
+    .get()!;
+}
+
+/**
+ * Runs Push A: ticks every bench set at `weight` lb x `reps`, flags the bench with `mark` when given, and finishes,
+ * leaving every other exercise unticked. Then winds the rotation back so Push A is up next again.
+ */
+function finishBench(db: Db, at: number, weight: number, reps: number, mark: ExerciseMark | null = null): void {
+  const id = startWorkoutFromDay(db, PUSH_A, at);
+  const bench = benchIn(db, id);
+  const benchSets = db.select({ id: sets.id }).from(sets).where(eq(sets.workoutExerciseId, bench.id)).orderBy(asc(sets.position)).all();
+  benchSets.forEach((s, i) => tickSet(db, s.id, { weight, reps, durationS: null, distance: null }, 'lb', at + (i + 1) * 60_000, 'mi'));
+  if (mark !== null) setExerciseMark(db, bench.id, mark);
+  finishWorkout(db, id, at + HOUR);
+  db.update(routines).set({ nextDayIndex: 0 }).where(eq(routines.id, PPL)).run();
+}
 
 function insertFinishedWorkout(
   db: Db,
@@ -109,11 +138,16 @@ describe('getUpNext', () => {
       exerciseId: 'barbell-bench-press',
       name: 'Barbell bench press',
       loggingType: 'weighted',
+      equipment: 'barbell',
       setCount: 4,
       repMin: 5,
       repMax: 8,
+      increment: 5,
+      incrementUnit: 'lb',
       nextWeight: null,
       nextWeightUnit: null,
+      lastOutcome: null,
+      lastMark: null,
     });
   });
 
@@ -154,7 +188,7 @@ describe('getUpNext', () => {
     expect([u.dayName, u.dayId]).toEqual(['Pull A', 'premade-ppl-6:pull-a']);
   });
 
-  it('reports the last finished workout of the day', () => {
+  it('reports the date of the last finished workout of the day, and no longer reads its day mark (R69)', () => {
     const db = seededDb();
     setActiveRoutine(db, PPL);
     insertFinishedWorkout(db, {
@@ -164,7 +198,7 @@ describe('getUpNext', () => {
       localDate: '2026-10-07',
       dayMark: 'rough_sleep',
     });
-    expect(getUpNext(db)!.lastTime).toEqual({ localDate: '2026-10-07', dayMark: 'rough_sleep' });
+    expect(getUpNext(db)!.lastTime).toEqual({ localDate: '2026-10-07' });
   });
 
   it('uses the latest finished_at, and ignores other days and unfinished workouts', () => {
@@ -192,6 +226,36 @@ describe('getUpNext', () => {
         localDate: '2026-10-09',
       })
       .run();
-    expect(getUpNext(db)!.lastTime).toEqual({ localDate: '2026-10-05', dayMark: 'rough_sleep' });
+    expect(getUpNext(db)!.lastTime).toEqual({ localDate: '2026-10-05' });
+  });
+
+  it("after a raised finish, the next Up next row has last time's outcome 'raised'", () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    finishBench(db, NOW, 135, 8);
+
+    const [bench, ohp] = getUpNext(db)!.exercises;
+    expect(bench).toMatchObject({ lastOutcome: 'raised', lastMark: null, nextWeight: 140, nextWeightUnit: 'lb' });
+    // The overhead press had nothing ticked, so finish dropped it: no history yet.
+    expect(ohp).toMatchObject({ exerciseId: 'barbell-overhead-press', lastOutcome: null, lastMark: null });
+  });
+
+  it("a flagged hold carries its reason, and the latest finish is last time's", () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    finishBench(db, NOW, 135, 8);
+    finishBench(db, NOW + DAY, 140, 8, 'rough_sleep');
+
+    expect(getUpNext(db)!.exercises[0]).toMatchObject({ lastOutcome: 'held_marked', lastMark: 'rough_sleep', nextWeight: 140 });
+  });
+
+  it('a workout of the day still in progress is not last time', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    finishBench(db, NOW, 135, 8);
+    const active = startWorkoutFromDay(db, PUSH_A, NOW + DAY);
+    setExerciseMark(db, benchIn(db, active).id, 'pain');
+
+    expect(getUpNext(db)!.exercises[0]).toMatchObject({ lastOutcome: 'raised', lastMark: null });
   });
 });
