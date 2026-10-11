@@ -82,7 +82,11 @@ export type UpNext = {
   exercises: UpNextExercise[];
 };
 
-/** The premades in `PREMADE_ORDER`, then the user's routines by creation time. */
+/**
+ * The premades in `PREMADE_ORDER`, then the retired premades still in use (by id), then the user's routines by
+ * creation time. A retired premade (§18.8) is listed only while it is the active routine or a finished workout was
+ * run from it.
+ */
 export function listRoutines(db: Db): RoutineSummary[] {
   const activeId = getSettings(db).activeRoutineId;
   const dayCounts = new Map<string, number>();
@@ -90,14 +94,27 @@ export function listRoutines(db: Db): RoutineSummary[] {
     dayCounts.set(routineId, (dayCounts.get(routineId) ?? 0) + 1);
   }
 
+  const inHistory = new Set(
+    db
+      .selectDistinct({ routineId: workouts.routineId })
+      .from(workouts)
+      .innerJoin(routines, and(eq(routines.id, workouts.routineId), eq(routines.retired, true)))
+      .where(eq(workouts.status, 'finished'))
+      .all()
+      .map((w) => w.routineId),
+  );
   const premadeRank = (id: string) => {
     const rank = PREMADE_ORDER.indexOf(id);
     return rank === -1 ? PREMADE_ORDER.length : rank;
   };
-  const rows = db.select().from(routines).all();
+  const rows = db
+    .select()
+    .from(routines)
+    .all()
+    .filter((r) => !r.retired || r.id === activeId || inHistory.has(r.id));
   rows.sort((a, b) => {
     if (a.isPremade !== b.isPremade) return a.isPremade ? -1 : 1;
-    if (a.isPremade) return premadeRank(a.id) - premadeRank(b.id);
+    if (a.isPremade) return premadeRank(a.id) - premadeRank(b.id) || a.id.localeCompare(b.id);
     return a.createdAt - b.createdAt || a.id.localeCompare(b.id);
   });
 

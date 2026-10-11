@@ -4,9 +4,10 @@ import { draftReducer, hasChanges, newDraft } from '../../domain/routineDraft';
 import type { DraftAction, LibraryExercise, RoutineDraft } from '../../domain/routineDraft';
 import { canAddRoutine } from '../../domain/routineLimit';
 import type { ExerciseMark, WeightUnit } from '../../domain/types';
-import { PREMADE_ORDER } from '../../seed/seed';
+import { PREMADE_ORDER, runSeed } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
+import { seededV1Db } from '../testing/seedV1';
 import type { Db } from '../types';
 import { getSettings, setSetting } from './settingsRepo';
 import {
@@ -81,6 +82,7 @@ describe('listRoutines', () => {
     const db = seededDb();
     const list = listRoutines(db);
     expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
+    expect(list.map((r) => r.dayCount)).toEqual([6, 4, 3, 4, 5, 3, 3, 3]);
     expect(list.every((r) => r.isPremade)).toBe(true);
     expect(list.every((r) => !r.isActive)).toBe(true);
     expect(list.find((r) => r.id === PPL)).toEqual({
@@ -105,6 +107,84 @@ describe('listRoutines', () => {
     expect(listRoutines(db).find((r) => r.id === 'user-r')).toMatchObject({ isPremade: false, dayCount: 0 });
     db.insert(routineDays).values({ id: 'user-r:d1', routineId: 'user-r', name: 'Day 1', position: 0 }).run();
     expect(listRoutines(db).find((r) => r.id === 'user-r')!.dayCount).toBe(1);
+  });
+});
+
+describe('listRoutines after an upgrade retired 5×5 and No equipment (§18.8)', () => {
+  const FIVE = 'premade-5x5-3';
+  const NO_EQUIPMENT = 'premade-noequipment-3';
+
+  /** A database seed version 1 wrote, upgraded by the current seed. */
+  const upgradedDb = () => {
+    const db = seededV1Db();
+    runSeed(db, NOW);
+    return db;
+  };
+
+  /** A workout run from `routineId`'s first day, finished or still going. */
+  const workoutFrom = (db: Db, routineId: string, status: 'active' | 'finished') => {
+    db.insert(workouts)
+      .values({
+        id: `w-${routineId}-${status}`,
+        name: 'A',
+        routineId,
+        routineDayId: `${routineId}:a`,
+        status,
+        startedAt: NOW,
+        finishedAt: status === 'finished' ? NOW + HOUR : null,
+        localDate: '2026-10-09',
+      })
+      .run();
+  };
+
+  it('lists the eight programs in the spec order, and hides the retired premades nobody uses', () => {
+    const list = listRoutines(upgradedDb());
+    expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
+    expect(list.map((r) => r.name)).toEqual([
+      'Push/pull/legs',
+      '4-day upper/lower',
+      'Beginner full body',
+      'Advanced full body',
+      'Bro split',
+      'Dumbbell full body',
+      'Calisthenics',
+      'Mobility',
+    ]);
+  });
+
+  it('keeps showing a retired premade while it is the active routine, after the eight', () => {
+    const db = upgradedDb();
+    setActiveRoutine(db, NO_EQUIPMENT);
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT]);
+    expect(listRoutines(db)[PREMADE_ORDER.length]).toEqual({
+      id: NO_EQUIPMENT,
+      name: 'No equipment',
+      isPremade: true,
+      dayCount: 3,
+      isActive: true,
+    });
+  });
+
+  it('keeps showing a retired premade a finished workout was run from, but not one only an unfinished workout uses', () => {
+    const db = upgradedDb();
+    workoutFrom(db, FIVE, 'finished');
+    workoutFrom(db, NO_EQUIPMENT, 'active');
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, FIVE]);
+  });
+
+  it('puts the retired premades it keeps after the eight, in their old order, and the routines of your own last', () => {
+    const db = upgradedDb();
+    insertUserRoutine(db, 'user-r', 1_000);
+    workoutFrom(db, NO_EQUIPMENT, 'finished');
+    setActiveRoutine(db, FIVE);
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, FIVE, NO_EQUIPMENT, 'user-r']);
+    expect(listRoutines(db).filter((r) => r.isActive).map((r) => r.id)).toEqual([FIVE]);
+  });
+
+  it('never hides a routine of your own', () => {
+    const db = upgradedDb();
+    insertUserRoutine(db, 'user-r', 1_000);
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, 'user-r']);
   });
 });
 
@@ -469,7 +549,7 @@ describe('duplicateRoutine', () => {
     expect(canAddRoutine(userRoutineCount(db), false)).toBe(false);
 
     const second = duplicateRoutine(db, first, NOW + HOUR);
-    expect(getRoutineDetail(db, second)!.name).toBe('Full body copy copy');
+    expect(getRoutineDetail(db, second)!.name).toBe('Beginner full body copy copy');
     expect(userRoutineCount(db)).toBe(2);
   });
 

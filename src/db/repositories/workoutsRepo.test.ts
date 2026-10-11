@@ -22,6 +22,7 @@ import {
 } from '../schema';
 import { createTestDb } from '../testing/createTestDb';
 import { seededDb } from '../testing/fixtures';
+import { seededV1Db } from '../testing/seedV1';
 import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
@@ -50,8 +51,10 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const PPL = 'premade-ppl-6';
 const PUSH_A = 'premade-ppl-6:push-a';
-const FIVE_A = 'premade-5x5-3:a';
-const FIVE_B = 'premade-5x5-3:b';
+const FULL_BODY = 'premade-fullbody-3';
+const FULL_A = 'premade-fullbody-3:a';
+const FULL_B = 'premade-fullbody-3:b';
+const FULL_C = 'premade-fullbody-3:c';
 
 /** Ticks a set at `weight` x `reps` in lb. */
 function tick(db: Db, setId: string, weight: number, reps: number, at: number): void {
@@ -107,9 +110,9 @@ describe('startWorkoutFromDay', () => {
 
   it("names the workout as Train does: the routine's name before a one- or two-character day (R56)", () => {
     const db = seededDb();
-    const five = startWorkoutFromDay(db, FIVE_B, NOW);
-    expect(db.select().from(workouts).where(eq(workouts.id, five)).get()!.name).toBe('5×5 B');
-    discardWorkout(db, five);
+    const fullBody = startWorkoutFromDay(db, FULL_B, NOW);
+    expect(db.select().from(workouts).where(eq(workouts.id, fullBody)).get()!.name).toBe('Beginner full body B');
+    discardWorkout(db, fullBody);
 
     const push = startWorkoutFromDay(db, PUSH_A, NOW);
     expect(db.select().from(workouts).where(eq(workouts.id, push)).get()!.name).toBe('Push A');
@@ -356,16 +359,35 @@ describe('finishWorkout', () => {
     expect(db.select().from(sets).all()).toHaveLength(2);
   });
 
-  it('5x5 rotation alternates A, B, A', () => {
+  it('Beginner full body rotation goes A, B, C, A', () => {
     const db = seededDb();
-    setActiveRoutine(db, 'premade-5x5-3');
+    setActiveRoutine(db, FULL_BODY);
     expect(getUpNext(db)!.dayName).toBe('A');
 
-    runDay(db, FIVE_A, NOW, 95, 5);
+    runDay(db, FULL_A, NOW, 95, 5);
+    expect(nextDayIndex(db, FULL_BODY)).toBe(1);
+    expect(getUpNext(db)!.dayName).toBe('B');
+
+    runDay(db, FULL_B, NOW + DAY, 95, 5);
+    expect(getUpNext(db)!.dayName).toBe('C');
+
+    runDay(db, FULL_C, NOW + 2 * DAY, 95, 5);
+    expect(nextDayIndex(db, FULL_BODY)).toBe(0);
+    expect(getUpNext(db)!.dayName).toBe('A');
+  });
+
+  it('a retired premade still runs and rotates for whoever has it active: 5×5 alternates A, B, A (§18.8)', () => {
+    const db = seededV1Db();
+    runSeed(db, NOW);
+    setActiveRoutine(db, 'premade-5x5-3');
+    expect(db.select().from(routines).where(eq(routines.id, 'premade-5x5-3')).get()).toMatchObject({ retired: true });
+    expect(getUpNext(db)!.dayName).toBe('A');
+
+    runDay(db, 'premade-5x5-3:a', NOW, 95, 5);
     expect(nextDayIndex(db, 'premade-5x5-3')).toBe(1);
     expect(getUpNext(db)!.dayName).toBe('B');
 
-    runDay(db, FIVE_B, NOW + DAY, 95, 5);
+    runDay(db, 'premade-5x5-3:b', NOW + DAY, 95, 5);
     expect(nextDayIndex(db, 'premade-5x5-3')).toBe(0);
     expect(getUpNext(db)!.dayName).toBe('A');
   });
@@ -832,14 +854,14 @@ describe('getNextDayTitle', () => {
 
   it('puts the routine name before a one- or two-character day name', () => {
     const db = seededDb();
-    setActiveRoutine(db, 'premade-5x5-3');
-    const id = startWorkoutFromDay(db, FIVE_B, NOW);
-    expect(getNextDayTitle(db, id)).toBe('5×5 A');
+    setActiveRoutine(db, FULL_BODY);
+    const id = startWorkoutFromDay(db, FULL_C, NOW);
+    expect(getNextDayTitle(db, id)).toBe('Beginner full body A');
   });
 
   it('is null for a day of a routine that is not the active one', () => {
     const db = seededDb();
-    setActiveRoutine(db, 'premade-5x5-3');
+    setActiveRoutine(db, FULL_BODY);
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
     expect(getNextDayTitle(db, id)).toBeNull();
   });
@@ -864,16 +886,16 @@ describe('getNextDayTitle', () => {
 
   it('names the day finish moves Up next to, as the Up next card titles it', () => {
     const db = seededDb();
-    setActiveRoutine(db, 'premade-5x5-3');
-    const id = startWorkoutFromDay(db, FIVE_A, NOW);
+    setActiveRoutine(db, FULL_BODY);
+    const id = startWorkoutFromDay(db, FULL_A, NOW);
     const preview = getNextDayTitle(db, id);
     tick(db, setIds(db)[0], 135, 5, NOW + 60_000);
     finishWorkout(db, id, NOW + HOUR);
 
     const upNext = getUpNext(db)!;
     expect(preview).toBe(dayTitle(upNext.routineName, upNext.dayName));
-    expect(preview).toBe('5×5 B');
-    expect(nextDayIndex(db, 'premade-5x5-3')).toBe(1);
+    expect(preview).toBe('Beginner full body B');
+    expect(nextDayIndex(db, FULL_BODY)).toBe(1);
   });
 });
 
