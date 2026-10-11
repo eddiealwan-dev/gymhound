@@ -1,16 +1,20 @@
+import { router } from 'expo-router';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
+import { getFuelTargets } from '../../src/db/repositories/foodLogRepo';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
 import type { Db } from '../../src/db/types';
 import { formatDateTime, formatRest } from '../../src/domain/dates';
+import { fuelNumber } from '../../src/domain/fuel';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
-import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
+import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
+import { announce } from '../../src/platform/announce';
 import { debugUnlockAllowed, entitlementsFor, useEntitlementsState } from '../../src/platform/entitlements';
-import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
+import { exportFoodCsv, exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
@@ -394,6 +398,62 @@ function RestTimerSection() {
   );
 }
 
+/** Taps closer together than this open Targets once. */
+const ONCE_MS = 1000;
+
+/** One day's targets as Settings shows them: calories and protein, whole numbers with separators (R156). */
+function TargetLine({ day, macros }: { day: 'Training day' | 'Rest day'; macros: Macros }) {
+  const kcal = fuelNumber(macros.kcal);
+  const protein = fuelNumber(macros.protein);
+  return (
+    <Body accessibilityLabel={`${day}: ${kcal} calories, ${protein} grams of protein`}>
+      {`${day}: ${kcal} kcal · ${protein} g protein`}
+    </Body>
+  );
+}
+
+/**
+ * Fuel targets (§8.11, R145). With Pro and targets: each day's calories and protein, and a secondary **Edit targets**;
+ * with Pro and none: "No targets yet." and **Set targets**; both open Fuel → Targets, once per tap. Without Pro
+ * (free, or lapsed with targets kept, §9): a line saying targets are Pro, and **See Pro**, which opens the paywall.
+ * It follows Pro as it turns on or off, with the screen open.
+ */
+function FuelSection() {
+  const { isPro } = useEntitlementsState();
+  const targets = useDbQuery(getFuelTargets) ?? null;
+  const openPaywall = useOpenPaywall();
+  const lastOpen = useRef(-Infinity);
+  const openTargets = () => {
+    const now = Date.now();
+    if (now - lastOpen.current < ONCE_MS) return;
+    lastOpen.current = now;
+    router.push('/fuel-targets');
+  };
+  return (
+    <View testID="settings-fuel">
+      <Section title="Fuel">
+        {!isPro ? (
+          <View style={{ gap: 8 }}>
+            <Body>Fuel targets are part of GymHound Pro.</Body>
+            <Button label="See Pro" variant="secondary" onPress={openPaywall} />
+          </View>
+        ) : targets === null ? (
+          <View style={{ gap: 8 }}>
+            <Body>No targets yet.</Body>
+            <Button label="Set targets" variant="secondary" onPress={openTargets} />
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            <TargetLine day="Training day" macros={targets.training} />
+            <TargetLine day="Rest day" macros={targets.rest} />
+            <Button label="Edit targets" variant="secondary" onPress={openTargets} />
+          </View>
+        )}
+      </Section>
+    </View>
+  );
+}
+
 /** Module-level, so `useDbQuery` reads again only when the data changes or the screen regains focus (after a finish, too). */
 const readBackups = (db: Db) => {
   const { lastSnapshotAt, lastSnapshotError } = getSettings(db);
@@ -455,47 +515,59 @@ function BackupsSection() {
   );
 }
 
+/** The two exports: what each button says and runs, and its line when there is nothing to export. */
+const EXPORTS = {
+  workouts: { label: 'Export workouts (CSV)', run: exportWorkoutsCsv, empty: 'No finished workouts yet.' },
+  food: { label: 'Export food (CSV)', run: exportFoodCsv, empty: 'No food logged yet.' },
+} as const;
+
+type ExportKind = keyof typeof EXPORTS;
+
 /**
- * The finished workouts as a CSV (spec §11) through the share sheet, to open in Numbers or Excel. Phone app only, like
- * Backups. A muted line says when there is nothing to export or the share sheet couldn't open. The line belongs to the
- * data version it was shown at, so a write since (a finished workout) drops it. While an export runs, the button is
- * faded and presses are ignored, so a second tap as the share sheet opens doesn't start a second export.
+ * The finished workouts and the food log as CSV files (spec §11) through the share sheet, to open in Numbers or Excel.
+ * The food CSV is free and stays after Pro lapses (§9, R153). Phone app only, like Backups. A muted line under the
+ * button pressed says when there is nothing to export or the share sheet couldn't open, and the screen reader is told
+ * it. The line belongs to the data version it was shown at, so a write since (a finished workout, a logged food) drops
+ * it. While an export runs, both buttons are faded and presses are ignored, so a second tap as the share sheet opens
+ * doesn't start a second export.
  */
 function ExportSection() {
   const db = useDb();
   const version = useDataVersion((state) => state.version);
-  const [message, setMessage] = useState<{ text: string; version: number } | null>(null);
+  const [message, setMessage] = useState<{ kind: ExportKind; text: string; version: number } | null>(null);
   const exporting = useRef(false);
   const [busy, setBusy] = useState(false);
+  const start = (kind: ExportKind) => {
+    if (exporting.current) return;
+    exporting.current = true;
+    setBusy(true);
+    setMessage(null);
+    const show = (text: string | null) => {
+      setMessage(text === null ? null : { kind, text, version });
+      if (text !== null) announce(text);
+    };
+    EXPORTS[kind]
+      .run(db, Date.now())
+      .then(
+        (result) => show(result === 'empty' ? EXPORTS[kind].empty : result === 'unavailable' ? SHARE_FAILED : null),
+        () => show(SHARE_FAILED),
+      )
+      .finally(() => {
+        exporting.current = false;
+        setBusy(false);
+      });
+  };
   return (
     <Section title="Export">
       {Platform.OS === 'web' ? (
         <Body>Export runs in the phone app.</Body>
       ) : (
-        <View style={{ gap: 8 }}>
-          <Button
-            label="Export workouts (CSV)"
-            variant="secondary"
-            disabled={busy}
-            onPress={() => {
-              if (exporting.current) return;
-              exporting.current = true;
-              setBusy(true);
-              setMessage(null);
-              const show = (text: string | null) => setMessage(text === null ? null : { text, version });
-              exportWorkoutsCsv(db, Date.now())
-                .then(
-                  (result) => show(result === 'empty' ? 'No finished workouts yet.' : result === 'unavailable' ? SHARE_FAILED : null),
-                  () => show(SHARE_FAILED),
-                )
-                .finally(() => {
-                  exporting.current = false;
-                  setBusy(false);
-                });
-            }}
-          />
-          {message !== null && message.version === version ? <Body muted>{message.text}</Body> : null}
-        </View>
+        (Object.keys(EXPORTS) as ExportKind[]).map((kind) => (
+          <View key={kind} style={{ gap: 8 }}>
+            <Button label={EXPORTS[kind].label} variant="secondary" disabled={busy} onPress={() => start(kind)} />
+            {message !== null && message.kind === kind && message.version === version ? <Body muted>{message.text}</Body> : null}
+          </View>
+        ))
       )}
     </Section>
   );
@@ -573,8 +645,8 @@ function DeveloperSection() {
 }
 
 /**
- * Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups, Export, GymHound Pro, and Developer
- * where the debug unlock is allowed.
+ * Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Fuel, Backups, Export, GymHound Pro, and
+ * Developer where the debug unlock is allowed.
  */
 export default function Settings() {
   return (
@@ -590,6 +662,7 @@ export default function Settings() {
         <PlatesSection />
         <ProgressionSection />
         <RestTimerSection />
+        <FuelSection />
         <BackupsSection />
         <ExportSection />
         <ProSection />
