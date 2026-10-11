@@ -40,6 +40,7 @@ export function createDebugEntitlements(db: Db): AppEntitlements {
     isDebugPro: isPro,
     subscribe,
     canPurchase: () => false,
+    dispose: () => {},
     offer: () => null,
     purchase: async () => 'unavailable',
     restore: async () => 'unavailable',

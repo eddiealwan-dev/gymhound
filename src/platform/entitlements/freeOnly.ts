@@ -15,5 +15,6 @@ export function createFreeOnlyEntitlements(): AppEntitlements {
     purchase: async () => 'unavailable',
     restore: async () => 'unavailable',
     setDebugUnlock: () => {},
+    dispose: () => {},
   };
 }

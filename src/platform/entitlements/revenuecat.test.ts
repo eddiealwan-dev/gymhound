@@ -10,7 +10,7 @@ import { createRevenueCatEntitlements, DEFAULT_OFFERING, PRO_ENTITLEMENT, storeP
 type Info = { activeEntitlements: string[] };
 const PRO: Info = { activeEntitlements: ['pro'] };
 const NONE: Info = { activeEntitlements: [] };
-const MONTHLY = { id: '$rc_monthly', priceString: '$4.99', period: 'month' as const };
+const MONTHLY = { id: '$rc_monthly', priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
 
 /** A fake store: every call is a jest.fn, `push` plays a customer-info update from the store. */
 function fakeSdk(overrides: Partial<PurchasesSdk> = {}) {
@@ -162,7 +162,7 @@ describe('RevenueCat entitlements (R135)', () => {
       entitlements.subscribe(() => seen.push(1));
       expect(entitlements.offer()).toBeNull();
       await settle();
-      expect(entitlements.offer()).toEqual({ priceString: '$4.99', period: 'month' });
+      expect(entitlements.offer()).toEqual({ priceString: '$4.99', period: { count: 1, unit: 'month' } });
       expect(seen).toEqual([1]);
     });
 
@@ -188,11 +188,16 @@ describe('RevenueCat entitlements (R135)', () => {
       }
     });
 
-    it('maps the store subscription period: P1W, P1M, P1Y; anything else is null', () => {
-      expect(storePeriod('P1W')).toBe('week');
-      expect(storePeriod('P1M')).toBe('month');
-      expect(storePeriod('P1Y')).toBe('year');
-      expect(storePeriod('P3M')).toBeNull();
+    it('maps any single ISO 8601 store period to a count and a unit (R157); anything else is null', () => {
+      expect(storePeriod('P1W')).toEqual({ count: 1, unit: 'week' });
+      expect(storePeriod('P1M')).toEqual({ count: 1, unit: 'month' });
+      expect(storePeriod('P3M')).toEqual({ count: 3, unit: 'month' });
+      expect(storePeriod('P6M')).toEqual({ count: 6, unit: 'month' });
+      expect(storePeriod('P1Y')).toEqual({ count: 1, unit: 'year' });
+      expect(storePeriod('P7D')).toEqual({ count: 7, unit: 'day' });
+      for (const garbage of ['', 'P', 'P0M', 'PM', 'P1X', '1M', 'P1Y6M', 'p1m', 'P1.5M', 'P-1M', ' P1M']) {
+        expect(storePeriod(garbage)).toBeNull();
+      }
       expect(storePeriod(null)).toBeNull();
       expect(storePeriod(undefined)).toBeNull();
     });
@@ -241,6 +246,75 @@ describe('RevenueCat entitlements (R135)', () => {
       const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => null) });
       await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase()).resolves.toBe('unavailable');
       expect(sdk.purchase).not.toHaveBeenCalled();
+    });
+    it('gives up waiting for an offering that never arrives after 10 seconds: unavailable', async () => {
+      jest.useFakeTimers();
+      try {
+        const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(() => new Promise<null>(() => {})) });
+        const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+        let result: string | null = null;
+        void entitlements.purchase().then((r) => (result = r));
+        await jest.advanceTimersByTimeAsync(9_999);
+        expect(result).toBeNull();
+        await jest.advanceTimersByTimeAsync(1);
+        expect(result).toBe('unavailable');
+        expect(sdk.purchase).not.toHaveBeenCalled();
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('leaves no timer behind once the offering arrives', async () => {
+      jest.useFakeTimers();
+      try {
+        const { sdk } = fakeSdk();
+        const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+        await expect(entitlements.purchase()).resolves.toBe('purchased');
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  describe('dispose()', () => {
+    it('removes the foreground listener and the store listener, once', async () => {
+      const remove = jest.fn();
+      jest.spyOn(AppState, 'addEventListener').mockImplementation(
+        () => ({ remove }) as unknown as ReturnType<typeof AppState.addEventListener>,
+      );
+      const unsubscribeStore = jest.fn();
+      const { sdk } = fakeSdk({ onCustomerInfo: jest.fn(() => unsubscribeStore) });
+      const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+      await settle();
+      entitlements.dispose();
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(unsubscribeStore).toHaveBeenCalledTimes(1);
+      entitlements.dispose();
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(unsubscribeStore).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops hearing store updates and foreground refreshes after it', async () => {
+      const { sdk, push } = fakeSdk();
+      const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+      await settle();
+      const seen: boolean[] = [];
+      entitlements.subscribe(() => seen.push(entitlements.isPro()));
+      entitlements.dispose();
+      push(PRO);
+      expect(seen).toEqual([]);
+      expect(getSettings(db).proCached).toBe(false);
+    });
+
+    it('is a no-op when configure failed', () => {
+      const { sdk } = fakeSdk({
+        configure: jest.fn(() => {
+          throw new Error('no native module');
+        }),
+      });
+      expect(() => createRevenueCatEntitlements(db, sdk, 'key', false).dispose()).not.toThrow();
     });
   });
 

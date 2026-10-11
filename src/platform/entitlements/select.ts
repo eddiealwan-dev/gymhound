@@ -55,6 +55,9 @@ let shared: { db: Db; entitlements: AppEntitlements } | null = null;
  * (a test's) gets a fresh object.
  */
 export function entitlementsFor(db: Db): AppEntitlements {
-  if (shared === null || shared.db !== db) shared = { db, entitlements: createEntitlements(db) };
+  if (shared === null || shared.db !== db) {
+    shared?.entitlements.dispose();
+    shared = { db, entitlements: createEntitlements(db) };
+  }
   return shared.entitlements;
 }

@@ -7,8 +7,11 @@
 export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'failed';
 export type RestoreResult = 'restored' | 'none' | 'unavailable' | 'failed';
 
-/** The store's product, as the store words it. `period` is null for a one-time purchase. */
-export type StoreOffer = { priceString: string; period: 'week' | 'month' | 'year' | null };
+/** A subscription's billing period (R157): `{ count: 3, unit: 'month' }` renews every 3 months. */
+export type StorePeriod = { count: number; unit: 'day' | 'week' | 'month' | 'year' };
+
+/** The store's product, as the store words it. `period` is null only for a one-time purchase. */
+export type StoreOffer = { priceString: string; period: StorePeriod | null };
 
 export interface Entitlements {
   /** Whether Pro is on now. Synchronous: never waits on the network (R135). */
@@ -36,6 +39,8 @@ export type AppEntitlements = Entitlements & {
   setDebugUnlock(on: boolean): void;
   /** Whether Pro is on only because of the debug unlock (Settings says "for testing"). */
   isDebugPro(): boolean;
+  /** Stops listening to the app and the store. The app keeps one object for its lifetime; tests and `entitlementsFor` call it. */
+  dispose(): void;
 };
 
 /**

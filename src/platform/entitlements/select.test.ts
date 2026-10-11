@@ -27,7 +27,7 @@ function fakeSdk(): PurchasesSdk {
     configure: jest.fn(),
     getCustomerInfo: jest.fn(async () => ({ activeEntitlements: [] })),
     onCustomerInfo: jest.fn(() => () => {}),
-    getDefaultPackage: jest.fn(async () => ({ id: 'p', priceString: '$4.99', period: 'month' as const })),
+    getDefaultPackage: jest.fn(async () => ({ id: 'p', priceString: '$4.99', period: { count: 1, unit: 'month' as const } })),
     purchase: jest.fn(async () => ({ activeEntitlements: ['pro'] })),
     restore: jest.fn(async () => ({ activeEntitlements: [] })),
   };
@@ -125,6 +125,20 @@ describe('entitlementsFor (R126)', () => {
     entitlementsFor(db2).subscribe(() => seen.push(true));
     entitlementsFor(db2).setDebugUnlock(true);
     expect(seen).toEqual([true]);
+  });
+
+  it('disposes the object it replaces when another database arrives', () => {
+    const first = entitlementsFor(freshDb());
+    const dispose = jest.spyOn(first, 'dispose');
+    entitlementsFor(freshDb());
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dispose on every kind', () => {
+  it('free and debug have a dispose that does nothing harmful', () => {
+    expect(() => createEntitlements(freshDb(), { expoGo: false, apiKey: null, debugAllowed: false }).dispose()).not.toThrow();
+    expect(() => createEntitlements(freshDb(), { expoGo: false, apiKey: null, debugAllowed: true }).dispose()).not.toThrow();
   });
 });
 

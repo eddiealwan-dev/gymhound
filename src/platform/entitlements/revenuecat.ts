@@ -2,19 +2,26 @@ import { AppState } from 'react-native';
 import { getSettings, setSetting } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
 import { createListeners } from './debug';
-import type { AppEntitlements, PurchasesSdk, StoreOffer } from './index';
+import type { AppEntitlements, PurchasesSdk, StoreOffer, StorePeriod } from './index';
 
 /** The RevenueCat entitlement that is GymHound Pro. */
 export const PRO_ENTITLEMENT = 'pro';
 /** The RevenueCat offering whose first package Unlock buys. */
 export const DEFAULT_OFFERING = 'default';
 
-/** A store subscription period (ISO 8601: P1W, P1M, P1Y) as the paywall words it; anything else, or none, is null. */
-export function storePeriod(iso: string | null | undefined): StoreOffer['period'] {
-  if (iso === 'P1W') return 'week';
-  if (iso === 'P1M') return 'month';
-  if (iso === 'P1Y') return 'year';
-  return null;
+/** How long `purchase()` waits for the offering before it says 'unavailable'. */
+export const OFFER_WAIT_MS = 10_000;
+
+const PERIOD_UNITS: Record<string, StorePeriod['unit']> = { D: 'day', W: 'week', M: 'month', Y: 'year' };
+
+/**
+ * A store subscription period (R157): a single ISO 8601 duration, `P{n}D`, `P{n}W`, `P{n}M` or `P{n}Y` with n ≥ 1, as a
+ * count and a unit ("P3M" → every 3 months). Anything else, or none, is null (a one-time purchase).
+ */
+export function storePeriod(iso: string | null | undefined): StorePeriod | null {
+  const match = /^P([1-9]\d*)([DWMY])$/.exec(iso ?? '');
+  if (match === null) return null;
+  return { count: Number(match[1]), unit: PERIOD_UNITS[match[2]] };
 }
 
 type Info = { activeEntitlements: string[] };
@@ -41,6 +48,8 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
   let configured = false;
   let pkg: Package | null = null;
   let packageLoad: Promise<void> = Promise.resolve();
+  let disposed = false;
+  const cleanups: (() => void)[] = [];
 
   const debugOn = () => debugAllowed && getSettings(db).proDebugUnlock;
   const isPro = () => getSettings(db).proCached || debugOn();
@@ -58,6 +67,7 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
 
   /** Writes `pro_cached` from a customer-info result; returns whether Pro is active in it. */
   const apply = (info: Info): boolean => {
+    if (disposed) return info.activeEntitlements.includes(PRO_ENTITLEMENT);
     const active = info.activeEntitlements.includes(PRO_ENTITLEMENT);
     changing(() => {
       if (getSettings(db).proCached !== active) setSetting(db, 'proCached', active);
@@ -79,19 +89,24 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
   if (configured) {
     refresh();
     packageLoad = attempt(() => sdk.getDefaultPackage()).then(
-      (found) => changing(() => (pkg = found ?? null)),
+      (found) => {
+        if (!disposed) changing(() => (pkg = found ?? null));
+      },
       () => {},
     );
     try {
-      sdk.onCustomerInfo((info) => {
-        apply(info);
-      });
+      cleanups.push(
+        sdk.onCustomerInfo((info) => {
+          apply(info);
+        }),
+      );
     } catch {
       // The store's updates are a nicety; the foreground refresh still runs.
     }
-    AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !disposed) refresh();
     });
+    cleanups.push(() => foreground.remove());
   }
 
   return {
@@ -103,7 +118,10 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
     offer,
     async purchase() {
       if (!configured) return 'unavailable';
-      await packageLoad;
+      // Wait for the offering, but not forever: a store that never answers leaves nothing to buy.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([packageLoad, new Promise<void>((resolve) => (timer = setTimeout(resolve, OFFER_WAIT_MS)))]);
+      clearTimeout(timer);
       if (pkg === null) return 'unavailable';
       const id = pkg.id;
       try {
@@ -121,6 +139,17 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
         return apply(info) ? 'restored' : 'none';
       } catch {
         return 'failed';
+      }
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const cleanup of cleanups.splice(0)) {
+        try {
+          cleanup();
+        } catch {
+          // Already gone.
+        }
       }
     },
     setDebugUnlock(on) {
