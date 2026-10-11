@@ -1,17 +1,12 @@
-import { router } from 'expo-router';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
-import FoodRoute from '../../app/food/[id]';
-import AddFoodRoute from '../../app/food/add';
-import { Footer } from './Footer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * Phase 5 Task 1 (R155): the placeholder routes later tasks fill (every stub is filled now). Each route says
- * "Not built yet." and can be left. The food screens have no footer (§18.4). The paywall and ProPitch are tested in
- * paywall.test.tsx.
+ * Phase 5 Task 1 (R155): every stub and placeholder route is filled now; each is tested in its own file. What is
+ * left here is the tabs layout registering the hidden route.
  */
 
 /** The screens each `Tabs.Screen` registered, by name, with its options. */
@@ -44,35 +39,6 @@ function render(element: React.ReactElement): ReactTestRenderer {
   });
   return tree;
 }
-
-const text = (tree: ReactTestRenderer) => JSON.stringify(tree.toJSON());
-
-beforeEach(() => {
-  jest.mocked(router.back).mockClear();
-});
-
-describe('the placeholder routes', () => {
-  it.each([
-    ['/food/add', AddFoodRoute],
-    ['/food/[id]', FoodRoute],
-  ])('%s says "Not built yet." and has no footer', (_route, Route) => {
-    const tree = render(<Route />);
-    expect(text(tree)).toContain('Not built yet.');
-    expect(tree.root.findAllByType(Footer)).toHaveLength(0);
-  });
-
-  it.each([
-    ['/food/add', AddFoodRoute, 'Close'],
-    ['/food/[id]', FoodRoute, 'Close'],
-  ])('%s goes back', (_route, Route, label) => {
-    const tree = render(<Route />);
-    const [control] = tree.root.findAll(
-      (n) => (n.props.accessibilityLabel === label || n.props.label === label) && typeof n.props.onPress === 'function',
-    );
-    act(() => control.props.onPress());
-    expect(router.back).toHaveBeenCalledTimes(1);
-  });
-});
 
 describe('the tabs layout', () => {
   it('registers /fuel-targets as a hidden tab route, so the header and dock stay (R154)', () => {
