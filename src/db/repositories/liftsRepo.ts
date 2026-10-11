@@ -49,7 +49,8 @@ export function getLift(
  * One session per finished workout with the exercise (R173), oldest first (by start; the active workout is never
  * read). When the exercise is in a workout twice, the first block in position order with a working weight (else the
  * first block) gives the mark, rule, outcome and working weight; `sets` are the done sets of every block, block by
- * block in position order. A workout whose blocks have no done set is left out.
+ * block in position order (warmups included). A workout with no done non-warmup set of the exercise is left out, so
+ * the count matches `listLifts`.
  */
 export function liftSessions(db: Db, exerciseId: string): LiftSession[] {
   const blocks = db
@@ -61,6 +62,7 @@ export function liftSessions(db: Db, exerciseId: string): LiftSession[] {
       mark: workoutExercises.mark,
       routineExerciseId: workoutExercises.routineExerciseId,
       ruleSetCount: workoutExercises.ruleSetCount,
+      ruleIncrement: workoutExercises.ruleIncrement,
       outcome: workoutExercises.outcome,
       workingWeight: workoutExercises.workingWeight,
       workingUnit: workoutExercises.workingUnit,
@@ -107,15 +109,18 @@ export function liftSessions(db: Db, exerciseId: string): LiftSession[] {
   const sessions: LiftSession[] = [];
   for (const group of byWorkout.values()) {
     const sessionSets = group.flatMap((b) => setsByBlock.get(b.id) ?? []);
-    if (sessionSets.length === 0) continue;
+    // As listLifts: a workout counts only with a done non-warmup set of the exercise.
+    if (!sessionSets.some((s) => s.setType !== 'warmup')) continue;
     const main = group.find((b) => b.workingWeight !== null) ?? group[0];
+    // As the rule at finish: no routine exercise means no rule (7.3 step 3).
+    const hasRule = main.routineExerciseId !== null && main.ruleSetCount !== null;
     sessions.push({
       workoutId: main.workoutId,
       localDate: main.localDate,
       startedAt: main.startedAt,
       mark: main.mark,
-      // As the rule at finish: no routine exercise means no rule (7.3 step 3).
-      hasRule: main.routineExerciseId !== null && main.ruleSetCount !== null,
+      hasRule,
+      ruleIncrement: hasRule ? main.ruleIncrement : null,
       outcome: main.outcome,
       workingWeight: main.workingWeight,
       workingUnit: main.workingUnit,

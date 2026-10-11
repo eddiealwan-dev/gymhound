@@ -28,6 +28,8 @@ export type LiftSession = {
   startedAt: number;
   mark: ExerciseMark | null;
   hasRule: boolean;
+  /** The rule's increment, null with no rule; 0 never stalls (R190). */
+  ruleIncrement: number | null;
   outcome: Outcome | null;
   workingWeight: number | null;
   workingUnit: WeightUnit | null;
@@ -42,18 +44,22 @@ const MINUS = '−';
 
 const counted = (s: LiftSet) => s.done && s.setType !== 'warmup';
 
-const unloaded = (s: LiftSession) =>
-  s.workingWeight === null || s.workingUnit === null || isZeroWeight(s.workingWeight, s.workingUnit);
+/** A done non-warmup set with a load above 0. */
+const loadedSet = (s: LiftSet) =>
+  counted(s) && s.weight !== null && s.weightUnit !== null && !isZeroWeight(s.weight, s.weightUnit);
+
+/** The lift has had a loaded (added weight > 0) working set: decides bodyweight plus's chart and its records alike. */
+const everLoaded = (sessions: readonly LiftSession[]) => sessions.some((s) => s.sets.some(loadedSet));
 
 /**
  * Timed charts the longest hold, distance and time charts nothing (records only, §8.9), bodyweight plus never loaded
- * (every working weight 0 or none) the most reps in a set; everything else the working weight (assisted: the
- * assistance).
+ * (no done non-warmup set with added weight above 0) the most reps in a set; everything else the working weight
+ * (assisted: the assistance).
  */
 export function liftMetric(loggingType: LoggingType, sessions: readonly LiftSession[]): LiftMetric {
   if (loggingType === 'timed') return 'longest_hold';
   if (loggingType === 'distance_time') return 'none';
-  if (loggingType === 'bodyweight_plus' && sessions.every(unloaded)) return 'best_reps';
+  if (loggingType === 'bodyweight_plus' && !everLoaded(sessions)) return 'best_reps';
   return 'working_weight';
 }
 
@@ -96,10 +102,10 @@ export function liftPoints(loggingType: LoggingType, sessions: readonly LiftSess
   return points;
 }
 
-/** A session's sets as the Previous column reads them, joined ", ": "185 × 5, 185 × 5, 175 × 8". */
+/** A session's done non-warmup sets as the Previous column reads them, joined ", ": "185 × 5, 185 × 5, 175 × 8". */
 export function sessionText(loggingType: LoggingType, s: LiftSession, displayUnit: WeightUnit): string {
   return s.sets
-    .filter((x) => x.done)
+    .filter(counted)
     .map((x, position) => formatPrevious({ ...x, position }, loggingType, displayUnit))
     .filter((t) => t !== '')
     .join(', ');
@@ -156,9 +162,10 @@ function record(kind: LiftRecordKind, title: string, value: string, c: Candidate
  * The records under a lift's chart (R174), from the done non-warmup sets of the sessions (finished workouts), each in
  * the unit logged; the earliest set wins a tie:
  * - weighted and bodyweight plus: Heaviest ("185 lb × 5", "+25 lb × 8", "Bodyweight × 15") and Best estimated 1RM
- *   ("210 lb", rounded as R105; none with no load); bodyweight plus never loaded: Most reps ("15") instead of both;
- * - weight and time: Heaviest ("70 lb × 40s") and Longest hold ("1:30"); timed: Longest hold;
- * - assisted: Least assistance ("−20 lb × 8"), the lowest assistance with reps;
+ *   ("210 lb", rounded as R105; none with no load); bodyweight plus never loaded (as `liftMetric`): Most reps ("15")
+ *   instead of both;
+ * - weight and time: Heaviest ("70 lb × 40s", loads above 0) and Longest hold ("1:30"); timed: Longest hold;
+ * - assisted: Least assistance ("−20 lb × 8", "Bodyweight × 8" at 0), the lowest assistance with reps;
  * - distance and time: Longest distance ("5 km") and Longest time ("32:10").
  */
 export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSession[]): LiftRecord[] {
@@ -174,8 +181,9 @@ export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSes
   switch (loggingType) {
     case 'weighted':
     case 'bodyweight_plus': {
-      const loaded = withReps.filter((c) => !isZeroWeight(loadOf(c.set).value, loadOf(c.set).unit));
-      if (loggingType === 'bodyweight_plus' && loaded.length === 0) {
+      const loaded = withReps.filter((c) => loadedSet(c.set));
+      // The same test as the chart (liftMetric): never loaded charts and records Most reps.
+      if (loggingType === 'bodyweight_plus' && !everLoaded(sessions)) {
         const c = best(withReps, (a, b) => (a.set.reps ?? 0) > (b.set.reps ?? 0));
         if (c) out.push(record('most_reps', 'Most reps', String(c.set.reps), c));
         break;
@@ -198,7 +206,8 @@ export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSes
       break;
     }
     case 'weighted_time': {
-      const timed = withHold.filter((c) => c.set.weight !== null && c.set.weightUnit !== null);
+      // A 0 load is not a heaviest; the hold still counts for Longest hold.
+      const timed = withHold.filter((c) => loadedSet(c.set));
       const heaviest = best(timed, (a, b) => heavierSet(a.set, b.set));
       if (heaviest) {
         const value = `${formatWeight(heaviest.set.weight ?? 0, heaviest.set.weightUnit ?? 'lb')} ${TIMES} ${formatDuration(heaviest.set.durationS ?? 0)}`;
@@ -221,7 +230,8 @@ export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSes
       });
       if (c) {
         const load = loadOf(c.set);
-        out.push(record('least_assistance', 'Least assistance', `${MINUS}${formatWeight(load.value, load.unit)} ${TIMES} ${c.set.reps}`, c));
+        const assistance = isZeroWeight(load.value, load.unit) ? 'Bodyweight' : `${MINUS}${formatWeight(load.value, load.unit)}`;
+        out.push(record('least_assistance', 'Least assistance', `${assistance} ${TIMES} ${c.set.reps}`, c));
       }
       break;
     }

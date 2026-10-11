@@ -39,7 +39,7 @@ let seq = 0;
 function sess(
   localDate: string,
   sets: LiftSet[],
-  o: { mark?: ExerciseMark; outcome?: Outcome; ww?: number | null; wu?: WeightUnit; rule?: boolean } = {},
+  o: { mark?: ExerciseMark; outcome?: Outcome; ww?: number | null; wu?: WeightUnit; rule?: boolean; inc?: number } = {},
 ): LiftSession {
   seq += 1;
   const ww = o.ww === undefined ? null : o.ww;
@@ -49,6 +49,7 @@ function sess(
     startedAt: seq,
     mark: o.mark ?? null,
     hasRule: o.rule ?? true,
+    ruleIncrement: (o.rule ?? true) ? (o.inc ?? 5) : null,
     outcome: o.outcome ?? 'held',
     workingWeight: ww,
     workingUnit: ww === null ? null : (o.wu ?? 'lb'),
@@ -70,6 +71,8 @@ describe('liftMetric (R173)', () => {
   it('charts the most reps for bodyweight plus never loaded, the longest hold for timed, nothing for distance', () => {
     expect(liftMetric('bodyweight_plus', unloaded)).toBe('best_reps');
     expect(liftMetric('bodyweight_plus', [])).toBe('best_reps');
+    // Only a loaded warmup, or a working weight with no loaded set: never loaded.
+    expect(liftMetric('bodyweight_plus', [sess('2026-10-01', [w(25, 5, 'lb', 'warmup'), w(null, 8)], { ww: 25 })])).toBe('best_reps');
     expect(liftMetric('timed', loaded)).toBe('longest_hold');
     expect(liftMetric('distance_time', loaded)).toBe('none');
   });
@@ -110,6 +113,11 @@ describe('liftPoints', () => {
     ]);
   });
 
+  it('a rule with an increment of 0 never stalls (R190)', () => {
+    const sessions = [1, 3, 5].map((d) => sess(`2026-10-0${d}`, [w(135, 8)], { ww: 135, inc: 0 }));
+    expect(liftPoints('weighted', sessions, 'lb').map((p) => p.label)).toEqual([null, null, null]);
+  });
+
   it('charts the most reps of a done non-warmup set for bodyweight plus never loaded, with no stall', () => {
     const sessions = [
       sess('2026-10-01', [w(null, 20, 'lb', 'warmup'), w(null, 8), w(null, 10)], { ww: 0 }),
@@ -140,6 +148,10 @@ describe('sessionText', () => {
     expect(sessionText('weighted', sess('2026-10-01', [w(84, 12, 'kg')]), 'lb')).toBe('84 kg × 12');
     expect(sessionText('bodyweight_plus', sess('2026-10-01', [w(null, 8), w(25, 6)]), 'lb')).toBe('BW × 8, +25 × 6');
     expect(sessionText('timed', sess('2026-10-01', [hold(40), hold(90)]), 'lb')).toBe('40s, 1:30');
+  });
+
+  it('leaves warmups out', () => {
+    expect(sessionText('weighted', sess('2026-10-01', [w(95, 10, 'lb', 'warmup'), w(185, 5)]), 'lb')).toBe('185 × 5');
   });
 });
 
@@ -190,11 +202,13 @@ describe('liftRecords (R174)', () => {
   });
 
   it('weight and time: Heaviest with the hold, and Longest hold', () => {
-    const a = sess('2026-09-01', [hold(40, 70), hold(90, 50)]);
+    const a = sess('2026-09-01', [hold(40, 70), hold(90, 50), hold(120, 0)]);
     expect(liftRecords('weighted_time', [a]).map((r) => [r.kind, r.title, r.value])).toEqual([
       ['heaviest', 'Heaviest', '70 lb × 40s'],
-      ['longest_hold', 'Longest hold', '1:30'],
+      ['longest_hold', 'Longest hold', '2:00'],
     ]);
+    // Only 0-weight holds: no Heaviest.
+    expect(liftRecords('weighted_time', [sess('2026-09-01', [hold(60, 0)])]).map((r) => r.kind)).toEqual(['longest_hold']);
   });
 
   it('timed: Longest hold', () => {
@@ -212,6 +226,11 @@ describe('liftRecords (R174)', () => {
     expect(liftRecords('assisted', [a, b])).toEqual([
       { kind: 'least_assistance', title: 'Least assistance', value: '−8 kg × 6', localDate: '2026-09-08', workoutId: b.workoutId },
     ]);
+  });
+
+  it('assisted: no assistance reads Bodyweight', () => {
+    const a = sess('2026-09-01', [w(20, 8), w(0, 8)]);
+    expect(liftRecords('assisted', [a]).map((r) => r.value)).toEqual(['Bodyweight × 8']);
   });
 
   it('distance and time: Longest distance and Longest time', () => {

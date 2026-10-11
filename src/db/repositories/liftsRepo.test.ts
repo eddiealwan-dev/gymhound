@@ -84,6 +84,7 @@ describe('liftSessions (R173)', () => {
     const db = seededDb();
     const first = workout(db, OCT_1, [[BENCH, [lb(135, 5), lb(135, 5)]]]);
     const second = workout(db, OCT_1 + 2 * DAY, [[BENCH, [lb(140, 5)], 'rough_sleep']]);
+    workout(db, OCT_1 + 3 * DAY, [[BENCH, [lb(95, 10, 'warmup')]]]); // warmups only: not a session
     workout(db, OCT_1 + 4 * DAY, [[BENCH, [lb(145, 5)]]], false); // active, not in history
 
     const sessions = liftSessions(db, BENCH);
@@ -132,7 +133,7 @@ describe('liftSessions (R173)', () => {
     finishWorkout(db, id, OCT_1 + 60 * MINUTE);
 
     expect(liftSessions(db, BENCH)).toEqual([
-      expect.objectContaining({ workoutId: id, hasRule: true, outcome: 'held', workingWeight: 135, workingUnit: 'lb' }),
+      expect.objectContaining({ workoutId: id, hasRule: true, ruleIncrement: expect.any(Number), outcome: 'held', workingWeight: 135, workingUnit: 'lb' }),
     ]);
   });
 
