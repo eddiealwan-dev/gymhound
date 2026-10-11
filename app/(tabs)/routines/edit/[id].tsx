@@ -369,6 +369,14 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
 
   useFocusEffect(
     useCallback(() => {
+      // A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
+      // editor). With nothing unsaved here, read it again; changes not yet saved are kept as they are.
+      if (routineId !== null && !premade && !unsaved(savedRef.current, latest.current)) {
+        const fresh = routineToDraft(db, routineId);
+        savedRef.current = fresh;
+        setSaved(fresh);
+        reset(fresh);
+      }
       // The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
       const exerciseId = usePendingPick.getState().take();
       const dayKey = pickFor.current;
@@ -390,7 +398,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
         if (!unsaved(savedRef.current, latest.current)) setTried(false);
       };
-    }, [db, apply, backTo]),
+    }, [db, apply, reset, backTo, routineId, premade]),
   );
 
   useEffect(() => {

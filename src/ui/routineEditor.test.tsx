@@ -326,6 +326,45 @@ describe('the routine editor: your own routine', () => {
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Back to My split').length).toBeGreaterThan(0);
   });
 
+  it('reads the routine again when shown again with nothing unsaved: a hidden tab stays mounted', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    leaveAndReturn();
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Back to Renamed elsewhere').length).toBeGreaterThan(0);
+    // What it read is now what Discard goes back to: nothing to lose.
+    const toTrain = jest.fn();
+    act(() => leaveGuarded(toTrain));
+    expect(toTrain).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unsaved changes when shown again, and still adds what the picker chose', () => {
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Mine now');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    leaveAndReturn();
+    expect(field(tree, 'Routine name').props.value).toBe('Mine now');
+
+    press(tree, 'Add exercise to Day B');
+    pick('bench');
+    expect(field(tree, 'Routine name').props.value).toBe('Mine now');
+    expect(shownText(tree).filter((t) => t === 'Barbell bench press')).toHaveLength(2);
+  });
+
+  it('a pick lands on the routine as read again, when nothing was unsaved', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    press(tree, 'Add exercise to Day B');
+    pick('bench');
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(shownText(tree).filter((t) => t === 'Barbell bench press')).toHaveLength(2);
+  });
+
   it('says so when the routine is not there', () => {
     jest.mocked(routineToDraft).mockReturnValue(null);
     const tree = mount('gone');
