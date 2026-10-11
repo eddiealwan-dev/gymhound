@@ -1,12 +1,10 @@
 import { router } from 'expo-router';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import FuelTargetsRoute from '../../app/(tabs)/fuel-targets';
 import TabsLayout from '../../app/(tabs)/_layout';
 import FoodRoute from '../../app/food/[id]';
 import AddFoodRoute from '../../app/food/add';
 import { FuelTrends } from './fuel/FuelTrends';
-import { TargetsForm } from './fuel/TargetsForm';
 import { Footer } from './Footer';
 import { FoodOfferBanner } from './session/FoodOfferBanner';
 
@@ -59,7 +57,6 @@ describe('the placeholder routes', () => {
   it.each([
     ['/food/add', AddFoodRoute],
     ['/food/[id]', FoodRoute],
-    ['/fuel-targets', FuelTargetsRoute],
   ])('%s says "Not built yet." and has no footer', (_route, Route) => {
     const tree = render(<Route />);
     expect(text(tree)).toContain('Not built yet.');
@@ -69,7 +66,6 @@ describe('the placeholder routes', () => {
   it.each([
     ['/food/add', AddFoodRoute, 'Close'],
     ['/food/[id]', FoodRoute, 'Close'],
-    ['/fuel-targets', FuelTargetsRoute, 'Back to Fuel'],
   ])('%s goes back', (_route, Route, label) => {
     const tree = render(<Route />);
     const [control] = tree.root.findAll(
@@ -82,7 +78,6 @@ describe('the placeholder routes', () => {
 
 describe('the stubs draw nothing until their task fills them', () => {
   it.each([
-    ['TargetsForm', <TargetsForm key="f" initial={null} submitLabel="Save targets" onSaved={() => {}} />],
     ['FuelTrends', <FuelTrends key="r" today="2026-10-11" />],
     ['FoodOfferBanner', <FoodOfferBanner key="b" workoutId="w1" />],
   ])('%s', (_name, element) => {
