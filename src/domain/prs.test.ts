@@ -1,5 +1,6 @@
 import {
   computePrFlags,
+  countPrKinds,
   estimatedOneRm,
   pickHighlights,
   PR_BIT,
@@ -347,5 +348,23 @@ describe('pickHighlights', () => {
         { exerciseId: 'x', name: 'Squat', loggingType: 'weighted', localDate: '2026-10-11', sets: [{ ...set('w1', 1, 1), prFlags: 0 }] },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('countPrKinds (R178)', () => {
+  it('counts distinct exercise and kind pairs', () => {
+    expect(
+      countPrKinds([
+        { exerciseId: 'bench', prFlags: 1 | 4 },
+        { exerciseId: 'bench', prFlags: 1 },
+        { exerciseId: 'bench', prFlags: 2 },
+        { exerciseId: 'squat', prFlags: 1 },
+        { exerciseId: 'plank', prFlags: 0 },
+      ]),
+    ).toBe(4);
+  });
+
+  it('is 0 with nothing flagged', () => {
+    expect(countPrKinds([])).toBe(0);
   });
 });

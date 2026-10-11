@@ -70,21 +70,6 @@ export function marksLine(marks: readonly ExerciseMark[]): string | null {
   return `Something off: ${unique.map((m) => MARK_LABELS[m]).join(' · ')}`;
 }
 
-/** The PR bits a set can carry: heaviest, reps at weight, estimated 1RM, longest hold. */
-const PR_BITS = [1, 2, 4, 8] as const;
-
-/**
- * How many personal bests a workout set (R178): the distinct (exercise, kind) pairs among its flagged sets — the same
- * count as the finish summary's Personal bests list (R105).
- */
-export function countPrKinds(rows: readonly { exerciseId: string; prFlags: number }[]): number {
-  const pairs = new Set<string>();
-  for (const { exerciseId, prFlags } of rows) {
-    for (const bit of PR_BITS) if ((prFlags & bit) !== 0) pairs.add(`${exerciseId}\u0000${bit}`);
-  }
-  return pairs.size;
-}
-
 /** A logged set as the History detail reads it: as Previous ("185 × 5", "84 kg × 5"), then " @ 8" when it has an RPE. */
 export function historySetText(set: PrevSet & { rpe: number | null }, loggingType: LoggingType, displayUnit: WeightUnit): string {
   const text = formatPrevious(set, loggingType, displayUnit);

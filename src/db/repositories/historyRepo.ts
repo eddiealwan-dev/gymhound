@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, lte, min, ne, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
-import { countPrKinds, type HistoryCard } from '../../domain/history';
+import type { HistoryCard } from '../../domain/history';
+import { countPrKinds } from '../../domain/prs';
 import type { DistanceUnit, ExerciseMark, LoggingType, SetType, WeightUnit } from '../../domain/types';
 import { LB_TO_KG } from '../../domain/units';
 import { newId } from '../ids';
@@ -147,12 +148,13 @@ export function trainingDaysInMonth(db: Db, month: string): string[] {
 
 /**
  * A finished workout for the History detail (R165): the finish summary, when and from what it was started, and each
- * exercise in order with its mark, the note saved with it and its sets with their PR flags. Null unless the workout
- * exists and is finished.
+ * exercise in order with its superset group (a group left with one member reads as none), its mark, the note saved with
+ * it and its sets with their PR flags. Null unless the workout exists, is finished and has a finish time.
  */
 export function getWorkoutDetail(db: Db, workoutId: string, displayUnit: WeightUnit): WorkoutDetail | null {
   const workout = db.select().from(workouts).where(eq(workouts.id, workoutId)).get();
-  if (!workout || workout.status !== 'finished') return null;
+  // A finished workout always has a finish time; one without (a damaged row) is not shown rather than thrown on.
+  if (!workout || workout.status !== 'finished' || workout.finishedAt === null) return null;
 
   const routineName =
     workout.routineId === null
@@ -170,6 +172,7 @@ export function getWorkoutDetail(db: Db, workoutId: string, displayUnit: WeightU
     .where(eq(workoutExercises.workoutId, workoutId))
     .orderBy(asc(workoutExercises.position), asc(workoutExercises.id))
     .all();
+  const groups = realGroups(rows.map((r) => r.we.supersetGroup));
   const setRows =
     rows.length === 0
       ? []
@@ -209,14 +212,14 @@ export function getWorkoutDetail(db: Db, workoutId: string, displayUnit: WeightU
     startedAt: workout.startedAt,
     routineName,
     dayName,
-    exercises: rows.map(({ we, name, loggingType }) => {
+    exercises: rows.map(({ we, name, loggingType }, index) => {
       const exerciseSets = setsByExercise.get(we.id) ?? [];
       return {
         workoutExerciseId: we.id,
         exerciseId: we.exerciseId,
         name,
         loggingType,
-        supersetGroup: we.supersetGroup,
+        supersetGroup: groups[index],
         mark: we.mark,
         note: we.note,
         showRpe: we.showRpe || exerciseSets.some((s) => s.rpe !== null),

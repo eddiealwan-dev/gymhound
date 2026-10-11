@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { count, eq } from 'drizzle-orm';
-import { countPrKinds } from '../../domain/history';
+import { countPrKinds } from '../../domain/prs';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { exercises, routineDays, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
@@ -184,6 +184,27 @@ describe('getWorkoutDetail (R165)', () => {
     expect(bench.sets[0].rpe).toBe(8);
   });
 
+  it('reads a superset group left with one member as none', () => {
+    const db = seededDb();
+    const id = startEmptyWorkout(db, NOW);
+    const a = addExerciseToWorkout(db, id, BENCH);
+    addExerciseToWorkout(db, id, SQUAT);
+    toggleSupersetWithNext(db, a);
+    tick(db, active(db, BENCH).sets[0].id, 185, 5, NOW + 1);
+    // Squat is never ticked, so finishing drops it and leaves bench alone in its group.
+    finishWorkout(db, id, NOW + HOUR);
+    expect(db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).get()!.supersetGroup).not.toBeNull();
+
+    expect(getWorkoutDetail(db, id, 'lb')!.exercises.map((e) => e.supersetGroup)).toEqual([null]);
+  });
+
+  it('is null for a finished workout with no finish time, rather than throwing', () => {
+    const db = seededDb();
+    const id = benchWorkout(db, NOW, 185);
+    db.update(workouts).set({ finishedAt: null }).where(eq(workouts.id, id)).run();
+    expect(getWorkoutDetail(db, id, 'lb')).toBeNull();
+  });
+
   it('is null for the active workout and an unknown id', () => {
     const db = seededDb();
     const id = startEmptyWorkout(db, NOW);
@@ -258,7 +279,6 @@ describe('startRepeatWorkout (R171)', () => {
     tick(db, active(db, BENCH).sets[0].id, 185, 5, NOW + 1);
     // Squat is never ticked, so finishing drops it and leaves bench alone in its group.
     finishWorkout(db, id, NOW + HOUR);
-    expect(getWorkoutDetail(db, id, 'lb')!.exercises.map((e) => e.supersetGroup)).toEqual([expect.any(Number)]);
 
     startRepeatWorkout(db, id, NOW + DAY);
     expect(getActiveWorkoutView(db)!.exercises.map((e) => e.supersetGroup)).toEqual([null]);

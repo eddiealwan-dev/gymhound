@@ -1,6 +1,5 @@
 import {
   cardLine,
-  countPrKinds,
   formatWorkoutDuration,
   groupByMonth,
   historySetText,
@@ -76,24 +75,6 @@ describe('marksLine', () => {
 
   it('is null with no marks', () => {
     expect(marksLine([])).toBeNull();
-  });
-});
-
-describe('countPrKinds (R178)', () => {
-  it('counts distinct exercise and kind pairs', () => {
-    expect(
-      countPrKinds([
-        { exerciseId: 'bench', prFlags: 1 | 4 },
-        { exerciseId: 'bench', prFlags: 1 },
-        { exerciseId: 'bench', prFlags: 2 },
-        { exerciseId: 'squat', prFlags: 1 },
-        { exerciseId: 'plank', prFlags: 0 },
-      ]),
-    ).toBe(4);
-  });
-
-  it('is 0 with nothing flagged', () => {
-    expect(countPrKinds([])).toBe(0);
   });
 });
 
