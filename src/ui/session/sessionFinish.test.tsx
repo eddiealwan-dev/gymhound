@@ -13,7 +13,7 @@ import { Button } from '../Button';
 const mockWorkout = { id: 'w1', name: 'Push A', startedAt: 1_000, restEndsAt: null, exercises: [] };
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn(), back: jest.fn(), push: jest.fn(), canGoBack: () => true },
+  router: { replace: jest.fn(), back: jest.fn(), push: jest.fn(), dismissTo: jest.fn(), canGoBack: () => true },
   useNavigation: () => ({ addListener: () => () => {} }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -86,6 +86,7 @@ let warn: jest.SpyInstance;
 
 beforeEach(() => {
   jest.mocked(router.replace).mockClear();
+  jest.mocked(router.dismissTo).mockClear();
   jest.mocked(finish).mockReset();
   jest.mocked(discard).mockClear();
   jest.mocked(flushAll).mockClear();
@@ -386,6 +387,24 @@ describe('the session screen after Finish anyway, while the finish waits for the
     press(tree, 'Discard');
 
     expect(discard).toHaveBeenCalledWith('db', 'w1');
-    expect(router.replace).toHaveBeenCalledWith('/');
+    // Back to the Train screen already there, without stacking another (R78).
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('Discard workout (R78)', () => {
+  it('once confirmed, discards and returns to the Train screen already there, without stacking another', () => {
+    jest.mocked(router.back).mockClear();
+    const tree = mount();
+    press(tree, 'Discard workout');
+    expect(shownText(tree)).toContain('Discard this workout?');
+    press(tree, 'Discard');
+
+    expect(discard).toHaveBeenCalledWith('db', 'w1');
+    expect(router.dismissTo).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
   });
 });

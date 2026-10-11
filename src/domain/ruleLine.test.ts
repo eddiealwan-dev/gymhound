@@ -235,6 +235,32 @@ describe("todaysRead (spec 7.4, today's read; R61 for a flagged exercise)", () =
     );
   });
 
+  it('bodyweight_plus planned at 0 added load reads "bodyweight"; the raise stays a weight (R75)', () => {
+    const dip = (over: Partial<ReadArgs>) =>
+      read({
+        rule: { ...RULE_LB, repMax: 10 },
+        loggingType: 'bodyweight_plus',
+        equipment: 'bodyweight',
+        planned: { weight: 0, unit: 'lb' },
+        ...over,
+      });
+    expect(dip({})).toBe('Hit 10s on a normal day and next time is 5 lb.');
+    expect(dip({ mark: 'sick' })).toBe('Hit 10s on a normal day and next time is 5 lb. Sick today, so bodyweight holds.');
+    expect(dip({ override: { weight: 10, unit: 'lb' } })).toBe('Today is set to 10 lb by you. The rule still says bodyweight.');
+    expect(dip({ override: { weight: 10, unit: 'lb' }, mark: 'pain' })).toBe('Today is set to 10 lb by you. Pain today, so bodyweight holds.');
+    expect(dip({ rule: RULE_KG, planned: { weight: 0, unit: 'kg' }, mark: 'cutting' })).toBe(
+      'Hit 8s on a normal day and next time is 2.5 kg. Cutting today, so bodyweight holds.',
+    );
+    // Above 0 it is a weight again.
+    expect(dip({ planned: { weight: 5, unit: 'lb' }, mark: 'sick' })).toBe('Hit 10s on a normal day and next time is 10 lb. Sick today, so 5 lb holds.');
+  });
+
+  it('a plan of 0 on any other type still says its weight', () => {
+    expect(read({ loggingType: 'assisted', equipment: 'machine', planned: { weight: 0, unit: 'lb' }, mark: 'sick' })).toBe(
+      'Hit 8s on a normal day and next time is 0 lb. Sick today, so 0 lb holds.',
+    );
+  });
+
   it('no read for timed, distance_time, increment 0 or no rule', () => {
     expect(read({ loggingType: 'timed', rule: RULE_TIME })).toBeNull();
     expect(read({ loggingType: 'distance_time' })).toBeNull();

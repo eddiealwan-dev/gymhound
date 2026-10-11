@@ -30,10 +30,13 @@ import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
-/** Leaves the session without touching the workout. With nothing to go back to (the page was opened by address, or reloaded), it lands on Train. */
-function leave() {
-  if (router.canGoBack()) router.back();
-  else router.replace('/');
+/**
+ * Back to the Train screen already under the session, as the finish summary's Done does (R78), so leaving never stacks
+ * a second Train screen. With nothing under it (the page was opened by address, or reloaded), Train takes its place.
+ * Back to Train leaves the workout as it is; Discard calls this once the workout is gone.
+ */
+function toTrain() {
+  router.dismissTo('/');
 }
 
 /** Module-level so `useDbQuery` reads again only when the data changes. */
@@ -101,7 +104,7 @@ function SessionHeader({
           accessibilityRole="button"
           accessibilityLabel="Back to Train"
           hitSlop={4}
-          onPress={leave}
+          onPress={toTrain}
           style={({ pressed }) => ({ ...ICON_BUTTON, opacity: pressed ? 0.8 : 1 })}
         >
           <Ionicons name="chevron-back" size={28} color={colors.text} />
@@ -200,7 +203,7 @@ export default function Session() {
       <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center' }}>
         <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', padding: 16, gap: 16 }}>
           <Body style={{ textAlign: 'center' }}>No workout in progress.</Body>
-          <Button label="Back to Train" onPress={() => router.replace('/')} />
+          <Button label="Back to Train" onPress={toTrain} />
         </View>
       </View>
     );
@@ -287,7 +290,7 @@ export default function Session() {
     if (finishing.current) return;
     setAsk(null);
     discard(db, workout.id);
-    router.replace('/');
+    toTrain();
   };
 
   return (

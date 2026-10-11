@@ -106,7 +106,8 @@ function raisedFrom(planned: Load, rule: Rule, loggingType: LoggingType, equipme
 /**
  * Today's read (spec 7.4, the read table), after the rule for the types it raises with an increment above 0; null
  * for the rest. A flagged exercise reads "{Reason} today, so {planned} holds." (R61). `planned` and `override` are
- * shown in their own units; `gear` is the bar and plates for the plan's unit.
+ * shown in their own units, except a bodyweight-plus plan of 0, which reads "bodyweight" (R75); `gear` is the bar and
+ * plates for the plan's unit.
  */
 export function todaysRead(a: {
   rule: Rule | null;
@@ -121,7 +122,9 @@ export function todaysRead(a: {
   if (!rule || !isLoaded(loggingType) || rule.increment <= 0) return null;
   if (!planned) return 'Pick a starting weight. Next time builds from it.';
 
-  const plan = formatWeight(planned.weight, planned.unit);
+  // A bodyweight-plus plan of 0 added load is just bodyweight (R75); the raise from it is still a weight.
+  const atBodyweight = loggingType === 'bodyweight_plus' && isZeroWeight(planned.weight, planned.unit);
+  const plan = atBodyweight ? 'bodyweight' : formatWeight(planned.weight, planned.unit);
   const holds = mark ? `${MARK_LABELS[mark]} today, so ${plan} holds.` : null;
   if (override) {
     return `Today is set to ${formatWeight(override.weight, override.unit)} by you. ${holds ?? `The rule still says ${plan}.`}`;
