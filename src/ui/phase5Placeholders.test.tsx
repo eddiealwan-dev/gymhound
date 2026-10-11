@@ -5,19 +5,18 @@ import FuelTargetsRoute from '../../app/(tabs)/fuel-targets';
 import TabsLayout from '../../app/(tabs)/_layout';
 import FoodRoute from '../../app/food/[id]';
 import AddFoodRoute from '../../app/food/add';
-import PaywallRoute from '../../app/paywall';
 import { FuelTrends } from './fuel/FuelTrends';
 import { TargetsForm } from './fuel/TargetsForm';
 import { WaterCard } from './fuel/WaterCard';
 import { Footer } from './Footer';
-import { ProPitch } from './pro/ProPitch';
 import { FoodOfferBanner } from './session/FoodOfferBanner';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
  * Phase 5 Task 1 (R155): the stubs and placeholder routes later tasks fill. The stubs draw nothing; each route says
- * "Not built yet." and can be left. The paywall and the food screens have no footer (§18.4).
+ * "Not built yet." and can be left. The food screens have no footer (§18.4). The paywall and ProPitch are tested in
+ * paywall.test.tsx.
  */
 
 /** The screens each `Tabs.Screen` registered, by name, with its options. */
@@ -59,7 +58,6 @@ beforeEach(() => {
 
 describe('the placeholder routes', () => {
   it.each([
-    ['/paywall', PaywallRoute],
     ['/food/add', AddFoodRoute],
     ['/food/[id]', FoodRoute],
     ['/fuel-targets', FuelTargetsRoute],
@@ -70,7 +68,6 @@ describe('the placeholder routes', () => {
   });
 
   it.each([
-    ['/paywall', PaywallRoute, 'Close'],
     ['/food/add', AddFoodRoute, 'Close'],
     ['/food/[id]', FoodRoute, 'Close'],
     ['/fuel-targets', FuelTargetsRoute, 'Back to Fuel'],
@@ -86,8 +83,6 @@ describe('the placeholder routes', () => {
 
 describe('the stubs draw nothing until their task fills them', () => {
   it.each([
-    ['ProPitch', <ProPitch key="p" context="screen" />],
-    ['ProPitch in the tab', <ProPitch key="t" context="tab" onDone={() => {}} />],
     ['WaterCard', <WaterCard key="w" localDate="2026-10-11" />],
     ['TargetsForm', <TargetsForm key="f" initial={null} submitLabel="Save targets" onSaved={() => {}} />],
     ['FuelTrends', <FuelTrends key="r" today="2026-10-11" />],

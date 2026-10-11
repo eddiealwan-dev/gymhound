@@ -40,7 +40,11 @@ jest.mock('../state/dataVersion', () => ({
 jest.mock('./BarPicker', () => ({ BarPicker: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 // Developer comes after Export where the debug unlock is allowed; these tests read Export as the last group.
-jest.mock('../platform/entitlements', () => ({ debugUnlockAllowed: () => false, entitlementsFor: jest.fn() }));
+jest.mock('../platform/entitlements', () => ({
+  debugUnlockAllowed: () => false,
+  entitlementsFor: jest.fn(),
+  useEntitlementsState: () => ({ isPro: false, isDebugPro: false, canPurchase: false, offer: null, kind: 'free' }),
+}));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -59,8 +63,12 @@ function mount(): ReactTestRenderer {
 
 const lines = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join(''));
 
-/** Every line of text in the Export section, from its heading to the end of the screen. */
-const exportLines = (tree: ReactTestRenderer) => lines(tree).slice(lines(tree).indexOf('Export') + 1);
+/** Every line of text in the Export section, from its heading to the next group (GymHound Pro). */
+const exportLines = (tree: ReactTestRenderer) => {
+  const all = lines(tree);
+  const next = all.indexOf('GymHound Pro');
+  return all.slice(all.indexOf('Export') + 1, next === -1 ? undefined : next);
+};
 
 const button = (tree: ReactTestRenderer, label: string) => tree.root.find((n) => n.props.label === label && typeof n.props.onPress === 'function');
 

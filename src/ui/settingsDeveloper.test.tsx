@@ -3,17 +3,26 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
 import { saveRoutine } from '../db/repositories/routinesRepo';
-import { getSettings } from '../db/repositories/settingsRepo';
+import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { draftReducer, newDraft } from '../domain/routineDraft';
+import { createRevenueCatEntitlements } from '../platform/entitlements';
+import type { AppEntitlements, PurchasesSdk } from '../platform/entitlements';
 import { useRoutineLimit } from './RoutineLimit';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A real seeded database, so Settings and the routine limit share what they read. */
 let mockDb: Db;
+/** When set, the app's entitlements object (a store build); otherwise the real one for `mockDb`. */
+let mockEntitlements: AppEntitlements | null = null;
 
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
+jest.mock('../platform/entitlements/select', () => {
+  const actual = jest.requireActual('../platform/entitlements/select');
+  return { ...actual, entitlementsFor: (db: Db) => mockEntitlements ?? actual.entitlementsFor(db) };
+});
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
@@ -87,6 +96,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mockEntitlements?.dispose();
+  mockEntitlements = null;
   globals.__DEV__ = originalDev;
   if (originalFlag === undefined) delete process.env.EXPO_PUBLIC_DEBUG_UNLOCK;
   else process.env.EXPO_PUBLIC_DEBUG_UNLOCK = originalFlag;
@@ -131,5 +142,37 @@ describe('Settings: Developer (R126)', () => {
     expect(unlock(tree)[0].props.value).toBe(false);
     act(() => limit.whenRoomFor(add));
     expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  it('under the store with Pro bought, shows the debug unlock itself, so it can still be turned off', async () => {
+    build(true);
+    setSetting(mockDb, 'proCached', true);
+    setSetting(mockDb, 'proDebugUnlock', true);
+    const sdk: PurchasesSdk = {
+      configure: () => {},
+      getCustomerInfo: async () => ({ activeEntitlements: ['pro'] }),
+      onCustomerInfo: () => () => {},
+      getDefaultPackage: async () => null,
+      purchase: async () => ({ activeEntitlements: ['pro'] }),
+      restore: async () => ({ activeEntitlements: ['pro'] }),
+    };
+    mockEntitlements = createRevenueCatEntitlements(mockDb, sdk, 'key', true);
+    const tree = mount();
+    await act(async () => {});
+
+    expect(unlock(tree)[0].props.value).toBe(true);
+    act(() => unlock(tree)[0].props.onValueChange(false));
+    expect(getSettings(mockDb).proDebugUnlock).toBe(false);
+    // The app re-reads on bumpData; here the screen is drawn again by hand.
+    act(() =>
+      tree.update(
+        <>
+          <Settings />
+          <LimitProbe />
+        </>,
+      ),
+    );
+    expect(unlock(tree)[0].props.value).toBe(false);
+    expect(mockEntitlements.isPro()).toBe(true);
   });
 });
