@@ -28,6 +28,8 @@ jest.mock('expo-router', () => {
   };
 });
 jest.mock('../platform/entitlements', () => ({ useIsPro: () => mockPro }));
+// The pitch has its own tests (paywall.test); here it only has to be the one the route shows.
+jest.mock('./pro/ProPitch', () => ({ ProPitch: () => null }));
 // The real form, counting its mounts: the route should mount it once, not again on its first focus.
 const mockFormMounts = { count: 0 };
 jest.mock('./fuel/TargetsForm', () => {
