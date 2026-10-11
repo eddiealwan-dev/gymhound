@@ -1262,3 +1262,37 @@ describe('getActiveWorkoutView', () => {
     expect(listed.at(-1)).toMatchObject({ id: a, rpe: 8.5, position: 9 });
   });
 });
+
+describe('barbell rounding reads the plates edited in Settings (Task 5, R107)', () => {
+  const BENCH = `${PUSH_A}:barbell-bench-press`;
+
+  /** A kg lifter who owns only four pairs of 20 kg plates, on a 20 kg bar: loadable totals are 20, 60, 100, 140, 180. */
+  function kgLifterWithTwenties(): Db {
+    const db = seededDb();
+    setSetting(db, 'unit', 'kg');
+    setSetting(db, 'barKg', 20);
+    setSetting(db, 'platesKg', { '20': 4 });
+    return db;
+  }
+
+  it('rounds a kg raise from 100 by 2.5 up to the next loadable total, 140 (the 40 kg step)', () => {
+    const db = kgLifterWithTwenties();
+    db.update(routineExercises).set({ nextWeight: 100, nextWeightUnit: 'kg' }).where(eq(routineExercises.id, BENCH)).run();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({ plannedWeight: 100, plannedUnit: 'kg' });
+    setIds(db).forEach((setId, i) =>
+      tickSet(db, setId, { weight: 100, reps: 8, durationS: null, distance: null }, 'kg', NOW + (i + 1) * 60_000, 'km'),
+    );
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({ outcome: 'raised', nextWeight: 140, nextUnit: 'kg' });
+  });
+
+  it('plans a 225 lb bench as a loadable kg total with those plates: 100 kg', () => {
+    const db = kgLifterWithTwenties();
+    db.update(routineExercises).set({ nextWeight: 225, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, BENCH)).run();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({ plannedWeight: 100, plannedUnit: 'kg' });
+  });
+});

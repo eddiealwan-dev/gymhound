@@ -7,6 +7,7 @@ import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
 import type { Db } from '../../src/db/types';
 import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
+import { formatWeight } from '../../src/domain/units';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
@@ -14,6 +15,7 @@ import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/stat
 import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
+import { PlatesEditor } from '../../src/ui/PlatesEditor';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -176,6 +178,85 @@ function BarSection() {
         <Body muted>Used by the plate calculator.</Body>
         <BarPicker />
       </View>
+    </Section>
+  );
+}
+
+/** The plate pairs owned for the display unit, edited as the bar is (R107). */
+function PlatesSection() {
+  return (
+    <Section title="Plates">
+      <PlatesEditor />
+    </Section>
+  );
+}
+
+/** The default increments Settings offers for each unit. */
+const INCREMENT_CHOICES: Record<WeightUnit, number[]> = { lb: [2.5, 5, 10], kg: [1, 1.25, 2.5, 5] };
+
+const INCREMENT_KEY = { lb: 'defaultIncrementLb', kg: 'defaultIncrementKg' } as const;
+
+/**
+ * The increment a new exercise in a routine starts with, for the display unit (spec 8.11, R124): the choices in one
+ * row, with a stored value that is not one of them (from a restored backup) kept in its place. The current one is
+ * filled with `text`, and the screen reader says it is selected.
+ */
+function IncrementControl({ unit, value, onChange }: { unit: WeightUnit; value: number; onChange: (increment: number) => void }) {
+  const { colors } = useTheme();
+  const base = INCREMENT_CHOICES[unit];
+  const choices = base.includes(value) || !(value > 0) ? base : [...base, value].sort((a, b) => a - b);
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
+      {choices.map((increment) => {
+        const selected = increment === value;
+        const label = formatWeight(increment, unit);
+        return (
+          <Pressable
+            key={increment}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(increment)}
+            style={{
+              flexGrow: 1,
+              flexBasis: 64,
+              minHeight: 44,
+              borderRadius: 9,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: selected ? colors.text : 'transparent',
+            }}
+          >
+            <Body weight={600} style={{ color: selected ? colors.bg : colors.text, fontVariant: ['tabular-nums'] }}>
+              {label}
+            </Body>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The default increment for the display unit, as Bar and Plates are edited: the other unit keeps its own. */
+function ProgressionSection() {
+  const db = useDb();
+  const settings = useDbQuery(getSettings);
+  const unit = settings.unit;
+  return (
+    <Section title="Progression">
+      <Field label="Default increment">
+        <View style={{ gap: 8 }}>
+          <Body muted>New exercises in a routine start with this. Change any one in the routine editor.</Body>
+          <IncrementControl
+            unit={unit}
+            value={settings[INCREMENT_KEY[unit]]}
+            onChange={(increment) => {
+              setSetting(db, INCREMENT_KEY[unit], increment);
+              bumpData();
+            }}
+          />
+        </View>
+      </Field>
     </Section>
   );
 }
@@ -425,7 +506,7 @@ function ExportSection() {
   );
 }
 
-/** Settings so far: Appearance, Units, Bar, Rest timer, Backups and Export. The rest arrive in later tasks. */
+/** Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups and Export. The rest arrive in later tasks. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -437,6 +518,8 @@ export default function Settings() {
         </Section>
         <UnitsSection />
         <BarSection />
+        <PlatesSection />
+        <ProgressionSection />
         <RestTimerSection />
         <BackupsSection />
         <ExportSection />
