@@ -1,4 +1,4 @@
-import { AccessibilityInfo, Animated, Image, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Image, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
@@ -77,7 +77,6 @@ const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK];
 let reduceMotion: boolean;
 /** What the phone told the sheet about Reduce Motion changing, so a test can change it. */
 let reduceMotionChanged: ((on: boolean) => void) | null;
-let timing: jest.SpyInstance;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -89,11 +88,6 @@ beforeEach(() => {
     if (event === 'reduceMotionChanged') reduceMotionChanged = handler;
     return { remove: () => void (reduceMotionChanged = null) };
   }) as unknown as typeof AccessibilityInfo.addEventListener);
-  // Jest has no native animation driver: each fade runs straight to where it ends, and its settings are recorded.
-  timing = jest.spyOn(Animated, 'timing').mockImplementation((value, config) => {
-    const run = { start: () => (value as Animated.Value).setValue(config.toValue as number), stop: () => {}, reset: () => {} };
-    return run as unknown as Animated.CompositeAnimation;
-  });
 });
 
 afterEach(() => {
@@ -187,25 +181,31 @@ describe('the form demo (R86)', () => {
 });
 
 describe('the form demo: the photos (R86)', () => {
-  it('starts on the start photo, then cross-fades to the end photo and back every 1.2 s in 250 ms', async () => {
+  it('starts on the start photo, then swaps to the end photo and back every 1.2 s, instantly', async () => {
     const tree = await open('barbell-bench-press');
     expect(opacity(photo(tree, END))).toBe(0);
 
     act(() => void jest.advanceTimersByTime(1199));
-    expect(timing).not.toHaveBeenCalled();
+    expect(opacity(photo(tree, END))).toBe(0);
     act(() => void jest.advanceTimersByTime(1));
-
-    expect(timing).toHaveBeenCalledTimes(1);
-    expect(timing.mock.calls[0][1]).toMatchObject({ toValue: 1, duration: 250 });
     expect(opacity(photo(tree, END))).toBe(1);
 
     act(() => void jest.advanceTimersByTime(1200));
-    expect(timing).toHaveBeenCalledTimes(2);
-    expect(timing.mock.calls[1][1]).toMatchObject({ toValue: 0, duration: 250 });
     expect(opacity(photo(tree, END))).toBe(0);
 
     act(() => void jest.advanceTimersByTime(1200));
-    expect(timing.mock.calls[2][1]).toMatchObject({ toValue: 1 });
+    expect(opacity(photo(tree, END))).toBe(1);
+    // No fade in between: it is an instant flip, so both photos stay drawn and the start photo is never touched.
+    expect(photos(tree)).toHaveLength(2);
+    expect(opacity(photo(tree, START))).toBeUndefined();
+  });
+
+  it('gives the end photo an opaque background, so nothing of the start photo shows around it', async () => {
+    const tree = await open('barbell-bench-press');
+
+    expect(StyleSheet.flatten(photo(tree, END).props.style)).toMatchObject({ backgroundColor: '#232019' });
+    act(() => void jest.advanceTimersByTime(1200));
+    expect(StyleSheet.flatten(photo(tree, END).props.style)).toMatchObject({ backgroundColor: '#232019', opacity: 1 });
   });
 
   it('lays the end photo over the start photo in one 3:2 frame', async () => {
@@ -223,11 +223,24 @@ describe('the form demo: the photos (R86)', () => {
 
   it('stops when it closes', async () => {
     const tree = await open('barbell-bench-press');
+    act(() => void jest.advanceTimersByTime(1200));
+    expect(jest.getTimerCount()).toBe(1);
     await act(async () => tree.update(<FormDemo exerciseId={null} onClose={() => {}} />));
 
     act(() => void jest.advanceTimersByTime(5000));
 
-    expect(timing).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('clears its timer when it is unmounted', async () => {
+    const tree = await open('barbell-bench-press');
+    act(() => void jest.advanceTimersByTime(1200));
+    expect(jest.getTimerCount()).toBe(1);
+
+    act(() => tree.unmount());
+
+    expect(jest.getTimerCount()).toBe(0);
+    act(() => void jest.advanceTimersByTime(5000));
   });
 
   it('with Reduce Motion on, shows both photos side by side and never moves them', async () => {
@@ -238,7 +251,6 @@ describe('the form demo: the photos (R86)', () => {
     const end = photo(tree, END);
     act(() => void jest.advanceTimersByTime(5000));
 
-    expect(timing).not.toHaveBeenCalled();
     expect(jest.getTimerCount()).toBe(0);
     expect(opacity(end)).toBeUndefined();
     // Side by side: a row holds both.
@@ -249,14 +261,44 @@ describe('the form demo: the photos (R86)', () => {
   it('when Reduce Motion is turned on while it is open, stops and shows both side by side', async () => {
     const tree = await open('barbell-bench-press');
     act(() => void jest.advanceTimersByTime(1200));
-    expect(timing).toHaveBeenCalledTimes(1);
+    expect(opacity(photo(tree, END))).toBe(1);
 
     act(() => reduceMotionChanged!(true));
     act(() => void jest.advanceTimersByTime(5000));
 
-    expect(timing).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
     expect(opacity(photo(tree, END))).toBeUndefined();
     expect(opacity(photo(tree, START))).toBeUndefined();
+  });
+
+  it('when Reduce Motion is turned off again, starts over on the start photo', async () => {
+    reduceMotion = true;
+    const tree = await open('barbell-bench-press');
+    act(() => void jest.advanceTimersByTime(5000));
+    expect(jest.getTimerCount()).toBe(0);
+
+    act(() => reduceMotionChanged!(false));
+    expect(opacity(photo(tree, END))).toBe(0);
+    act(() => void jest.advanceTimersByTime(1200));
+    expect(opacity(photo(tree, END))).toBe(1);
+
+    // Turned on while the end photo shows, then off again: back to the start photo, not the end photo.
+    act(() => reduceMotionChanged!(true));
+    act(() => reduceMotionChanged!(false));
+    expect(opacity(photo(tree, END))).toBe(0);
+    act(() => void jest.advanceTimersByTime(1199));
+    expect(opacity(photo(tree, END))).toBe(0);
+  });
+
+  it('shows the start photo alone, and still, until the phone has said whether Reduce Motion is on', async () => {
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockImplementation(() => new Promise<boolean>(() => {}));
+    const tree = await open('barbell-bench-press');
+
+    act(() => void jest.advanceTimersByTime(5000));
+
+    expect(jest.getTimerCount()).toBe(0);
+    expect(photos(tree)).toHaveLength(2);
+    expect(opacity(photo(tree, END))).toBe(0);
   });
 
   it('holds still, as with Reduce Motion, when the phone cannot say whether it is on', async () => {
@@ -265,8 +307,9 @@ describe('the form demo: the photos (R86)', () => {
 
     act(() => void jest.advanceTimersByTime(5000));
 
-    expect(timing).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
     expect(photos(tree)).toHaveLength(2);
+    expect(opacity(photo(tree, END))).toBeUndefined();
   });
 
   it('an exercise with photos and no steps shows the photos alone', async () => {
@@ -285,7 +328,7 @@ describe('the form demo without photos (R86)', () => {
     expect(photos(tree)).toHaveLength(0);
     expect(texts(tree)).toEqual(['Kettlebell halo', 'Shoulders', '1', 'Hold the bell by its horns.', '2', 'Circle it around your head.', 'Close']);
     act(() => void jest.advanceTimersByTime(5000));
-    expect(timing).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('with neither photos nor steps, shows the name and the muscles', async () => {

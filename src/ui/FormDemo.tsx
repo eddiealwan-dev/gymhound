@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Image, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, Image, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { getExercise, type ExerciseDetail } from '../db/repositories/exercisesRepo';
@@ -10,10 +10,8 @@ import { Sheet } from './Sheet';
 import { Body, Display, Num } from './Text';
 import { useTheme } from './ThemeProvider';
 
-/** How long each photo shows before the other fades in (R86). */
+/** How long each photo shows before the other swaps in (R86, R98). */
 const PHOTO_MS = 1200;
-/** The cross-fade between them. */
-const FADE_MS = 250;
 /** The steps shown before **Show all steps**. */
 const FIRST_STEPS = 3;
 
@@ -44,29 +42,27 @@ function useReduceMotion(): boolean | null {
 }
 
 /**
- * The start and end photos in a 3:2 frame: the end photo cross-fades in over the start photo and back out every 1.2 s.
- * With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while unknown,
- * the start photo shows alone.
+ * The start and end photos in a 3:2 frame: every 1.2 s the shown photo flips, instantly, like a flipbook (R98: a blend of
+ * two poses of the same person shows a ghost of the first). Both photos stay mounted, the end photo stacked over the
+ * start photo, and only the end photo's opacity flips between 0 and 1, so iOS never shows a blank frame decoding a new
+ * source. The end photo has an opaque background, so none of the start photo shows around it when their letterboxing
+ * differs. With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while
+ * unknown, the start photo shows alone.
  */
 function Photos({ name, photos }: { name: string; photos: readonly [ImageSourcePropType, ImageSourcePropType] }) {
   const { colors } = useTheme();
   const reduced = useReduceMotion();
-  /** The end photo's opacity: 0 shows the start photo under it, 1 covers it. */
-  const endShown = useRef(new Animated.Value(0)).current;
+  /** Whether the end photo is shown: its opacity is 1 and it covers the start photo, or 0 and the start photo shows. */
+  const [endShown, setEndShown] = useState(false);
 
   useEffect(() => {
     if (reduced !== false) return;
-    let showingEnd = false;
-    const timer = setInterval(() => {
-      showingEnd = !showingEnd;
-      Animated.timing(endShown, { toValue: showingEnd ? 1 : 0, duration: FADE_MS, useNativeDriver: true }).start();
-    }, PHOTO_MS);
+    const timer = setInterval(() => setEndShown((shown) => !shown), PHOTO_MS);
     return () => {
       clearInterval(timer);
-      endShown.stopAnimation();
-      endShown.setValue(0);
+      setEndShown(false);
     };
-  }, [reduced, endShown]);
+  }, [reduced]);
 
   const frame = { aspectRatio: 3 / 2, borderRadius: 12, overflow: 'hidden' as const, backgroundColor: colors.surfaceRaised };
   const photo = (which: 0 | 1) => ({
@@ -92,7 +88,7 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   return (
     <View style={frame}>
       <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
-      <Animated.Image {...photo(1)} style={[StyleSheet.absoluteFill, { opacity: endShown }]} />
+      <Image {...photo(1)} style={[StyleSheet.absoluteFill, { opacity: endShown ? 1 : 0, backgroundColor: colors.surfaceRaised }]} />
     </View>
   );
 }
@@ -154,8 +150,8 @@ type Props = {
 };
 
 /**
- * The form demo (R86): a sheet with the exercise's name, its start and end photos alternating with a cross-fade (side
- * by side with Reduce Motion), its primary and secondary muscles, and its first three steps with **Show all steps**.
+ * The form demo (R86): a sheet with the exercise's name, its start and end photos swapping every 1.2 s (side by
+ * side with Reduce Motion), its primary and secondary muscles, and its first three steps with **Show all steps**.
  * An exercise without photos shows its steps only; one with neither shows its name and muscles. It opens when given an
  * exercise and reads it then, never before.
  */
