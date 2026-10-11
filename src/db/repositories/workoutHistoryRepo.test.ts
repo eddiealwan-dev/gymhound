@@ -9,7 +9,7 @@ import type { Db } from '../types';
 import { deleteSavedWorkout, getSavedWorkout, saveWorkoutAs, startSavedWorkout } from './savedWorkoutsRepo';
 import { setActiveRoutine } from './routinesRepo';
 import { setSetting } from './settingsRepo';
-import { addExerciseToWorkout, addSet, setExerciseMark } from './workoutEditRepo';
+import { addExerciseToWorkout, addSet, addWarmupSet, setExerciseMark } from './workoutEditRepo';
 import {
   deleteFinishedWorkout,
   loadWorkoutDraft,
@@ -514,5 +514,126 @@ describe('gear from Settings now (R167)', () => {
     saveWorkoutEdit(db, patchDraftSet(d, weIdOf(d, BENCH), 0, { rpe: 8 }));
     expect(block(db, id, BENCH)!.nextWeight).toBe(145);
     expect(slot(db, BENCH_SLOT).nextWeight).toBe(145);
+  });
+});
+
+describe('a progress reset sticks (R192)', () => {
+  function swap(db: Db, exerciseId: string): void {
+    // As the routine editor does when a slot's exercise is replaced: the progress starts again.
+    db.update(routineExercises).set({ exerciseId, nextWeight: null, nextWeightUnit: null }).where(eq(routineExercises.id, BENCH_SLOT)).run();
+  }
+
+  it('a slot reset by a swap stays null after an old workout is edited or deleted', () => {
+    const db = seededDb();
+    const oldBench = pushDay(db, OCT_1, 135, [8, 8, 8, 8]);
+    swap(db, 'incline-dumbbell-press');
+    const incline = pushDay(db, OCT_1 + 2 * DAY, 50, [8, 8, 8, 8]);
+    expect(block(db, incline, 'incline-dumbbell-press')).toMatchObject({ routineExerciseId: BENCH_SLOT, outcome: 'raised' });
+    swap(db, BENCH);
+    expect(slot(db, BENCH_SLOT).nextWeight).toBeNull();
+
+    const d = draftOf(db, oldBench);
+    saveWorkoutEdit(db, patchDraftSet(d, weIdOf(d, BENCH), 0, { reps: 5 }));
+    expect(slot(db, BENCH_SLOT)).toMatchObject({ exerciseId: BENCH, nextWeight: null, nextWeightUnit: null });
+
+    deleteFinishedWorkout(db, incline);
+    expect(slot(db, BENCH_SLOT)).toMatchObject({ exerciseId: BENCH, nextWeight: null, nextWeightUnit: null });
+  });
+
+  it('editing an older workout leaves the slot as the newest left it when the newest had no counted set', () => {
+    const db = seededDb();
+    const older = pushDay(db, OCT_1, 135, [8, 8, 8, 8]);
+    expect(slot(db, BENCH_SLOT).nextWeight).toBe(140);
+    // The newest only logs a warmup on bench: no_sets, next = the plan.
+    const newest = startWorkoutFromDay(db, PUSH_A, OCT_1 + 2 * DAY);
+    const benchId = getActiveWorkoutView(db)!.exercises[0].id;
+    const warm = addWarmupSet(db, benchId);
+    tick(db, warm, 95, 5, OCT_1 + 2 * DAY + MINUTE);
+    finishWorkout(db, newest, OCT_1 + 2 * DAY + HOUR);
+    expect(block(db, newest, BENCH)).toMatchObject({ outcome: 'no_sets', nextWeight: 140 });
+    expect(slot(db, BENCH_SLOT).nextWeight).toBe(140);
+
+    const d = draftOf(db, older);
+    saveWorkoutEdit(db, patchDraftSet(d, weIdOf(d, BENCH), 0, { reps: 5 }));
+
+    expect(block(db, older, BENCH)).toMatchObject({ outcome: 'held', nextWeight: 135 });
+    expect(slot(db, BENCH_SLOT)).toMatchObject({ nextWeight: 140, nextWeightUnit: 'lb' });
+  });
+});
+
+describe('guards for a hand-built draft', () => {
+  function twoBlocks(db: Db): string {
+    return plainWorkout(db, OCT_1, [
+      [BENCH, [[135, 5, null]]],
+      [PLANK, [[null, null, 60]]],
+    ]);
+  }
+
+  it('rejects a draft that repeats an exercise block or leaves one out, changing nothing', () => {
+    const db = seededDb();
+    const id = twoBlocks(db);
+    const before = dump(db, id);
+    const d = draftOf(db, id);
+    expect(() => saveWorkoutEdit(db, { ...d, exercises: [d.exercises[0], d.exercises[0], d.exercises[1]] })).toThrow();
+    expect(() => saveWorkoutEdit(db, { ...d, exercises: [d.exercises[0]] })).toThrow();
+    expect(dump(db, id)).toEqual(before);
+  });
+
+  it.each([
+    ['an RPE under 6', { rpe: 5.5 }],
+    ['an RPE over 10', { rpe: 10.5 }],
+    ['a negative weight', { weight: -5 }],
+    ['negative reps', { reps: -1 }],
+    ['a non-finite weight', { weight: Number.POSITIVE_INFINITY }],
+    ['a NaN reps', { reps: Number.NaN }],
+    ['a negative time', { durationS: -10 }],
+    ['a negative distance', { distance: -1 }],
+  ])('rejects %s, changing nothing', (_name, patch) => {
+    const db = seededDb();
+    const id = twoBlocks(db);
+    const before = dump(db, id);
+    const d = draftOf(db, id);
+    expect(() => saveWorkoutEdit(db, patchDraftSet(d, weIdOf(d, BENCH), 0, patch))).toThrow();
+    expect(dump(db, id)).toEqual(before);
+  });
+
+  it('accepts RPE 6 and 10 and a zero load', () => {
+    const db = seededDb();
+    const id = plainWorkout(db, OCT_1, [[BENCH, [[135, 5, null], [0, 5, null]]]]);
+    let d = draftOf(db, id);
+    d = patchDraftSet(d, weIdOf(d, BENCH), 0, { rpe: 6 });
+    d = patchDraftSet(d, weIdOf(d, BENCH), 1, { rpe: 10 });
+    expect(() => saveWorkoutEdit(db, d)).not.toThrow();
+  });
+});
+
+describe('only exercises whose sets changed re-run the rule', () => {
+  it('after a plate change, an unchanged exercise keeps its stored outcome and next weight', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_1);
+    const view = getActiveWorkoutView(db)!;
+    view.exercises[0].sets.forEach((s, i) => tick(db, s.id, 135, 8, OCT_1 + (i + 1) * MINUTE));
+    view.exercises[1].sets.forEach((s, i) => tick(db, s.id, 95, 12, OCT_1 + (i + 10) * MINUTE));
+    finishWorkout(db, id, OCT_1 + HOUR);
+    expect(block(db, id, BENCH)!.nextWeight).toBe(140);
+    expect(block(db, id, OHP)!.nextWeight).toBe(100);
+
+    // Only 45s and two pairs of 10s now: a raise from 135 rounds to 155, from 95 to 135.
+    setSetting(db, 'platesLb', { '45': 4, '10': 2 });
+    const d = draftOf(db, id);
+    saveWorkoutEdit(db, patchDraftSet(d, weIdOf(d, OHP), 0, { rpe: 8 }));
+
+    expect(block(db, id, BENCH)).toMatchObject({ outcome: 'raised', nextWeight: 140 });
+    expect(slot(db, BENCH_SLOT).nextWeight).toBe(140);
+    expect(block(db, id, OHP)).toMatchObject({ outcome: 'raised', nextWeight: 135 });
+    expect(slot(db, OHP_SLOT).nextWeight).toBe(135);
+  });
+
+  it('a changed mark alone re-runs the rule for that exercise', () => {
+    const db = seededDb();
+    const id = pushDay(db, OCT_1, 135, [8, 8, 8, 8]);
+    const d = draftOf(db, id);
+    saveWorkoutEdit(db, setDraftMark(d, weIdOf(d, BENCH), 'sick'));
+    expect(block(db, id, BENCH)).toMatchObject({ outcome: 'held_marked' });
   });
 });

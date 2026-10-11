@@ -89,14 +89,51 @@ function sameSet(a: DraftSet, b: DraftSet): boolean {
   );
 }
 
+function sameExercise(a: DraftExercise, b: DraftExercise): boolean {
+  return (
+    a.workoutExerciseId === b.workoutExerciseId &&
+    a.mark === b.mark &&
+    a.sets.length === b.sets.length &&
+    a.sets.every((s, j) => sameSet(s, b.sets[j]))
+  );
+}
+
 /** Whether the draft differs from the saved one in anything Save would write. Compares values, not identity. */
 export function isDraftDirty(saved: WorkoutDraft, current: WorkoutDraft): boolean {
   if (saved.exercises.length !== current.exercises.length) return true;
-  return saved.exercises.some((a, i) => {
-    const b = current.exercises[i];
-    if (a.workoutExerciseId !== b.workoutExerciseId || a.mark !== b.mark || a.sets.length !== b.sets.length) return true;
-    return a.sets.some((s, j) => !sameSet(s, b.sets[j]));
-  });
+  return saved.exercises.some((a, i) => !sameExercise(a, current.exercises[i]));
+}
+
+/**
+ * The workout exercises whose sets or mark differ between the saved draft and the current one (by id, so order does
+ * not matter); one only in the current draft counts as changed. A save re-runs the rule on these only.
+ */
+export function changedExercises(saved: WorkoutDraft, current: WorkoutDraft): string[] {
+  const before = new Map(saved.exercises.map((e) => [e.workoutExerciseId, e]));
+  return current.exercises
+    .filter((e) => {
+      const was = before.get(e.workoutExerciseId);
+      return was === undefined || !sameExercise(was, e);
+    })
+    .map((e) => e.workoutExerciseId);
+}
+
+/**
+ * Whether every value of every set can be stored: weight, reps, time and distance finite and not negative, RPE null
+ * or 6 to 10. The editor's fields already parse this way; a hand-built draft may not.
+ */
+export function draftValuesInRange(d: WorkoutDraft): boolean {
+  const ok = (n: number | null) => n === null || (Number.isFinite(n) && n >= 0);
+  return d.exercises.every((e) =>
+    e.sets.every(
+      (s) =>
+        ok(s.weight) &&
+        ok(s.reps) &&
+        ok(s.durationS) &&
+        ok(s.distance) &&
+        (s.rpe === null || (Number.isFinite(s.rpe) && s.rpe >= 6 && s.rpe <= 10)),
+    ),
+  );
 }
 
 export type DraftProblem = { workoutExerciseId: string; index: number; need: 'weight' | 'reps' | 'time' | 'distance' };

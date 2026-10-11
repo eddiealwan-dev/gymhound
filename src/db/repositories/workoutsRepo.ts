@@ -187,16 +187,21 @@ export type StoredOutcome = {
  * outcome and next weight on the workout exercise. It writes nothing else: the routine slots are the caller's (finish
  * writes them from this workout, a history edit re-reads the newest finished workout of each slot). "Marked" is the
  * exercise flagged Something off. Each exercise uses its own rule snapshot and planned weight; barbell raises round
- * with the bar and plates in Settings now, for the working unit.
+ * with the bar and plates in Settings now, for the working unit. With `only`, just those workout exercises are run;
+ * the others keep what is stored.
  */
-export function storeOutcomes(db: Db, workoutId: string): StoredOutcome[] {
+export function storeOutcomes(db: Db, workoutId: string, only?: readonly string[]): StoredOutcome[] {
   const settings = getSettings(db);
   const gear = { lb: gearFor('lb', settings), kg: gearFor('kg', settings) };
   const rows = db
     .select({ we: workoutExercises, loggingType: exercises.loggingType, equipment: exercises.equipment })
     .from(workoutExercises)
     .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
-    .where(eq(workoutExercises.workoutId, workoutId))
+    .where(
+      only === undefined
+        ? eq(workoutExercises.workoutId, workoutId)
+        : and(eq(workoutExercises.workoutId, workoutId), inArray(workoutExercises.id, [...only])),
+    )
     .orderBy(asc(workoutExercises.position))
     .all();
   const stored: StoredOutcome[] = [];

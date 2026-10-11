@@ -1,5 +1,7 @@
 import {
   addDraftSet,
+  changedExercises,
+  draftValuesInRange,
   draftLeavesNothing,
   draftProblems,
   isDraftDirty,
@@ -121,6 +123,31 @@ describe('isDraftDirty', () => {
   it('a value changed and changed back is clean', () => {
     const d = draft();
     expect(isDraftDirty(d, patchDraftSet(patchDraftSet(d, 'we1', 0, { reps: 6 }), 'we1', 0, { reps: 5 }))).toBe(false);
+  });
+});
+
+describe('changedExercises', () => {
+  it('names only the exercises whose sets or mark changed', () => {
+    const d = draft();
+    expect(changedExercises(d, JSON.parse(JSON.stringify(d)))).toEqual([]);
+    expect(changedExercises(d, patchDraftSet(d, 'we2', 0, { durationS: 70 }))).toEqual(['we2']);
+    expect(changedExercises(d, setDraftMark(d, 'we1', 'pain'))).toEqual(['we1']);
+    expect(changedExercises(d, removeDraftSet(addDraftSet(d, 'we1', 'lb', 'mi'), 'we2', 0))).toEqual(['we1', 'we2']);
+  });
+});
+
+describe('draftValuesInRange', () => {
+  it('accepts stored values and rejects negatives, non-finite numbers and an RPE outside 6 to 10', () => {
+    const d = draft();
+    expect(draftValuesInRange(d)).toBe(true);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { rpe: 6, weight: 0 }))).toBe(true);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { rpe: 10 }))).toBe(true);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { rpe: 5.5 }))).toBe(false);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { rpe: 11 }))).toBe(false);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { weight: -1 }))).toBe(false);
+    expect(draftValuesInRange(patchDraftSet(d, 'we1', 0, { reps: Number.NaN }))).toBe(false);
+    expect(draftValuesInRange(patchDraftSet(d, 'we2', 0, { durationS: Number.POSITIVE_INFINITY }))).toBe(false);
+    expect(draftValuesInRange(patchDraftSet(d, 'we2', 0, { distance: -0.5 }))).toBe(false);
   });
 });
 

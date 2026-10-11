@@ -1,5 +1,12 @@
 import { and, asc, desc, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
-import { draftLeavesNothing, draftProblems, type DraftSet, type WorkoutDraft } from '../../domain/historyDraft';
+import {
+  changedExercises,
+  draftLeavesNothing,
+  draftProblems,
+  draftValuesInRange,
+  type DraftSet,
+  type WorkoutDraft,
+} from '../../domain/historyDraft';
 import { newId } from '../ids';
 import { exercises, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -110,16 +117,17 @@ function setValues(s: DraftSet, unit: { weight: DraftSet['weightUnit']; distance
  * For each routine slot (R167, spec 7.3): its next weight from the most recent finished workout exercise linked to it
  * (by finish time, then start, then workout id, then the later block) that still holds the slot's exercise (R74) and
  * ran a rule (outcome not `no_rule`). With none left the slot keeps its value; a slot that no longer exists is skipped.
- * The active workout's rows are never read.
+ * A slot with no next weight (never trained, or its progress reset when its exercise was swapped) is left alone, so a
+ * reset sticks (R192): history from before the reset never refills it. The active workout's rows are never read.
  */
 export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[]): void {
   for (const id of new Set(routineExerciseIds)) {
     const slot = db
-      .select({ exerciseId: routineExercises.exerciseId })
+      .select({ exerciseId: routineExercises.exerciseId, nextWeight: routineExercises.nextWeight })
       .from(routineExercises)
       .where(eq(routineExercises.id, id))
       .get();
-    if (!slot) continue;
+    if (!slot || slot.nextWeight === null) continue;
     const newest = db
       .select({ nextWeight: workoutExercises.nextWeight, nextUnit: workoutExercises.nextUnit })
       .from(workoutExercises)
@@ -170,30 +178,31 @@ function renumber(db: Db, workoutId: string): void {
  * Saves a history edit (spec 7.12, R166, R167, R169) in one transaction: the draft's sets are written (updated by id,
  * added, removed), then unticked sets are dropped and exercises left with none removed, as at finish, and positions
  * renumbered; marks are written. The rule re-runs on the workout with each exercise's own snapshot and planned weight
- * and the gear in Settings now (`storeOutcomes`); PR flags are recomputed for every exercise the workout had before or
+ * and the gear in Settings now (`storeOutcomes`), for the exercises whose sets or mark changed only (the others keep
+ * their stored outcome and next weight); PR flags are recomputed for every exercise the workout had before or
  * after; each routine slot it was linked to before or after takes its next weight from its newest finished workout
  * (`refreshNextWeights`). The saved workout it was started from re-remembers its sets only when this is the latest
  * finished workout started from it (R169). Names, notes, dates and times are not edited; Up next does not move (R168).
  *
  * Throws, changing nothing: for a workout that is not finished (the active workout is never edited here); with
- * `NothingLeftError` when no set would be left; when a ticked set lacks a value its type needs; for a draft exercise
- * or set id that is not this workout's.
+ * `NothingLeftError` when no set would be left; when a ticked set lacks a value its type needs; for a value out of range
+ * (negative or non-finite, RPE outside 6 to 10); for a draft exercise or set id that is not this workout's, or a draft
+ * that lists an exercise block twice or leaves out one the workout has.
  */
 export function saveWorkoutEdit(db: Db, draft: WorkoutDraft): void {
   db.transaction((tx) => {
     const workout = requireFinished(tx, draft.workoutId);
     if (draftLeavesNothing(draft)) throw new NothingLeftError();
     if (draftProblems(draft).length > 0) throw new Error('A ticked set needs a value.');
+    if (!draftValuesInRange(draft)) throw new Error('A set has a value out of range.');
 
     const before = linksOf(tx, workout.id);
-    const blocks = new Set(
-      tx
-        .select({ id: workoutExercises.id })
-        .from(workoutExercises)
-        .where(eq(workoutExercises.workoutId, workout.id))
-        .all()
-        .map((r) => r.id),
-    );
+    const saved = loadWorkoutDraft(tx, workout.id)!;
+    const blocks = new Set(saved.exercises.map((e) => e.workoutExerciseId));
+    const listed = draft.exercises.map((e) => e.workoutExerciseId);
+    if (new Set(listed).size !== listed.length) throw new Error('A draft lists an exercise block twice.');
+    if (listed.length !== blocks.size) throw new Error('A draft leaves out an exercise block of the workout.');
+    const changed = changedExercises(saved, draft);
     const settings = getSettings(tx);
     const units = { weight: settings.unit, distance: settings.distanceUnit };
     // A set ticked in the editor has no tick time: it takes the finish time, so it sorts after the sets ticked on the day.
@@ -243,7 +252,7 @@ export function saveWorkoutEdit(db: Db, draft: WorkoutDraft): void {
       .run();
     renumber(tx, workout.id);
 
-    storeOutcomes(tx, workout.id);
+    storeOutcomes(tx, workout.id, changed);
     const after = linksOf(tx, workout.id);
     recomputePrFlags(tx, [...new Set([...before.exerciseIds, ...after.exerciseIds])]);
     refreshNextWeights(tx, [...before.routineExerciseIds, ...after.routineExerciseIds]);
