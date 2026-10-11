@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { count, eq } from 'drizzle-orm';
 import type { SavedSet, SetType } from '../../domain/types';
-import { exercises, savedWorkoutExercises, savedWorkouts, workoutExercises, workouts } from '../schema';
+import { exercises, savedWorkoutExercises, savedWorkouts, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import {
@@ -14,7 +14,7 @@ import {
   saveWorkoutAs,
   startSavedWorkout,
 } from './savedWorkoutsRepo';
-import { addExerciseToWorkout, addWarmupSet, toggleSupersetWithNext } from './workoutEditRepo';
+import { addExerciseToWorkout, addSet, addWarmupSet, toggleSupersetWithNext } from './workoutEditRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 import {
   ActiveWorkoutExistsError,
@@ -84,6 +84,24 @@ function savedPushA(db: Db): string {
   return saveWorkoutAs(db, finishedPushA(db), 'Push A', NOW + 2 * HOUR);
 }
 
+/** A saved workout with Bench twice: 3 × 185 × 5, then a back-off 2 × 135 × 12. */
+function savedTwoBench(db: Db): string {
+  const id = startEmptyWorkout(db, NOW);
+  addExerciseToWorkout(db, id, BENCH);
+  addExerciseToWorkout(db, id, BENCH);
+  const [top, backOff] = getActiveWorkoutView(db)!.exercises;
+  addSet(db, top.id);
+  addSet(db, top.id);
+  addSet(db, backOff.id);
+  const view = getActiveWorkoutView(db)!;
+  view.exercises[0].sets.forEach((s, i) => tick(db, s.id, 185, 5, NOW + i));
+  view.exercises[1].sets.forEach((s, i) => tick(db, s.id, 135, 12, NOW + 10 + i));
+  finishWorkout(db, id, NOW + HOUR);
+  const savedId = saveWorkoutAs(db, id, 'Bench day', NOW + 2 * HOUR);
+  expect(getSavedWorkout(db, savedId)!.exercises.map((e) => e.sets.length)).toEqual([3, 2]);
+  return savedId;
+}
+
 const countOf = (db: Db, table: typeof workouts | typeof savedWorkouts) => db.select({ n: count() }).from(table).get()!.n;
 
 describe('saveWorkoutAs', () => {
@@ -130,6 +148,15 @@ describe('saveWorkoutAs', () => {
     tick(db, active(db, BENCH).sets[0].id, 185, 5, NOW + 1);
     expect(() => saveWorkoutAs(db, id, 'Push A', NOW + HOUR)).toThrow();
     expect(() => saveWorkoutAs(db, 'no-such-workout', 'Push A', NOW + HOUR)).toThrow();
+    expect(countOf(db, savedWorkouts)).toBe(0);
+  });
+
+  it('throws "Nothing logged to save." when no exercise has a done set, saving nothing', () => {
+    const db = seededDb();
+    const id = finishedPushA(db);
+    // A history edit could leave a finished workout with nothing done.
+    db.update(sets).set({ done: false }).run();
+    expect(() => saveWorkoutAs(db, id, 'Push A', NOW + 2 * HOUR)).toThrow('Nothing logged to save.');
     expect(countOf(db, savedWorkouts)).toBe(0);
   });
 
@@ -273,7 +300,35 @@ describe('rememberSavedWorkout (at finish)', () => {
     expect(savedWorkoutOf(db, id)).toEqual({ id: savedId, name: 'Push A' });
   });
 
-  it('takes the first block when the exercise was logged twice', () => {
+  it('matches each saved row of an exercise to the logged block of it in the same order', () => {
+    const db = seededDb();
+    const savedId = savedTwoBench(db);
+    const id = startSavedWorkout(db, savedId, NOW + DAY);
+    const [top, backOff] = getActiveWorkoutView(db)!.exercises;
+    top.sets.forEach((s, i) => tick(db, s.id, 190, 5, NOW + DAY + i));
+    backOff.sets.forEach((s, i) => tick(db, s.id, 140, 12, NOW + DAY + 10 + i));
+    finishWorkout(db, id, NOW + DAY + HOUR);
+    const after = getSavedWorkout(db, savedId)!;
+    expect(after.exercises.map((e) => e.sets)).toEqual([
+      [lb(190, 5), lb(190, 5), lb(190, 5)],
+      [lb(140, 12), lb(140, 12)],
+    ]);
+  });
+
+  it('counts only logged blocks: with the first one skipped, the back-off goes to the first saved row', () => {
+    const db = seededDb();
+    const savedId = savedTwoBench(db);
+    const before = getSavedWorkout(db, savedId)!;
+    const id = startSavedWorkout(db, savedId, NOW + DAY);
+    const backOff = getActiveWorkoutView(db)!.exercises[1];
+    backOff.sets.forEach((s, i) => tick(db, s.id, 140, 12, NOW + DAY + i));
+    finishWorkout(db, id, NOW + DAY + HOUR);
+    const after = getSavedWorkout(db, savedId)!;
+    expect(after.exercises[0].sets).toEqual([lb(140, 12), lb(140, 12)]);
+    expect(after.exercises[1].sets).toEqual(before.exercises[1].sets);
+  });
+
+  it('ignores an extra logged block of an exercise', () => {
     const db = seededDb();
     const savedId = savedPushA(db);
     const id = startSavedWorkout(db, savedId, NOW + DAY);
@@ -282,7 +337,9 @@ describe('rememberSavedWorkout (at finish)', () => {
     const second = getActiveWorkoutView(db)!.exercises.filter((e) => e.exerciseId === PUSHDOWN)[1];
     tick(db, second.sets[0].id, 30, 20, NOW + DAY + 2);
     finishWorkout(db, id, NOW + DAY + HOUR);
-    expect(getSavedWorkout(db, savedId)!.exercises[3].sets).toEqual([lb(55, 12)]);
+    const after = getSavedWorkout(db, savedId)!;
+    expect(after.exercises).toHaveLength(4);
+    expect(after.exercises[3].sets).toEqual([lb(55, 12)]);
   });
 
   it('is a no-op for a workout not started from a saved one', () => {

@@ -47,7 +47,8 @@ export const MAX_SAVED_NAME = 60;
 export function validateSavedName(name: string): string | null {
   const trimmed = name.trim();
   if (trimmed === '') return 'Give the workout a name.';
-  if (trimmed.length > MAX_SAVED_NAME) return `Keep the name to ${MAX_SAVED_NAME} characters.`;
+  // Characters as a person counts them: an emoji is one, not two UTF-16 units.
+  if (Array.from(trimmed).length > MAX_SAVED_NAME) return `Keep the name to ${MAX_SAVED_NAME} characters.`;
   return null;
 }
 
@@ -83,16 +84,26 @@ function rangeValue(s: SavedSet, loggingType: LoggingType): number | null {
 
 /**
  * The easiest load among the counted sets, as §7.3 step 2 picks it: the lowest, or the most assistance for `assisted`,
- * compared in kg (loads within 0.01 kg are the same; the first is kept), in the unit it was logged in. Sets with no
- * weight are skipped; null when none has one, and for timed and distance and time.
+ * compared in kg (loads within 0.01 kg are the same; the first is kept), in the unit it was logged in. For bodyweight
+ * plus a set with no weight is bodyweight alone, 0 (in `emptyUnit`); other sets with no weight are skipped. Null
+ * when none has a load, and for timed and distance and time.
  */
-function easiestLoad(counted: readonly SavedSet[], loggingType: LoggingType): { weight: number; unit: WeightUnit } | null {
+function easiestLoad(
+  counted: readonly SavedSet[],
+  loggingType: LoggingType,
+  emptyUnit: WeightUnit,
+): { weight: number; unit: WeightUnit } | null {
   if (NO_LOAD.includes(loggingType)) return null;
   const easier = loggingType === 'assisted' ? (a: number, b: number) => a > b : (a: number, b: number) => a < b;
   let easiest: { value: number; unit: WeightUnit } | null = null;
   for (const s of counted) {
-    if (s.weight === null || s.weightUnit === null) continue;
-    const load = { value: s.weight, unit: s.weightUnit };
+    const load =
+      s.weight !== null
+        ? { value: s.weight, unit: s.weightUnit ?? emptyUnit }
+        : loggingType === 'bodyweight_plus'
+          ? { value: 0, unit: emptyUnit }
+          : null;
+    if (load === null) continue;
     if (!easiest || (!sameWeight(load, easiest) && easier(toKg(load.value, load.unit), toKg(easiest.value, easiest.unit)))) {
       easiest = load;
     }
@@ -130,7 +141,8 @@ export function dayFromSaved(saved: SavedWorkoutDetail, increment: { value: numb
         increment: rule.increment,
         incrementUnit: increment.unit,
         supersetWithNext: e.supersetGroup !== null && next !== undefined && next.supersetGroup === e.supersetGroup,
-        startWeight: easiestLoad(counted, e.loggingType),
+        // A bodyweight set's 0 takes the unit of the exercise's loaded sets, else the increment's.
+        startWeight: easiestLoad(counted, e.loggingType, e.sets.find((s) => s.weightUnit !== null)?.weightUnit ?? increment.unit),
       };
     }),
   };

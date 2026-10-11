@@ -51,6 +51,13 @@ describe('validateSavedName', () => {
     expect(validateSavedName('a'.repeat(61))).toBe('Keep the name to 60 characters.');
   });
 
+  it('counts an emoji as one character', () => {
+    const flex = String.fromCodePoint(0x1f4aa);
+    expect(validateSavedName(`${'a'.repeat(59)}${flex}`)).toBeNull();
+    expect(validateSavedName(flex.repeat(60))).toBeNull();
+    expect(validateSavedName(flex.repeat(61))).toBe('Keep the name to 60 characters.');
+  });
+
   it('accepts a name', () => {
     expect(validateSavedName('Push A')).toBeNull();
   });
@@ -158,6 +165,12 @@ describe('dayFromSaved', () => {
 
   it('starts bodyweight plus with no added weight at 0', () => {
     const day = dayFromSaved(saved([exercise('pullup', 'bodyweight_plus', [loaded(0, 8), loaded(25, 6)])]), LB5);
+    expect(day.exercises[0].startWeight).toEqual({ weight: 0, unit: 'lb' });
+  });
+
+  it('counts a bodyweight plus set with no weight as bodyweight, 0', () => {
+    const bw: SavedSet = { ...loaded(0, 10), weight: null, weightUnit: null };
+    const day = dayFromSaved(saved([exercise('dip', 'bodyweight_plus', [bw, loaded(25, 8)])]), LB5);
     expect(day.exercises[0].startWeight).toEqual({ weight: 0, unit: 'lb' });
   });
 

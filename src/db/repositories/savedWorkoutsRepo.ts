@@ -88,8 +88,9 @@ export function getSavedWorkout(db: Db, id: string): SavedWorkoutDetail | null {
 
 /**
  * Saves a finished workout to start again (R118): each exercise in position order with its superset group and its done
- * sets in set order. Returns the new saved workout's id. Throws, saving nothing, when the workout is not finished or
- * the name is invalid (the message is `validateSavedName`'s copy).
+ * sets in set order. Returns the new saved workout's id. Throws, saving nothing, when the workout is not finished,
+ * when no exercise has a done set ("Nothing logged to save."), or when the name is invalid (the message is
+ * `validateSavedName`'s copy).
  */
 export function saveWorkoutAs(db: Db, workoutId: string, name: string, now: number): string {
   return db.transaction((tx) => {
@@ -108,6 +109,7 @@ export function saveWorkoutAs(db: Db, workoutId: string, name: string, now: numb
       .map((r) => ({ ...r, sets: doneSets(tx, r.id) }))
       // Finishing already drops exercises with no done set; a history edit could leave one.
       .filter((r) => r.sets.length > 0);
+    if (rows.length === 0) throw new Error('Nothing logged to save.');
     const groups = realGroups(rows.map((r) => r.supersetGroup));
     rows.forEach((r, position) => {
       tx.insert(savedWorkoutExercises)
@@ -186,9 +188,12 @@ export function savedWorkoutOf(db: Db, workoutId: string): { id: string; name: s
 
 /**
  * When a finished workout was started from a saved workout, rewrites that saved workout's logged exercises with the
- * sets done today (R120): each saved exercise whose exercise was logged takes the done sets of the first block of it;
- * one not logged keeps its sets; exercises added on the day are not added. `updated_at` becomes the workout's
- * `finished_at`. A no-op when the workout has no saved workout or it was deleted.
+ * sets done today (R120). An exercise may appear more than once (a top set block and a back-off block): the k-th saved
+ * row of an exercise, in position order, takes the done sets of the k-th LOGGED block of that exercise today, in
+ * position order, where a block with no done set does not count. So with the first of two blocks skipped, the one
+ * logged block goes to the first saved row and the second saved row keeps its sets. Saved rows left without a logged
+ * block keep their sets; extra logged blocks, and exercises added on the day, are not added. `updated_at` becomes the
+ * workout's `finished_at`. A no-op when the workout has no saved workout or it was deleted.
  *
  * Called by `finishWorkout` inside its transaction, after the status update and `writePrFlags`.
  */
@@ -202,8 +207,8 @@ export function rememberSavedWorkout(db: Db, workoutId: string): void {
   const saved = savedWorkoutOf(db, workoutId);
   if (!saved) return;
 
-  // The first block of each exercise logged today, with its done sets.
-  const logged = new Map<string, SavedSet[]>();
+  // Each exercise's logged blocks today, in position order, with their done sets.
+  const logged = new Map<string, SavedSet[][]>();
   const blocks = db
     .select({ id: workoutExercises.id, exerciseId: workoutExercises.exerciseId })
     .from(workoutExercises)
@@ -211,18 +216,21 @@ export function rememberSavedWorkout(db: Db, workoutId: string): void {
     .orderBy(asc(workoutExercises.position))
     .all();
   for (const block of blocks) {
-    if (logged.has(block.exerciseId)) continue;
     const done = doneSets(db, block.id);
-    if (done.length > 0) logged.set(block.exerciseId, done);
+    if (done.length > 0) logged.set(block.exerciseId, [...(logged.get(block.exerciseId) ?? []), done]);
   }
 
   const rows = db
     .select({ id: savedWorkoutExercises.id, exerciseId: savedWorkoutExercises.exerciseId })
     .from(savedWorkoutExercises)
     .where(eq(savedWorkoutExercises.savedWorkoutId, saved.id))
+    .orderBy(asc(savedWorkoutExercises.position))
     .all();
+  const taken = new Map<string, number>();
   for (const row of rows) {
-    const today = logged.get(row.exerciseId);
+    const k = taken.get(row.exerciseId) ?? 0;
+    taken.set(row.exerciseId, k + 1);
+    const today = logged.get(row.exerciseId)?.[k];
     if (today) db.update(savedWorkoutExercises).set({ sets: today }).where(eq(savedWorkoutExercises.id, row.id)).run();
   }
   if (workout.finishedAt !== null) {
