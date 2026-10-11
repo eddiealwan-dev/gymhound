@@ -33,7 +33,8 @@ const TICK_MS = 250;
  * check and "Rest's up" for `REST_UP_MS`, with no buttons and at the height the countdown had, then shows nothing. It is
  * the only countdown while that set is in the workout; the bar at the bottom shows only when no set row can (R41). Text
  * doesn't shrink, so when large text leaves no room beside the time, the three pills wrap together onto a second line,
- * at the end (G1). It sits on `surface`, outlined in `borderStrong`, so it never looks like a done set.
+ * at the end (G1), and wrap among themselves when even that line is too narrow for all three. It sits on `surface`,
+ * outlined in `borderStrong`, so it never looks like a done set.
  */
 export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRest }: Props) {
   const db = useDb();
@@ -98,8 +99,22 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               {formatRest(phase.remaining)}
             </Num>
           </Pressable>
-          {/* The pills wrap as one group, so Skip never sits alone on the second line. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8, flexShrink: 0 }}>
+          {/*
+            The pills wrap as one group, so Skip never sits alone on the second line. When the group alone is wider than
+            the row (AX2 on 320pt), it wraps inside itself, at the end, rather than being clipped by the row.
+          */}
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              rowGap: 8,
+              columnGap: 8,
+              maxWidth: '100%',
+              flexShrink: 0,
+            }}
+          >
             <Button
               label="−15s"
               variant="secondary"

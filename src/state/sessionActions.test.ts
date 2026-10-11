@@ -311,7 +311,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
 
     const { ex, row } = benchRow(0);
     expect(valueText(row, 'weight', 'kg')).toBe('135 lb');
-    const reading = readRow(row, {}, 'kg');
+    const reading = readRow(row, {}, 'kg', 'mi');
     expect(tick(db, ex, row.set, reading.entered, reading.weightUnit)).toBe(true);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb' });
   });
@@ -322,7 +322,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     switchDisplayUnit(db, 'kg');
 
     const { ex, row } = benchRow(0);
-    const reading = readRow(row, { weight: '60' }, 'kg');
+    const reading = readRow(row, { weight: '60' }, 'kg', 'mi');
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
 
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
@@ -349,7 +349,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     const { ex, row } = benchRow(0);
     expect(row.target).toBe(60);
     expect(valueText(row, 'weight', 'kg')).toBe('60');
-    const reading = readRow(row, {}, 'kg');
+    const reading = readRow(row, {}, 'kg', 'mi');
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
   });
@@ -460,6 +460,44 @@ describe('tick records a carried distance in the entry distance unit', () => {
     expect(tick(db, run, run.sets[1], NOTHING)).toBe(true);
 
     expect(reread(run.sets[1].id)).toMatchObject({ distance: 3.11, distanceUnit: 'mi', durationS: 1500 });
+  });
+});
+
+describe('a distance unit switch mid-workout: a typed or saved distance keeps its unit, as a weight does', () => {
+  /** The bench press's first set read as a distance exercise, as the session shows it now, in the units in Settings. */
+  function runRow() {
+    const settings = getSettings(db);
+    const ex = { ...activeView().exercises[0], loggingType: 'distance_time' as const, rule: null };
+    return { ex, settings, row: buildRows(ex, settings.unit, gearFor(settings.unit, settings), settings.distanceUnit)[0] };
+  }
+
+  /** Saves 5 km on the first set, then switches the distance unit to mi. */
+  function fiveKmThenMiles() {
+    startFromDay(db, PUSH_A);
+    setSetting(db, 'distanceUnit', 'km');
+    commitSetField(db, activeView().exercises[0].sets[0].id, fieldPatch('distance', 5, 'lb', 'km'));
+    setSetting(db, 'distanceUnit', 'mi');
+  }
+
+  it('ticks 5 saved in km before a switch to mi as 5 km, as the row shows it', () => {
+    fiveKmThenMiles();
+
+    const { ex, settings, row } = runRow();
+    expect(valueText(row, 'distance', settings.unit)).toBe('5');
+    const reading = readRow(row, { durationS: '25:00' }, settings.unit, settings.distanceUnit);
+    expect(tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit)).toBe(true);
+
+    expect(reread(row.set.id)).toMatchObject({ done: true, distance: 5, distanceUnit: 'km', durationS: 1500 });
+  });
+
+  it('ticks a distance typed after the switch in mi', () => {
+    fiveKmThenMiles();
+
+    const { ex, settings, row } = runRow();
+    const reading = readRow(row, { distance: '3', durationS: '25:00' }, settings.unit, settings.distanceUnit);
+    expect(tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit)).toBe(true);
+
+    expect(reread(row.set.id)).toMatchObject({ done: true, distance: 3, distanceUnit: 'mi', durationS: 1500 });
   });
 });
 

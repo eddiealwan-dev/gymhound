@@ -297,6 +297,12 @@ export type RowReading = {
    * was logged in. A tick keeps it, so a weight logged before a unit switch is never re-saved converted (spec 7.1).
    */
   weightUnit: WeightUnit;
+  /**
+   * The unit `entered.distance` is in, as for the weight: the display distance unit for a typed distance (or none),
+   * else the unit the stored distance was logged in. A tick keeps it, so a distance logged before a unit switch is
+   * recorded as it shows.
+   */
+  distanceUnit: DistanceUnit;
   rpe: number | null;
   /** The inputs whose non-blank text does not parse. */
   invalid: InputKey[];
@@ -319,8 +325,11 @@ function neededFields(loggingType: LoggingType): FieldKey[] {
   return loggingType === 'bodyweight_plus' ? ['reps'] : FIELDS[loggingType];
 }
 
-/** The row as it stands: the stored values overlaid with what is being typed. Typed text counts before it is saved. */
-export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowReading {
+/**
+ * The row as it stands: the stored values overlaid with what is being typed. Typed text counts before it is saved.
+ * `unit` and `distanceUnit` are the display units in Settings, which a typed weight or distance is in.
+ */
+export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit, distanceUnit: DistanceUnit): RowReading {
   const values = {} as Record<InputKey, number | null>;
   const invalid: InputKey[] = [];
   for (const key of ORDER) {
@@ -336,6 +345,7 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowRea
   const entered: TickValues = { weight: values.weight, reps: values.reps, durationS: values.durationS, distance: values.distance };
   const resolved = resolveTick({ loggingType: row.loggingType, entered, target: row.target, placeholders: row.placeholders });
   const weightUnit = drafts.weight === undefined ? (row.set.weightUnit ?? unit) : unit;
+  const enteredDistanceUnit = drafts.distance === undefined ? (row.set.distanceUnit ?? distanceUnit) : distanceUnit;
   const filled: TickValues = {
     weight: entered.weight ?? row.target ?? row.placeholders.weight,
     reps: entered.reps ?? row.placeholders.reps,
@@ -343,7 +353,15 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit): RowRea
     distance: entered.distance ?? row.placeholders.distance,
   };
   const missing = neededFields(row.loggingType).find((key) => filled[key] === null) ?? null;
-  return { entered, weightUnit, rpe: values.rpe, invalid, tickable: invalid.length === 0 && resolved !== null, missing };
+  return {
+    entered,
+    weightUnit,
+    distanceUnit: enteredDistanceUnit,
+    rpe: values.rpe,
+    invalid,
+    tickable: invalid.length === 0 && resolved !== null,
+    missing,
+  };
 }
 
 /**

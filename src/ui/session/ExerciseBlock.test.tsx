@@ -1,14 +1,14 @@
 import * as Haptics from 'expo-haptics';
-import { Keyboard, StyleSheet, Text, TextInput } from 'react-native';
+import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { flushAll } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote, tick, untick } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
-import { SetRow, SUGGESTED_HINT } from './SetRow';
+import { cellStyle, COLUMN_GAP, SetRow, SUGGESTED_HINT } from './SetRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -227,7 +227,7 @@ describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
     act(() => byLabel(tree, 'Set 1 done').props.onPress());
 
     expect(tick).toHaveBeenCalledTimes(1);
-    expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ weight: 140, reps: 8 }), 'lb');
+    expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ weight: 140, reps: 8 }), 'lb', 'mi');
     expect(dismiss).toHaveBeenCalled();
     expect(jest.mocked(tick).mock.invocationCallOrder[0]).toBeLessThan(dismiss.mock.invocationCallOrder[0]);
   });
@@ -990,5 +990,66 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     expect(order[0]).toBeLessThan(order[1]);
     expect(order[1]).toBeLessThan(order[2]);
     expect(order[2]).toBeLessThan(order[3]);
+  });
+});
+
+describe("ExerciseBlock: the tick's tap area stays clear of the reps field (R67)", () => {
+  /** The width of the column cell `node` is drawn in: its nearest ancestor view with a width. */
+  const cellWidth = (node: ReactTestInstance) => {
+    let at = node.parent;
+    while (at !== null && !(at.type === View && StyleSheet.flatten(at.props.style)?.width !== undefined)) at = at.parent;
+    return at === null ? undefined : StyleSheet.flatten(at.props.style).width;
+  };
+
+  it('is a 44pt column, in the header and in every row, so the two still line up', () => {
+    expect(cellStyle('tick')).toMatchObject({ width: 44, alignItems: 'center' });
+    const tree = mount(bench([set('s0', 0)]));
+
+    expect(cellWidth(textNode(tree, '✓'))).toBe(44);
+    expect(cellWidth(byLabel(tree, 'Set 1 done'))).toBe(44);
+  });
+
+  it('keeps the 40pt ring, centred in the column', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    expect(restingStyle(byLabel(tree, 'Set 1 done'))).toMatchObject({ width: 40, height: 40, borderRadius: 20 });
+  });
+
+  it('reaches out on the top, bottom and right only, so a tap just left of the ring never lands on reps', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    const hitSlop = byLabel(tree, 'Set 1 done').props.hitSlop;
+
+    expect(hitSlop).toEqual({ top: 4, bottom: 4, right: 4, left: 0 });
+    // What lies between the reps field and the tick's target: the column gap and half the space round the ring.
+    expect(COLUMN_GAP + (44 - 40) / 2 - hitSlop.left).toBeGreaterThan(0);
+  });
+});
+
+describe('ExerciseBlock: a distance keeps its unit when ticked', () => {
+  /** A run whose first set has 5 km saved, drawn while the distance unit in Settings is mi. */
+  const run = (): WorkoutExerciseView => ({
+    ...bench([set('s0', 0, { distance: 5, distanceUnit: 'km', durationS: 1500 })]),
+    loggingType: 'distance_time',
+  });
+
+  it('ticks a distance saved in km, shown as saved, in km', () => {
+    jest.mocked(tick).mockReturnValue(true);
+    const ex = run();
+    const tree = mount(ex);
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ distance: 5, durationS: 1500 }), 'lb', 'km');
+  });
+
+  it('ticks a distance typed now in the distance unit in Settings', () => {
+    jest.mocked(tick).mockReturnValue(true);
+    const ex = run();
+    const tree = mount(ex);
+    act(() => byLabel(tree, 'DIST, set 1').props.onChangeText('3'));
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ distance: 3, durationS: 1500 }), 'lb', 'mi');
   });
 });

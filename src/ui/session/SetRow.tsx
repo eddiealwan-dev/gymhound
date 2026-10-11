@@ -38,7 +38,8 @@ export function cellStyle(key: ColumnKey): ViewStyle {
     case 'set':
       return { width: 32 };
     case 'tick':
-      return { width: 40, alignItems: 'center' };
+      // 4pt wider than the 40pt ring, which sits centred in it (R67).
+      return { width: 44, alignItems: 'center' };
     case 'previous':
       return { flex: 1.5, minWidth: 0 };
     case 'rpe':
@@ -77,6 +78,13 @@ function warningHaptic(): void {
     // no haptics here
   }
 }
+
+/**
+ * How far the tick's target reaches past its 40pt ring (R67): 4pt up, down and right, for a 44pt-wide, 48pt-tall
+ * target, and none to the left, where the reps field is. A tap just left of the ring then lands in the 6pt between them
+ * (the column gap and half the space round the ring), not on reps.
+ */
+const TICK_HIT_SLOP = { top: 4, bottom: 4, right: 4, left: 0 };
 
 /** The line under a row whose tick was tapped before it was ready (spec 18.6). */
 const NEED_LINE: Record<FieldKey, string> = {
@@ -162,7 +170,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     if (focusAsk !== null) inputs.current[focusAsk.key]?.focus();
   }, [focusAsk]);
 
-  const reading = readRow(row, drafts, unit);
+  const reading = readRow(row, drafts, unit, distanceUnit);
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
   /**
@@ -192,7 +200,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     }
     commitSetField(db, set.id, fieldPatch(key, parsed.value, unit, distanceUnit));
     // Clearing a field a ticked set needs takes the tick off, rather than leaving a ticked set with a hole in it.
-    if (set.done && key !== 'rpe' && !isComplete(row.loggingType, { ...readRow(row, {}, unit).entered, [key]: parsed.value })) {
+    if (set.done && key !== 'rpe' && !isComplete(row.loggingType, { ...readRow(row, {}, unit, distanceUnit).entered, [key]: parsed.value })) {
       untick(db, set.id);
     }
     setDrafts((d) => {
@@ -234,7 +242,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       }
       return;
     }
-    if (tick(db, ex, set, reading.entered, reading.weightUnit)) {
+    if (tick(db, ex, set, reading.entered, reading.weightUnit, reading.distanceUnit)) {
       // RPE is not part of a tick; save it if it is still being typed.
       if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
       setDrafts({});
@@ -336,7 +344,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
             aria-checked={set.done}
             accessibilityHint={!set.done && !canTick && reading.missing !== null ? NEED_HINT[reading.missing] : undefined}
             onPress={toggle}
-            hitSlop={4}
+            hitSlop={TICK_HIT_SLOP}
             style={tickStyle}
           >
             {set.done ? <Ionicons name="checkmark" size={24} color={colors.bg} /> : null}

@@ -33,7 +33,7 @@ import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
-import type { WeightUnit } from '../domain/types';
+import type { DistanceUnit, WeightUnit } from '../domain/types';
 import { announce } from '../platform/announce';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
@@ -69,13 +69,21 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * needs still has no value; the row says which one (spec 18.6).
  * `enteredUnit` is the unit `entered.weight` is in (`RowReading.weightUnit`), the unit in Settings when left out: a
  * weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged (spec 7.1), and a
- * weight from the target or a placeholder is recorded in the unit in Settings, which they are in. A distance from a
- * placeholder is already in the distance unit in Settings, which the tick records it in.
+ * weight from the target or a placeholder is recorded in the unit in Settings, which they are in.
+ * `enteredDistanceUnit` does the same for `entered.distance` (`RowReading.distanceUnit`): a distance typed or stored
+ * keeps its unit, and one from a placeholder, already in the distance unit in Settings, is recorded in that.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
  * or the exercise is in a superset and is not the last member of its round. The screen reader is then told the set and the
  * rest: "Set 2 logged. Rest 2 minutes."
  */
-export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues, enteredUnit?: WeightUnit): boolean {
+export function tick(
+  db: Db,
+  ex: WorkoutExerciseView,
+  set: Pick<SetView, 'id'>,
+  entered: TickValues,
+  enteredUnit?: WeightUnit,
+  enteredDistanceUnit?: DistanceUnit,
+): boolean {
   const settings = getSettings(db);
   const { unit, distanceUnit } = settings;
   const row = buildRows(ex, unit, gearFor(unit, settings), distanceUnit).find((r) => r.set.id === set.id);
@@ -84,7 +92,8 @@ export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, 
   if (values === null) return false;
   const now = Date.now();
   const weightUnit = entered.weight !== null ? (enteredUnit ?? unit) : unit;
-  tickSet(db, set.id, values, weightUnit, now, distanceUnit);
+  const tickedDistanceUnit = entered.distance !== null ? (enteredDistanceUnit ?? distanceUnit) : distanceUnit;
+  tickSet(db, set.id, values, weightUnit, now, tickedDistanceUnit);
   const view = getActiveWorkoutView(db);
   let restStarted: number | null = null;
   if (view) {

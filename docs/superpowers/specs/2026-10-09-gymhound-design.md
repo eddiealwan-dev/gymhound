@@ -931,6 +931,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - What a set shows is what its tick logs. A value typed in another row carries once that row is left.
 - **A tick that is not ready says why** (replaces "the tick stays disabled" in §8.4):
   - The tick keeps a full-strength dashed ring and stays pressable.
+  - The tick's column is 44pt wide, with the 40pt ring centred in it. Its tap area reaches 4pt above, below and right of the ring but not left, so a tap just left of the ring never lands on the reps field (R67).
   - A tap ticks nothing. It focuses the missing field, shows a muted line under the row and gives a warning haptic. The line is "Add a weight to tick", "Add reps to tick", "Add a time to tick" or "Add a distance to tick".
   - Round 4 (the phone gave no buzz and the keyboard opened on reps):
     - The haptic comes first, before anything moves the keyboard, which can swallow it. It is a heavy impact (`Haptics.impactAsync(Heavy)`), distinct from the tick's light one, in place of the warning notification.
@@ -975,15 +976,21 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - A saved note shows in full as a muted line under the name. Tap it to edit.
   - The note saves when the field is left and on every flush (R29). A blank note clears it.
   - **+ Set**, then **+ Warmup**, as quiet compact buttons (36pt, with 44pt targets) on one line under the table. They behave as §18.2 says.
+    - Compact buttons (these and the rest pills) are at least 44pt wide.
 - **Rest row as a live timer** (replaces the countdown line in §8.4):
   - Under its set, the row shows:
     - a small REST label over the countdown, in Barlow 800 at 32pt;
     - a 3pt text-colour track that drains;
     - outlined pills **−15s**, **+15s** and **Skip**.
+  - With large text the three pills wrap together under the countdown, 8pt apart, and wrap among themselves when one line cannot hold all three.
+  - The track keeps the length the rest started with: +15s or a new choice from the countdown does not rescale it.
+  - If you leave the session and come back mid-rest, the track uses the exercise's current rest length.
   - The row has a `surface` fill and a `borderStrong` edge, so it never looks like a done set.
   - +15s moves the end and reschedules the notification, as −15s does. Once the rest has ended it does nothing.
+  - −15s and Skip, like +15s, do nothing once the rest has ended.
   - Tapping the countdown opens this exercise's rest choices. A choice sets future rests. The running rest keeps its end.
   - At zero the row reads "Rest's up · Set {n} next" for 10 seconds, or until a set is ticked.
+    - The Rest's up row keeps the running row's height, so the sets below don't move.
     - It reads "Warmup next" (or "Drop set" or "Failure set") for those types, and the exercise's name when the next set is in another exercise. With nothing left, it reads just "Rest's up".
     - Round 4: it names another exercise only after the last set of this one. While the exercise holding the rest (in a superset, its run) has a set left, it names that set, or in a superset the member whose turn it is. Once it is done, it names the workout's next set (which may be an earlier exercise left open).
     - Skip shows nothing.

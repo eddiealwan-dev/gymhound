@@ -61,8 +61,10 @@ const timerBox = () =>
   tree.root.find(
     (n) => n.type === View && n.props.accessibilityRole === 'button' && String(n.props.accessibilityLabel ?? '').startsWith('Rest, '),
   );
-/** The row holding the time box, −15s, +15s and Skip. */
-const row = () => tree.root.find((n) => n.type === View && styleOf(n).flexWrap === 'wrap');
+/** The row holding the time box, −15s, +15s and Skip: the one view that clips. */
+const row = () => tree.root.find((n) => n.type === View && styleOf(n).overflow === 'hidden');
+/** The views in the row that hold all three pills (the row itself aside). */
+const pillGroups = () => row().findAll((n) => n.type === View && styleOf(n).overflow !== 'hidden' && n.findAllByType(Button).length === 3);
 /** Every string drawn on screen right now. */
 const shownText = () => tree.root.findAllByType(Text).map((t) => [t.props.children].flat().join(''));
 
@@ -171,9 +173,14 @@ describe('the rest under its set fits large text (G1)', () => {
   });
 
   it('wraps −15s, +15s and Skip together, never Skip alone', () => {
-    const pills = row().findAll((n) => n.type === View && styleOf(n).flexWrap !== 'wrap' && n.findAllByType(Button).length === 3);
+    const pills = pillGroups();
     expect(pills).toHaveLength(1);
     expect(styleOf(pills[0])).toMatchObject({ flexDirection: 'row', flexShrink: 0, columnGap: 8 });
+  });
+
+  it('wraps the pills inside their group, at the end and 8pt apart, when the group alone is wider than the row (AX2 on 320pt)', () => {
+    const [pills] = pillGroups();
+    expect(styleOf(pills)).toMatchObject({ flexWrap: 'wrap', justifyContent: 'flex-end', rowGap: 8, columnGap: 8, maxWidth: '100%', flexShrink: 0 });
   });
 
   it('lets the time box claim the width of its text, so the pills wrap instead of drawing over it', () => {
