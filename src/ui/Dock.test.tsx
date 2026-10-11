@@ -12,7 +12,7 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const ROUTES = ['index', 'history/index', 'stats', 'fuel', 'settings', 'routines/index', 'saved/[id]', 'body/[kind]'].map((name) => ({
+const ROUTES = ['index', 'history/index', 'stats', 'fuel', 'settings', 'routines/index', 'saved/[id]', 'body/[kind]', 'fuel-targets'].map((name) => ({
   key: `${name}-key`,
   name,
   params: undefined,
@@ -42,6 +42,13 @@ describe('the dock', () => {
     // Its label is red, as the active tab's is.
     const label = tab(tree, 'Stats').findAll((n) => typeof n.type === 'string' && n.props.children === 'Stats')[0];
     expect(JSON.stringify(label.props.style)).toContain('#E10600');
+  });
+
+  it('highlights Fuel on its Targets, and Fuel there goes back to Fuel', () => {
+    const tree = mountOn('fuel-targets');
+    expect(selected(tree)).toEqual(['Fuel']);
+    act(() => tab(tree, 'Fuel').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledWith('fuel', undefined);
   });
 
   it('Stats on a body detail goes back to Stats', () => {
