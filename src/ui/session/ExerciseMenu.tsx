@@ -141,7 +141,8 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
         <Body muted>{unit}</Body>
       </View>
       {check ? (
-        <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 12, marginTop: 2 }}>
+        // No live region: Save announces it on both phones, and TalkBack would read it twice.
+        <Body muted style={{ fontSize: 12, marginTop: 2 }}>
           Check this number
         </Body>
       ) : null}

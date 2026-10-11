@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { latestBodyEntries, listBodyEntries } from '../../src/db/repositories/bodyRepo';
 import { getSettings } from '../../src/db/repositories/settingsRepo';
@@ -24,8 +24,7 @@ function readStats(db: Db) {
 
 function openKind(kind: BodyKind) {
   flushAll();
-  // The cast can go once .expo/types/router.d.ts is regenerated: it predates the body route.
-  router.push(`/body/${kind}` as Href);
+  router.push(`/body/${kind}`);
 }
 
 /**

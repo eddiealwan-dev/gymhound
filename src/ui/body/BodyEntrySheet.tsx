@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { AccessibilityInfo, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteBodyEntry, updateBodyEntry } from '../../db/repositories/bodyRepo';
 import { BODY_LABELS, parseBodyValue } from '../../domain/body';
 import type { BodyEntry } from '../../domain/body';
-import { announce } from '../../platform/announce';
+import { announce, focusOn } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
@@ -40,7 +40,7 @@ function EntryEditor({ entry, title, onClose }: { entry: BodyEntry; title: strin
       firstRender.current = false;
       return;
     }
-    if (titleRef.current) AccessibilityInfo.sendAccessibilityEvent(titleRef.current, 'focus');
+    focusOn(titleRef.current);
   }, [askDelete]);
 
   const save = () => {

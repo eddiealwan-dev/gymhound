@@ -1,5 +1,5 @@
 import { router, Stack } from 'expo-router';
-import { AccessibilityInfo, BackHandler, Platform, Text, TextInput } from 'react-native';
+import { BackHandler, Platform, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import ExerciseEditorScreen from '../../app/exercise/[id]';
@@ -37,6 +37,8 @@ jest.mock('../db/repositories/customExercisesRepo', () => ({
   isExerciseArchived: jest.fn(() => false),
 }));
 jest.mock('../platform/exercisePhotoFiles', () => ({ deleteExercisePhotoFile: jest.fn() }));
+const mockAnnounce = jest.fn();
+jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
 // Its own tests cover the photo slots; here, which exercise they are shown for is what the tests read.
 jest.mock('./OwnPhotos', () => ({ OwnPhotos: jest.fn(() => null) }));
 jest.mock('./ThemeProvider', () => {
@@ -104,6 +106,7 @@ beforeEach(() => {
   jest.mocked(isExerciseArchived).mockReturnValue(false);
   jest.mocked(bumpData).mockClear();
   jest.mocked(Stack.Screen).mockClear();
+  mockAnnounce.mockClear();
 });
 afterEach(() => {
   Platform.OS = originalOS;
@@ -130,21 +133,39 @@ describe('a new exercise (R108)', () => {
     expect(radio(tree, 'Weight and reps').props.accessibilityState).toEqual({ checked: true });
   });
 
+  it('tells VoiceOver which equipment is selected and which logging type is checked', () => {
+    const tree = mount();
+    /** The drawn view VoiceOver reads for a control, by its label. */
+    const drawn = (label: string) =>
+      tree.root.findAll((n) => typeof n.type === 'string' && typeof n.props.onClick === 'function' && (n.props.accessibilityLabel === label || n.findAll((c) => c.props.children === label).length > 0))[0];
+    expect(drawn('Dumbbell').props.accessibilityState).toMatchObject({ selected: false });
+    tap(tree, 'Dumbbell');
+    expect(drawn('Dumbbell').props.accessibilityState).toMatchObject({ selected: true });
+    expect(drawn('Barbell').props.accessibilityState).toMatchObject({ selected: false });
+
+    expect(drawn('Time').props.accessibilityRole).toBe('radio');
+    expect(drawn('Time').props.accessibilityState).toMatchObject({ checked: false });
+    act(() => radio(tree, 'Time').props.onPress());
+    expect(drawn('Time').props.accessibilityState).toMatchObject({ checked: true });
+    expect(drawn('Weight and reps').props.accessibilityState).toMatchObject({ checked: false });
+  });
+
   it('chooses no equipment for you (R128)', () => {
     const tree = mount();
     for (const label of ['Barbell', 'Dumbbell', 'Other']) expect(button(tree, label).props.selected).toBe(false);
   });
 
-  it('lists what stops it above Save once Save is tapped, says it to the screen reader, and saves nothing', () => {
-    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  it('lists what stops it above Save once Save is tapped, says it to the screen reader once, and saves nothing', () => {
     const tree = mount();
     expect(shows(tree, 'Give the exercise a name.')).toBe(false);
     tap(tree, 'Save');
     expect(shows(tree, 'Give the exercise a name.')).toBe(true);
     expect(shows(tree, 'Pick at least one primary muscle.')).toBe(true);
     expect(shows(tree, 'Pick the equipment.')).toBe(true);
-    expect(announce).toHaveBeenCalledWith('Give the exercise a name. Pick at least one primary muscle. Pick the equipment.');
-    announce.mockRestore();
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
+    expect(mockAnnounce).toHaveBeenCalledWith('Give the exercise a name. Pick at least one primary muscle. Pick the equipment.');
+    // Said once: no live region over the lines as well, which TalkBack would read a second time.
+    expect(tree.root.findAll((n) => n.props.accessibilityLiveRegion !== undefined && n.props.accessibilityLiveRegion !== 'none')).toHaveLength(0);
     expect(createCustomExercise).not.toHaveBeenCalled();
 
     typeName(tree, 'barbell bench press');
@@ -272,6 +293,26 @@ describe('Delete exercise (R109)', () => {
     act(() => ask.props.onCancel());
     expect(sheet(tree, 'Delete Landmine press?').props.visible).toBe(false);
     expect(deleteCustomExercise).not.toHaveBeenCalled();
+  });
+});
+
+describe('Delete exercise that fails', () => {
+  it("says Couldn't delete. Try again. in a muted line, tells the screen reader, and stays", () => {
+    mockParams = { id: 'mine' };
+    jest.mocked(deleteCustomExercise).mockImplementationOnce(() => {
+      throw new Error('database is locked');
+    });
+    const tree = mount();
+    tap(tree, 'Delete exercise');
+    act(() => sheet(tree, 'Delete Landmine press?').props.onConfirm());
+    act(() => void jest.runAllTimers());
+
+    expect(sheet(tree, 'Delete Landmine press?').props.visible).toBe(false);
+    const line = tree.root.findAll((n) => n.type === Text && n.props.children === "Couldn't delete. Try again.");
+    expect(line).toHaveLength(1);
+    expect(mockAnnounce).toHaveBeenCalledWith("Couldn't delete. Try again.");
+    expect(bumpData).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
   });
 });
 

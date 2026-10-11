@@ -677,6 +677,8 @@ describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
 
     expect(shownText(tree)).toContain('Check this number');
     expect(announce).toHaveBeenCalledWith('Check this number');
+    // Said once: announce() speaks it on both phones, so no live region reads it again on Android.
+    expect(tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite')).toHaveLength(0);
     expect(overrideWeight).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
 

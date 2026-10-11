@@ -4,7 +4,7 @@ import { PR_BIT } from '../../domain/prs';
 import { sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
-import { backfillPrFlags, getWorkoutPrs, recomputePrFlags, writePrFlags } from './prRepo';
+import { backfillPrFlags, getWorkoutPrs, recomputePrFlags, tryBackfillPrFlags, writePrFlags } from './prRepo';
 import { getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, addSet, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
@@ -353,5 +353,26 @@ describe('backfillPrFlags: workouts finished before phase 4 (R127)', () => {
     const flagged = db.select({ prFlags: sets.prFlags }).from(sets).all().filter((r) => r.prFlags !== 0);
     // The first set of each later workout is heavier than everything before it.
     expect(flagged).toHaveLength(199);
+  });
+});
+
+describe('tryBackfillPrFlags: the launch never stops on the backfill (R127)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('logs a failed backfill and carries on, leaving the flag off so the next launch tries again', () => {
+    const db = seededDb();
+    setSetting(db, 'prFlagsBackfilled', false);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const transaction = jest.spyOn(db, 'transaction').mockImplementation(() => {
+      throw new Error('disk I/O error');
+    });
+
+    expect(() => tryBackfillPrFlags(db)).not.toThrow();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(getSettings(db).prFlagsBackfilled).toBe(false);
+
+    transaction.mockRestore();
+    tryBackfillPrFlags(db);
+    expect(getSettings(db).prFlagsBackfilled).toBe(true);
   });
 });

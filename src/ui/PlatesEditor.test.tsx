@@ -185,6 +185,15 @@ describe('PlatesEditor (Task 5, R107)', () => {
     expect(mockStored.platesLb['3']).toBe(1);
   });
 
+  it('Reset to defaults is a button to VoiceOver', () => {
+    const tree = mount();
+    // The drawn view VoiceOver reads, holding the words.
+    const [reset] = tree.root.findAll(
+      (n) => typeof n.type === 'string' && typeof n.props.onClick === 'function' && n.findAll((c) => c.props.children === 'Reset to defaults').length > 0,
+    );
+    expect(reset.props.accessibilityRole).toBe('button');
+  });
+
   it('resets to the defaults for the unit', () => {
     mockStored.platesLb = { '45': 1 };
     const tree = mount();

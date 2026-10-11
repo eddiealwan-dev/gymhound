@@ -9,6 +9,7 @@ import type { Db } from '../../../src/db/types';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
 import { savedSetsLine, validateSavedName } from '../../../src/domain/savedWorkout';
 import type { WeightUnit } from '../../../src/domain/types';
+import { announce } from '../../../src/platform/announce';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
@@ -26,7 +27,9 @@ function toRoutines() {
   else router.navigate('/routines');
 }
 
-const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
+const DELETE_FAILED = "Couldn't delete. Try again.";
+
+const exerciseCount =(n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
 
 type SavedExercise = SavedWorkoutDetail['exercises'][number];
 
@@ -60,6 +63,7 @@ export default function SavedWorkoutScreen() {
   const saved = current.saved ?? held.current;
   const [renaming, setRenaming] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const starter = useStartSaved();
 
   if (saved === null) {
@@ -88,8 +92,15 @@ export default function SavedWorkoutScreen() {
 
   const remove = () => {
     setAskDelete(false);
+    try {
+      deleteSavedWorkout(db, saved.id);
+    } catch {
+      // Nothing was deleted, so the screen stays and a muted line under the buttons says so.
+      setDeleteFailed(true);
+      announce(DELETE_FAILED);
+      return;
+    }
     held.current = saved;
-    deleteSavedWorkout(db, saved.id);
     bumpData();
     afterSheetCloses(toRoutines);
   };
@@ -111,9 +122,17 @@ export default function SavedWorkoutScreen() {
             <Button label="Rename" variant="secondary" onPress={() => setRenaming(true)} />
           </View>
           <View style={{ flexGrow: 1 }}>
-            <Button label="Delete" variant="secondary" onPress={() => setAskDelete(true)} />
+            <Button
+              label="Delete"
+              variant="secondary"
+              onPress={() => {
+                setDeleteFailed(false);
+                setAskDelete(true);
+              }}
+            />
           </View>
         </View>
+        {deleteFailed ? <Body muted>{DELETE_FAILED}</Body> : null}
       </View>
       <View style={{ marginTop: 32, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16 }}>
         {supersetRuns(saved.exercises, links).map((run) => {
