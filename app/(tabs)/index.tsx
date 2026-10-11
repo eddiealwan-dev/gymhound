@@ -13,9 +13,10 @@ import { getActiveWorkoutView, getTrainingDates, getVolumeSetsSince } from '../.
 import type { Db } from '../../src/db/types';
 import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } from '../../src/domain/dates';
 import { formatRepScheme } from '../../src/domain/labels';
+import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
 import type { WeightUnit } from '../../src/domain/types';
-import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextSubtitle } from '../../src/domain/upNext';
+import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
@@ -30,12 +31,14 @@ const openSession = () => router.push('/session');
 
 const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 
-/** What Train shows from the database. `weekStart` is the Monday on or before today. */
+/** What Train shows from the database. `weekStart` is the Monday on or before today. `gear` is the display unit's bar and plates. */
 function readTrain(db: Db, weekStart: string) {
-  const { unit } = getSettings(db);
+  const settings = getSettings(db);
+  const { unit } = settings;
   const active = getActiveWorkoutView(db);
   return {
     unit,
+    gear: gearFor(unit, settings),
     active:
       active === null
         ? null
@@ -146,8 +149,23 @@ function ChangeRoutineLink() {
   );
 }
 
-/** The next day of the active routine: its name, when it was last done, a button that starts it, and its exercises. */
-function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: string; onStart: (dayId: string) => void }) {
+/**
+ * The next day of the active routine: its name, when it was last done, a button that starts it, and its exercises,
+ * each with its load in the display unit and how it went last time.
+ */
+function UpNextCard({
+  upNext,
+  unit,
+  gear,
+  locale,
+  onStart,
+}: {
+  upNext: UpNext;
+  unit: WeightUnit;
+  gear: Gear;
+  locale: string;
+  onStart: (dayId: string) => void;
+}) {
   const dayHasWeight = upNextDayHasWeight(upNext.exercises);
   return (
     <Card>
@@ -162,8 +180,9 @@ function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: strin
         <Button label={startDayLabel(upNext.routineName, upNext.dayName)} onPress={() => onStart(upNext.dayId)} />
       </View>
       {upNext.exercises.map((exercise) => {
-        const load = upNextLoad(exercise, dayHasWeight);
+        const load = upNextLoad(exercise, dayHasWeight, unit, gear);
         const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+        const outcome = upNextOutcome(exercise, unit) ?? '';
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
         // pushes the scheme to the right edge.
@@ -171,7 +190,7 @@ function UpNextCard({ upNext, locale, onStart }: { upNext: UpNext; locale: strin
           <View key={exercise.routineExerciseId} style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, paddingVertical: 8 }}>
             <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
             <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
-              {load === null ? scheme : `${scheme} · ${load}`}
+              {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
             </Body>
           </View>
         );
@@ -206,7 +225,7 @@ export default function Train() {
   const locale = deviceLocale();
   const weekStart = mondayOf(today);
   const read = useCallback((d: Db) => readTrain(d, weekStart), [weekStart]);
-  const { unit, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
+  const { unit, gear, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
   const [blocked, setBlocked] = useState(false);
 
   const streak = computeStreak(trainingDates, today);
@@ -243,7 +262,7 @@ export default function Train() {
         {active !== null ? (
           <ResumeCard name={active.name} startedAt={active.startedAt} setsDone={active.setsDone} />
         ) : upNext !== null ? (
-          <UpNextCard upNext={upNext} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
+          <UpNextCard upNext={upNext} unit={unit} gear={gear} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
         ) : (
           <NoRoutineCard onStartEmpty={startEmptyWorkout} />
         )}
