@@ -9,7 +9,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
-import { debugUnlockAllowed, entitlementsFor } from '../../src/platform/entitlements';
+import { debugUnlockAllowed, entitlementsFor, useEntitlementsState } from '../../src/platform/entitlements';
 import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
@@ -17,6 +17,8 @@ import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersio
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { PlatesEditor } from '../../src/ui/PlatesEditor';
+import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
+import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -500,21 +502,66 @@ function ExportSection() {
 }
 
 /**
+ * GymHound Pro (§8.11, R138): whether Pro is on (from the store, or only for testing), or what it adds with **See Pro**
+ * (the paywall, once per tap); and **Restore purchases**, always, saying what happened as the paywall does. With no
+ * store in the build, Restore purchases is disabled under one line. A store subscription adds a quiet **Manage
+ * subscription**, which opens the store's own page.
+ */
+function ProSection() {
+  const db = useDb();
+  const { isPro, isDebugPro, canRestore, offer, kind } = useEntitlementsState();
+  const { busy, status, run } = useStoreAction();
+  const openPaywall = useOpenPaywall();
+  const subscribed = kind === 'revenuecat' && canRestore && isPro && !isDebugPro && offer !== null && offer.period !== null;
+  return (
+    <Section title="GymHound Pro">
+      {isPro ? (
+        <Body>{isDebugPro ? 'Pro is on for testing.' : 'Pro is on.'}</Body>
+      ) : (
+        <View style={{ gap: 8 }}>
+          <Body>Free holds one routine of your own. Pro adds more routines and Fuel.</Body>
+          <Button label="See Pro" onPress={openPaywall} />
+        </View>
+      )}
+      <View style={{ gap: 8 }}>
+        <Button label="Restore purchases" variant="secondary" disabled={!canRestore || busy} onPress={() => run('restore')} />
+        {!canRestore ? <Body muted>{PURCHASES_UNAVAILABLE}</Body> : null}
+        {status !== null ? <Body muted>{status}</Body> : null}
+        {subscribed ? (
+          <Button
+            label="Manage subscription"
+            variant="quiet"
+            onPress={() => {
+              entitlementsFor(db)
+                .manageSubscription()
+                .catch(() => false);
+            }}
+          />
+        ) : null}
+      </View>
+    </Section>
+  );
+}
+
+/**
  * The Pro debug switch (§9, R126), for testing Pro before it can be bought: it turns Pro on through the app's one
- * entitlements object, so the routine limit on every screen hears it at once. Shown only where the debug unlock is
+ * entitlements object, so the routine limit on every screen hears it at once. It shows the debug unlock itself, not
+ * whether Pro is on, so it can still be turned off where Pro was also bought. Shown only where the debug unlock is
  * allowed: a development build, or one that sets EXPO_PUBLIC_DEBUG_UNLOCK=1.
  */
 function DeveloperSection() {
   const db = useDb();
   const entitlements = entitlementsFor(db);
-  const pro = useSyncExternalStore(entitlements.subscribe, entitlements.isPro);
+  // Heard so the switch redraws when the unlock changes; the switch shows the stored setting.
+  useSyncExternalStore(entitlements.subscribe, entitlements.isDebugPro);
+  const unlocked = useDbQuery(getSettings).proDebugUnlock;
   return (
     <Section title="Developer">
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body style={{ flexShrink: 1 }}>Unlock Pro for testing</Body>
         <Toggle
           accessibilityLabel="Unlock Pro for testing"
-          value={pro}
+          value={unlocked}
           onValueChange={(value) => {
             entitlements.setDebugUnlock(value);
             bumpData();
@@ -525,7 +572,10 @@ function DeveloperSection() {
   );
 }
 
-/** Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups, Export, and Developer where the debug unlock is allowed. */
+/**
+ * Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups, Export, GymHound Pro, and Developer
+ * where the debug unlock is allowed.
+ */
 export default function Settings() {
   return (
     <Screen footer>
@@ -542,6 +592,7 @@ export default function Settings() {
         <RestTimerSection />
         <BackupsSection />
         <ExportSection />
+        <ProSection />
         {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
     </Screen>

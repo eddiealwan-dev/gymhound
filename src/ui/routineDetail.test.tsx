@@ -240,7 +240,8 @@ describe('Routine detail: Duplicate and the free limit (R88)', () => {
     expect(shownText(tree)).toContain(LIMIT);
     press(tree, 'See Pro');
     act(() => void jest.advanceTimersByTime(400));
-    expect(shownText(tree)).toContain('GymHound Pro is coming.');
+    expect(router.push).toHaveBeenCalledWith('/paywall');
+    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
   });
 
   it('with Pro on, copies however many you have', () => {

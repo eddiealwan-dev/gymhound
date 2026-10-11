@@ -228,19 +228,31 @@ describe('Routines: the free limit (R88)', () => {
     expect(shownText(tree)).not.toContain(LIMIT);
   });
 
-  it('See Pro says "GymHound Pro is coming." once the limit sheet has gone; OK closes it', () => {
+  it('a double tap on See Pro opens one paywall', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount();
+
+    press(tree, 'New routine');
+    const [seePro] = buttons(tree, 'See Pro');
+    act(() => {
+      seePro.props.onPress();
+      seePro.props.onPress();
+    });
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('See Pro closes the limit sheet and, once it has gone, opens the paywall (R138)', () => {
     jest.mocked(userRoutineCount).mockReturnValue(1);
     const tree = mount();
 
     press(tree, 'New routine');
     press(tree, 'See Pro');
     expect(shownText(tree)).not.toContain(LIMIT);
-    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
-    act(() => void jest.advanceTimersByTime(400));
-    expect(shownText(tree)).toContain('GymHound Pro is coming.');
-
-    press(tree, 'OK');
-    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
     expect(router.push).not.toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/paywall');
+    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
   });
 });
