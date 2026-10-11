@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { BackHandler, Pressable, Switch, TextInput, View } from 'react-native';
+import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
-import { PremadeRoutineError, routineToDraft, saveRoutine } from '../../../../src/db/repositories/routinesRepo';
+import { getRoutineDetail, routineToDraft, saveRoutine } from '../../../../src/db/repositories/routinesRepo';
 import { getSettings } from '../../../../src/db/repositories/settingsRepo';
-import { parseDecimal, parseReps } from '../../../../src/domain/input';
+import { parseDecimal, parseDuration, parseReps } from '../../../../src/domain/input';
 import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, validateDraft } from '../../../../src/domain/routineDraft';
 import type { DraftAction, DraftDay, DraftExercise, RoutineDraft } from '../../../../src/domain/routineDraft';
 import type { LoggingType, WeightUnit } from '../../../../src/domain/types';
@@ -67,16 +68,29 @@ function IconButton({ icon, label, onPress, disabled = false }: { icon: Componen
 }
 
 /**
- * A whole number (or, with `decimal`, a decimal with a comma or a dot) typed as text and kept as a draft until the
- * field is left (R29): typing "12" never passes through 1, which the rule's limits would act on. A blank or unreadable
- * entry goes back to the number. Back, the picker and Save commit a draft not yet left (`flushAll`).
+ * What a number field reads: whole reps; seconds, typed "90" or "1:30" as in the session's time fields; or a decimal
+ * with a comma or a dot.
  */
-function NumberField({ value, label, decimal = false, onCommit }: { value: number; label: string; decimal?: boolean; onCommit: (n: number) => void }) {
+type NumberKind = 'reps' | 'seconds' | 'decimal';
+const PARSE: Record<NumberKind, (text: string) => number | null> = { reps: parseReps, seconds: parseDuration, decimal: parseDecimal };
+const KEYBOARD: Record<NumberKind, KeyboardTypeOptions> = {
+  reps: 'number-pad',
+  // "1:30" needs the colon.
+  seconds: 'numbers-and-punctuation',
+  decimal: 'decimal-pad',
+};
+
+/**
+ * A number typed as text and kept as a draft until the field is left (R29): typing "12" never passes through 1, which
+ * the rule's limits would act on. A blank or unreadable entry goes back to the number. Back, the picker and Save
+ * commit a draft not yet left (`flushAll`). The field is at least 64 wide and grows with the phone's text size.
+ */
+function NumberField({ value, label, kind, onCommit }: { value: number; label: string; kind: NumberKind; onCommit: (n: number) => void }) {
   const { colors } = useTheme();
   const [text, setText] = useState<string | null>(null);
   const commit = () => {
     if (text === null) return;
-    const n = decimal ? parseDecimal(text) : parseReps(text);
+    const n = PARSE[kind](text);
     setText(null);
     if (n !== null && n !== value) onCommit(n);
   };
@@ -87,13 +101,13 @@ function NumberField({ value, label, decimal = false, onCommit }: { value: numbe
       onChangeText={setText}
       onBlur={commit}
       onSubmitEditing={commit}
-      keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
+      keyboardType={KEYBOARD[kind]}
       // iOS adds its own Done bar above the number pad with this key (R43); Done submits and blurs.
       returnKeyType="done"
       selectTextOnFocus
       accessibilityLabel={label}
       style={{
-        width: 64,
+        minWidth: 64,
         minHeight: 44,
         paddingHorizontal: 8,
         borderRadius: 8,
@@ -174,7 +188,7 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
   const { colors } = useTheme();
   const { key: exerciseKey, name, loggingType } = exercise;
   const update = (patch: Extract<DraftAction, { type: 'updateExercise' }>['patch']) => apply({ type: 'updateExercise', exerciseKey, patch });
-  const repWord = IN_SECONDS.includes(loggingType) ? 'seconds' : 'reps';
+  const repWord: NumberKind = IN_SECONDS.includes(loggingType) ? 'seconds' : 'reps';
   const increment = Number(convertIncrement(exercise.increment, exercise.incrementUnit, unit).toFixed(2));
   return (
     <View style={{ gap: 12, paddingVertical: 12, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.border }}>
@@ -193,9 +207,9 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
         {NO_REPS.includes(loggingType) ? null : (
           <Field label={repWord === 'seconds' ? 'Seconds' : 'Reps'}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <NumberField value={exercise.repMin} label={`${name} ${repWord} from`} onCommit={(repMin) => update({ repMin })} />
+              <NumberField value={exercise.repMin} kind={repWord} label={`${name} ${repWord} from`} onCommit={(repMin) => update({ repMin })} />
               <Body muted>–</Body>
-              <NumberField value={exercise.repMax} label={`${name} ${repWord} to`} onCommit={(repMax) => update({ repMax })} />
+              <NumberField value={exercise.repMax} kind={repWord} label={`${name} ${repWord} to`} onCommit={(repMax) => update({ repMax })} />
             </View>
           </Field>
         )}
@@ -204,12 +218,12 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <NumberField
                 value={increment}
-                decimal
+                kind="decimal"
                 label={`${name} increment in ${unit}`}
                 onCommit={(value) => update({ increment: value, incrementUnit: unit })}
               />
-              <Body muted>{unit}</Body>
-              {increment === 0 ? <Body muted>Reps only</Body> : null}
+              {/* 0 adds no weight, so in place of the unit it says what the rule does instead. */}
+              <Body muted>{increment === 0 ? 'reps only' : unit}</Body>
             </View>
           </Field>
         )}
@@ -297,22 +311,27 @@ function useDraft(initial: RoutineDraft | null) {
   return { draft, latest, apply, reset };
 }
 
+/** Whether `draft` holds anything the routine as saved does not: leaving would lose it. */
+const unsaved = (saved: RoutineDraft | null, draft: RoutineDraft | null) => saved !== null && draft !== null && hasChanges(saved, draft);
+
 /**
  * The editor for one routine of your own, or a new one (`routineId` null). Nothing is written until **Save**, which
  * writes the whole routine in one go (`saveRoutine`), so an exercise that stays keeps its next weight and a workout in
  * progress is never touched. Leaving with changes not saved asks "Discard changes?" first, whether by Back, the
- * Android back button, the dock or the header's Settings button.
+ * Android back button, the dock or the header's Settings button. A premade is read-only (§8.6): its editor address
+ * shows its detail instead.
  */
 function RoutineEditor({ routineId }: { routineId: string | null }) {
   const db = useDb();
   const { colors } = useTheme();
   const { unit } = useDbQuery(getSettings);
-  /** The routine as last saved: what Discard goes back to. Null when there is no such routine. */
-  const [saved, setSaved] = useState(() => (routineId === null ? newDraft() : routineToDraft(db, routineId)));
+  const [premade] = useState(() => routineId !== null && getRoutineDetail(db, routineId)?.isPremade === true);
+  /** The routine as last saved: what Discard goes back to. Null when there is no such routine of your own. */
+  const [saved, setSaved] = useState(() => (premade ? null : routineId === null ? newDraft() : routineToDraft(db, routineId)));
   const savedRef = useRef(saved);
   const { draft, latest, apply, reset } = useDraft(saved);
+  /** Save was tapped: what stops it shows, and keeps up as the draft changes, until the editor is left or saved. */
   const [tried, setTried] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   /** The move Back, the dock or the header was making when "Discard changes?" opened. */
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
@@ -325,14 +344,13 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     setSaved(next);
     reset(next);
     setTried(false);
-    setSaveError(null);
   };
 
   /** Takes `leave` over when there are changes to lose, opening "Discard changes?"; false lets it go now. */
   const askBeforeLeaving = useRef<(leave: () => void) => boolean>(() => false);
   askBeforeLeaving.current = (leave: () => void) => {
     flushAll();
-    if (savedRef.current === null || latest.current === null || !hasChanges(savedRef.current, latest.current)) return false;
+    if (!unsaved(savedRef.current, latest.current)) return false;
     setPendingLeave(() => leave);
     return true;
   };
@@ -361,9 +379,26 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
       return () => {
         unguard();
         back.remove();
+        // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
+        if (!unsaved(savedRef.current, latest.current)) setTried(false);
       };
     }, [db, apply, backTo]),
   );
+
+  useEffect(() => {
+    if (premade) router.navigate(backTo);
+  }, [premade, backTo]);
+
+  if (premade) {
+    return (
+      <Screen>
+        <BackLink label="Routines" onPress={() => goBack('/routines')} />
+        <Body muted style={{ marginTop: 8 }}>
+          Premade routines are read-only.
+        </Body>
+      </Screen>
+    );
+  }
 
   if (draft === null || saved === null) {
     return (
@@ -385,15 +420,10 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const write = () => {
     const current = latest.current;
     if (current === null) return;
-    try {
-      const id = saveRoutine(db, current, Date.now());
-      bumpData();
-      startOver(routineId === null ? newDraft() : routineToDraft(db, id));
-      goBack(routineId === null ? '/routines' : `/routines/${id}`);
-    } catch (e) {
-      if (!(e instanceof PremadeRoutineError)) throw e;
-      setSaveError(e.message);
-    }
+    const id = saveRoutine(db, current, Date.now());
+    bumpData();
+    startOver(routineId === null ? newDraft() : routineToDraft(db, id));
+    goBack(routineId === null ? '/routines' : `/routines/${id}`);
   };
 
   const save = () => {
@@ -406,7 +436,6 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   };
 
   const problems = tried ? validateDraft(draft) : [];
-  if (saveError !== null) problems.push(saveError);
 
   return (
     <Screen>

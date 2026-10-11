@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { StyleSheet, Switch, TextInput } from 'react-native';
+import { BackHandler, StyleSheet, Switch, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import EditRoutine from '../../app/(tabs)/routines/edit/[id]';
-import { PremadeRoutineError, routineToDraft, saveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
+import { getRoutineDetail, routineToDraft, saveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
+import type { RoutineDetail } from '../db/repositories/routinesRepo';
 import type { RoutineDraft } from '../domain/routineDraft';
 import { bumpData } from '../state/dataVersion';
 import { leaveGuarded } from '../state/leaveGuard';
@@ -52,11 +53,7 @@ jest.mock('../db/repositories/exercisesRepo', () => {
   return { getExercise: (_db: unknown, id: string) => library[id] ?? null };
 });
 jest.mock('../db/repositories/routinesRepo', () => ({
-  PremadeRoutineError: class PremadeRoutineError extends Error {
-    constructor() {
-      super('Premade routines are read-only.');
-    }
-  },
+  getRoutineDetail: jest.fn(),
   routineToDraft: jest.fn(),
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
@@ -157,6 +154,28 @@ function pick(exerciseId: string) {
   });
 }
 
+/** The editor is left (another screen takes the focus) and later shown again, as New routine or Edit does. */
+function leaveAndReturn() {
+  act(() => {
+    if (typeof mockFocus.cleanup === 'function') mockFocus.cleanup();
+    mockFocus.cleanup = undefined;
+  });
+  act(() => {
+    mockFocus.cleanup = mockFocus.effect?.();
+  });
+}
+
+/** Android's back button while the editor is focused: true when the editor took it over. */
+type BackPress = Parameters<typeof BackHandler.addEventListener>[1];
+const mockBack: { handler: BackPress | null } = { handler: null };
+const androidBack = () => {
+  let handled: boolean | null | undefined = false;
+  act(() => {
+    handled = mockBack.handler?.({} as Parameters<BackPress>[0]);
+  });
+  return handled;
+};
+
 /** The draft the last Save wrote. */
 const saved = (): RoutineDraft => jest.mocked(saveRoutine).mock.calls.at(-1)![1];
 
@@ -169,6 +188,15 @@ beforeEach(() => {
   jest.mocked(routineToDraft).mockReturnValue(MINE);
   jest.mocked(saveRoutine).mockReturnValue('saved-id');
   jest.mocked(userRoutineCount).mockReturnValue(0);
+  jest.mocked(getRoutineDetail).mockReturnValue({ isPremade: false } as RoutineDetail);
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+    mockBack.handler = handler;
+    return {
+      remove: () => {
+        if (mockBack.handler === handler) mockBack.handler = null;
+      },
+    };
+  });
 });
 
 afterEach(() => jest.useRealTimers());
@@ -318,12 +346,15 @@ describe('the routine editor: your own routine', () => {
     expect([row.increment, row.incrementUnit]).toEqual([2, 'kg']);
   });
 
-  it('an increment of 0 means reps only, and says so', () => {
+  it('an increment of 0 means reps only, and says so after the field in place of the unit', () => {
     const tree = mount('mine');
+    expect(shownText(tree).filter((t) => t === 'kg')).toHaveLength(2);
 
     enter(tree, 'Barbell row increment in kg', '0');
 
-    expect(shownText(tree)).toContain('Reps only');
+    expect(shownText(tree)).toContain('reps only');
+    expect(shownText(tree)).not.toContain('Reps only');
+    expect(shownText(tree).filter((t) => t === 'kg')).toHaveLength(1);
     press(tree, 'Save');
     expect(saved().days[0].exercises[1]).toMatchObject({ increment: 0, incrementUnit: 'kg' });
   });
@@ -404,27 +435,89 @@ describe('the routine editor: your own routine', () => {
     type(tree, 'Day 1 name', 'Upper');
     press(tree, '+ Add day');
 
-    expect(field(tree, 'Day 3 name').props.value).toBe('Day 1');
-    expect(shownText(tree)).not.toContain('Day 1 has no exercises.');
+    // A blank day is named for its place.
+    expect(field(tree, 'Day 3 name').props.value).toBe('Day 3');
+    expect(shownText(tree)).not.toContain('Day 3 has no exercises.');
     press(tree, 'Save');
     expect(saveRoutine).not.toHaveBeenCalled();
-    expect(shownText(tree)).toContain('Day 1 has no exercises.');
+    expect(shownText(tree)).toContain('Day 3 has no exercises.');
   });
 
-  it('a premade cannot be saved', () => {
-    jest.mocked(saveRoutine).mockImplementation(() => {
-      throw new PremadeRoutineError();
-    });
+  it('number fields grow with the text rather than clipping it', () => {
     const tree = mount('mine');
 
+    for (const label of ['Barbell bench press reps from', 'Barbell bench press increment in kg', 'Plank seconds to']) {
+      const style = StyleSheet.flatten(field(tree, label).props.style);
+      expect(style.minWidth).toBe(64);
+      expect(style.width).toBeUndefined();
+    }
+  });
+
+  it('a time takes seconds or minutes and seconds, as the session does', () => {
+    const tree = mount('mine');
+
+    expect(field(tree, 'Plank seconds to').props.keyboardType).toBe('numbers-and-punctuation');
+    enter(tree, 'Plank seconds to', '1:30');
+    expect(field(tree, 'Plank seconds to').props.value).toBe('90');
+    enter(tree, 'Plank seconds from', '45');
     press(tree, 'Save');
 
+    expect(saved().days[1].exercises[0]).toMatchObject({ repMin: 45, repMax: 90 });
+  });
+
+  it('a premade is read-only: its editor address shows the detail instead', () => {
+    jest.mocked(getRoutineDetail).mockReturnValue({ isPremade: true } as RoutineDetail);
+    const tree = mount('premade-ppl-6');
+
+    expect(getRoutineDetail).toHaveBeenCalledWith('db', 'premade-ppl-6');
+    expect(router.navigate).toHaveBeenCalledWith('/routines/premade-ppl-6');
     expect(shownText(tree)).toContain('Premade routines are read-only.');
-    expect(router.back).not.toHaveBeenCalled();
+    expect(buttons(tree, 'Save')).toHaveLength(0);
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
   });
 });
 
 describe('the routine editor: leaving with unsaved changes (R89)', () => {
+  it('problems from a Save are gone once the editor is left with nothing to lose', () => {
+    const tree = mount('new');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain('Give the routine a name.');
+
+    press(tree, 'Back to Routines');
+    expect(router.back).toHaveBeenCalled();
+    leaveAndReturn();
+
+    expect(shownText(tree)).not.toContain('Give the routine a name.');
+    expect(shownText(tree)).not.toContain('Add at least one day.');
+  });
+
+  it("Android's back leaves at once when nothing changed, and asks first when something did", () => {
+    const tree = mount('mine');
+
+    expect(androidBack()).toBe(false);
+    expect(shownText(tree)).not.toContain('Discard changes?');
+
+    type(tree, 'Routine name', 'Renamed');
+    expect(androidBack()).toBe(true);
+    expect(shownText(tree)).toContain('Discard changes?');
+    press(tree, 'Discard');
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops listening to Android's back once it is left", () => {
+    mount('mine');
+    expect(mockBack.handler).not.toBeNull();
+
+    leaveAndReturn();
+    expect(mockBack.handler).not.toBeNull();
+    act(() => {
+      if (typeof mockFocus.cleanup === 'function') mockFocus.cleanup();
+      mockFocus.cleanup = undefined;
+    });
+    expect(mockBack.handler).toBeNull();
+  });
+
   it('Back leaves at once when nothing changed', () => {
     const tree = mount('mine');
 

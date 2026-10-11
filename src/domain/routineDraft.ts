@@ -52,7 +52,7 @@ type Dir = 'up' | 'down';
 
 export type DraftAction =
   | { type: 'rename'; name: string }
-  /** A blank or missing name becomes the lowest "Day {n}" not in use. */
+  /** A blank or missing name becomes "Day {n}" for its place, or the lowest "Day {n}" not in use. */
   | { type: 'addDay'; name?: string }
   | { type: 'renameDay'; dayKey: string; name: string }
   | { type: 'moveDay'; dayKey: string; dir: Dir }
@@ -209,9 +209,14 @@ function patched(e: DraftExercise, patch: ExercisePatch): DraftExercise {
   return clampRule(next, given(patch.repMax) && !given(patch.repMin) ? 'max' : 'min');
 }
 
-/** The lowest "Day {n}" that no day of the draft is called, as saved. */
-function unusedDayName(days: DraftDay[]): string {
+/**
+ * The name of a blank day added after `days`: "Day {n}" for its place (counted from 1), or, when a day is already
+ * called that (as saved), the lowest "Day {n}" that none is, so two days never share a name.
+ */
+function newDayName(days: DraftDay[]): string {
   const taken = new Set(days.map(dayLabel));
+  const own = `Day ${days.length + 1}`;
+  if (!taken.has(own)) return own;
   let n = 1;
   while (taken.has(`Day ${n}`)) n++;
   return `Day ${n}`;
@@ -272,7 +277,7 @@ export function draftReducer(draft: RoutineDraft, action: DraftAction): RoutineD
     case 'rename':
       return { ...draft, name: action.name };
     case 'addDay': {
-      const name = action.name?.trim() ? action.name : unusedDayName(draft.days);
+      const name = action.name?.trim() ? action.name : newDayName(draft.days);
       const day: DraftDay = { key: `new:${draft.nextKey}`, id: null, name, exercises: [] };
       return { ...draft, days: [...draft.days, day], nextKey: draft.nextKey + 1 };
     }
