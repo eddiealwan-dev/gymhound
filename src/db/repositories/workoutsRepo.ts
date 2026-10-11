@@ -18,18 +18,13 @@ import {
   workouts,
 } from '../schema';
 import type { Db } from '../types';
+import { ActiveWorkoutExistsError, assertNoActiveWorkout, getActiveWorkoutId } from './activeWorkout';
 import { writePrFlags } from './prRepo';
 import { ruleOf } from './ruleSnapshot';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
 
-/** Raised when a workout is started while another one is still active. */
-export class ActiveWorkoutExistsError extends Error {
-  constructor() {
-    super('A workout is already active.');
-    this.name = 'ActiveWorkoutExistsError';
-  }
-}
+export { ActiveWorkoutExistsError, assertNoActiveWorkout, getActiveWorkoutId };
 
 /** Raised when a workout is finished with no set ticked. An empty workout never reaches history. */
 export class NothingTickedError extends Error {
@@ -37,10 +32,6 @@ export class NothingTickedError extends Error {
     super('Nothing is ticked yet.');
     this.name = 'NothingTickedError';
   }
-}
-
-export function getActiveWorkoutId(db: Db): string | null {
-  return db.select({ id: workouts.id }).from(workouts).where(eq(workouts.status, 'active')).get()?.id ?? null;
 }
 
 /** The active workout's id and its stored rest end (epoch ms, null when no rest is running), or null with no active workout. A light read for the rest watcher. */
@@ -51,11 +42,6 @@ export function getActiveRest(db: Db): { workoutId: string; restEndsAt: number |
     .where(eq(workouts.status, 'active'))
     .get();
   return row ? { workoutId: row.id, restEndsAt: row.restEndsAt } : null;
-}
-
-/** Throws `ActiveWorkoutExistsError` if a workout is active. Every way of starting a workout calls it first. */
-export function assertNoActiveWorkout(db: Db): void {
-  if (getActiveWorkoutId(db) !== null) throw new ActiveWorkoutExistsError();
 }
 
 function requireActiveWorkout(db: Db, workoutId: string) {

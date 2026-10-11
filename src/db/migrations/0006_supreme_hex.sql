@@ -3,7 +3,7 @@ CREATE TABLE `exercise_photos` (
 	`start_file` text,
 	`end_file` text,
 	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE TABLE `measurements` (

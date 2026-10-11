@@ -217,7 +217,15 @@ describe('migration 0006 (phase 4, R102)', () => {
       { name: 'updated_at', type: 'INTEGER', notnull: 1, pk: 0 },
     ]);
     const fks = db.all<{ table: string; from: string; to: string }>(sql`pragma foreign_key_list(exercise_photos)`);
-    expect(fks).toEqual([expect.objectContaining({ table: 'exercises', from: 'exercise_id', to: 'id' })]);
+    expect(fks).toEqual([expect.objectContaining({ table: 'exercises', from: 'exercise_id', to: 'id', on_delete: 'CASCADE' })]);
+  });
+
+  it('removes an exercise photo row with its exercise', () => {
+    const { db } = createTestDb();
+    insertBench(db);
+    db.insert(schema.exercisePhotos).values({ exerciseId: 'barbell-bench-press', startFile: 'a.jpg', endFile: null, updatedAt: 1 }).run();
+    db.delete(exercises).where(eq(exercises.id, 'barbell-bench-press')).run();
+    expect(db.select().from(schema.exercisePhotos).all()).toEqual([]);
   });
 
   it('adds saved_workouts and saved_workout_exercises, whose sets default to an empty list', () => {

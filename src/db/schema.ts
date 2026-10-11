@@ -227,11 +227,12 @@ export const measurements = sqliteTable(
 );
 
 // Your own start and end photos for an exercise with none bundled (R111). File NAMES in the documents folder's
-// `exercise-photos/`, never URIs: iOS moves the app's folder on update. Added in 0006.
+// `exercise-photos/`, never URIs: iOS moves the app's folder on update. Goes with its exercise (the files are removed
+// by the caller). Added in 0006.
 export const exercisePhotos = sqliteTable('exercise_photos', {
   exerciseId: text('exercise_id')
     .primaryKey()
-    .references(() => exercises.id),
+    .references(() => exercises.id, { onDelete: 'cascade' }),
   startFile: text('start_file'),
   endFile: text('end_file'),
   updatedAt: integer('updated_at').notNull(),
