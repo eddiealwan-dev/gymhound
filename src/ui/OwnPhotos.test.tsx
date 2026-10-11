@@ -2,17 +2,19 @@ import { Image, Platform, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { getOwnPhotos, setOwnPhoto } from '../db/repositories/exercisePhotosRepo';
+import { announce } from '../platform/announce';
 import { deleteExercisePhotoFile, photoFileExists, pickPhoto, saveExercisePhoto } from '../platform/exercisePhotoFiles';
 import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
 import { OwnPhotos } from './OwnPhotos';
-import { Sheet } from './Sheet';
+import { ConfirmSheet, Sheet } from './Sheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../state/dataVersion', () => {
   const actual = jest.requireActual<typeof import('../state/dataVersion')>('../state/dataVersion');
   return { ...actual, bumpData: jest.fn(() => actual.bumpData()) };
@@ -52,6 +54,7 @@ beforeEach(() => {
   jest.mocked(deleteExercisePhotoFile).mockReset();
   jest.mocked(photoFileExists).mockReset().mockReturnValue(true);
   jest.mocked(bumpData).mockClear();
+  jest.mocked(announce).mockClear();
 });
 
 afterEach(() => {
@@ -104,6 +107,8 @@ describe('your own photos (R111)', () => {
     expect(images).toHaveLength(1);
     expect(images[0].props.source).toEqual({ uri: 'file:///documents/exercise-photos/wall-sit-start-1.jpg' });
     expect(images[0].props.style).toMatchObject({ width: 120, height: 80 });
+    // Not a repeat of the slot's heading for the screen reader.
+    expect(images[0].props.accessibilityLabel).toBe('Your start photo');
     expect(button(tree, 'Replace start photo').props.label).toBe('Replace');
     expect(button(tree, 'Remove start photo').props.label).toBe('Remove');
     expect(buttonsLabelled(tree, 'Add end photo')).toHaveLength(1);
@@ -184,6 +189,9 @@ describe('your own photos (R111)', () => {
     expect(texts(tree)).toContain(DENIED);
     const line = tree.root.findAll((n) => n.type === Text && n.props.children === DENIED)[0];
     expect(line.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: '#a39d90' })]));
+    // Said once: by announce, on both phones, and not again by a live region on Android.
+    expect(announce).toHaveBeenCalledWith(DENIED);
+    expect(line.props.accessibilityLiveRegion).toBeUndefined();
     expect(setOwnPhoto).not.toHaveBeenCalled();
   });
 
@@ -200,11 +208,45 @@ describe('your own photos (R111)', () => {
     expect(texts(tree)).toContain("That photo couldn't be saved.");
   });
 
-  it('Remove clears the slot and deletes the file', () => {
+  const removeSheet = (tree: ReactTestRenderer) => tree.root.findAllByType(ConfirmSheet).find((c) => c.props.title === 'Remove this photo?')!;
+
+  it('Remove asks first, and Keep keeps the photo', () => {
+    mockRows['wall-sit'] = { start: 'wall-sit-start-1.jpg', end: null };
+    const tree = mount();
+    expect(removeSheet(tree).props.visible).toBe(false);
+    tap(tree, 'Remove start photo');
+    expect(removeSheet(tree).props).toMatchObject({ visible: true, confirmLabel: 'Remove', cancelLabel: 'Keep' });
+    expect(setOwnPhoto).not.toHaveBeenCalled();
+
+    act(() => removeSheet(tree).props.onCancel());
+    expect(removeSheet(tree).props.visible).toBe(false);
+    expect(setOwnPhoto).not.toHaveBeenCalled();
+    expect(deleteExercisePhotoFile).not.toHaveBeenCalled();
+  });
+
+  it('says so when a photo cannot be removed', () => {
+    mockRows['wall-sit'] = { start: 'wall-sit-start-1.jpg', end: null };
+    jest.mocked(setOwnPhoto).mockImplementation(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount();
+    tap(tree, 'Remove start photo');
+    act(() => removeSheet(tree).props.onConfirm());
+
+    expect(removeSheet(tree).props.visible).toBe(false);
+    expect(texts(tree)).toContain("That photo couldn't be saved.");
+    expect(announce).toHaveBeenCalledWith("That photo couldn't be saved.");
+    expect(deleteExercisePhotoFile).not.toHaveBeenCalled();
+    expect(buttonsLabelled(tree, 'Replace start photo')).toHaveLength(1);
+  });
+
+  it('Remove, once confirmed, clears the slot and deletes the file', () => {
     mockRows['wall-sit'] = { start: 'wall-sit-start-1.jpg', end: 'wall-sit-end-1.jpg' };
     const tree = mount();
     tap(tree, 'Remove end photo');
+    act(() => removeSheet(tree).props.onConfirm());
 
+    expect(removeSheet(tree).props.visible).toBe(false);
     expect(setOwnPhoto).toHaveBeenCalledWith('db', 'wall-sit', 'end', null, NOW);
     expect(deleteExercisePhotoFile).toHaveBeenCalledWith('wall-sit-end-1.jpg');
     expect(bumpData).toHaveBeenCalled();

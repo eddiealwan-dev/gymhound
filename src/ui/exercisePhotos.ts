@@ -27,8 +27,9 @@ export function canHaveOwnPhotos(exerciseId: string): boolean {
 /** Your own photo names for an exercise, with any whose file has gone (a restored snapshot) read as none. */
 export function useOwnPhotoNames(exerciseId: string): { start: string | null; end: string | null } | null {
   const db = useDb();
-  const version = useDataVersion((state) => state.version);
   const allowed = Platform.OS !== 'web' && canHaveOwnPhotos(exerciseId);
+  // Only a slot that can hold your own photos follows writes; a bundled one (most picker rows) never draws again for one.
+  const version = useDataVersion((state) => (allowed ? state.version : 0));
   return useMemo(() => {
     if (!allowed) return null;
     const { start, end } = getOwnPhotos(db, exerciseId);

@@ -5,7 +5,7 @@ import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import { photoFileExists } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
-import { bumpData } from '../state/dataVersion';
+import { bumpData, useDataVersion } from '../state/dataVersion';
 import { canHaveOwnPhotos, exercisePhotos, useExercisePhotos } from './exercisePhotos';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -118,6 +118,22 @@ describe('useExercisePhotos', () => {
     jest.mocked(getOwnPhotos).mockReturnValue({ start: 'wall-sit-start-1.jpg', end: null });
     act(() => bumpData());
     expect(seen).toEqual([{ uri: 'file:///documents/exercise-photos/wall-sit-start-1.jpg' }, null]);
+  });
+
+  it('does not draw again after a write when photos are bundled: a long picker list stays still', () => {
+    let draws = 0;
+    function Counted() {
+      useExercisePhotos('barbell-back-squat');
+      draws += 1;
+      return null;
+    }
+    act(() => {
+      create(createElement(Counted));
+    });
+    expect(draws).toBe(1);
+    act(() => bumpData());
+    expect(draws).toBe(1);
+    expect(useDataVersion.getState().version).toBeGreaterThan(0);
   });
 
   it('never looks for your own on web: there are none there', () => {
