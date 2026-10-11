@@ -25,7 +25,7 @@ import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
 import { ensureSettings, getSettings, setSetting } from './settingsRepo';
-import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
+import { addExerciseToWorkout, replaceExercise, setExerciseMark } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
   clearRestEndsAtIf,
@@ -506,6 +506,156 @@ describe('finishWorkout saves the note and clears the rest timer', () => {
     expect(() => finishWorkout(db, id, NOW + 30_000)).toThrow(NothingTickedError);
     expect(db.select().from(workouts).where(eq(workouts.id, id)).get()!.restEndsAt).toBe(NOW + 120_000);
     expect(db.select().from(workoutExercises).all().every((e) => e.note === null)).toBe(true);
+  });
+});
+
+describe('finishWorkout runs the rule (7.3, 18.7)', () => {
+  const BENCH = `${PUSH_A}:barbell-bench-press`;
+  const OHP = `${PUSH_A}:barbell-overhead-press`;
+
+  /** Stores `weight` lb as the routine exercise's next weight, so the next start plans it. */
+  function plan(db: Db, routineExerciseId: string, weight: number): void {
+    db.update(routineExercises)
+      .set({ nextWeight: weight, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, routineExerciseId))
+      .run();
+  }
+
+  function routineExercise(db: Db, id: string) {
+    return db.select().from(routineExercises).where(eq(routineExercises.id, id)).get()!;
+  }
+
+  /** Starts Push A and ticks its four bench sets at `weight` lb, one rep count per set. */
+  function benchDay(db: Db, weight: number, reps: [number, number, number, number]): string {
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setIds(db).forEach((setId, i) => tick(db, setId, weight, reps[i], NOW + (i + 1) * 60_000));
+    return id;
+  }
+
+  it('raises when every set hits the top: next time 140 lb, written to the routine and planned at the next start', () => {
+    const db = seededDb();
+    const id = benchDay(db, 135, [8, 8, 8, 8]);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      workingWeight: 135,
+      workingUnit: 'lb',
+      outcome: 'raised',
+      nextWeight: 140,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 140, nextWeightUnit: 'lb' });
+
+    const next = startWorkoutFromDay(db, PUSH_A, NOW + DAY);
+    expect(rawWorkoutExercise(db, next, 'barbell-bench-press')).toMatchObject({ plannedWeight: 140, plannedUnit: 'lb' });
+  });
+
+  it('holds at the working weight when one set misses the top', () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const id = benchDay(db, 135, [8, 8, 8, 7]);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      workingWeight: 135,
+      workingUnit: 'lb',
+      outcome: 'held',
+      nextWeight: 135,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb' });
+  });
+
+  it('holds the plan, not what was lifted, on an exercise flagged Rough sleep', () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const id = benchDay(db, 140, [8, 8, 8, 8]);
+    setExerciseMark(db, getActiveWorkoutView(db)!.exercises[0].id, 'rough_sleep');
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      mark: 'rough_sleep',
+      workingWeight: 140,
+      workingUnit: 'lb',
+      outcome: 'held_marked',
+      nextWeight: 135,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb' });
+  });
+
+  it('raises once the flag is cleared: nothing off is a normal day', () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const id = benchDay(db, 135, [8, 8, 8, 8]);
+    const benchId = getActiveWorkoutView(db)!.exercises[0].id;
+    setExerciseMark(db, benchId, 'rough_sleep');
+    setExerciseMark(db, benchId, null);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      mark: null,
+      outcome: 'raised',
+      nextWeight: 140,
+      nextUnit: 'lb',
+    });
+    expect(routineExercise(db, BENCH)).toMatchObject({ nextWeight: 140, nextWeightUnit: 'lb' });
+  });
+
+  it('drops an exercise with no ticks and leaves its routine next weight untouched', () => {
+    const db = seededDb();
+    plan(db, OHP, 95);
+    const before = db.select().from(routineExercises).all().filter((r) => r.id !== BENCH);
+    const id = benchDay(db, 135, [8, 8, 8, 8]);
+    finishWorkout(db, id, NOW + HOUR);
+
+    const kept = db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all();
+    expect(kept.map((e) => [e.exerciseId, e.outcome])).toEqual([['barbell-bench-press', 'raised']]);
+    expect(routineExercise(db, OHP)).toMatchObject({ nextWeight: 95, nextWeightUnit: 'lb' });
+    expect(db.select().from(routineExercises).all().filter((r) => r.id !== BENCH)).toEqual(before);
+  });
+
+  it('an empty workout has no rule: no_rule with the working weight, no next weight, and no routine row changes', () => {
+    const db = seededDb();
+    const before = db.select().from(routineExercises).all();
+    const id = startEmptyWorkout(db, NOW);
+    addExerciseToWorkout(db, id, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(rawWorkoutExercise(db, id, 'barbell-bench-press')).toMatchObject({
+      routineExerciseId: null,
+      workingWeight: 135,
+      workingUnit: 'lb',
+      outcome: 'no_rule',
+      nextWeight: null,
+      nextUnit: null,
+    });
+    expect(db.select().from(routineExercises).all()).toEqual(before);
+  });
+
+  it('a refused finish writes nothing: no outcome on any exercise and no routine row changes', () => {
+    const db = seededDb();
+    plan(db, BENCH, 135);
+    const before = db.select().from(routineExercises).all();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    untickSet(db, setIds(db)[0]);
+
+    expect(() => finishWorkout(db, id, NOW + HOUR)).toThrow(NothingTickedError);
+    const rows = db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all();
+    expect(rows).toHaveLength(5);
+    expect(
+      rows.every(
+        (e) =>
+          e.workingWeight === null &&
+          e.workingUnit === null &&
+          e.outcome === null &&
+          e.nextWeight === null &&
+          e.nextUnit === null,
+      ),
+    ).toBe(true);
+    expect(db.select().from(routineExercises).all()).toEqual(before);
   });
 });
 

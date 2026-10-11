@@ -1,6 +1,7 @@
 import { and, asc, count, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
-import { planInUnit } from '../../domain/plates';
+import { gearFor, planInUnit } from '../../domain/plates';
+import { computeOutcome, type OutcomeInput } from '../../domain/progression';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { convertIncrement } from '../../domain/units';
@@ -182,11 +183,90 @@ export function getNextDayTitle(db: Db, workoutId: string): string | null {
   return dayTitle(next.routineName, next.dayName);
 }
 
+/** The rule snapshot of a workout exercise, or null when it has no rule (no routine exercise, or ad hoc). */
+function ruleSnapshot(we: typeof workoutExercises.$inferSelect): OutcomeInput['rule'] {
+  if (
+    we.routineExerciseId === null ||
+    we.ruleSetCount === null ||
+    we.ruleRepMin === null ||
+    we.ruleRepMax === null ||
+    we.ruleIncrement === null ||
+    we.ruleIncrementUnit === null
+  ) {
+    return null;
+  }
+  return {
+    setCount: we.ruleSetCount,
+    repMin: we.ruleRepMin,
+    repMax: we.ruleRepMax,
+    increment: we.ruleIncrement,
+    incrementUnit: we.ruleIncrementUnit,
+  };
+}
+
+/**
+ * Runs the rule (spec 7.3, 18.7) on each exercise of the workout: stores its working weight, outcome and next weight,
+ * and, unless the outcome is `no_rule`, writes the next weight to the routine exercise it came from. "Marked" is the
+ * exercise flagged Something off. Barbell raises round with the bar and plates in Settings for the working unit.
+ */
+function writeOutcomes(db: Db, workoutId: string): void {
+  const settings = getSettings(db);
+  const gear = { lb: gearFor('lb', settings), kg: gearFor('kg', settings) };
+  const rows = db
+    .select({ we: workoutExercises, loggingType: exercises.loggingType, equipment: exercises.equipment })
+    .from(workoutExercises)
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .orderBy(asc(workoutExercises.position))
+    .all();
+  for (const { we, loggingType, equipment } of rows) {
+    const exerciseSets = db
+      .select({
+        setType: sets.setType,
+        done: sets.done,
+        weight: sets.weight,
+        weightUnit: sets.weightUnit,
+        reps: sets.reps,
+        durationS: sets.durationS,
+      })
+      .from(sets)
+      .where(eq(sets.workoutExerciseId, we.id))
+      .all();
+    const result = computeOutcome({
+      rule: ruleSnapshot(we),
+      plannedWeight: we.plannedWeight,
+      plannedUnit: we.plannedUnit,
+      loggingType,
+      equipment,
+      marked: we.mark !== null,
+      sets: exerciseSets,
+      gear,
+    });
+    db.update(workoutExercises)
+      .set({
+        workingWeight: result.workingWeight,
+        workingUnit: result.workingUnit,
+        outcome: result.outcome,
+        nextWeight: result.nextWeight,
+        nextUnit: result.nextUnit,
+      })
+      .where(eq(workoutExercises.id, we.id))
+      .run();
+    if (we.routineExerciseId !== null && result.outcome !== 'no_rule') {
+      db.update(routineExercises)
+        .set({ nextWeight: result.nextWeight, nextWeightUnit: result.nextUnit })
+        .where(eq(routineExercises.id, we.routineExerciseId))
+        .run();
+    }
+  }
+}
+
 /**
  * Finishes a workout in one transaction: unticked sets are dropped, then exercises left with no sets, then each
  * remaining exercise keeps a copy of its current note (null when it has none) so later note edits never touch
- * history. The workout is marked finished with its rest timer cleared, and the routine's rotation moves to the
- * day after this one. Throws `NothingTickedError`, changing nothing, if no set is ticked.
+ * history, and runs the rule (`writeOutcomes`), which writes next time's weight back to the routine. The workout is
+ * marked finished with its rest timer cleared, and the routine's rotation moves to the day after this one. Throws
+ * `NothingTickedError`, changing nothing, if no set is ticked.
  */
 export function finishWorkout(db: Db, workoutId: string, now: number): void {
   db.transaction((tx) => {
@@ -225,6 +305,8 @@ export function finishWorkout(db: Db, workoutId: string, now: number): void {
       where ${exerciseNotes.exerciseId} = ${workoutExercises.exerciseId}
     )`;
     tx.update(workoutExercises).set({ note: currentNote }).where(eq(workoutExercises.workoutId, workoutId)).run();
+
+    writeOutcomes(tx, workoutId);
 
     tx.update(workouts)
       .set({ status: 'finished', finishedAt: now, restEndsAt: null, restSetId: null })

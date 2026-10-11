@@ -13,7 +13,7 @@ import {
   tickSet,
 } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/workoutViewsRepo';
-import { workoutExercises, workouts } from '../db/schema';
+import { routineExercises, workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
@@ -149,7 +149,11 @@ function bench() {
 
 const reread = (setId: string) => activeView().exercises[0].sets.find((s) => s.id === setId)!;
 
-/** A finished Push A from the day before, with `done` bench sets ticked at 135 × 8 and the rest left unticked. */
+/**
+ * A finished Push A from the day before, with `done` bench sets ticked at 135 × 8 and the rest left unticked. The
+ * next weight the rule wrote to the routine is cleared, so the next start has no plan and only last time's values
+ * are left to fall back on.
+ */
 function finishedPushA(done: number) {
   const before = new Date(2026, 9, 8, 9, 0).getTime();
   const id = startWorkoutFromDay(db, PUSH_A, before);
@@ -158,6 +162,10 @@ function finishedPushA(done: number) {
     tickSet(db, s.id, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', before + (i + 1) * 60_000, 'mi');
   });
   finishWorkout(db, id, before + 3_600_000);
+  db.update(routineExercises)
+    .set({ nextWeight: null, nextWeightUnit: null })
+    .where(eq(routineExercises.id, `${PUSH_A}:barbell-bench-press`))
+    .run();
 }
 
 const NOTHING = { weight: null, reps: null, durationS: null, distance: null };
