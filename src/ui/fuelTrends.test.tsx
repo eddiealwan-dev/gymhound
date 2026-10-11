@@ -115,7 +115,7 @@ describe('Fuel trends (R149)', () => {
     expect(headings).toHaveLength(1);
     expect(shownText(tree)[0]).toBe('Trends');
     expect(option(tree, 'Calories').props.accessibilityState).toEqual({ checked: true });
-    expect(option(tree, 'Last month').props.accessibilityState).toEqual({ checked: true });
+    expect(option(tree, '1M, last month').props.accessibilityState).toEqual({ checked: true });
     expect(dots(tree)).toBe(3);
     expect(chart(tree)!.props.accessibilityLabel).toBe(
       'Calories. Oct 1 to Oct 10: 1,800 kcal to 2,000 kcal. Lowest 1,800 kcal, highest 2,200 kcal.',
@@ -140,7 +140,7 @@ describe('Fuel trends (R149)', () => {
     expect(shownText(tree)).toContain('Average 65 g a day over 2 logged days.');
   });
 
-  it('widens to 3M and 1Y, each chip read out in words', () => {
+  it('widens to 3M and 1Y, each chip read out with its text first', () => {
     eat('2026-10-10', 2000);
     eat('2026-08-01', 2100); // 71 days ago
     eat('2026-01-15', 2200); // 269 days ago
@@ -149,12 +149,12 @@ describe('Fuel trends (R149)', () => {
     layOut(tree);
     expect(dots(tree)).toBe(1);
     expect(shownText(tree)).toContain('Average 2,000 kcal a day over 1 logged day.');
-    choose(tree, 'Last 3 months');
+    choose(tree, '3M, last 3 months');
     layOut(tree);
-    expect(option(tree, 'Last 3 months').props.accessibilityState).toEqual({ checked: true });
-    expect(option(tree, 'Last month').props.accessibilityState).toEqual({ checked: false });
+    expect(option(tree, '3M, last 3 months').props.accessibilityState).toEqual({ checked: true });
+    expect(option(tree, '1M, last month').props.accessibilityState).toEqual({ checked: false });
     expect(dots(tree)).toBe(2);
-    choose(tree, 'Last year');
+    choose(tree, '1Y, last year');
     layOut(tree);
     expect(dots(tree)).toBe(3);
     expect(shownText(tree)).toContain('Average 2,100 kcal a day over 3 logged days.');
@@ -167,7 +167,7 @@ describe('Fuel trends (R149)', () => {
     expect(chart(tree)).toBeUndefined();
     expect(shownText(tree)).toContain('Nothing logged in this range.');
     expect(shownText(tree).some((t) => t.startsWith('Average'))).toBe(false);
-    choose(tree, 'Last year');
+    choose(tree, '1Y, last year');
     expect(chart(tree)).toBeDefined();
     expect(shownText(tree)).not.toContain('Nothing logged in this range.');
   });
@@ -183,12 +183,87 @@ describe('Fuel trends (R149)', () => {
     expect(dots(tree)).toBe(2);
   });
 
+  it('names its two groups for VoiceOver', () => {
+    eat('2026-10-01', 1800);
+    const tree = mount();
+    const groups = tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radiogroup');
+    expect(groups.map((g) => g.props.accessibilityLabel)).toEqual(['Chart measure', 'Chart range']);
+  });
+
+  it('protein, carbs and fat have the same days as calories: a logged day with 0 g still counts', () => {
+    eat('2026-10-01', 1800, 150, 200, 60);
+    eat('2026-10-02', 300); // a quick add of calories only: 0 g of each macro
+    eat('2026-10-03', 2000, 170, 0, 70);
+    const tree = mount();
+    layOut(tree);
+    expect(dots(tree)).toBe(3);
+    for (const [measure, average] of [
+      ['Protein', 'Average 107 g a day over 3 logged days.'],
+      ['Carbs', 'Average 67 g a day over 3 logged days.'],
+      ['Fat', 'Average 43 g a day over 3 logged days.'],
+    ]) {
+      choose(tree, measure);
+      layOut(tree);
+      expect(dots(tree)).toBe(3);
+      expect(shownText(tree)).toContain(average);
+      expect(chart(tree)!.props.accessibilityLabel).toMatch(/Lowest 0 g/);
+    }
+  });
+
+  describe('the four measures share the well by its measured width, so "Calories" never breaks', () => {
+    /** Gives the well a width and every measured label the same width, as the phone's layout would. */
+    function measure(tree: ReactTestRenderer, wellWidth: number, labelWidth: number) {
+      act(() => {
+        tree.root.findAll((n) => n.props.testID === 'chart-measure-well' && typeof n.type === 'string')[0].props.onLayout({
+          nativeEvent: { layout: { x: 0, y: 0, width: wellWidth, height: 52 } },
+        });
+        for (const label of ['Calories', 'Protein', 'Carbs', 'Fat']) {
+          const probes = tree.root.findAll((n) => n.props.testID === `chart-measure-probe-${label}` && typeof n.type === 'string');
+          probes[0].props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: labelWidth, height: 20 } } });
+        }
+      });
+    }
+
+    const widthOf = (tree: ReactTestRenderer, label: string) => {
+      const flat = [option(tree, label).props.style].flat(Infinity) as ({ width?: number } | null)[];
+      return flat.reduce<number | undefined>((w, s) => (s && typeof s === 'object' && s.width !== undefined ? s.width : w), undefined);
+    };
+
+    beforeEach(() => eat('2026-10-01', 1800));
+
+    // A 342pt well has 334pt inside its 4pt padding; segments are 4pt apart, with 4pt padding each side of the words.
+    it('four in a row when the longest word fits a quarter', () => {
+      const tree = mount();
+      measure(tree, 342, 64);
+      expect(['Calories', 'Protein', 'Carbs', 'Fat'].map((l) => widthOf(tree, l))).toEqual([80, 80, 80, 80]);
+    });
+
+    it('two to a row when it does not fit a quarter but fits a half', () => {
+      const tree = mount();
+      measure(tree, 342, 100);
+      expect(widthOf(tree, 'Calories')).toBe(165);
+    });
+
+    it('one to a row at very large text', () => {
+      const tree = mount();
+      measure(tree, 342, 200);
+      expect(widthOf(tree, 'Calories')).toBe(334);
+    });
+
+    it('the measuring copies are hidden from VoiceOver and touch', () => {
+      const tree = mount();
+      const probes = tree.root.findAll((n) => typeof n.props.testID === 'string' && n.props.testID.startsWith('chart-measure-probes'));
+      expect(probes.length).toBeGreaterThan(0);
+      expect(probes[0].props).toMatchObject({ accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants', pointerEvents: 'none' });
+    });
+  });
+
   it('every option is a 44pt target, and nothing is red', () => {
     eat('2026-10-01', 1800, 150);
     eat('2026-10-02', 2000, 160);
     const tree = mount();
     layOut(tree);
-    for (const label of ['Calories', 'Protein', 'Carbs', 'Fat', 'Last month', 'Last 3 months', 'Last year']) {
+    for (const label of ['Calories', 'Protein', 'Carbs', 'Fat', '1M, last month', '3M, last 3 months', '1Y, last year']) {
       const flat = [option(tree, label).props.style].flat(Infinity) as ({ minHeight?: number } | null)[];
       expect(flat.some((s) => typeof s === 'object' && s !== null && (s.minHeight ?? 0) >= 44)).toBe(true);
     }

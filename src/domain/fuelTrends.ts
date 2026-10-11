@@ -1,6 +1,5 @@
 import { pointsInDays } from './chart';
 import type { SeriesPoint } from './chart';
-import { fromLocalDate, toLocalDate } from './dates';
 import { fuelNumber } from './fuel';
 
 /** The trends' ranges (R149): 1M is the default. */
@@ -9,19 +8,14 @@ export type FuelRange = '1M' | '3M' | '1Y';
 /** How many days each range covers (R149). */
 export const FUEL_RANGE_DAYS: Record<FuelRange, number> = { '1M': 30, '3M': 91, '1Y': 365 };
 
-/** The day before a YYYY-MM-DD date, counted on the calendar so a clock change cannot skip or repeat a day. */
-function dayBefore(localDate: string): string {
-  const d = fromLocalDate(localDate);
-  return toLocalDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1).getTime());
-}
-
 /**
  * The logged days a trend draws, oldest first: the range's days ending yesterday. Today is left out because its day is
  * not over: a morning's breakfast as a point would drag the line and the average down until evening. Only days with
  * entries are points (an unlogged day is not a zero); a logged day whose value is 0 stays.
  */
 export function trendPoints(points: readonly SeriesPoint[], range: FuelRange, today: string): SeriesPoint[] {
-  return pointsInDays(points, FUEL_RANGE_DAYS[range], dayBefore(today));
+  // The range's days plus today, then today taken off: counted in whole calendar days, as pointsInDays counts them.
+  return pointsInDays(points, FUEL_RANGE_DAYS[range] + 1, today).filter((pt) => pt.localDate !== today);
 }
 
 /** A trend value as shown and read: "2,140 kcal" or "143 g", a whole number with the locale's separators (R156). */

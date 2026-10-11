@@ -38,6 +38,12 @@ describe('trendPoints', () => {
     expect(trendPoints([p('2026-10-05', 0)], '1M', today)).toEqual([p('2026-10-05', 0)]);
   });
 
+  it('counts calendar days across a clock change (Europe and the US move their clocks in March and November)', () => {
+    // 2026-03-29 (EU) and 2026-03-08 (US) start summer time; 30 days before 2026-04-07 is 2026-03-08.
+    const points = [p('2026-03-07', 1), p('2026-03-08', 2), p('2026-03-29', 3), p('2026-04-06', 4)];
+    expect(trendPoints(points, '1M', '2026-04-07').map((x) => x.value)).toEqual([2, 3, 4]);
+  });
+
   it('drops future dates and steps back across a month and a year', () => {
     expect(trendPoints([p('2026-10-12', 1), p('2026-12-31', 2)], '1Y', today)).toEqual([]);
     expect(trendPoints([p('2025-12-31', 7)], '1M', '2026-01-01')).toEqual([p('2025-12-31', 7)]);
