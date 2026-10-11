@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Keyboard, ScrollView, Text, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Session from '../../../app/session';
@@ -85,6 +85,9 @@ function shownText(tree: ReactTestRenderer): string[] {
 
 const textWith = (tree: ReactTestRenderer, children: string) => tree.root.findAll((n) => n.type === Text && n.props.children === children);
 
+/** The line under the name: one row, read as one by its label. */
+const lineRow = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.props.accessibilityLabel === '2 of 4 sets done. Workout time 0:01')[0];
+
 /** The 2pt line along the bottom of the header. */
 const progressLine = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === View && n.props.style?.height === 2);
 
@@ -127,13 +130,15 @@ describe('the session header (spec 18.6)', () => {
     expect(name).toHaveLength(1);
     expect(name[0].props).toMatchObject({ numberOfLines: 1, maxFontSizeMultiplier: 1.3 });
 
-    const line = textWith(tree, '2/4 sets · 0:01');
-    expect(line).toHaveLength(1);
-    expect(line[0].props).toMatchObject({
-      numberOfLines: 1,
-      maxFontSizeMultiplier: 1.3,
-      accessibilityLabel: '2 of 4 sets done. Workout time 0:01',
-    });
+    // The line is two parts in a row, read as one: the count, then the time (Round 4, A2).
+    const count = textWith(tree, '2/4 sets');
+    const time = textWith(tree, ' · 0:01');
+    expect(count).toHaveLength(1);
+    expect(time).toHaveLength(1);
+    const row = lineRow(tree);
+    expect(row.props.accessible).toBe(true);
+    expect(row.findAll((n) => n.type === Text).map((n) => n.props.children)).toEqual(['2/4 sets', ' · 0:01']);
+    for (const part of [count[0], time[0]]) expect(part.props).toMatchObject({ numberOfLines: 1, maxFontSizeMultiplier: 1.3 });
   });
 
   it('the progress line is the share ticked', () => {
@@ -194,5 +199,63 @@ describe('the session header (spec 18.6)', () => {
     mount();
     expect(mockBlocks.length).toBeGreaterThanOrEqual(2);
     expect(mockBlocks.map((b) => b.nextSetId)).toEqual(mockBlocks.map(() => 's2'));
+  });
+
+  describe('at the largest text, on a 320 or 390 phone with Music (Round 4, A2)', () => {
+    const flat = (style: unknown) => StyleSheet.flatten(typeof style === 'function' ? style({ pressed: false }) : style) ?? {};
+    /** The outermost element labelled `label`: the Pressable itself, whose style is still a function of `pressed`. */
+    const pressable = (tree: ReactTestRenderer, label: string) => tree.root.findAll((n) => n.props.accessibilityLabel === label)[0];
+    /** The header's one row: the View holding Back. */
+    const headerRow = (tree: ReactTestRenderer) => pressable(tree, 'Back to Train').parent!;
+
+    it('the progress line has its own 2pt strip under the row, so it never covers the text', () => {
+      const tree = mount();
+      // The line sits at bottom 0 of the header, in the 2pt the header keeps below the row.
+      expect(progressLine(tree)[0].props.style).toMatchObject({ position: 'absolute', bottom: 0, height: 2 });
+      const header = tree.root.findAll((n) => n.type === View && flat(n.props.style).borderBottomWidth === 1);
+      expect(header.length).toBeGreaterThan(0);
+      expect(flat(header[0].props.style).paddingBottom).toBe(2);
+    });
+
+    it('the row keeps space above and below its text, so 1.3× text grows the header instead of touching its edges', () => {
+      const tree = mount();
+      expect(flat(headerRow(tree).props.style)).toMatchObject({ paddingVertical: 4 });
+    });
+
+    it('Back and Music keep 44pt targets and never shrink; the name column takes what is left and truncates', () => {
+      const tree = mount();
+      for (const label of ['Back to Train', 'Music']) {
+        expect(flat(pressable(tree, label).props.style)).toMatchObject({ width: 44, height: 44, flexShrink: 0 });
+      }
+      expect(flat(lineRow(tree).parent!.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+      expect(textWith(tree, 'Push A')[0].props.numberOfLines).toBe(1);
+    });
+
+    it('the header grows taller with its text: no fixed height on it', () => {
+      const tree = mount();
+      const row = headerRow(tree);
+      expect(flat(row.props.style)).toMatchObject({ minHeight: 56, alignItems: 'center' });
+      expect(flat(row.props.style).height).toBeUndefined();
+      for (const header of tree.root.findAll((n) => n.type === View && flat(n.props.style).borderBottomWidth === 1)) {
+        expect(flat(header.props.style).height).toBeUndefined();
+      }
+      expect(flat(lineRow(tree).parent!.props.style).height).toBeUndefined();
+    });
+
+    it('the time is never cut: the count shrinks first', () => {
+      const tree = mount();
+      expect(flat(textWith(tree, '2/4 sets')[0].props.style)).toMatchObject({ flexShrink: 1 });
+      expect(flat(textWith(tree, ' · 0:01')[0].props.style)).toMatchObject({ flexShrink: 0 });
+      expect(flat(lineRow(tree).props.style)).toMatchObject({ flexDirection: 'row', minWidth: 0 });
+    });
+
+    it("Music's and Finish's touch areas don't overlap", () => {
+      const tree = mount();
+      const music = pressable(tree, 'Music');
+      const finish = finishButtons(tree)[0].findAll((n) => n.props.hitSlop !== undefined)[0];
+      const gap =
+        (flat(headerRow(tree).props.style).gap ?? 0) + (flat(music.props.style).marginRight ?? 0) + (flat(finish.props.style).marginLeft ?? 0);
+      expect(gap).toBeGreaterThanOrEqual(music.props.hitSlop + finish.props.hitSlop);
+    });
   });
 });

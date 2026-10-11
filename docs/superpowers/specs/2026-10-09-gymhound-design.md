@@ -914,6 +914,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
        - A quiet **Change routine ›** at the foot of the card opens Routines.
      - **No routine:** one card reads "No routine yet. Pick one and Train will line up your next workout.", with a filled **Choose a routine** and an outlined **Start empty workout**.
      - **In progress:** the Resume card, with the eyebrow "IN PROGRESS". Resume is the only filled button. Start empty workout and Up next are hidden.
+       - Round 4: the same quiet **Change routine ›** sits at the foot of the Resume card, under Resume, so Routines is reachable while a workout runs.
   3. Streak and This week.
   4. An outlined **Start empty workout**, in the Up next state only.
   5. The footer.
@@ -931,16 +932,21 @@ The owner picked the seven highest-impact items from the UX review and approved 
 - **A tick that is not ready says why** (replaces "the tick stays disabled" in §8.4):
   - The tick keeps a full-strength dashed ring and stays pressable.
   - A tap ticks nothing. It focuses the missing field, shows a muted line under the row and gives a warning haptic. The line is "Add a weight to tick", "Add reps to tick", "Add a time to tick" or "Add a distance to tick".
+  - Round 4 (the phone gave no buzz and the keyboard opened on reps):
+    - The haptic comes first, before anything moves the keyboard, which can swallow it. It is a heavy impact (`Haptics.impactAsync(Heavy)`), distinct from the tick's light one, in place of the warning notification.
+    - The field to focus is the first missing one in column order (weight before reps). It is focused once the row has drawn its line, so nothing that tap re-renders (the line, or a blur that saves another field) comes after the focus.
+    - The line is also announced (`announce`), since VoiceOver does not read a live region on iOS. "Check this number" is announced the same way.
   - A number that needs another look shows "Check this number" instead.
   - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").
 - **Finish confirm** (replaces "{n} sets aren't ticked" in §8.4):
   - Finish first saves whatever is typed, then reads the workout.
   - Nothing ticked: the "Nothing is ticked yet." sheet, as before.
   - Every set ticked: Finish goes straight through.
-  - Otherwise a sheet asks "Finish {workout}?". Its body has up to three parts:
-    - "{done} of {total} sets done."
-    - When whole exercises have no tick: "{names} has nothing logged." or "{names} have nothing logged." Up to three names are listed in full; more read "A, B and {n} more".
-    - "Unticked sets won't count, and Up next moves to {day}." The Up next part appears only when the workout's routine is the active routine. Otherwise this part reads "Unticked sets won't count."
+  - Otherwise a sheet asks first (R57, Round 4):
+    - When whole exercises have no tick, the title names them: "{names} has nothing logged" or "{names} have nothing logged". Up to three names are listed in full; more read "A, B and {n} more".
+    - Otherwise the title is "Finish {workout}?".
+    - The body is "{done} of {total} sets done. Incomplete sets won't count, and Up next moves to {day}." The Up next part appears only when the workout's routine is the active routine. Otherwise the body ends "Incomplete sets won't count."
+    - The word "Unticked" is not used in this sheet.
   - The buttons are **Keep logging** and **Finish anyway**. Keep logging is the filled default when a whole exercise has no tick. Otherwise Finish anyway is.
   - Counts include warmups. An exercise with no sets is never listed.
 - **Session header** (replaces the §8.4 Header; §18.1 already dropped the day-mark chip):
@@ -949,6 +955,11 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - The bottom Finish is gone. Add exercise and Discard stay at the bottom.
   - A 2pt text-colour line along the header's bottom edge fills with the share of sets ticked.
   - The name, the line under it and the Finish label stop growing at 1.3× the phone's text size, so the header stays one row. This is the only exception to §8.2's text-size rule besides the wordmark.
+  - Round 4 (the header clipped at the bottom and right at the largest text):
+    - At 1.3× the name and the line under it need about 55pt, which left under 1pt in the 56pt row, and the 2pt progress line was drawn over the bottom of the row. The row now has 4pt above and below its text, so the header grows instead, and the progress line has its own 2pt strip under the row.
+    - The header has no fixed height. Back and Music are 44pt and never shrink; the name column takes what is left and truncates.
+    - The line under the name is two parts in a row, read as one label: the count ("5/18 sets") shrinks and truncates first, and the time (" · 24:10") is never cut.
+    - Music has 8pt to Finish, so their 4pt hit slops never overlap.
   - Each exercise block shows a muted "{done}/{total}" before ⋯.
   - The next set to do has a bolder tick ring (2.5pt, text colour). It is the first unticked set in workout order. In a superset, it is in the member with the fewest ticked sets, with the earlier member winning a tie.
 - **Suggested values look like suggestions:**
@@ -971,6 +982,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - Tapping the countdown opens this exercise's rest choices. A choice sets future rests. The running rest keeps its end.
   - At zero the row reads "Rest's up · Set {n} next" for 10 seconds, or until a set is ticked.
     - It reads "Warmup next" (or "Drop set" or "Failure set") for those types, and the exercise's name when the next set is in another exercise. With nothing left, it reads just "Rest's up".
+    - Round 4: it names another exercise only after the last set of this one. While the exercise holding the rest (in a superset, its run) has a set left, it names that set, or in a superset the member whose turn it is. Once it is done, it names the workout's next set (which may be an earlier exercise left open).
     - Skip shows nothing.
   - **VoiceOver:**
     - A tick announces "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when no rest starts.

@@ -15,10 +15,12 @@ import { SetRow, SUGGESTED_HINT } from './SetRow';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(() => Promise.resolve()),
-  ImpactFeedbackStyle: { Light: 'light' },
+  ImpactFeedbackStyle: { Light: 'light', Heavy: 'heavy' },
   notificationAsync: jest.fn(() => Promise.resolve()),
   NotificationFeedbackType: { Warning: 'warning' },
 }));
+const mockAnnounce = jest.fn();
+jest.mock('../../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../state/sessionActions', () => ({
@@ -110,6 +112,16 @@ function byLabel(tree: ReactTestRenderer, label: string) {
   );
   expect(found.length).toBeGreaterThan(0);
   return found[0];
+}
+
+/**
+ * Gives the field its own focus mock. React Native's jest TextInput shares one `focus` mock on its prototype, so a
+ * spy on it would count every field's focus, in every test.
+ */
+function focusOf(tree: ReactTestRenderer, label: string): jest.Mock {
+  const own = jest.fn();
+  (byLabel(tree, label).instance as { focus: () => void }).focus = own;
+  return own;
 }
 
 /** Every string drawn on screen right now (a closed sheet draws nothing). */
@@ -242,6 +254,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
   beforeEach(() => {
     jest.mocked(Haptics.impactAsync).mockClear();
     jest.mocked(Haptics.notificationAsync).mockClear();
+    mockAnnounce.mockClear();
   });
 
   it('stays pressable at full strength, with a hint', () => {
@@ -255,7 +268,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
   it('tapping it focuses the weight field, says "Add a weight to tick", gives a warning haptic, and ticks nothing', () => {
     const tree = mount(bench([set('s0', 0)]));
-    const focus = jest.spyOn(byLabel(tree, 'LB, set 1').instance, 'focus');
+    const focus = focusOf(tree, 'LB, set 1');
 
     act(() => byLabel(tree, 'Set 1 done').props.onPress());
 
@@ -264,8 +277,80 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     // A not-ready tap keeps the keyboard up, so the focused field can be typed in.
     expect(dismiss).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain('Add a weight to tick');
-    expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
-    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+    // A heavy tap, distinct from the tick's light one (Round 4, A3).
+    expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.impactAsync).toHaveBeenCalledWith('heavy');
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+  });
+
+  describe('on the phone (Round 4, A3)', () => {
+    /** Each field's own focus mock, by its label. */
+    const focusSpies = (tree: ReactTestRenderer, labels: string[]) => Object.fromEntries(labels.map((label) => [label, focusOf(tree, label)]));
+
+    it('buzzes before it focuses: the keyboard coming up can swallow a haptic', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      const { 'LB, set 1': focus } = focusSpies(tree, ['LB, set 1']);
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(focus).toHaveBeenCalledTimes(1);
+      expect(jest.mocked(Haptics.impactAsync).mock.invocationCallOrder[0]).toBeLessThan(focus.mock.invocationCallOrder[0]);
+    });
+
+    it('focuses the weight and never the reps when the reps have a suggestion (a routine set with no weight)', () => {
+      const ex = { ...bench([set('s0', 0)]), rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' } } as WorkoutExerciseView;
+      const tree = mount(ex);
+      expect(byLabel(tree, 'REPS, set 1').props.placeholder).toBe('8');
+      const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
+      expect(focus['REPS, set 1']).not.toHaveBeenCalled();
+      expect(shownText(tree)).toContain('Add a weight to tick');
+    });
+
+    it('focuses once the line has drawn, so nothing the tap re-renders can move the focus on', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      const lineShownAtFocus: boolean[] = [];
+      focusOf(tree, 'LB, set 1').mockImplementation(() => void lineShownAtFocus.push(shownText(tree).includes('Add a weight to tick')));
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(lineShownAtFocus).toEqual([true]);
+    });
+
+    it('with the reps typed and still focused, the tap still lands on the weight, after the reps are saved', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('5'));
+      const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
+      // What the phone does when another field takes focus: the reps field blurs, and its blur saves.
+      focus['LB, set 1'].mockImplementation(() => byLabel(tree, 'REPS, set 1').props.onBlur());
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
+      expect(focus['REPS, set 1']).not.toHaveBeenCalled();
+      expect(commitSetField).toHaveBeenCalledWith('db', 's0', { reps: 5 });
+      expect(shownText(tree)).toContain('Add a weight to tick');
+    });
+
+    it('says the line to VoiceOver, which does not read a live region on iOS', () => {
+      const tree = mount(bench([set('s0', 0)]));
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
+    });
+
+    it('says "Check this number" to VoiceOver when that is the line', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
+
+      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+      expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    });
   });
 
   it('the line goes once a weight is typed', () => {

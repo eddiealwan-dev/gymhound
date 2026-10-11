@@ -234,6 +234,26 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(router.push).toHaveBeenCalledWith('/session');
   });
 
+  it('in progress: a quiet Change routine at the foot of the Resume card opens Routines (Round 4, A4)', () => {
+    mockRead = { ...mockRead, active: { name: 'Upper A', startedAt: NOW - 27 * 60_000, setsDone: 5 } };
+    const tree = mount();
+    const all = lines(tree);
+    const link = tree.root.findAll((n) => n.props.accessibilityLabel === 'Change routine' && typeof n.props.onPress === 'function');
+
+    expect(link.length).toBeGreaterThan(0);
+    expect(link[0].props.accessibilityRole).toBe('button');
+    expect(all).toContain('Change routine');
+    // Under Resume and before the stat cards: it belongs to the card.
+    expect(all.indexOf('Change routine')).toBeGreaterThan(all.indexOf('27:00 · 5 sets done'));
+    expect(all.indexOf('Change routine')).toBeLessThan(all.indexOf('Streak'));
+    expect(shownText(tree).indexOf('Change routine')).toBeGreaterThan(shownText(tree).indexOf('Resume'));
+    expect(filled(tree)).toEqual(['Resume']);
+
+    act(() => link[0].props.onPress());
+
+    expect(router.push).toHaveBeenCalledWith('/routines');
+  });
+
   it('a one-letter day reads Start 5×5 A', () => {
     mockRead = { ...mockRead, upNext: { ...upperA(), routineName: '5×5', dayName: 'A' } };
     const tree = mount();

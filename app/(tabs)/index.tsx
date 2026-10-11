@@ -66,7 +66,10 @@ function Eyebrow({ children }: { children: string }) {
   );
 }
 
-/** The workout in progress, with an elapsed clock that ticks every second. */
+/**
+ * The workout in progress, with an elapsed clock that ticks every second, and the quiet Change routine at its foot, as
+ * on Up next: Routines stays one tap away while a workout runs (Round 4).
+ */
 function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: number; setsDone: number }) {
   const now = useNow(1000);
   return (
@@ -79,6 +82,7 @@ function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: nu
         {`${formatElapsed(now - startedAt)} · ${setsDone} ${setsDone === 1 ? 'set' : 'sets'} done`}
       </Body>
       <Button label="Resume" onPress={openSession} />
+      <ChangeRoutineLink />
     </Card>
   );
 }
@@ -117,7 +121,7 @@ function volumeNumber(n: number, unit: WeightUnit, locale: string): string {
   return text.slice(0, text.length - unit.length - 1);
 }
 
-/** A quiet link at the foot of the Up next card that opens Routines. */
+/** A quiet link at the foot of the Up next and Resume cards that opens Routines. */
 function ChangeRoutineLink() {
   const { colors } = useTheme();
   return (

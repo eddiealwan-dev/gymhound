@@ -18,23 +18,22 @@ export function listNames(names: readonly string[]): string {
   return `${names[0]}, ${names[1]} and ${names.length - 2} more`;
 }
 
-/** The question Finish asks before it drops unticked sets. `safeDefault` makes Keep logging the primary answer. */
+/** The question Finish asks before it drops incomplete sets. `safeDefault` makes Keep logging the primary answer. */
 export type FinishConfirm = { title: string; body: string; safeDefault: boolean };
 
 /**
- * "Finish Upper A?", then how many sets are done, the exercises with nothing logged, and that unticked sets won't count
- * and where Up next moves (nothing about Up next when `nextDayTitle` is null). Keep logging is the safe default when a
- * whole exercise has nothing logged.
+ * R57: when whole exercises have nothing logged the title names them ("Barbell row has nothing logged"); otherwise it asks
+ * "Finish Upper A?". The body says how many sets are done, that incomplete sets won't count and where Up next moves
+ * (nothing about Up next when `nextDayTitle` is null). Keep logging is the safe default when a whole exercise has nothing
+ * logged.
  */
 export function finishConfirm(workoutName: string, check: FinishCheck, nextDayTitle: string | null): FinishConfirm {
   const { done, total, untouched } = check;
-  const nothingLogged =
-    untouched.length > 0 ? ` ${listNames(untouched)} ${untouched.length === 1 ? 'has' : 'have'} nothing logged.` : '';
+  const title =
+    untouched.length > 0
+      ? `${listNames(untouched)} ${untouched.length === 1 ? 'has' : 'have'} nothing logged`
+      : `Finish ${workoutName}?`;
   const after =
-    nextDayTitle === null ? " Unticked sets won't count." : ` Unticked sets won't count, and Up next moves to ${nextDayTitle}.`;
-  return {
-    title: `Finish ${workoutName}?`,
-    body: `${done} of ${total} sets done.${nothingLogged}${after}`,
-    safeDefault: untouched.length > 0,
-  };
+    nextDayTitle === null ? " Incomplete sets won't count." : ` Incomplete sets won't count, and Up next moves to ${nextDayTitle}.`;
+  return { title, body: `${done} of ${total} sets done.${after}`, safeDefault: untouched.length > 0 };
 }

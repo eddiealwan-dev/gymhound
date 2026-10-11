@@ -158,6 +158,7 @@ describe('the session screen when Finish is pressed (R32)', () => {
 
 describe('the session screen asks before Finish drops untouched sets (§18.6)', () => {
   const ASKED = 'Finish Push A?';
+  const UNTOUCHED_TITLE = 'Overhead press has nothing logged';
 
   /** Bench half done and the overhead press not started. */
   const untouched = () =>
@@ -176,7 +177,7 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     expect(shownText(tree)).not.toContain(ASKED);
   });
 
-  it('asks with Keep logging filled when a whole exercise is untouched', () => {
+  it('asks with Keep logging filled when a whole exercise is untouched, naming it in the title (R57)', () => {
     untouched();
     const tree = mount();
 
@@ -184,10 +185,11 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
 
     expect(shownText(tree)).toEqual(
       expect.arrayContaining([
-        ASKED,
-        "1 of 3 sets done. Overhead press has nothing logged. Unticked sets won't count, and Up next moves to Pull A.",
+        UNTOUCHED_TITLE,
+        "1 of 3 sets done. Incomplete sets won't count, and Up next moves to Pull A.",
       ]),
     );
+    expect(shownText(tree)).not.toContain(ASKED);
     expect(getNextDayTitle).toHaveBeenCalledWith('db', 'w1');
     expect(answers(tree)).toEqual([
       ['Keep logging', 'primary'],
@@ -203,7 +205,7 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
 
     press(tree, 'Keep logging');
 
-    expect(shownText(tree)).not.toContain(ASKED);
+    expect(shownText(tree)).not.toContain(UNTOUCHED_TITLE);
     expect(finish).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
   });
@@ -218,7 +220,7 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     press(tree, 'Finish anyway');
 
     // The sheet goes away first: nothing finishes while it fades.
-    expect(shownText(tree)).not.toContain(ASKED);
+    expect(shownText(tree)).not.toContain(UNTOUCHED_TITLE);
     expect(finish).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
 
@@ -249,7 +251,7 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     press(tree, 'Finish');
 
     expect(shownText(tree)).toEqual(
-      expect.arrayContaining([ASKED, "2 of 3 sets done. Unticked sets won't count, and Up next moves to Pull A."]),
+      expect.arrayContaining([ASKED, "2 of 3 sets done. Incomplete sets won't count, and Up next moves to Pull A."]),
     );
     expect(answers(tree)).toEqual([
       ['Finish anyway', 'primary'],
@@ -265,6 +267,15 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     press(tree, 'Finish');
 
     expect(shownText(tree).some((text) => text.includes("aren't ticked"))).toBe(false);
+  });
+
+  it("never says 'Unticked' (R57)", () => {
+    untouched();
+    const tree = mount();
+
+    press(tree, 'Finish');
+
+    expect(shownText(tree).some((text) => /unticked/i.test(text))).toBe(false);
   });
 
   it('saves typed text before it counts', () => {

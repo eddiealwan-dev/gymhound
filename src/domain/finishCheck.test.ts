@@ -51,31 +51,50 @@ describe('listNames: names joined for a sentence', () => {
   });
 });
 
-describe('finishConfirm: the question before Finish drops sets', () => {
-  it('names the untouched exercises and the next day, with Keep logging as the safe default', () => {
+describe('finishConfirm: the question before Finish drops sets (R57)', () => {
+  it('titles the sheet with the exercises that have nothing logged, with Keep logging as the safe default', () => {
     expect(finishConfirm('Upper A', finishCheck(UPPER_A), 'Lower A')).toEqual({
-      title: 'Finish Upper A?',
-      body: "4 of 18 sets done. Barbell row, Overhead press and 3 more have nothing logged. Unticked sets won't count, and Up next moves to Lower A.",
+      title: 'Barbell row, Overhead press and 3 more have nothing logged',
+      body: "4 of 18 sets done. Incomplete sets won't count, and Up next moves to Lower A.",
       safeDefault: true,
     });
   });
 
-  it('says "has" for one untouched exercise', () => {
+  it('says "has" for one exercise with nothing logged', () => {
     const check = { done: 4, total: 8, untouched: ['Barbell row'] };
-    expect(finishConfirm('Upper A', check, 'Lower A').body).toContain('Barbell row has nothing logged.');
+    expect(finishConfirm('Upper A', check, 'Lower A')).toEqual({
+      title: 'Barbell row has nothing logged',
+      body: "4 of 8 sets done. Incomplete sets won't count, and Up next moves to Lower A.",
+      safeDefault: true,
+    });
   });
 
-  it('with every exercise ticked, says only the count and what finishing does, with Finish anyway as the default', () => {
+  it('says "have" for two', () => {
+    const check = { done: 4, total: 8, untouched: ['Barbell row', 'Squat'] };
+    expect(finishConfirm('5×5 A', check, null).title).toBe('Barbell row and Squat have nothing logged');
+  });
+
+  it('with every exercise ticked, asks "Finish {workout}?" with the count and what finishing does, Finish anyway as the default', () => {
     expect(finishConfirm('Upper A', { done: 16, total: 18, untouched: [] }, 'Lower A')).toEqual({
       title: 'Finish Upper A?',
-      body: "16 of 18 sets done. Unticked sets won't count, and Up next moves to Lower A.",
+      body: "16 of 18 sets done. Incomplete sets won't count, and Up next moves to Lower A.",
       safeDefault: false,
     });
   });
 
   it('says nothing of Up next when there is no next day', () => {
-    const { body } = finishConfirm('Workout', { done: 16, total: 18, untouched: [] }, null);
-    expect(body.endsWith("Unticked sets won't count.")).toBe(true);
-    expect(body).not.toContain('Up next');
+    expect(finishConfirm('Workout', { done: 16, total: 18, untouched: [] }, null).body).toBe(
+      "16 of 18 sets done. Incomplete sets won't count.",
+    );
+    expect(finishConfirm('Workout', { done: 1, total: 4, untouched: ['Squat'] }, null).body).toBe(
+      "1 of 4 sets done. Incomplete sets won't count.",
+    );
+  });
+
+  it('never says "Unticked"', () => {
+    for (const untouched of [[], ['Squat']]) {
+      const { title, body } = finishConfirm('Workout', { done: 1, total: 4, untouched }, 'Lower A');
+      expect(`${title} ${body}`).not.toMatch(/unticked/i);
+    }
   });
 });

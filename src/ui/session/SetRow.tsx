@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
@@ -22,6 +22,7 @@ import {
   type RowModel,
 } from '../../domain/setTable';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
+import { announce } from '../../platform/announce';
 import { useDraftFlush } from '../../state/draftFlush';
 import { commitSetField, tick, untick } from '../../state/sessionActions';
 import { Body, Num } from '../Text';
@@ -65,10 +66,13 @@ function lightHaptic(): void {
   }
 }
 
-/** A warning buzz when a tick that is not ready is tapped. As with `lightHaptic`, a missing haptic changes nothing. */
+/**
+ * A heavy tap when a tick that is not ready is tapped, distinct from the tick's light one. It plays before the keyboard
+ * comes up, which can swallow a haptic (Round 4). As with `lightHaptic`, a missing haptic changes nothing.
+ */
 function warningHaptic(): void {
   try {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
   } catch {
     // no haptics here
   }
@@ -149,6 +153,14 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   /** The field a tap on the not-ready tick asked for. Typing clears it. */
   const [need, setNeed] = useState<FieldKey | null>(null);
   const inputs = useRef<Partial<Record<InputKey, TextInput | null>>>({});
+  /**
+   * The field a not-ready tap asked to focus. It is focused once the row has drawn its line, so nothing that tap
+   * re-renders comes after the focus. A new object per tap, so a second tap on the same field focuses it again.
+   */
+  const [focusAsk, setFocusAsk] = useState<{ key: InputKey } | null>(null);
+  useEffect(() => {
+    if (focusAsk !== null) inputs.current[focusAsk.key]?.focus();
+  }, [focusAsk]);
 
   const reading = readRow(row, drafts, unit);
   const showHint = reading.invalid.some((key) => left.includes(key));
@@ -190,7 +202,8 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   /**
    * Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the
    * focused field is the one ticked; other rows are not flushed first (R48). A tick that is not ready ticks nothing: it
-   * points at the number to check, else at the missing field, focuses it and keeps the keyboard up (spec 18.6).
+   * buzzes first, then points at the number to check, else at the missing field, says the line to VoiceOver (which
+   * does not read a live region on iOS), focuses the field and keeps the keyboard up (spec 18.6, Round 4).
    */
   const toggle = () => {
     if (set.done) {
@@ -199,15 +212,19 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       return;
     }
     if (!canTick) {
+      warningHaptic();
       const { invalid, missing } = reading;
       if (invalid.length > 0) {
         setLeft((l) => [...l, ...invalid.filter((key) => !l.includes(key))]);
-        inputs.current[invalid[0]]?.focus();
+        announce('Check this number');
+        setFocusAsk({ key: invalid[0] });
       } else {
         setNeed(missing);
-        if (missing !== null) inputs.current[missing]?.focus();
+        if (missing !== null) {
+          announce(NEED_LINE[missing]);
+          setFocusAsk({ key: missing });
+        }
       }
-      warningHaptic();
       return;
     }
     if (tick(db, ex, set, reading.entered, reading.weightUnit)) {
