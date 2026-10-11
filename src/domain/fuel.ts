@@ -109,9 +109,9 @@ export function leftText(target: number, eaten: number, unit: '' | ' g', locale?
   return { value: `${fuelNumber(left, locale)}${unit}`, over: false };
 }
 
-/** Servings with up to 2 decimals and no trailing zeros: "1", "1.5", "0.33". */
-export function servingsText(servings: number): string {
-  return String(round2(servings));
+/** Servings with up to 2 decimals, no trailing zeros, in the locale's decimal mark: "1", "1.5", "0.33" ("1,5" in de-DE). */
+export function servingsText(servings: number, locale?: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(round2(servings));
 }
 
 /** The four macro fields of a form, as typed. */

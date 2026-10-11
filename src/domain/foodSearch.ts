@@ -1,6 +1,11 @@
-/** Lower-case words, split on anything that is not a letter or digit, as the exercise search splits them (`search.ts`). */
+/**
+ * Lower-case words without accents ("Crème" reads "creme", composed or decomposed alike), split on anything that is
+ * not a letter or digit, as the exercise search splits them (`search.ts`).
+ */
 function words(s: string): string[] {
   return s
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter((w) => w.length > 0);

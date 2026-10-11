@@ -124,7 +124,13 @@ describe('servingsText', () => {
     [0.33, '0.33'],
     [0.333333, '0.33'],
     [2.5, '2.5'],
-  ])('%p reads %p', (n, text) => expect(servingsText(n)).toBe(text));
+  ])('%p reads %p', (n, text) => expect(servingsText(n, 'en-US')).toBe(text));
+
+  it("uses the locale's decimal mark", () => {
+    expect(servingsText(1.5, 'de-DE')).toBe('1,5');
+    expect(servingsText(0.333333, 'de-DE')).toBe('0,33');
+    expect(servingsText(2, 'de-DE')).toBe('2');
+  });
 });
 
 const macros = (m: Partial<MacroInput>): MacroInput => ({ kcal: '', protein: '', carbs: '', fat: '', ...m });

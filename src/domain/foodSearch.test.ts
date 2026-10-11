@@ -32,6 +32,21 @@ describe('searchFoods', () => {
     expect(names(items, 'yogurt greek')).toEqual(['Yogurt, Greek, plain', 'Greek yogurt']);
   });
 
+  it('ignores accents both ways', () => {
+    const items = [{ name: 'Crème fraîche' }, { name: 'Jalapeño' }];
+    expect(names(items, 'creme')).toEqual(['Crème fraîche']);
+    expect(names(items, 'fraiche')).toEqual(['Crème fraîche']);
+    expect(names(items, 'CRÈME')).toEqual(['Crème fraîche']);
+    expect(names(items, 'jalapen')).toEqual(['Jalapeño']);
+  });
+
+  it('matches whether the name and the query are composed or decomposed', () => {
+    const composed = 'Crème';
+    const decomposed = 'Crème';
+    expect(names([{ name: decomposed }], composed)).toEqual([decomposed]);
+    expect(names([{ name: composed }], decomposed)).toEqual([composed]);
+  });
+
   it('keeps the items it was given and leaves the list alone', () => {
     const items = [{ name: 'Oats', id: 'a' }];
     const found = searchFoods(items, 'oat');
