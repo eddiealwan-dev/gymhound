@@ -1,5 +1,12 @@
 import { AccessibilityInfo, Platform } from 'react-native';
-import { announce } from './announce';
+import { announce, focusOn } from './announce';
+
+/** React Native's own sendAccessibilityEvent, put back after a test takes it away as React Native Web does. */
+const realSendAccessibilityEvent = AccessibilityInfo.sendAccessibilityEvent;
+function setSendAccessibilityEvent(fn: (() => void) | undefined): void {
+  (AccessibilityInfo as { sendAccessibilityEvent?: unknown }).sendAccessibilityEvent = fn;
+}
+afterEach(() => setSendAccessibilityEvent(realSendAccessibilityEvent as () => void));
 
 /** The screen reader's call. React Native's jest setup already mocks it, so each test starts it afresh. */
 let call: jest.SpyInstance;
@@ -62,5 +69,36 @@ describe('announce', () => {
     announce('Set 1 logged.');
 
     expect(call).toHaveBeenCalledWith('Set 1 logged.');
+  });
+});
+
+describe('focusOn', () => {
+  const node = { props: { children: 'Delete this entry?' } } as never;
+
+  it.each(['ios', 'android'] as const)('moves the screen reader to the node on %s', (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    const send = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
+
+    focusOn(node);
+
+    expect(send).toHaveBeenCalledWith(node, 'focus');
+  });
+
+  it('does nothing on the web, where React Native Web has no sendAccessibilityEvent', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    setSendAccessibilityEvent(undefined);
+
+    expect(() => focusOn(node)).not.toThrow();
+  });
+
+  it('never throws when the call is missing or fails, or there is no node', () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    setSendAccessibilityEvent(undefined);
+    expect(() => focusOn(node)).not.toThrow();
+    setSendAccessibilityEvent(() => {
+      throw new Error('no screen reader');
+    });
+    expect(() => focusOn(node)).not.toThrow();
+    expect(() => focusOn(null)).not.toThrow();
   });
 });

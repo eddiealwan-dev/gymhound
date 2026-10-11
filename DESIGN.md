@@ -169,7 +169,7 @@ What a set shows is what it logs, so suggestion and fact look different on sight
 A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a single signal red reserved for the brand.
 
 ### Primary
-- **Wordmark Red** (wordmark-red): the GYMHOUND wordmark in the header, the focused dock tab's icon and label, and PR marks. Nothing else, including errors, warnings, flags and destructive actions.
+- **Wordmark Red** (wordmark-red): the GYMHOUND wordmark in the header, the focused dock tab's icon and label, and PR marks: the "PR" mark on each personal best row of the finish summary, and the personal best card's GYMHOUND and PERSONAL BEST. Nothing else, including errors, warnings, flags, destructive actions, the Share pill and the chart.
 
 ### Neutral
 - **Iron Black / Chalk Paper** (bg-dark / bg-light): the page, the header, the dock and the session header.
@@ -203,11 +203,12 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, REST TIMER, BACKUPS, EXPORT on Settings). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
+- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, PLATES, PROGRESSION, REST TIMER, BACKUPS, EXPORT on Settings; BODY and MEASUREMENTS on Stats; SAVED WORKOUTS on Routines; PERSONAL BESTS on the finish summary). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
+- **Chart label** (Inter 400, 12px, muted, tabular figures): a line chart's y labels and the dates under its axis. The one place numbers are not in Barlow, as R116 sets them: the labels are the chart's scaffolding, quieter than the values a screen shows in Barlow beside it.
 
 ### Named Rules
-**The Text-Size Rule.** All text follows the phone's text size except the wordmark (fixed) and the session header's name, progress line and Finish label (capped at 1.3x so the header stays one row). Rows wrap instead of capping or truncating.
+**The Text-Size Rule.** All text follows the phone's text size except the wordmark (fixed), the session header's name, progress line and Finish label (capped at 1.3x so the header stays one row), the body number field (capped at 1.5x so "182.5" stays whole) and the personal best card (an image, so every text on it is fixed). Rows wrap instead of capping or truncating.
 
 **The Tabular Rule.** Every number that can sit above or beside another number uses tabular figures.
 
@@ -249,10 +250,10 @@ Plain, confident and quiet about it.
 - **Internal Padding:** 16px.
 
 ### Segmented control
-A well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments; the chosen segment is filled with the text colour and labelled in the background colour. Used for Appearance, units, bell sound, bell volume and (wrapping in rows of three) rest length.
+A well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments; the chosen segment is filled with the text colour and labelled in the background colour. Used for Appearance, units, bell sound, bell volume, (wrapping in rows of three) rest length, the default increment on Settings → Progression, and a chart's range: 3M, 1Y and All, under the chart, read as "3M, last 3 months" and so on.
 
 ### Switch
-The platform switch, themed: on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too), so the off state is as visible as the on state in both themes. Its row is 44pt tall with the setting's name on the left.
+The platform switch, themed (`switchColors`, R131): on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too), so the off state is as visible as the on state in both themes. The thumb is the background colour on and off, in the browser build too (react-native-web would otherwise turn an on thumb teal). Never red. Its row is 44pt tall with the setting's name on the left.
 
 ### Settings groups
 Each group is an upper-case Label heading 8pt over its items; items sit 16pt apart; a field is its name 8pt over its control; groups are 32pt apart, the first 24pt under the title. Helper lines ("Used by the plate calculator.") are muted.
@@ -262,6 +263,7 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 - **Entered set field:** surface fill, 1px solid Strong Seam edge, text in Barlow 800 at 20px.
 - **Invalid:** a 2px muted bottom edge and the line "Check this number" above the row. Never red.
 - **Needed (a tick tapped before it was ready):** the field it asks for takes the same 2px muted bottom edge, and the line ("Add a weight to tick") sits above the row in the text colour at body size, led by an alert-circle-outline icon inside the text. The tap buzzes a warning and focuses nothing, so the keyboard stays down and the person taps the field (R99). "Check this number" draws the same way. Never red.
+- **Body number field** (Stats and the body screens): a surface field with a 1px Strong Seam edge and 8px corners, at least 112pt wide and 44pt tall, the number centred in Barlow 700 at 20px with tabular figures, followed by its unit in muted body text. A number out of bounds takes the invalid field's 2px muted bottom edge, with "Check this number" muted under the row. Never red.
 - **Focus:** the platform caret and keyboard; fields keep returnKeyType "done".
 
 ### Navigation
@@ -278,12 +280,24 @@ The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt bo
 ### The rest row (signature)
 Under the set that started it: a surface panel with a Strong Seam edge, a REST label over a Barlow 800 countdown, then −15s, +15s and Skip as compact pills, over a 3px text-colour track that drains with the time left. At zero it holds a check and "Rest's up" at the same height.
 
+### Personal bests (finish summary)
+After the next-time lines, across a Seam hairline 16pt above: a PERSONAL BESTS Label, then one row per personal best. A row is a red "PR" (Barlow 800, 14px), 8pt before the line in body text ("Bench press — heaviest: 185 lb × 5"), baseline-aligned; the mark and the line are one element read as "Personal best. {line}". On a phone that can share, a compact secondary **Share** pill ends the row, 12pt after the line, and drops under it as a unit at large text. Rows are 8pt apart. A failed share puts "Couldn't make the image. Try again." in muted body text 4pt under its row. The pill is never red; only the mark is.
+
+### The personal best card
+The image Share makes (R106): 360 × 450 points, captured at 1080 × 1350. It is **always dark** (bg-dark, text-dark, text-muted-dark), whatever the app's theme, because a shared image has no theme, and every text is a **fixed size**. 28px padding all round. Top: the header lockup, the owner's dark hound mark image (`mark-dark.png`, 48px, never redrawn) 10px from GYMHOUND in red (Barlow 800, 38px, -0.5 tracking). Centred in the space under it: PERSONAL BEST in red (Barlow 800, 22px, 1 tracking), the exercise name (Barlow 700, 32px, up to two lines), the value (Barlow 800, 64px, tabular, one line, shrinking to fit) and the caption (Inter 400, 18px, muted). At the bottom the day in muted Barlow 700 at 20px ("SUN 11 OCT 2026"). No footer, no quote, no other red.
+
+### The line chart
+Hand-drawn SVG (R116), never red. A 2px line in the text colour with round joins, a dot at each point (r = 2, filled with the text colour), and a 1px border-colour grid line at each y tick. The y labels sit on the left in the chart label style (Inter 12px, muted, tabular), centred on their ticks and taking at most 30% of the width; the first and last dates sit under the axis in the same style (one date centred when there is one day). The plot is 180pt tall by default. One point is a dot only; with nothing in the range the screen says "No entries in this range." in muted body text instead. The range control (3M, 1Y, All) is a segmented control 12pt under the chart. The whole chart is one image element that reads the series in words.
+
+### Choice chips and radio rows (exercise editor)
+Choices take the shape that says how many can be picked. Primary muscles, secondary muscles and equipment are compact pills (36pt, 4pt hit slop) that wrap 8pt apart: unchosen a secondary pill, chosen filled with the text colour and labelled in the background colour, as in the picker. Muscles allow many; equipment allows one, and a new exercise starts with none chosen (R128). Logging, a single choice of six, is a column of 44pt radio rows: a 22px radio mark (filled in the text colour when chosen, an open muted ring when not) 12pt before the label, which wraps. Once the exercise is in use the rows give way to the type in body strong over the muted line "It's in use, so this stays." What stops Save is listed in muted lines over it, never red.
+
 ## Do's and Don'ts
 
 ### Do:
 - **Do** keep the hound mark and the GYMHOUND wordmark on one line at every width, the wordmark at a fixed 38px. Use the owner's mark files; never redraw the dog.
 - **Do** use the theme tokens from `src/ui/theme.ts` for every colour, in both themes.
-- **Do** set numbers in Barlow Condensed with tabular figures, and sentences in Inter.
+- **Do** set numbers in Barlow Condensed with tabular figures, and sentences in Inter. A chart's axis labels are the one exception (Inter 12, R116).
 - **Do** keep every target at least 44pt, counting a compact pill's 4pt hit slop.
 - **Do** let rows wrap at large text: trailing groups drop to their own line together, then wrap among themselves.
 - **Do** keep suggestions faint and dashed, and entered values bold and solid.
@@ -293,5 +307,6 @@ Under the set that started it: a surface panel with a Strong Seam edge, a REST l
 - **Don't** add shadows, gradients or glass; move a tonal step instead.
 - **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines, the rest row's edge and a switch's off track.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
+- **Don't** put a footer, a quote or the light palette on the personal best card.
 - **Don't** add motivational quotes, flames or skulls.
 - **Don't** truncate a row's text at large text sizes when it can wrap.

@@ -30,6 +30,7 @@ function fakeSdk(): PurchasesSdk {
     getDefaultPackage: jest.fn(async () => ({ id: 'p', priceString: '$4.99', period: { count: 1, unit: 'month' as const } })),
     purchase: jest.fn(async () => ({ activeEntitlements: ['pro'] })),
     restore: jest.fn(async () => ({ activeEntitlements: [] })),
+    showManageSubscriptions: jest.fn(async () => {}),
   };
 }
 
@@ -161,6 +162,7 @@ describe('useIsPro and useEntitlementsState', () => {
       isPro: false,
       isDebugPro: false,
       canPurchase: false,
+      canRestore: false,
       offer: null,
       kind: 'debug',
     });

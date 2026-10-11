@@ -310,7 +310,7 @@ function DayEditor({ day, index, count, unit, apply, onAddExercise }: DayProps) 
  * 1. A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
  *    editor). With nothing unsaved here, it is read again as both the saved version and the draft (`reread`), so
  *    nothing looks unsaved; null when it is gone. Changes not yet saved are kept as they are.
- * 2. The library: a custom exercise can be deleted, renamed or retyped while the editor is away (Task 6). The draft
+ * 2. The library: a custom exercise can be deleted, renamed or retyped while the editor is away (R108, R109). The draft
  *    follows it (`refreshDraft`), saying what changed in plain words; the saved copy takes the new names only, so a
  *    rename made elsewhere never counts as a change here.
  */

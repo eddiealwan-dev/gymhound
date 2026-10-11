@@ -830,7 +830,7 @@ describe('the routine editor: Add a saved workout (R121)', () => {
   });
 });
 
-describe('the routine editor: exercises changed while it was away (Task 6)', () => {
+describe('the routine editor: exercises changed while it was away (R108, R109)', () => {
   it('drops a deleted exercise from its day and says so', () => {
     const tree = mount('mine');
     delete mockLibrary.row;

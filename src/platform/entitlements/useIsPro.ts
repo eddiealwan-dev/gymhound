@@ -7,6 +7,7 @@ export type EntitlementsState = {
   isPro: boolean;
   isDebugPro: boolean;
   canPurchase: boolean;
+  canRestore: boolean;
   offer: StoreOffer | null;
   kind: EntitlementsKind;
 };
@@ -26,6 +27,7 @@ export function useEntitlementsState(): EntitlementsState {
       isPro: entitlements.isPro(),
       isDebugPro: entitlements.isDebugPro(),
       canPurchase: entitlements.canPurchase(),
+      canRestore: entitlements.canRestore(),
       offer: entitlements.offer(),
       kind: entitlements.kind,
     }),

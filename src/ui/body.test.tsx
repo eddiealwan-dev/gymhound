@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { router } from 'expo-router';
-import { AccessibilityInfo, TextInput } from 'react-native';
+import { AccessibilityInfo, Platform, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import BodyDetail from '../../app/(tabs)/body/[kind]';
@@ -11,6 +11,13 @@ import { createTestDb } from '../db/testing/createTestDb';
 import type { Db } from '../db/types';
 import { LineChart } from './charts/LineChart';
 import { Footer } from './Footer';
+
+/** React Native's own sendAccessibilityEvent, put back after a test takes it away as React Native Web does. */
+const realSendAccessibilityEvent = AccessibilityInfo.sendAccessibilityEvent;
+function setSendAccessibilityEvent(fn: (() => void) | undefined): void {
+  (AccessibilityInfo as { sendAccessibilityEvent?: unknown }).sendAccessibilityEvent = fn;
+}
+afterEach(() => setSendAccessibilityEvent(realSendAccessibilityEvent as () => void));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,7 +36,10 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({
+  ...jest.requireActual('../platform/announce'),
+  announce: (text: string) => mockAnnounce(text),
+}));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -56,6 +66,12 @@ afterEach(() => {
   jest.restoreAllMocks();
   closeDb();
 });
+
+/** Every node with a live region, which TalkBack reads as it changes. */
+const liveRegions = (tree: ReactTestRenderer) =>
+  tree.root
+    .findAll((n) => n.props.accessibilityLiveRegion !== undefined && n.props.accessibilityLiveRegion !== 'none')
+    .map((n) => n.props.accessibilityLiveRegion as string);
 
 function mount(element: React.ReactElement): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -133,11 +149,30 @@ describe('Stats: Body (R114)', () => {
     expect(shownText(tree)).toContain('Check this number');
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
     expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
-    const line = tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite' && n.findAll((c) => c.children.includes('Check this number')).length > 0);
-    expect(line.length).toBeGreaterThan(0);
+    // Said once: announce() speaks it on both phones, so no live region reads it again on Android.
+    expect(liveRegions(tree)).toEqual([]);
     // Typing again clears it.
     type(tree, 'Bodyweight, lb', '180');
     expect(shownText(tree)).not.toContain('Check this number');
+  });
+
+  it("says Couldn't log. Try again. in a muted line when the write fails, tells the screen reader, and keeps the number", () => {
+    const tree = mount(<Stats />);
+    type(tree, 'Bodyweight, lb', '182.5');
+    const insert = jest.spyOn(mockDb, 'insert').mockImplementation(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    expect(() => press(tree, 'Log')).not.toThrow();
+    insert.mockRestore();
+
+    expect(listBodyEntries(mockDb, 'bodyweight')).toEqual([]);
+    expect(shownText(tree)).toContain("Couldn't log. Try again.");
+    expect(mockAnnounce).toHaveBeenCalledWith("Couldn't log. Try again.");
+    expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
+    expect(field(tree, 'Bodyweight, lb').props.value).toBe('182.5');
+    // Typing again clears it.
+    type(tree, 'Bodyweight, lb', '182');
+    expect(shownText(tree)).not.toContain("Couldn't log. Try again.");
   });
 
   it('a kg lifter logs in kg, and an earlier lb entry charts in kg', () => {
@@ -278,6 +313,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Check this number');
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    expect(liveRegions(tree)).toEqual([]);
     expect(listBodyEntries(mockDb, 'waist')[0].value).toBe(33.75);
 
     act(() => edit().props.onChangeText('33'));
@@ -335,6 +371,19 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     expect(listBodyEntries(mockDb, 'waist')).toEqual([]);
     expect(shownText(tree)).not.toContain('Delete this entry?');
     expect(shownText(tree)).toContain('No entries yet.');
+  });
+
+  it('on the web, which has no sendAccessibilityEvent, Delete asks and deletes without crashing', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    setSendAccessibilityEvent(undefined);
+    mockKind = 'waist';
+    addBodyEntry(mockDb, 'waist', 34, 'in', NOW);
+    const tree = mount(<BodyDetail />);
+    press(tree, 'Oct 11, 34 in');
+    press(tree, 'Delete');
+    expect(shownText(tree)).toContain('Delete this entry?');
+    press(tree, 'Delete');
+    expect(listBodyEntries(mockDb, 'waist')).toEqual([]);
   });
 
   it('says "That isn\'t here." for a kind that is not one', () => {

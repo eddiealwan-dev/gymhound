@@ -43,9 +43,20 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
 
   // Room inside the plot: the dots stay whole at the sides, and half a (scaled) label line above the top tick and below
   // the bottom one, so the y labels centred on those ticks stay inside the chart at any text size.
-  const halfLine = Math.ceil((LABEL_LINE_HEIGHT * fontScale) / 2);
+  const lineHeight = LABEL_LINE_HEIGHT * fontScale;
+  const halfLine = Math.ceil(lineHeight / 2);
   const inset = { left: DOT_RADIUS + 1, right: DOT_RADIUS + 1, top: halfLine, bottom: halfLine };
   const plotted = plotSeries(drawable, { width: Math.max(width, 1), height, ...inset });
+  // Top to bottom, each label's gap after the one above, so its middle lands on its tick.
+  let above = 0;
+  const yLabels = [...plotted.yTicks]
+    .sort((a, b) => a.y - b.y)
+    .map((tick) => {
+      const top = tick.y - lineHeight / 2;
+      const marginTop = top - above;
+      above = top + lineHeight;
+      return { value: tick.value, marginTop };
+    });
   const days = drawable.map((pt) => pt.localDate).sort();
   const dates = days[0] === days[days.length - 1] ? [days[0]] : [days[0], days[days.length - 1]];
   const smallText = { fontFamily: fonts.body400, fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, color: colors.textMuted, fontVariant: ['tabular-nums' as const] };
@@ -53,23 +64,14 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
 
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-      <View
-        style={{
-          height,
-          maxWidth: LABEL_COLUMN_MAX,
-          paddingTop: inset.top,
-          paddingBottom: inset.bottom,
-          marginRight: LABEL_GAP,
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-        }}
-      >
-        {[...plotted.yTicks].reverse().map((tick) => (
-          <View key={tick.value} style={{ height: 0, justifyContent: 'center', alignSelf: 'stretch', alignItems: 'flex-end' }}>
-            <Text style={smallText} numberOfLines={1} adjustsFontSizeToFit>
-              {formatValue(tick.value)}
-            </Text>
-          </View>
+      {/* The y labels, top to bottom. Each is a line tall and sits in the flow of the column, its top margin putting its
+          middle on its tick: a label in a zero-height box vanished on the web, and in-flow labels give the column its
+          width. */}
+      <View style={{ height, maxWidth: LABEL_COLUMN_MAX, marginRight: LABEL_GAP, alignItems: 'flex-end' }}>
+        {yLabels.map(({ value, marginTop }) => (
+          <Text key={value} style={[smallText, { height: lineHeight, marginTop, flexShrink: 0, textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit>
+            {formatValue(value)}
+          </Text>
         ))}
       </View>
       <View style={{ flex: 1 }}>

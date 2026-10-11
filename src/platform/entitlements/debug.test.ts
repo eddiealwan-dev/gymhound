@@ -72,6 +72,9 @@ describe('debug entitlements (R88, R133)', () => {
     expect(entitlements.offer()).toBeNull();
     await expect(entitlements.purchase()).resolves.toBe('unavailable');
     await expect(entitlements.restore()).resolves.toBe('unavailable');
+    expect(entitlements.canRestore()).toBe(false);
+    expect(() => entitlements.refreshOffer()).not.toThrow();
+    await expect(entitlements.manageSubscription()).resolves.toBe(false);
   });
 });
 

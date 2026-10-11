@@ -113,7 +113,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | pattern | text | squat, hinge, lunge, horizontal_push, vertical_push, horizontal_pull, vertical_pull, carry, core, isolation |
 | logging_type | text | weighted, bodyweight_plus, assisted, timed, distance_time, weighted_time (weight and duration, no reps: carries and sleds) |
 | is_custom | int | |
-| archived | int | custom exercises used in history are archived, never deleted |
+| archived | int | custom exercises used in history are archived, never deleted. Phase 4 (R109): "used" is any workout (active or finished), routine slot or saved workout |
 | created_at | int | |
 
 ### exercise_notes
@@ -158,6 +158,7 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | food_offer_shown | int | the Short on food offer appears at most once per workout |
 | health_status | text null | phase 7. Null means not attempted, otherwise `done` or `failed`. Never blocks anything (§17.1) |
 | health_record_id | text null | phase 7. The id of the record GymHound wrote to Apple Health or Health Connect |
+| saved_workout_id | text null | phase 4 (migration 0006): the saved workout this workout was started from (R119). Not a foreign key, so history survives a deleted saved workout |
 
 ### workout_exercises
 | column | type | notes |
@@ -194,7 +195,28 @@ All IDs are text. Bundled rows use stable slugs (`barbell-back-squat`, `premade-
 | completed_at | int null | |
 
 ### bodyweight
-`id`, `local_date`, `measured_at`, `weight`, `unit`.
+`id`, `local_date`, `measured_at`, `weight`, `unit`. Each entry keeps the unit it was logged in (R112). Several a day are allowed (R115).
+
+### measurements (phase 4, migration 0006)
+`id`, `kind` (waist, chest, hips, arms, thighs, neck, body_fat), `local_date`, `measured_at`, `value` (real), `unit` (in, cm or %). Bodyweight stays in its own table. Arms and thighs are one value each (R113). Each entry keeps the unit it was logged in (R112). Index `measurements(kind, local_date)`.
+
+### exercise_photos (phase 4, migration 0006)
+`exercise_id` (PK, FK to exercises, cascade), `start_file` (text null), `end_file` (text null), `updated_at`. Your own start and end photos for an exercise with no bundled photos (R111). The columns hold **file names only** (`{exerciseId}-{slot}-{time}.jpg`), never paths or URIs: the files are in the documents folder's `exercise-photos/`, resolved against the documents folder each time they are shown, because iOS moves the app's folder on update. A name whose file is missing (a restored snapshot) reads as no photo.
+
+### saved_workouts (phase 4, migration 0006)
+`id`, `name` (trimmed, 1–60 characters), `created_at`, `updated_at` (the finish time of the last workout that updated it, R120). Free and unlimited; never counted as a routine (R118).
+
+### saved_workout_exercises (phase 4, migration 0006)
+| column | type | notes |
+|---|---|---|
+| id | text PK | |
+| saved_workout_id | FK cascade | |
+| exercise_id | FK | an archived exercise stays and still starts (R119, R130) |
+| position | int | |
+| superset_group | int null | a group left with one member is stored as null |
+| sets | json | the remembered sets in set order: `{setType, weight, weightUnit, reps, durationS, distance, distanceUnit}` each, the done sets only (R118). Default `[]` |
+
+Index `saved_workout_exercises(saved_workout_id)`.
 
 ### foods
 `id`, `name`, `serving_label` (e.g. "1 large egg", "100 g"), `serving_grams` (null ok), `kcal`, `protein_g`, `carbs_g`, `fat_g` (per serving), `source` (bundled or custom), `barcode` (null, the scanner seam), `archived`.
@@ -211,9 +233,9 @@ A key/value table with JSON values.
 | unit | lb if the device measurement system is US, else kg |
 | distance_unit | mi if unit is lb, else km |
 | bar_lb, bar_kg | 45, 20 |
-| plates_lb | pairs owned: 45×4, 35×1, 25×1, 10×2, 5×1, 2.5×1 |
-| plates_kg | pairs owned: 25×4, 20×1, 15×1, 10×1, 5×1, 2.5×1, 1.25×1 |
-| default_increment_lb, default_increment_kg | 5, 2.5 |
+| plates_lb | pairs owned: 45×4, 35×1, 25×1, 10×2, 5×1, 2.5×1. Edited in Settings → Plates from phase 4 (R107): a map of size to whole pairs, 0–20 each, at least one pair kept |
+| plates_kg | pairs owned: 25×4, 20×1, 15×1, 10×1, 5×1, 2.5×1, 1.25×1. As plates_lb |
+| default_increment_lb, default_increment_kg | 5, 2.5. One per unit, edited for the display unit in Settings → Progression from phase 4; new routine slots start with it (R124) |
 | rest_seconds | 120 |
 | rest_bell | true |
 | rest_bell_sound | `bell` (one of the bundled bell sounds) |
@@ -223,8 +245,9 @@ A key/value table with JSON values.
 | pro_debug_unlock | false |
 | pro_cached | false (last known store entitlement) |
 | seed_version | integer |
+| pr_flags_backfilled | false. Phase 4 (R127): turned on once the PR flags of workouts finished before phase 4 have been written at launch. A fresh install turns it on at once |
 
-Indexes: `workouts(status)`, `workouts(local_date)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, `workout_exercises(routine_exercise_id)`, `sets(workout_exercise_id)`, `food_log(local_date)`, `bodyweight(local_date)`.
+Indexes: `workouts(status)`, `workouts(local_date)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, `workout_exercises(routine_exercise_id)`, `sets(workout_exercise_id)`, `food_log(local_date)`, `bodyweight(local_date)`, and from phase 4 `measurements(kind, local_date)` and `saved_workout_exercises(saved_workout_id)`.
 
 ## 7. Rules (`src/domain`)
 
@@ -520,6 +543,10 @@ In order:
   - "Holds at 180 lb · Rough sleep"
   - "Holds at 180 lb"
 - **Done** returns to Train, where Up next already shows the new weights.
+- **Phase 4 (§18.9):**
+  - **Personal bests** (R105), after the next-time lines and hidden when there are none: a Label, then one row per exercise per PR kind, a red "PR" mark (Barlow 800, 14) before the line ("Bench press — heaviest: 185 lb × 5"), read as "Personal best. {line}".
+  - **Share** (R106), a compact secondary pill on each row, on a phone whose share sheet is available only: it draws the personal best card, captures it as a 1080 × 1350 PNG and opens the share sheet. A failure shows "Couldn't make the image. Try again." (muted) under the row.
+  - **Save as a workout** (R118), a secondary button just above Done when something was done: a sheet "Save as a workout" with the name prefilled, **Save** / **Cancel**; then the muted line "Saved as {name}.". A workout started from a saved workout that still exists shows "{name} remembers today's sets." instead (R120).
 
 ### 8.6 Routines
 - **Two sections:**
@@ -534,12 +561,20 @@ In order:
   - Name.
   - Days: add, rename, reorder, delete.
   - Per exercise: set count, rep range, increment (pre-filled from the default for the unit), and superset pairing.
+- **Saved workouts (phase 4, R122):**
+  - A third group after Yours, "Saved workouts": each row is the name and "{n} exercises" (muted), opening the saved workout, with a compact **Start** pill (a workout in progress opens the in-progress sheet instead). Empty: "Finish a workout and tap Save as a workout to keep it here." (muted).
+  - **Saved workout screen** (`/saved/{id}`): Back to Routines, the name, each exercise with its remembered sets on one line ("185 × 5, 185 × 5, 175 × 8"; warmups "W 95 × 10"), a filled **Start**, and **Rename** (name sheet) and **Delete** ("Delete {name}?", "Workouts you've finished keep their history.", **Delete** / **Keep**) as secondary buttons.
+  - **Editor:** under Add day, a secondary **Add a saved workout** (hidden when there are none) opens a list of saved workouts; choosing one appends it as a day (R121). The editor's Save writes it.
 
 ### 8.7 Library and custom exercises
 - **Search:** a single box. It matches whole words and word prefixes across name, aliases, muscles and equipment, ignoring case. "RDL", "OHP", "lat pulldown" and "hip thrust" all resolve.
 - **Filters:** chips for muscle and equipment.
 - **Rows:** name, equipment, primary muscle.
 - **Custom exercise:** available on free and Pro. Name, primary and secondary muscles, equipment, logging type. Custom exercises can be edited. Deleting one that is used in history archives it, which hides it from the picker but keeps the name in history.
+- **As built in phase 4 (§18.9):**
+  - **Picker:** a compact **New exercise** under the search box opens the editor with the search text as the name; a saved exercise is chosen at once in the picker's mode (add, replace or routine) (R110). Your own exercises' rows end " · Custom".
+  - **Exercise editor** (`/exercise/new` or `/exercise/{id}`, a modal over the picker or the form demo): "New exercise" / "Edit exercise"; Name; **Primary muscles** and **Secondary muscles** as wrapping multi-select chips (the three delts apart; a muscle chosen as primary leaves secondary); **Equipment** as single-select chips, none chosen for a new exercise (R128); **Logging** as radio rows (Weight and reps, Bodyweight plus weight, Assisted, Time, Weight and time, Distance and time), or, once the exercise is in use, the type as text with "It's in use, so this stays." (R108, R129); **Photos** (a saved exercise, phone builds only, R111). What stops Save is listed in muted lines over **Save** once Save is tapped: "Give the exercise a name.", "Keep the name to 60 characters.", "You already have an exercise called {name}.", "Pick at least one primary muscle.", "Pick the equipment.". A quiet **Delete exercise** (not on an archived one) asks "Delete {name}?" with "It stays in your history and routines but leaves the exercise list." (used) or "This can't be undone." (unused), **Delete** / **Keep** (R109). Leaving with changes asks "Discard changes?" (**Keep editing** / **Discard**).
+  - **Form demo:** your own exercise with no steps shows "No steps for your own exercise." and **Edit exercise**, which opens the editor once the sheet has closed (not offered from the routine editor's picker). On an exercise with no bundled photos, a phone build shows **Start photo** and **End photo** slots: **Add**, or a thumbnail with **Replace** and **Remove** ("Remove this photo?"). Add and Replace open **Take photo**, **Choose a photo**, **Cancel**; a refused camera reads "Camera access is off. Turn it on in Settings to take a photo." The demo shows your own photos as it shows bundled ones (one photo stands still; two swap, R98).
 
 ### 8.8 History
 - Finished workouts grouped by month, newest first.
@@ -558,6 +593,10 @@ In order:
   - Timed exercises chart the longest hold per session instead. Distance exercises show records only, with no chart, in v1.
 - **Records** under the chart: heaviest, best estimated 1RM, longest hold, with dates.
 - **Bodyweight:** a card with a quick entry field and a line chart.
+- **Body, as built in phase 4 (R114–R117):** Stats is "Stats", then a **Body** Label (phase 6 puts the lift charts above it):
+  - The **Bodyweight** card: the latest entry (a 44pt number in the unit it was logged in, its unit and date, muted) or "No entries yet."; the quick entry (a number field in the display unit, its unit, a filled **Log**; out of bounds or not a number → "Check this number", nothing written); the chart with 3M (default), 1Y and All, or "No entries in this range."; a quiet "All entries ›".
+  - A **Measurements** Label and one 44pt row per kind (Waist, Chest, Hips, Arms, Thighs, Neck, Body fat): the latest "{value} · {date}" or "No entries" (muted), opening its detail.
+  - **Body detail** (`/body/{kind}`): Back to Stats, the kind's name, the same entry row and chart, then every entry newest first. Tapping an entry opens a sheet "{Kind} on {date}" with the value field (in the entry's unit), **Save**, **Delete** ("Delete this entry?", **Delete** / **Keep**) and **Cancel**.
 
 ### 8.10 Fuel (Pro)
 - **Locked:** the paywall content appears inside the tab.
@@ -585,6 +624,10 @@ In order:
 - Developer, shown only when debug unlock is allowed (9): the Pro debug switch.
 - About (version).
 - Footer.
+- **As built through phase 4**, in this order: Appearance, Units, Bar, **Plates**, **Progression**, Rest timer, Backups, Export, then **Developer** where the debug unlock is allowed (R126). Fuel, Health, Pro and About come with their phases.
+  - **Plates** (R107), for the display unit only, as Bar is: "Pairs you own, for the plate calculator and barbell rounding." (muted); one 44pt row per size (the standard sizes always, your own sizes too, heaviest first) with a − count + stepper, 0–20 pairs; the last pair can't be removed ("Keep at least one pair."); "Add a plate size" (a multiple of 0.25 up to 100 lb or 50 kg, else "Check this number"); a quiet **Reset to defaults**.
+  - **Progression** (R124): "Default increment", "New exercises in a routine start with this. Change any one in the routine editor." (muted), and a segmented control for the display unit: 2.5, 5, 10 lb or 1, 1.25, 2.5, 5 kg.
+  - **Developer:** one switch, "Unlock Pro for testing" (R126).
 
 ### 8.12 Paywall
 - **Content:**
@@ -696,14 +739,23 @@ app/
   (tabs)/routines/index.tsx, (tabs)/routines/[id].tsx, (tabs)/routines/edit/[id].tsx
   (tabs)/library.tsx, (tabs)/exercise/edit/[id].tsx
   (tabs)/settings.tsx
+  exercise/[id].tsx           phase 4: the custom exercise editor (`new` or an id), a modal over the picker. It takes
+                              the place of the (tabs)/exercise/edit/[id].tsx planned above
+  (tabs)/saved/[id].tsx       phase 4: a saved workout (hidden tab)
+  (tabs)/body/[kind].tsx      phase 4: one body kind's chart and entries (hidden tab)
 src/domain/                   progression.ts, ruleText.ts, stall.ts, prs.ts, plates.ts, units.ts,
                               streak.ts, volume.ts, fuelPace.ts, csv.ts (+ *.test.ts)
 src/db/                       schema.ts, client.ts, migrations/, repositories/
 src/seed/                     exercises.ts, routines.ts, foods.json, seed.ts
 src/platform/entitlements/    index.ts, freeOnly.ts, debug.ts, revenuecat.ts
 src/platform/restTimer/       index.ts, expoGoNotification.ts (phase 7: liveActivity.ts, androidOngoing.ts)
+src/platform/sharePb.ts       phase 4: captures the personal best card and opens the share sheet (R106)
+src/platform/exercisePhotoFiles.ts  phase 4: picks, crops, saves and resolves your own exercise photos (R111)
 src/state/                    sessionStore.ts
 src/ui/                       theme.ts, fonts.ts, Header.tsx, HoundMark.tsx, Dock.tsx, Footer.tsx, components/
+src/ui/finish/                phase 4: FinishPrs.tsx, PbCard.tsx, PbCardHost.tsx, SaveAsWorkout.tsx (finish summary slots)
+src/ui/body/                  phase 4: BodyLog.tsx (field, quick entry, chart with ranges), BodyEntrySheet.tsx
+src/ui/charts/                phase 4: LineChart.tsx (hand-drawn SVG, R116; phase 6 reuses it)
 assets/brand/                 hound-head.png (master, from the logo), mark*.png, mark-dark*.png, icon, splash
 ```
 
@@ -728,6 +780,7 @@ Each phase gets its own implementation plan and ends with its acceptance check.
    - Routines screen, detail, set active, duplicate, editor, the `Entitlements` interface with the free-only implementation, and the one-sentence stop on the second user routine.
 4. **Library, custom exercises, plates, bodyweight, PRs**
    - Full seed (about 250, including the carries and sleds as `weighted_time`), search with filters, custom exercises (all logging types, including weight and time), plate settings, calculator and barbell rounding, the bodyweight log, PR flags and finish-summary PRs.
+   - **Built (2026-10-11; owner review pending):** as §18.9. The library, search and form demos moved to phase 3 (§18.8); the calculator and barbell rounding were built earlier; phase 4 built custom exercises with your own photos, saved workouts, plates owned and the default increment in Settings, bodyweight and seven measurements with charts, PR flags with personal bests on the finish summary, and sharing a personal best as an image.
 5. **Pro, paywall, Fuel**
    - Debug and RevenueCat implementations, paywall screen, Fuel (foods seed, log, quick add, custom foods, targets, summary, training-day switch), and the Short on food offer.
 6. **History, Stats, CSV**
@@ -790,6 +843,7 @@ Added by the owner on 2026-10-09:
   - The phone builds do this from phase 1. The browser build skips it.
 - **Restore:** the newest snapshot is restored when the database is missing or empty, or when a migration fails (§12). The live file is never deleted.
 - **Export** stays available from Settings, and from the error screen even when the database cannot open.
+- **Your own exercise photos (phase 4, R111)** are files in the documents folder's `exercise-photos/`, not in the database. They are **not** in a snapshot or in "Save a backup copy": a restored snapshot names files that may be gone, and a missing file reads as no photo.
 - **The copy that survives a dead phone (phase 7, once the developer accounts exist):**
   - On iPhone, the newest snapshot is copied to iCloud.
   - On Android, the snapshot folder is included in Android's backup.
@@ -817,6 +871,16 @@ Added by the owner on 2026-10-09:
 
 ### 17.4 Watch apps (phase 8)
 - A watch app that logs each set on the wrist, for Apple Watch and Wear OS only.
+
+### 17.5 Camera, photos and sharing (phase 4, phone builds only)
+- **Permission strings** (`app.json`, the `expo-image-picker` plugin; used by the phase 7 builds, Expo Go shows its own):
+  - Photos: "GymHound uses your photos only for exercise pictures you choose."
+  - Camera: "GymHound uses the camera only to take an exercise picture."
+  - The camera is asked for on the first **Take photo**. Choosing a photo asks for nothing: the phone's own picker hands over only the photo chosen.
+  - Photos only, never video, so no microphone access is needed. The image picker plugin sets `microphonePermission: false`, so no microphone prompt is added on iOS and Android's `RECORD_AUDIO` is removed.
+- **Your own photos:** cropped 3:2 (iOS's picker crops square, so GymHound crops again) and saved 720 px wide as JPEG at 0.7 in `exercise-photos/` (§6 `exercise_photos`, §17.2).
+- **Share a personal best:** the card is captured as a 1080 × 1350 PNG into the app's cache (the temporary folder) and handed only to the share sheet; on iOS it is released once the sheet is done, and Android's are cleared by the capture module. Nothing is written anywhere else and nothing is uploaded.
+- None of this exists in the browser build: no photo controls, no Share pill.
 - Garmin, Whoop and other brands cannot run it. They reach GymHound only through Health (§17.1).
 
 ## 18. Owner additions after the first device check (2026-10-10)
@@ -1073,3 +1137,40 @@ The owner set this scope and asked for it to run without a review stop, so the c
   - VoiceOver hears it with the tick: "Set 2 logged. Rest after Ab roller." When the last member's rest time is Off, it hears just "Set 2 logged."
 - **The rest time in a superset (R101):** the rest after a superset round takes its length from the last member's rest time. The ⋯ Rest time panel of a member that isn't last says so under the exercise's name: "Rest comes after {last}, using its rest time.", or "No rest after {last}: its rest time is Off." when that resolves to Off. The choices stay: they apply whenever the exercise isn't mid-superset.
 - **Library details settled while building (R91, R92):** imported names are in sentence case, keeping acronyms and proper nouns ("EZ-bar curl", "Romanian deadlift"); band-assisted moves log as bodyweight plus, since a band's assistance can't be weighed; `src/seed/libraryIds.json` lists every library id, and the build refuses to drop one, so an exercise with history never vanishes when the source data is updated.
+
+### 18.9 Phase 4 (owner decisions and rulings) (2026-10-11)
+The owner said to continue without waiting, so the plan's open questions were decided by the controller and the choices below are Claude's rulings (R102–R125, R127–R130) for the owner to check. R126 and R131 belong to phase 3 (§18.8, DESIGN.md). The plan is `.superpowers/sdd/2026-10-11-gymhound-phase-4/plan-draft.md`, its ledger `progress.md` beside it. Each ruling reads: what — why — cost if wrong, as built at `phase-4` c535b84; where the build differs from the plan, it says so. Where this section and an earlier one disagree, this section wins.
+
+- **Scope delivered:** your own exercises (every logging type) from the picker, with your own start and end photos where none are bundled; saved workouts (save from the finish summary, start from Routines, remember the last sets, add one as a routine day); the plates you own and the default increment in Settings; bodyweight and seven measurements, each with a hand-drawn chart; PR flags at finish, personal bests on the finish summary, and sharing one as an image. Screens: §8.5, §8.6, §8.7, §8.9, §8.11. Data: §6 (migration 0006). Files: §14. Phone-only parts: §17.5. Everything here is free (§9); nothing calls `Entitlements`, and saved workouts never count toward the one-routine limit. The library, search and form demos were already moved to phase 3 (§18.8); the plate calculator and barbell rounding were built earlier, so phase 4 adds only the editing of plates owned.
+- **Not in phase 4:** live PR marks in the session (R104); back-dated body entries (R115); left and right arms and thighs (R113); saving a workout from History or from scratch, or starting one from Train (R118, R122); lift charts, records and stall labels on Stats (phase 6).
+- **Fixed after c535b84** (the final whole-branch review and the browser walkthrough, branch `phase-4-fixes`): the PR backfill has its own try/catch (R127); deleting an exercise, deleting a saved workout and logging a body entry each catch a failure and say "Couldn't delete. Try again." or "Couldn't log. Try again." in a muted line, announced; the exercise editor's problems are announced once, with no live region, so TalkBack no longer reads them twice; the image picker sets `microphonePermission: false` (§17.5); "{name} remembers today's sets." is no longer announced as the finish screen opens; the dock highlights Stats on `/body/{kind}` (Settings, Routines and a saved workout still highlight nothing); Delete in a body entry sheet no longer blanks the web build (React Native Web has no `sendAccessibilityEvent`; screen reader focus goes through `focusOn` in `src/platform/announce.ts`); the chart's y labels show on the web; and small leftovers.
+
+**Rulings:**
+- **R102:** one migration (0006) adds every phase 4 table (`measurements`, `exercise_photos`, `saved_workouts`, `saved_workout_exercises`) and `workouts.saved_workout_id`, written by the first task with stub contracts (`writePrFlags`, `rememberSavedWorkout`), the finish summary's slots and placeholder routes — parallel worktrees can't each generate a migration without clashing journal numbers — none; the stubs were filled in place.
+- **R103:** PR time order is the workout's start, then the set's tick time (unticked last), then exercise and set position. "First session" means no earlier finished workout has an eligible (done, not warmup) set of the exercise; within a workout a set is still compared with the earlier sets of that workout — §7.6 says "time order" and "contains the exercise" without defining either, and a warmup-only earlier session should not make every set a PR — a different order flags a different set of a tie-free pair; a recompute fixes all history.
+- **R104:** PRs are computed at finish only, inside the finish transaction after the status becomes finished; the session shows no live PR marks — a live mark could vanish when a set is edited — the owner may want a live mark; it can come later from the same rule.
+- **R105:** the finish summary lists one line per exercise per PR kind, the best set of that kind, in the order heaviest, best estimated 1RM, most reps at a weight, longest hold, each after a red "PR" mark: "Bench press — heaviest: 185 lb × 5", "Bench press — best estimated 1RM: 210 lb", "Bench press — most reps at 185 lb: 8" ("Dip — most reps at bodyweight: 15"), "Plank — longest hold: 1:30". Weights are in the unit logged; e1RM is rounded to a whole number in that unit — §8.5 only says "the PR list", and one line per set would repeat when two sets both beat history — copy only.
+- **R106:** **Share** on a personal best makes a 1080 × 1350 PNG on the phone from a 360 × 450 card: always the dark palette whatever the app theme, the dark hound mark beside the red GYMHOUND, the red PERSONAL BEST (a PR mark), the exercise, the value and caption ("185 lb × 5", "Heaviest set"), and the day ("SUN 11 OCT 2026"); every text at a fixed size; no footer and no quotes. Phone builds only, where the share sheet is available; the file stays in the cache and goes only to the share sheet (§17.5). As built (differs from the plan): the card is drawn at the screen's top left under the finish screen's opaque scroll view rather than off-screen (an off-screen view can be culled), waits for the hound mark to load (at most 1.5 s) and one frame before the capture, and iOS asks for the size in points so it comes out 1080 × 1350 on any iPhone — the spec says only "an image through the share sheet; nothing uploaded"; dark is the brand's default and a shared image has no theme — a light variant or a "powered by GRUNTHOUND" footer is a small change.
+- **R107:** the plates you own are edited for the display unit only (as Bar is), as 0–20 pairs per size, the standard sizes always listed (lb 45, 35, 25, 15, 10, 5, 2.5; kg 25, 20, 15, 10, 5, 2.5, 1.25, 0.5) and your own sizes addable (as built: a multiple of 0.25 up to 100 lb or 50 kg, which keeps the plate maths small); at least one pair is kept; **Reset to defaults** restores §6's — matches the Bar control; with no plates every barbell raise would hold forever — a lifter who trains in both units switches units to edit the other set.
+- **R108:** your own exercise has a name (at most 60 characters, unique as R129 says), at least one primary muscle, secondary muscles, one equipment (R128) and one logging type; its pattern is derived (weight and time → carry; abs or obliques first → core; else isolation); there is no steps editor. The logging type locks once the exercise is used anywhere (any workout, routine or saved workout) — §8.7 lists those fields, and changing the type would make logged sets unreadable — a lifter who picked the wrong type makes a new exercise.
+- **R109:** deleting your own exercise archives it if anything references it (a finished or active workout, a routine slot, a saved workout) and otherwise deletes it with its note, rest time and own photos (the row and the files) — §8.7 archives "used in history", and routines and the active workout need the row too — an archived exercise in a routine still runs but can't be picked again. An archived exercise offers no **Delete exercise**.
+- **R110:** **New exercise** in the picker opens the editor with the search text as the name, and the saved exercise is chosen at once in the picker's mode (add, replace or a routine slot) — saves a second search for what was just made — the picker could instead just list it. The routine editor's picker doesn't offer **Edit exercise** in the form demo, so a routine draft never holds an exercise edited under it (the editor also re-checks its draft's exercises when it comes back into view).
+- **R111:** your own photos (start and end, from the camera or the library, cropped 3:2 and saved 720 px wide as JPEG) go only on exercises with no bundled photos and never replace a bundled one. Today that is every custom exercise and nine library exercises: the six without a source (Wall sit, Hollow body hold, Reverse lunge, Pike push-up, Split squat, Bird dog) and three kettlebell ones whose source has no photos (Kettlebell halo, Kettlebell halo with overhead extension, Kettlebell overhead triceps extension) — `canHaveOwnPhotos` is simply "no bundled photo". The files live in the documents folder's `exercise-photos/` and the database stores **file names only**, resolved against the documents folder each time; a photo is kept as soon as it is taken, apart from the editor's Save; **Remove** asks first. Own photos are not in a snapshot or the backup copy (§17.2). Phone builds only — the owner was offered "add your own photo" for those exercises (handoff §4.4), and a name survives iOS moving the app's folder on update where a stored path would break — if the owner wants own photos on any exercise, `canHaveOwnPhotos` widens and the demo needs a "bundled or yours" choice; Own photo files are removed only when a custom exercise is deleted (R109); a library exercise's own photos stay on the phone until the user removes them. If a later seed bundles photos for one of the nine, the bundled pair shows instead. If that happens, the own photos can no longer be removed in the app; they're deleted with the app.
+- **R112:** lengths follow the weight unit (lb → in, kg → cm); body fat is in %; every entry keeps the unit it was logged in (the latest on Stats shows that unit) and charts convert to the display unit's — no new setting, and lb users almost always measure in inches — a separate length setting later.
+- **R113:** arms and thighs are one value each, not left and right — the owner's list names one of each — two more kinds per limb if wanted.
+- **R114:** body lives on the Stats tab: a Bodyweight card (latest, quick entry, chart, all entries) and a Measurements list, each kind opening a detail screen with its chart and entries — §8.9 already puts the bodyweight card on Stats, and eight charts on one screen would be too long — phase 6 adds the lift charts above it.
+- **R115:** entries are for today only; several a day are allowed and all listed; the chart uses each day's latest; tapping an entry edits or deletes it — the simplest honest log — a date picker later (phase 6 with History) if the owner logs late.
+- **R116:** charts are hand-drawn SVG (§3) through one shared `LineChart` (phase 6 reuses it): a 2px text-colour line, 4px dots, border-colour grid lines at the y ticks, y labels and the first and last dates in Inter 12 muted with tabular figures (an exception to "numbers in Barlow", noted in DESIGN.md), ranges 3M (91 days, default), 1Y (365) and All as a segmented control, never red; one point is a dot; none in the range says "No entries in this range."; the chart is one accessible element that reads its series in words — no chart library is allowed — none.
+- **R117:** value bounds: bodyweight 20–1000 lb or 10–450 kg; lengths 5–100 in or 12–250 cm; body fat 2–75 %; outside, or not a number → "Check this number" (muted, announced), nothing written — catches typos like 1855 — a real value outside is very unlikely.
+- **R118:** a saved workout is saved from the finish summary (**Save as a workout**, shown only when a set was done; the repository refuses an empty one with "Nothing logged to save.") and holds each exercise in order with its superset group (a group left with one member is no superset) and its done sets (type, weight, reps, time, distance); the name is 1–60 characters (counted by character, not code unit). Saved workouts are free, unlimited and not counted in the one-routine limit — §18.1 "remembers the last weights, sets and reps" and "everything else added here is free" — saving from History or from scratch can come later.
+- **R119:** starting a saved workout creates a workout with the saved name, linked by `saved_workout_id`, with no routine, no rule and no planned weight; each exercise (an archived one too) gets its remembered sets' types and count, empty, with RPE off; Previous and the placeholders come from history as in any workout. A workout in progress stops it with the in-progress sheet — one source of "last time" on screen; a planned weight would show one target on every set of a pyramid — if the owner wants the saved values as targets, `planned_weight` can come from the first working set.
+- **R120 (as built; differs from the plan):** finishing a workout started from a saved workout that still exists updates it inside the finish transaction: the k-th saved row of an exercise, in position order, takes the done sets of the k-th **logged** block of that exercise today (a block with no done set doesn't count), so a top-set block and a back-off block each keep their own sets. Saved rows without a logged block keep their sets; extra logged blocks and exercises added on the day are not added (save again to change the list); `updated_at` becomes the finish time. The summary says "{name} remembers today's sets." The plan had "the first block with that id", which would give both rows of a repeated exercise the first block's sets — a skipped exercise must not vanish from the template — a lifter who wants added exercises kept saves a new one.
+- **R121:** **Add a saved workout** in the routine editor appends a day: per exercise the set count is its working and failure sets (1–10, at least 1), the rep range their lowest to highest reps (seconds for timed and weight and time; 1–1 for distance and time) within the editor's limits, the increment the display unit's default (0 for timed and distance and time), and the easiest working load (the lowest; the most assistance for assisted; bodyweight plus with no weight counts as 0) as the new slot's first next weight, written when the routine is saved and only for new slots; supersets carry over; a blank day name becomes "Day {n}" and a name in use gets " 2" — §18.1's "add it as a day in one of your routines" needs a rule, and these are the values the lifter actually did — the lifter edits the range in the editor before saving.
+- **R122:** saved workouts are a third group on Routines ("Saved workouts", with Start on each row) and have their own screen with Start, Rename and Delete; started from Routines only — Routines is where workouts are picked, and Train's layout is fixed by §18.6 — a Train entry point later.
+- **R123:** the task order and file ownership in the plan (stubs and slots in the first task, one owner per shared file per wave) is the phase 4 contract, as `src/state/pendingPick.ts` was in phase 3 — keeps worktrees from editing the same file — none.
+- **R124 (amended):** Settings → Progression edits **one default increment per unit** (`default_increment_lb`, `default_increment_kg`), for the display unit, as Bar and Plates are: 2.5, 5 or 10 lb; 1, 1.25, 2.5 or 5 kg (a stored value outside these, from a restored backup, is kept and shown). It is used by **new routine slots only** (Add exercise and Add a saved workout in the routine editor); your own exercises have no increment of their own. The decision first read "per equipment class as §8.11 describes", but §8.11 names no classes and the settings hold one value per unit, so per-equipment defaults were not built — §8.11 lists "Progression default increments" and it had never been built — one more Settings group; per-equipment defaults are a later addition if the owner wants them.
+- **R125:** two loads are the same load within 0.01 kg (§7.1), or, in different units, when one converted to the other's unit and rounded to 0.1 equals the other, so 60 kg and 132.3 lb (60 kg is 132.28 lb, 0.0103 kg away) are the same for "most reps at a weight" and are neither heavier — a lifter who switches units logs the converted number rounded, and a strict 0.01 kg would make that a new weight — a rare cross-unit PR flagged or missed (the app pre-fills 132.5 lb, which counts as heavier).
+- **R127:** a one-time PR backfill at launch: after the seed, while `pr_flags_backfilled` is off, every exercise in a finished workout is recomputed in one transaction (batched updates) and the setting turned on; a fresh install has nothing to do and just turns it on; a restored older snapshot has no setting and is backfilled on the launch that opens it. A failure must never block the app: it is caught on its own, the setting stays off and it runs again on the next launch. (At c535b84 the backfill ran inside the startup try, so a throw there showed the startup error screen; it now has its own try/catch, `tryBackfillPrFlags`, which logs the failure and lets the app start.) — without it, workouts finished before phase 4 never get PR flags, so the first PR after the update would be judged against an unflagged history and History (phase 6) would show none for them — one slow first launch after the update (about 1–2 s on years of history).
+- **R128:** a new exercise has no equipment chosen; Save asks "Pick the equipment." — a default Barbell would turn on barbell rounding and the plate calculator unseen — one more tap.
+- **R129:** a name must be unique, ignoring case, among the exercises you can see (not archived): an archived exercise's name can be used again, so history may show two exercises with the same name. The locked logging type reads "It's in use, so this stays." (the plan's "It's been logged, so this stays." was wrong for an exercise only in a routine or a saved workout) — an archived name would otherwise be taken forever by something you can't see or edit — two same-named exercises in stats.
+- **R130:** an archived exercise in a saved workout still starts (R119), and can enter a routine day through **Add a saved workout**, although the picker hides it — the saved workout is what the lifter actually did, and dropping an exercise silently would change it — an exercise the picker hides shows up in a routine.
