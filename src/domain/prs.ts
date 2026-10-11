@@ -38,9 +38,9 @@ type Load = { value: number; unit: WeightUnit; kg: number };
 const roundTenth = (v: number) => Math.round(v * 10) / 10;
 
 /**
- * Two loads are the same within 0.01 kg (spec 7.1), or, in different units, when one converted to
- * the other's unit and rounded to 0.1 is the other: 60 kg is 132.28 lb, shown and logged as
- * 132.3 lb, which is 0.0103 kg away.
+ * R125: two loads are the same within 0.01 kg (spec 7.1), or, in different units, when one
+ * converted to the other's unit and rounded to 0.1 is the other: 60 kg is 132.28 lb, logged as
+ * 132.3 lb, which is 0.0103 kg away. (The app pre-fills 132.5 lb, which counts as heavier.)
  */
 function sameLoad(a: Load, b: Load): boolean {
   if (Math.abs(a.kg - b.kg) < TOLERANCE_KG) return true;
@@ -88,19 +88,25 @@ function measure(loggingType: LoggingType, s: PrCandidate): Measured | null {
   }
 }
 
-function e1rmKg(m: Measured): number | null {
-  return m.load === null || m.reps === null ? null : estimatedOneRm(m.load.kg, m.reps);
-}
+/** Earlier sets at one logged load: the most reps, and the rep counts that have an e1RM. */
+type LoadBucket = { load: Load; maxReps: number; e1rmReps: Set<number> };
 
 /**
  * One exercise's sets from finished workouts, already in time order (R103). Returns flags for every
  * set id (0 when none). A set is compared with every earlier eligible set, including earlier sets of
  * its own workout, but flags nothing until an earlier workout has an eligible set (first session).
+ *
+ * One pass with running bests: the heaviest load, the best e1RM, the longest duration, and one
+ * bucket per distinct logged load (few per exercise) for reps at weight.
  */
 export function computePrFlags(loggingType: LoggingType, sets: readonly PrCandidate[]): Map<string, number> {
   const flags = new Map<string, number>();
-  const earlier: Measured[] = [];
-  const workoutsWithEligible = new Set<string>();
+  let firstWorkout: string | null = null; // the first workout with an eligible set
+  let pastFirstWorkout = false; // an eligible set came from a second workout
+  let maxLoad: Load | null = null;
+  let maxE1rm: number | null = null;
+  let maxDuration: number | null = null;
+  const buckets = new Map<string, LoadBucket>();
 
   for (const s of sets) {
     const m = measure(loggingType, s);
@@ -108,35 +114,46 @@ export function computePrFlags(loggingType: LoggingType, sets: readonly PrCandid
       flags.set(s.id, 0);
       continue;
     }
+    if (firstWorkout === null) firstWorkout = s.workoutId;
+    else if (s.workoutId !== firstWorkout) pastFirstWorkout = true;
+    // An earlier workout has an eligible set when this set is not in the first one, or when an
+    // eligible set from a second workout came before it.
+    const gated = s.workoutId !== firstWorkout || pastFirstWorkout;
+    const { load, reps, durationS } = m;
+    const sameLoadBuckets = load === null ? [] : [...buckets.values()].filter((b) => sameLoad(b.load, load));
+    const mine = load === null || reps === null ? null : estimatedOneRm(load.kg, reps);
+
     let f = 0;
-    if ([...workoutsWithEligible].some((w) => w !== s.workoutId)) {
-      const load = m.load;
-      if (load !== null) {
-        const loads = earlier.flatMap((e) => (e.load === null ? [] : [e.load]));
-        if (loads.length > 0 && loads.every((l) => heavier(load, l))) f |= PR_BIT.heaviest;
+    if (gated) {
+      if (load !== null && maxLoad !== null && heavier(load, maxLoad)) f |= PR_BIT.heaviest;
+      if (reps !== null && sameLoadBuckets.length > 0 && sameLoadBuckets.every((b) => reps > b.maxReps)) {
+        f |= PR_BIT.reps_at_weight;
       }
-      if (load !== null && m.reps !== null) {
-        const reps = m.reps;
-        const atLoad = earlier.filter((e) => e.load !== null && e.reps !== null && sameLoad(e.load, load));
-        if (atLoad.length > 0 && atLoad.every((e) => reps > (e.reps as number))) f |= PR_BIT.reps_at_weight;
+      if (
+        mine !== null &&
+        mine > 0 &&
+        maxE1rm !== null &&
+        mine - maxE1rm >= TOLERANCE_KG &&
+        !sameLoadBuckets.some((b) => b.e1rmReps.has(reps as number))
+      ) {
+        f |= PR_BIT.e1rm;
       }
-      const mine = e1rmKg(m);
-      if (mine !== null) {
-        const others = earlier.flatMap((e) => {
-          const v = e1rmKg(e);
-          return v === null ? [] : [v];
-        });
-        if (others.every((o) => mine - o >= TOLERANCE_KG)) f |= PR_BIT.e1rm;
-      }
-      if (m.durationS !== null) {
-        const d = m.durationS;
-        const durations = earlier.flatMap((e) => (e.durationS === null ? [] : [e.durationS]));
-        if (durations.length > 0 && durations.every((o) => d > o)) f |= PR_BIT.longest_hold;
-      }
+      if (durationS !== null && maxDuration !== null && durationS > maxDuration) f |= PR_BIT.longest_hold;
     }
     flags.set(s.id, f);
-    earlier.push(m);
-    workoutsWithEligible.add(s.workoutId);
+
+    if (load !== null) {
+      if (maxLoad === null || load.kg > maxLoad.kg) maxLoad = load;
+      if (reps !== null) {
+        const key = `${load.value} ${load.unit}`;
+        const bucket = buckets.get(key) ?? { load, maxReps: 0, e1rmReps: new Set<number>() };
+        bucket.maxReps = Math.max(bucket.maxReps, reps);
+        if (mine !== null) bucket.e1rmReps.add(reps);
+        buckets.set(key, bucket);
+      }
+    }
+    if (mine !== null && (maxE1rm === null || mine > maxE1rm)) maxE1rm = mine;
+    if (durationS !== null && (maxDuration === null || durationS > maxDuration)) maxDuration = durationS;
   }
   return flags;
 }
@@ -219,14 +236,21 @@ export function pickHighlights(
   return out;
 }
 
-/** "185 lb", "+25 lb" for bodyweight plus, "bodyweight" for bodyweight plus with no added load. */
-function loadText(h: PrHighlight): string {
-  const unit = h.weightUnit ?? 'lb';
-  const w = h.weight ?? 0;
-  if (h.loggingType === 'bodyweight_plus') {
-    return isZeroWeight(w, unit) ? 'bodyweight' : `+${formatWeight(w, unit)}`;
+/**
+ * A weight in the unit the set was logged in: "185 lb", "+25 lb" for bodyweight plus, and
+ * "bodyweight" for bodyweight plus with no added weight. Never a guessed unit.
+ */
+function weightText(h: PrHighlight, v: number): string {
+  const bodyweightPlus = h.loggingType === 'bodyweight_plus';
+  if (bodyweightPlus && (h.weight === null || h.weightUnit === null || isZeroWeight(v, h.weightUnit))) {
+    return 'bodyweight';
   }
-  return formatWeight(w, unit);
+  const text = h.weightUnit === null ? String(Number(v.toFixed(2))) : formatWeight(v, h.weightUnit);
+  return bodyweightPlus ? `+${text}` : text;
+}
+
+function loadText(h: PrHighlight): string {
+  return weightText(h, h.weight ?? 0);
 }
 
 /** "185 lb × 5", "+25 lb × 8", "70 lb × 40s". */
@@ -237,9 +261,7 @@ function setText(h: PrHighlight): string {
 
 /** e1RM rounded to a whole number in the unit logged: "210 lb". */
 function e1rmText(h: PrHighlight): string {
-  const unit = h.weightUnit ?? 'lb';
-  const v = Math.round(estimatedOneRm(h.weight ?? 0, h.reps ?? 0) ?? 0);
-  return h.loggingType === 'bodyweight_plus' ? `+${formatWeight(v, unit)}` : formatWeight(v, unit);
+  return weightText(h, Math.round(estimatedOneRm(h.weight ?? 0, h.reps ?? 0) ?? 0));
 }
 
 /** The finish summary line (R105), e.g. "Bench press — heaviest: 185 lb × 5". */

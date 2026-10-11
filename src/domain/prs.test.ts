@@ -148,6 +148,35 @@ describe('computePrFlags', () => {
     expect(flags.get('b')).toBe(R | E);
   });
 
+  it('never flags e1RM for the same load and reps logged in the other unit', () => {
+    const a = computePrFlags('weighted', [
+      set('w1', 60, 5, { weightUnit: 'kg' }),
+      set('w2', 132.3, 5, { id: 'b' }),
+    ]);
+    expect(a.get('b')).toBe(0);
+    const b = computePrFlags('weighted', [
+      set('w1', 100, 5, { weightUnit: 'kg' }),
+      set('w2', 220.5, 5, { id: 'b' }),
+    ]);
+    expect(b.get('b')).toBe(0);
+  });
+
+  it('flags e1RM only when an earlier e1RM exists', () => {
+    const flags = computePrFlags('weighted', [set('w1', 100, 15), set('w2', 135, 10, { id: 'b' })]);
+    expect(flags.get('b')).toBe(H);
+  });
+
+  it('never flags an e1RM of 0', () => {
+    const flags = computePrFlags('bodyweight_plus', [
+      set('w1', null, 15),
+      set('w1', null, 20),
+      set('w2', null, 5, { id: 'b' }),
+      set('w3', null, 8, { id: 'c' }),
+    ]);
+    expect(flags.get('b')).toBe(0);
+    expect(flags.get('c')).toBe(0);
+  });
+
   it('flags reps at weight only against sets at the same load', () => {
     const flags = computePrFlags('weighted', [set('w1', 135, 10), set('w2', 145, 6), set('w3', 145, 8, { id: 'b' })]);
     expect(flags.get('b')).toBe(R | E);
@@ -231,6 +260,15 @@ describe('prLine', () => {
       prLine(hl({ name: 'Dip', loggingType: 'bodyweight_plus', kind: 'reps_at_weight', weight: null, weightUnit: null, reps: 15 })),
     ).toBe('Dip — most reps at bodyweight: 15');
     expect(prLine(hl({ kind: 'e1rm', reps: 4 }))).toBe('Bench press — best estimated 1RM: 210 lb');
+    expect(prLine(hl({ kind: 'e1rm', weight: 100, weightUnit: 'kg', reps: 5 }))).toBe(
+      'Bench press — best estimated 1RM: 117 kg',
+    );
+    expect(prLine(hl({ name: 'Dip', loggingType: 'bodyweight_plus', kind: 'e1rm', weight: 20, weightUnit: 'kg', reps: 6 }))).toBe(
+      'Dip — best estimated 1RM: +24 kg',
+    );
+    expect(prLine(hl({ kind: 'reps_at_weight', weight: 60, weightUnit: 'kg', reps: 9 }))).toBe(
+      'Bench press — most reps at 60 kg: 9',
+    );
     expect(
       prLine(hl({ name: 'Plank', loggingType: 'timed', kind: 'longest_hold', weight: null, weightUnit: null, reps: null, durationS: 90 })),
     ).toBe('Plank — longest hold: 1:30');
