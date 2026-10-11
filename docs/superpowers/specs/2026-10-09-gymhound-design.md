@@ -903,6 +903,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - The review's light `textFaint` (#9a9386) measured 2.75:1 on `bg`, so #8f897d replaces it.
 - **Train leads with today's workout** (replaces the order in §8.3):
   1. The greeting and date, unchanged.
+     - Round 5 (the date was gone at the largest text, R79): the date is one line that shrinks to fit (`numberOfLines={1}`, `adjustsFontSizeToFit`, `minimumFontScale` 0.3) at any text size, with no fixed line height. iOS shrinks only the font to fit, never a fixed line height, which grows with the text size. The greeting wraps if it needs to.
   2. One of three cards:
      - **Up next**, when no workout is active and a routine is:
        - The eyebrow "UP NEXT", then the title "{routine} · {day}".
@@ -915,6 +916,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
      - **No routine:** one card reads "No routine yet. Pick one and Train will line up your next workout.", with a filled **Choose a routine** and an outlined **Start empty workout**.
      - **In progress:** the Resume card, with the eyebrow "IN PROGRESS". Resume is the only filled button. Start empty workout and Up next are hidden.
        - Round 4: the same quiet **Change routine ›** sits at the foot of the Resume card, under Resume, so Routines is reachable while a workout runs.
+       - Round 5 (R80): the routine can't change while a workout runs, so this Change routine opens a sheet instead of Routines: the title "Workout in progress", the text "Finish or discard the workout in progress before changing routines.", a filled **Resume** that opens the session once the sheet has closed, and **Not now**. **Set active** on Routines shows the same sheet while a workout runs, and changes nothing (before, it changed the routine silently, and Train, showing the workout in progress, never showed it).
   3. Streak and This week.
   4. An outlined **Start empty workout**, in the Up next state only.
   5. The footer.
@@ -937,6 +939,9 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - The haptic comes first, before anything moves the keyboard, which can swallow it. It is a heavy impact (`Haptics.impactAsync(Heavy)`), distinct from the tick's light one, in place of the warning notification.
     - The field to focus is the first missing one in column order (weight before reps). It is focused once the row has drawn its line, so nothing that tap re-renders (the line, or a blur that saves another field) comes after the focus.
     - The line is also announced (`announce`), since VoiceOver does not read a live region on iOS. "Check this number" is announced the same way.
+  - Round 5 (still no line and no buzz on the phone, R82):
+    - The line sits above the row's inputs, not under them. It was drawn, but the keyboard comes up for the focused field and the session scrolls only that field clear of it, so a line under the row was under the keyboard.
+    - The heavy haptic is still the first thing the tap does. The field is focused only once the haptic has played (its promise settles), so the keyboard no longer comes up in the same moment as the buzz.
   - A number that needs another look shows "Check this number" instead.
   - The line names the field that is missing now, which a value carried from the set above can change after the tap. Typing in the row clears the line until the next tap.
   - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").
@@ -974,6 +979,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
 - **Slimmer exercise blocks** (replaces the always-open note in §8.4 and the §18.2 button labels):
   - An empty note shows a quiet **+ Note** with a pencil in the name row. It opens the note field, focused.
   - A saved note shows in full as a muted line under the name. Tap it to edit.
+    - Round 5: the line leads with + Note's 14pt pencil. With a note saved there is no + Note, and the plain muted line read as the first line of the rule under it (phase 2), so the note looked missing on those exercises.
   - The note saves when the field is left and on every flush (R29). A blank note clears it.
   - **+ Set**, then **+ Warmup**, as quiet compact buttons (36pt, with 44pt targets) on one line under the table. They behave as §18.2 says.
     - Compact buttons (these and the rest pills) are at least 44pt wide.
@@ -1000,3 +1006,28 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - On iOS every announcement is said half a second later, so VoiceOver reading the tapped tick again does not cut it off.
     - The countdown reads as a duration: "Rest, 1 minute 45 seconds left". The bottom bar's countdown does too.
   - The fallback bottom bar (R41) gets +15s and the same pills.
+
+### 18.7 Phase 2: Something off and the rule (2026-10-11)
+The owner asked for phase 2 to start overnight without a review stop, so the choices below are Claude's rulings (R60–R66), for the owner to check in the morning. The plan is `docs/superpowers/plans/2026-10-11-gymhound-phase-2.md`. Where this section and an earlier one disagree, this section wins.
+
+- **Something off, per exercise (R60):**
+  - Each exercise in a session can be flagged from its ⋯ menu: **Something off** opens a sheet with Rough sleep, Sick, Short on food, Pain and Cutting, plus **Nothing off** to clear it. It is stored as `workout_exercises.mark` (null = nothing off).
+  - A flagged exercise shows a muted line under its name, "Something off: {reason}".
+    - Round 5 (R81): that line is gone. The name row has a quiet **Something off** control beside + Note, in the same compact style (a 14pt `alert-circle-outline` and the words), in the order [name][count][+ Note][Something off][⋯]. Flagged, it shows the reason instead ("Rough sleep"), muted, never red. Tapping it saves what is typed, puts the keyboard away and opens the ⋯ sheet straight on the Something off reasons. VoiceOver reads "Something off for {name}" or "Something off for {name}: {Reason}". Wider than the row (the largest text), the controls wrap among themselves, right-aligned.
+  - `workouts.day_mark` stays in the database but the app no longer reads or writes it. The CSV keeps its `day_mark` column and fills it from the exercise's mark ("normal" when nothing is off).
+  - The Short on food and Rough sleep one-tap offers wait for Fuel (phase 5) and Health (phase 7).
+- **The rule (§7.3) runs at finish, per exercise.** "Marked day" means the exercise is flagged.
+  - The working weight keeps the unit of the set it came from; the next weight uses that unit, with the increment converted by the gym convention (R62). `planned_weight` keeps its own unit.
+  - `routine_exercises.next_weight` is written from the workout exercise that just finished.
+- **The rule line and today's read (§7.4)** show under each exercise's name, muted. On a flagged exercise, "Today is marked, so {planned} holds." reads "{Reason} today, so {planned} holds." (R61), for example "Rough sleep today, so 185 lb holds."
+- **Override today's weight** (⋯ menu): a sheet with one number field in the display unit, **Save**, **Clear** and **Cancel**. It changes today's target only and is never written back to the rule.
+- **Finish summary (§8.5):** one line per exercise with a rule, each starting with the exercise's name: "Bench press — next time 185 lb ↑", "Bench press — holds at 180 lb · Rough sleep", "Bench press — holds at 180 lb" (R64).
+- **Up next (§8.3, §18.6):** each row's right side becomes "{scheme} · {load}" plus last time's outcome: " · ↑ 5 lb", " · held · Rough sleep" or " · held". Loads show in the display unit through `planInUnit` (R63; closes the §18.6 deferral).
+- **After the final review (R74–R78):**
+  - Finish writes `routine_exercises.next_weight`, and Up next reads last time, only while the routine slot still holds the same exercise (R74).
+  - A bodyweight_plus exercise at 0 added load shows no load on Up next, doesn't count as the day's weight, and its finish line reads "Dip — holds at bodyweight" (with " · {Reason}" when flagged) until it rises above 0; in the session its read says "bodyweight" for the plan ("Sick today, so bodyweight holds.") while the raise stays a weight (R75).
+    - Round 5 (R83): a bodyweight_plus exercise ticked with no added weight reads "{name} — holds at bodyweight" when it holds, and "{name} — next time {w} ↑" when every set hit the top of the range; the line is never missing for an exercise with a rule. A tick with the reps left as suggested logs the top of the range, so that counts as every set hitting it. An exercise added or swapped in on the day has no rule, so it has no line.
+  - An assisted exercise already at 0 assistance with every set hit holds at 0, as a barbell holds when nothing heavier loads; a raise known to have moved nothing shows no rise on Up next, never the increment (R76).
+  - Up next's rise is the difference between the loads it shows: the next and last working weights each through `planInUnit` in the display unit with its gear, so after a unit switch the rise matches the shown loads (R77).
+  - Done (and Back to Train) on the finish summary, and the session's Back to Train and Discard, return to the Train screen already open, `router.dismissTo('/')`, instead of stacking another (R78).
+- Not in phase 2: History, Stats and charts (phase 6), stall labels (phase 6), PR flags (phase 4), recompute after history edits (phase 6).

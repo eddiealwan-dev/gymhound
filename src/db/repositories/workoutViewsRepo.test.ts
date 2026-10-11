@@ -1,9 +1,19 @@
 /** @jest-environment node */
+import { eq } from 'drizzle-orm';
+import { formatRepScheme } from '../../domain/labels';
+import { gearFor } from '../../domain/plates';
+import { finishLine } from '../../domain/ruleLine';
+import { resolveTick } from '../../domain/setEntry';
+import { buildRows, readRow } from '../../domain/setTable';
+import { upNextDayHasWeight, upNextLoad, upNextOutcome } from '../../domain/upNext';
 import { totalVolume } from '../../domain/volume';
+import { exercises, routineExercises, routines, workoutExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setRestSeconds } from './exercisePrefsRepo';
-import { addExerciseToWorkout, updateSet } from './workoutEditRepo';
+import { getUpNext, setActiveRoutine } from './routinesRepo';
+import { getSettings } from './settingsRepo';
+import { addExerciseToWorkout, addWarmupSet, setExerciseMark, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
 
@@ -140,6 +150,8 @@ describe('getFinishSummary', () => {
       durationMs: 72 * MINUTE,
       volume: 675,
       setCount: 2,
+      // One working set of the four missed: the bench holds at what was lifted.
+      next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
     });
   });
 
@@ -160,6 +172,162 @@ describe('getFinishSummary', () => {
     const db = seededDb();
     const { active } = buildHistory(db);
     expect(() => getFinishSummary(db, active, 'lb')).toThrow(`No finished workout with id ${active}.`);
+  });
+});
+
+describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
+  /** Stores `weight` lb as the Push A exercise's next weight, so the next start plans it. */
+  function plan(db: Db, exerciseId: string, weight: number): void {
+    db.update(routineExercises)
+      .set({ nextWeight: weight, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, `${PUSH_A}:${exerciseId}`))
+      .run();
+  }
+
+  it('lists each exercise with a rule and a next weight, in workout order, after a real finish', () => {
+    const db = seededDb();
+    plan(db, 'barbell-overhead-press', 95);
+    plan(db, 'cable-triceps-pushdown', 40);
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    const [bench, ohp, incline, , pushdown] = getActiveWorkoutView(db)!.exercises;
+    // Bench: every set hits 8, so it is raised.
+    setIds(db, 0).forEach((setId, i) => tick(db, setId, 135, 8, OCT_9 + (i + 1) * MINUTE));
+    // Overhead press: every set hits 12, but it is flagged Pain, so the plan holds.
+    setIds(db, 1).forEach((setId, i) => tick(db, setId, 100, 12, OCT_9 + (i + 10) * MINUTE));
+    setExerciseMark(db, ohp.id, 'pain');
+    // Incline press: one set of three, so it holds at what was lifted.
+    tick(db, setIds(db, 2)[0], 50, 8, OCT_9 + 20 * MINUTE);
+    // Lateral raise: nothing ticked, so the finish drops it.
+    // Pushdown: only a warm-up ticked, so the plan holds.
+    tick(db, addWarmupSet(db, pushdown.id), 20, 10, OCT_9 + 30 * MINUTE);
+    // An exercise added on the day has no rule, and neither has a timed one.
+    addExerciseToWorkout(db, id, 'barbell-curl');
+    tick(db, setIds(db, 5)[0], 65, 10, OCT_9 + 40 * MINUTE);
+    addExerciseToWorkout(db, id, 'plank');
+    tickSet(db, setIds(db, 6)[0], { weight: null, reps: null, durationS: 45, distance: null }, 'lb', OCT_9 + 41 * MINUTE, 'mi');
+    expect([bench.name, incline.name]).toEqual(['Barbell bench press', 'Incline dumbbell press']);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+      { name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+      { name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+      { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+    ]);
+  });
+
+  it('leaves out an exercise with no next weight: only a warm-up ticked and nothing planned', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    tick(db, addWarmupSet(db, getActiveWorkoutView(db)!.exercises[0].id), 45, 10, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([]);
+  });
+
+  it('is empty for an empty workout: nothing in it has a rule', () => {
+    const db = seededDb();
+    const id = startEmptyWorkout(db, OCT_9);
+    addExerciseToWorkout(db, id, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 135, 8, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([]);
+  });
+
+  it('keeps the unit each next weight is in, whatever the display unit', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    setIds(db).forEach((setId) => tickSet(db, setId, { weight: 60, reps: 8, durationS: null, distance: null }, 'kg', OCT_9 + MINUTE, 'mi'));
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
+    ]);
+  });
+
+  it("carries each exercise's logging type: an assisted raise takes assistance off (R72)", () => {
+    const db = seededDb();
+    db.update(exercises).set({ loggingType: 'assisted' }).where(eq(exercises.id, 'cable-triceps-pushdown')).run();
+    plan(db, 'cable-triceps-pushdown', 40);
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    // Every set of three hits 15 with 40 lb of help, so 5 lb of it comes off.
+    setIds(db, 4).forEach((setId, i) => tick(db, setId, 40, 15, OCT_9 + (i + 1) * MINUTE));
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Triceps pushdown', loggingType: 'assisted', outcome: 'raised', nextWeight: 35, nextUnit: 'lb', mark: null },
+    ]);
+  });
+});
+
+describe('getFinishSummary: pull-ups and dips with no added weight (R75, R83, Round 5)', () => {
+  const PULL_A = 'premade-ppl-6:pull-a';
+  const PUSH_B = 'premade-ppl-6:push-b';
+
+  /**
+   * Ticks every set of the exercise as the session does with the added weight left empty: the row is read with only
+   * `reps` typed (or nothing, which ticks the rule's top of the range, the suggestion the reps field shows), and the
+   * tick records what `resolveTick` resolves, in the unit in Settings (as `sessionActions.tick` does).
+   */
+  function tickEmptyLoad(db: Db, exerciseId: string, reps: string | null, at: number): void {
+    const settings = getSettings(db);
+    const exercise = getActiveWorkoutView(db)!.exercises.find((e) => e.exerciseId === exerciseId)!;
+    exercise.sets.forEach((_, i) => {
+      const current = getActiveWorkoutView(db)!.exercises.find((e) => e.exerciseId === exerciseId)!;
+      const row = buildRows(current, settings.unit, gearFor(settings.unit, settings), settings.distanceUnit)[i];
+      const reading = readRow(row, reps === null ? {} : { reps }, settings.unit, settings.distanceUnit);
+      const values = resolveTick({ loggingType: current.loggingType, entered: reading.entered, target: row.target, placeholders: row.placeholders });
+      tickSet(db, row.set.id, values!, settings.unit, at + i * MINUTE, settings.distanceUnit);
+    });
+  }
+
+  /** Up next's row for the exercise, as Train draws its right side: the scheme, the load and last time's outcome. */
+  function upNextRow(db: Db, dayIndex: number, exerciseId: string): string {
+    db.update(routines).set({ nextDayIndex: dayIndex }).where(eq(routines.id, 'premade-ppl-6')).run();
+    const settings = getSettings(db);
+    const gear = gearFor(settings.unit, settings);
+    const upNext = getUpNext(db)!;
+    const exercise = upNext.exercises.find((e) => e.exerciseId === exerciseId)!;
+    const load = upNextLoad(exercise, upNextDayHasWeight(upNext.exercises), settings.unit, gear);
+    const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+    return `${load === null ? scheme : `${scheme} · ${load}`}${upNextOutcome(exercise, settings.unit, gear) ?? ''}`;
+  }
+
+  /** Starts the day, ticks only `exerciseId` with no added weight, finishes, and returns the finish lines. */
+  function finishDay(db: Db, dayId: string, exerciseId: string, reps: string | null): string[] {
+    const id = startWorkoutFromDay(db, dayId, OCT_9);
+    tickEmptyLoad(db, exerciseId, reps, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+    return getFinishSummary(db, id, getSettings(db).unit).next.map(finishLine);
+  }
+
+  it('stores an empty added weight as 0 in the unit shown, and a missed set holds at bodyweight; Up next shows no load', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-ppl-6');
+
+    expect(finishDay(db, PULL_A, 'pull-up', '8')).toEqual(['Pull-up — holds at bodyweight']);
+    const working = db.select().from(workoutExercises).where(eq(workoutExercises.exerciseId, 'pull-up')).get()!;
+    expect(working).toMatchObject({ workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb' });
+    expect(upNextRow(db, 1, 'pull-up')).toBe('3×6–10 · held');
+  });
+
+  it('every set at the top of the range (typed, or the suggested reps ticked as they are) goes up from bodyweight', () => {
+    for (const reps of ['10', null]) {
+      const db = seededDb();
+      setActiveRoutine(db, 'premade-ppl-6');
+
+      expect(finishDay(db, PULL_A, 'pull-up', reps)).toEqual(['Pull-up — next time 5 lb ↑']);
+      expect(upNextRow(db, 1, 'pull-up')).toBe('3×6–10 · 5 lb · ↑ 5 lb');
+    }
+  });
+
+  it('in kg: dips that miss hold at bodyweight, and Up next shows no "0 kg"', () => {
+    const db = seededDb('metric');
+    setActiveRoutine(db, 'premade-ppl-6');
+
+    expect(finishDay(db, PUSH_B, 'dip', '9')).toEqual(['Dip — holds at bodyweight']);
+    expect(upNextRow(db, 3, 'dip')).toBe('3×8–12 · held');
   });
 });
 

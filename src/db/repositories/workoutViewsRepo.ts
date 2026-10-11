@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
+import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
-import type { DayMark, Equipment, LoggingType, WeightUnit } from '../../domain/types';
+import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { ruleOf } from './ruleSnapshot';
 
 export type SetView = PrevSet & {
   id: string;
@@ -32,6 +34,8 @@ export type WorkoutExerciseView = {
   plannedUnit: WeightUnit | null;
   overrideWeight: number | null;
   overrideUnit: WeightUnit | null;
+  /** Something off today (R60): the reason the exercise is flagged, or null when nothing is off. */
+  mark: ExerciseMark | null;
   sets: SetView[];
   previous: PrevSet[];
 };
@@ -40,7 +44,6 @@ export type ActiveWorkoutView = {
   id: string;
   name: string;
   startedAt: number;
-  dayMark: DayMark;
   restEndsAt: number | null;
   /** The set whose tick started the running rest (R38); the countdown shows under it. Null when no rest runs. */
   restSetId: string | null;
@@ -55,6 +58,8 @@ export type FinishSummary = {
   volume: number;
   /** How many sets were done, warm-ups included. */
   setCount: number;
+  /** Next time's weight for each exercise with a rule and a next weight, in workout order (spec 8.5, R64). */
+  next: NextTime[];
 };
 
 const PREV_SET_COLUMNS = {
@@ -150,7 +155,6 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     id: workout.id,
     name: workout.name,
     startedAt: workout.startedAt,
-    dayMark: workout.dayMark,
     restEndsAt: workout.restEndsAt,
     restSetId: workout.restSetId,
     exercises: rows.map(({ we, exercise, note, restSeconds }) => ({
@@ -164,24 +168,12 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       showRpe: we.showRpe,
       note,
       restSeconds,
-      rule:
-        we.ruleSetCount !== null &&
-        we.ruleRepMin !== null &&
-        we.ruleRepMax !== null &&
-        we.ruleIncrement !== null &&
-        we.ruleIncrementUnit !== null
-          ? {
-              setCount: we.ruleSetCount,
-              repMin: we.ruleRepMin,
-              repMax: we.ruleRepMax,
-              increment: we.ruleIncrement,
-              incrementUnit: we.ruleIncrementUnit,
-            }
-          : null,
+      rule: ruleOf(we),
       plannedWeight: we.plannedWeight,
       plannedUnit: we.plannedUnit,
       overrideWeight: we.overrideWeight,
       overrideUnit: we.overrideUnit,
+      mark: we.mark,
       sets: setsByExercise.get(we.id) ?? [],
       previous: getPreviousSets(db, we.exerciseId, workout.id),
     })),
@@ -230,7 +222,37 @@ export function getVolumeSetsSince(db: Db, fromLocalDate: string): VolumeSet[] {
   return selectVolumeSets(db, gte(workouts.localDate, fromLocalDate));
 }
 
-/** The duration, volume and done-set count of a finished workout. Throws if it does not exist or is not finished. */
+/**
+ * What the rule left at finish for each exercise of the workout that has a rule and a next weight, in workout order.
+ * No rule (an exercise added on the day, a timed one) and no next weight (no working set ticked and nothing planned)
+ * leave the exercise out.
+ */
+function selectNextTimes(db: Db, workoutId: string): NextTime[] {
+  const rows = db
+    .select({
+      name: exercises.name,
+      loggingType: exercises.loggingType,
+      outcome: workoutExercises.outcome,
+      nextWeight: workoutExercises.nextWeight,
+      nextUnit: workoutExercises.nextUnit,
+      mark: workoutExercises.mark,
+    })
+    .from(workoutExercises)
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .orderBy(asc(workoutExercises.position))
+    .all();
+  return rows.flatMap(({ name, loggingType, outcome, nextWeight, nextUnit, mark }) =>
+    outcome === null || outcome === 'no_rule' || nextWeight === null || nextUnit === null
+      ? []
+      : [{ name, loggingType, outcome, nextWeight, nextUnit, mark }],
+  );
+}
+
+/**
+ * The duration, volume, done-set count and next-time weights of a finished workout. Throws if it does not exist or is
+ * not finished.
+ */
 export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightUnit): FinishSummary {
   const workout = db.select().from(workouts).where(eq(workouts.id, workoutId)).get();
   if (!workout || workout.status !== 'finished' || workout.finishedAt === null) {
@@ -244,5 +266,6 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     durationMs: workout.finishedAt - workout.startedAt,
     volume: totalVolume(workoutSets, displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
+    next: selectNextTimes(db, workoutId),
   };
 }

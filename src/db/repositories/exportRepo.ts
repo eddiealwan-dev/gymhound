@@ -18,7 +18,7 @@ export function workoutCsvRows(db: Db, offsetAt: (epochMs: number) => number = d
       workoutName: workouts.name,
       routineName: routines.name,
       routineDayName: routineDays.name,
-      dayMark: workouts.dayMark,
+      mark: workoutExercises.mark,
       workoutExerciseId: workoutExercises.id,
       exerciseName: exercises.name,
       exerciseId: exercises.id,

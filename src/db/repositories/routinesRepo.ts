@@ -1,7 +1,8 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
-import type { DayMark, LoggingType, WeightUnit } from '../../domain/types';
+import type { Outcome } from '../../domain/progression';
+import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/routines';
-import { exercises, routineDays, routineExercises, routines, workouts } from '../schema';
+import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 import { getSettings, setSetting } from './settingsRepo';
 
@@ -18,11 +19,38 @@ export type UpNextExercise = {
   exerciseId: string;
   name: string;
   loggingType: LoggingType;
+  equipment: Equipment;
   setCount: number;
   repMin: number;
   repMax: number;
+  increment: number;
+  incrementUnit: WeightUnit;
   nextWeight: number | null;
   nextWeightUnit: WeightUnit | null;
+  /**
+   * The latest finished workout exercise run from this routine exercise: its outcome, Something off mark, and working
+   * and next weights (R73: a raise shows the actual rise).
+   */
+  lastOutcome: Outcome | null;
+  lastMark: ExerciseMark | null;
+  lastWorkingWeight: number | null;
+  lastWorkingUnit: WeightUnit | null;
+  lastNextWeight: number | null;
+  lastNextUnit: WeightUnit | null;
+};
+
+type LastResult = Pick<
+  UpNextExercise,
+  'lastOutcome' | 'lastMark' | 'lastWorkingWeight' | 'lastWorkingUnit' | 'lastNextWeight' | 'lastNextUnit'
+>;
+
+const NO_LAST_RESULT: LastResult = {
+  lastOutcome: null,
+  lastMark: null,
+  lastWorkingWeight: null,
+  lastWorkingUnit: null,
+  lastNextWeight: null,
+  lastNextUnit: null,
 };
 
 export type UpNext = {
@@ -30,7 +58,8 @@ export type UpNext = {
   routineName: string;
   dayId: string;
   dayName: string;
-  lastTime: { localDate: string; dayMark: DayMark } | null;
+  /** The day's latest finished workout. Its `day_mark` is no longer read: marks are per exercise (R69). */
+  lastTime: { localDate: string } | null;
   exercises: UpNextExercise[];
 };
 
@@ -67,8 +96,39 @@ export function setActiveRoutine(db: Db, routineId: string | null): void {
 }
 
 /**
- * The active routine's next day: `days[next_day_index % days.length]`, with its exercises and when it
- * was last finished. Null when there is no active routine, it no longer exists, or it has no days.
+ * The outcome, mark, working weight and next weight of the latest finished workout exercise run from
+ * `routineExerciseId` with the exercise the slot holds now, `exerciseId` (R74); all null when it has never been
+ * finished (or was finished before the rule wrote outcomes).
+ */
+function lastResult(db: Db, routineExerciseId: string, exerciseId: string): LastResult {
+  return (
+    db
+      .select({
+        lastOutcome: workoutExercises.outcome,
+        lastMark: workoutExercises.mark,
+        lastWorkingWeight: workoutExercises.workingWeight,
+        lastWorkingUnit: workoutExercises.workingUnit,
+        lastNextWeight: workoutExercises.nextWeight,
+        lastNextUnit: workoutExercises.nextUnit,
+      })
+      .from(workoutExercises)
+      .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
+      .where(
+        and(
+          eq(workoutExercises.routineExerciseId, routineExerciseId),
+          eq(workoutExercises.exerciseId, exerciseId),
+          eq(workouts.status, 'finished'),
+        ),
+      )
+      .orderBy(desc(workouts.finishedAt))
+      .limit(1)
+      .get() ?? NO_LAST_RESULT
+  );
+}
+
+/**
+ * The active routine's next day: `days[next_day_index % days.length]`, with its exercises, each with how it went last
+ * time, and when the day was last finished. Null when there is no active routine, it no longer exists, or it has no days.
  */
 export function getUpNext(db: Db): UpNext | null {
   const activeId = getSettings(db).activeRoutineId;
@@ -88,7 +148,7 @@ export function getUpNext(db: Db): UpNext | null {
 
   const lastTime =
     db
-      .select({ localDate: workouts.localDate, dayMark: workouts.dayMark })
+      .select({ localDate: workouts.localDate })
       .from(workouts)
       .where(and(eq(workouts.routineDayId, day.id), eq(workouts.status, 'finished')))
       .orderBy(desc(workouts.finishedAt))
@@ -101,9 +161,12 @@ export function getUpNext(db: Db): UpNext | null {
       exerciseId: routineExercises.exerciseId,
       name: exercises.name,
       loggingType: exercises.loggingType,
+      equipment: exercises.equipment,
       setCount: routineExercises.setCount,
       repMin: routineExercises.repMin,
       repMax: routineExercises.repMax,
+      increment: routineExercises.increment,
+      incrementUnit: routineExercises.incrementUnit,
       nextWeight: routineExercises.nextWeight,
       nextWeightUnit: routineExercises.nextWeightUnit,
     })
@@ -119,6 +182,9 @@ export function getUpNext(db: Db): UpNext | null {
     dayId: day.id,
     dayName: day.name,
     lastTime,
-    exercises: dayExercises,
+    exercises: dayExercises.map((exercise) => ({
+      ...exercise,
+      ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
+    })),
   };
 }

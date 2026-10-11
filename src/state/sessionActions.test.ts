@@ -13,7 +13,7 @@ import {
   tickSet,
 } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary } from '../db/repositories/workoutViewsRepo';
-import { workoutExercises, workouts } from '../db/schema';
+import { routineExercises, workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
@@ -26,7 +26,9 @@ import {
   commitSetField,
   discard,
   finish,
+  markExercise,
   moveBlock,
+  overrideWeight,
   removeFromWorkout,
   removeSetFrom,
   replaceWith,
@@ -147,7 +149,11 @@ function bench() {
 
 const reread = (setId: string) => activeView().exercises[0].sets.find((s) => s.id === setId)!;
 
-/** A finished Push A from the day before, with `done` bench sets ticked at 135 × 8 and the rest left unticked. */
+/**
+ * A finished Push A from the day before, with `done` bench sets ticked at 135 × 8 and the rest left unticked. The
+ * next weight the rule wrote to the routine is cleared, so the next start has no plan and only last time's values
+ * are left to fall back on.
+ */
 function finishedPushA(done: number) {
   const before = new Date(2026, 9, 8, 9, 0).getTime();
   const id = startWorkoutFromDay(db, PUSH_A, before);
@@ -156,6 +162,10 @@ function finishedPushA(done: number) {
     tickSet(db, s.id, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', before + (i + 1) * 60_000, 'mi');
   });
   finishWorkout(db, id, before + 3_600_000);
+  db.update(routineExercises)
+    .set({ nextWeight: null, nextWeightUnit: null })
+    .where(eq(routineExercises.id, `${PUSH_A}:barbell-bench-press`))
+    .run();
 }
 
 const NOTHING = { weight: null, reps: null, durationS: null, distance: null };
@@ -1141,6 +1151,63 @@ describe('setRpeShown', () => {
     setRpeShown(db, bench().id, false);
     expect(bench().showRpe).toBe(false);
     expect(version()).toBe(before + 2);
+  });
+});
+
+// ---- Something off and today's override (phase 2, Task 1) ----
+
+/** The bench press of a Push A finished just now, with one set ticked. Nothing is active afterwards. */
+function finishedBenchId(): string {
+  startFromDay(db, PUSH_A);
+  const ex = bench();
+  tick(db, ex, ex.sets[0], VALUES);
+  finishWorkout(db, workoutId(), NOW + 3_600_000);
+  return ex.id;
+}
+
+describe('markExercise', () => {
+  it('flags the exercise Something off, then clears it, bumping the data version each time (R60)', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    markExercise(db, bench().id, 'short_on_food');
+    expect(activeView().exercises.map((e) => e.mark)).toEqual(['short_on_food', null, null, null, null]);
+
+    markExercise(db, bench().id, null);
+    expect(bench().mark).toBeNull();
+    expect(version()).toBe(before + 2);
+  });
+
+  it('throws for an exercise of a finished workout, leaving the version alone', () => {
+    const id = finishedBenchId();
+    const before = version();
+
+    expect(() => markExercise(db, id, 'pain')).toThrow('is not in the active workout');
+
+    expect(version()).toBe(before);
+  });
+});
+
+describe('overrideWeight', () => {
+  it("sets today's weight in its unit, then clears it, bumping the data version each time", () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    overrideWeight(db, bench().id, 80, 'kg');
+    expect(bench()).toMatchObject({ overrideWeight: 80, overrideUnit: 'kg' });
+
+    overrideWeight(db, bench().id, null, null);
+    expect(bench()).toMatchObject({ overrideWeight: null, overrideUnit: null });
+    expect(version()).toBe(before + 2);
+  });
+
+  it('throws for an exercise of a finished workout, leaving the version alone', () => {
+    const id = finishedBenchId();
+    const before = version();
+
+    expect(() => overrideWeight(db, id, 200, 'lb')).toThrow('is not in the active workout');
+
+    expect(version()).toBe(before);
   });
 });
 

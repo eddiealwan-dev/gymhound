@@ -25,7 +25,7 @@ const EXERCISES = [
   { id: 'we1', exerciseId: 'bench', name: 'Barbell bench press', position: 0, supersetGroup: null, sets: [set('s1', 0, true), set('s2', 1, false)] },
   { id: 'we2', exerciseId: 'ohp', name: 'Overhead press', position: 1, supersetGroup: null, sets: [set('s3', 0, true), set('s4', 1, false)] },
 ];
-const mockState: { workout: Workout; musicApp: MusicAppId | null } = {
+const mockState: { workout: Workout | null; musicApp: MusicAppId | null } = {
   workout: { id: 'w1', name: 'Push A', startedAt: 1_000, restEndsAt: null, restSetId: null, exercises: EXERCISES },
   musicApp: null,
 };
@@ -34,7 +34,7 @@ const mockState: { workout: Workout; musicApp: MusicAppId | null } = {
 const mockBlocks: { nextSetId: string | null }[] = [];
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn(), back: jest.fn(), push: jest.fn(), canGoBack: () => true },
+  router: { replace: jest.fn(), back: jest.fn(), push: jest.fn(), dismissTo: jest.fn(), canGoBack: () => true },
   useNavigation: () => ({ addListener: () => () => {} }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -149,7 +149,7 @@ describe('the session header (spec 18.6)', () => {
     expect(line[0].props.accessibilityElementsHidden).toBe(true);
     expect(line[0].props.importantForAccessibility).toBe('no-hide-descendants');
 
-    mockState.workout = { ...mockState.workout, exercises: [] };
+    mockState.workout = { ...mockState.workout!, exercises: [] };
     const empty = mount();
     expect(progressLine(empty)[0].props.style.width).toBe('0%');
     expect(textWith(empty, '0:01')).toHaveLength(1);
@@ -257,5 +257,36 @@ describe('the session header (spec 18.6)', () => {
         (flat(headerRow(tree).props.style).gap ?? 0) + (flat(music.props.style).marginRight ?? 0) + (flat(finish.props.style).marginLeft ?? 0);
       expect(gap).toBeGreaterThanOrEqual(music.props.hitSlop + finish.props.hitSlop);
     });
+  });
+});
+
+describe('Back to Train returns to the Train screen already there, without stacking another (R78)', () => {
+  beforeEach(() => {
+    jest.mocked(router.dismissTo).mockClear();
+    jest.mocked(router.back).mockClear();
+  });
+
+  it('the header back button leaves the workout running and goes back to Train', () => {
+    const tree = mount();
+    const back = tree.root.findAll((n) => n.props.accessibilityLabel === 'Back to Train' && typeof n.props.onPress === 'function');
+    act(() => back[0].props.onPress());
+
+    expect(router.dismissTo).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it('with no workout in progress, its Back to Train does the same', () => {
+    mockState.workout = null;
+    const tree = mount();
+    expect(shownText(tree)).toContain('No workout in progress.');
+    const button = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Back to Train');
+    expect(button).toHaveLength(1);
+    act(() => button[0].props.onPress());
+
+    expect(router.dismissTo).toHaveBeenCalledWith('/');
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

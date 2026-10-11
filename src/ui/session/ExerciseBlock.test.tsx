@@ -73,6 +73,7 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
   plannedUnit: null,
   overrideWeight: null,
   overrideUnit: null,
+  mark: null,
   sets,
   previous: [],
 });
@@ -105,6 +106,7 @@ function block(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSet
       upText="Rest's up · Set 3 next"
       settingsRestSeconds={120}
       onOpenRest={() => {}}
+      onOpenMark={() => {}}
       nextSetId={nextSetId}
     />
   );
@@ -145,6 +147,11 @@ function press(tree: ReactTestRenderer, label: string) {
   const buttons = tree.root.findAllByType(Button).filter((b) => b.props.label === label);
   expect(buttons).toHaveLength(1);
   act(() => buttons[0].props.onPress());
+}
+
+/** Taps a tick and lets the tap settle: a tick that is not ready focuses its field once its haptic has played (R82). */
+async function tapTick(tree: ReactTestRenderer, label: string) {
+  await act(async () => byLabel(tree, label).props.onPress());
 }
 
 /** iOS opens the next sheet a moment after the last one closes. */
@@ -271,11 +278,11 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(tickButton.props.style({ pressed: false })).toMatchObject({ opacity: 1, borderStyle: 'dashed' });
   });
 
-  it('tapping it focuses the weight field, says "Add a weight to tick", gives a warning haptic, and ticks nothing', () => {
+  it('tapping it focuses the weight field, says "Add a weight to tick", gives a warning haptic, and ticks nothing', async () => {
     const tree = mount(bench([set('s0', 0)]));
     const focus = focusOf(tree, 'LB, set 1');
 
-    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    await tapTick(tree, 'Set 1 done');
 
     expect(focus).toHaveBeenCalledTimes(1);
     expect(tick).not.toHaveBeenCalled();
@@ -292,47 +299,47 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     /** Each field's own focus mock, by its label. */
     const focusSpies = (tree: ReactTestRenderer, labels: string[]) => Object.fromEntries(labels.map((label) => [label, focusOf(tree, label)]));
 
-    it('buzzes before it focuses: the keyboard coming up can swallow a haptic', () => {
+    it('buzzes before it focuses: the keyboard coming up can swallow a haptic', async () => {
       const tree = mount(bench([set('s0', 0)]));
       const { 'LB, set 1': focus } = focusSpies(tree, ['LB, set 1']);
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(focus).toHaveBeenCalledTimes(1);
       expect(jest.mocked(Haptics.impactAsync).mock.invocationCallOrder[0]).toBeLessThan(focus.mock.invocationCallOrder[0]);
     });
 
-    it('focuses the weight and never the reps when the reps have a suggestion (a routine set with no weight)', () => {
+    it('focuses the weight and never the reps when the reps have a suggestion (a routine set with no weight)', async () => {
       const ex = { ...bench([set('s0', 0)]), rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' } } as WorkoutExerciseView;
       const tree = mount(ex);
       expect(byLabel(tree, 'REPS, set 1').props.placeholder).toBe('8');
       const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
       expect(focus['REPS, set 1']).not.toHaveBeenCalled();
       expect(shownText(tree)).toContain('Add a weight to tick');
     });
 
-    it('focuses once the line has drawn, so nothing the tap re-renders can move the focus on', () => {
+    it('focuses once the line has drawn, so nothing the tap re-renders can move the focus on', async () => {
       const tree = mount(bench([set('s0', 0)]));
       const lineShownAtFocus: boolean[] = [];
       focusOf(tree, 'LB, set 1').mockImplementation(() => void lineShownAtFocus.push(shownText(tree).includes('Add a weight to tick')));
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(lineShownAtFocus).toEqual([true]);
     });
 
-    it('with the reps typed and still focused, the tap still lands on the weight, after the reps are saved', () => {
+    it('with the reps typed and still focused, the tap still lands on the weight, after the reps are saved', async () => {
       const tree = mount(bench([set('s0', 0)]));
       act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('5'));
       const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
       // What the phone does when another field takes focus: the reps field blurs, and its blur saves.
       focus['LB, set 1'].mockImplementation(() => byLabel(tree, 'REPS, set 1').props.onBlur());
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
       expect(focus['REPS, set 1']).not.toHaveBeenCalled();
@@ -340,27 +347,103 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       expect(shownText(tree)).toContain('Add a weight to tick');
     });
 
-    it('says the line to VoiceOver, which does not read a live region on iOS', () => {
+    it('the buzz comes first, before the tap changes anything on screen (Round 5, R82)', async () => {
+      const tree = mount(bench([set('s0', 0)]));
+      const focus = focusOf(tree, 'LB, set 1');
+      const shownAtBuzz: string[][] = [];
+      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => {
+        shownAtBuzz.push(shownText(tree));
+        return Promise.resolve();
+      });
+
+      await tapTick(tree, 'Set 1 done');
+
+      expect(shownAtBuzz).toHaveLength(1);
+      expect(shownAtBuzz[0]).not.toContain('Add a weight to tick');
+      expect(focus).toHaveBeenCalledTimes(1);
+    });
+
+    it('the keyboard waits for the buzz: the field is focused only once the haptic has played (Round 5, R82)', async () => {
+      const tree = mount(bench([set('s0', 0)]));
+      const focus = focusOf(tree, 'LB, set 1');
+      let played!: () => void;
+      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => new Promise<void>((resolve) => (played = resolve)));
+
+      await tapTick(tree, 'Set 1 done');
+
+      // The line and the announcement don't wait; the keyboard does.
+      expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
+      expect(focus).not.toHaveBeenCalled();
+
+      await act(async () => played());
+
+      expect(focus).toHaveBeenCalledTimes(1);
+    });
+
+    it('a phone with no haptics still focuses the field', async () => {
+      const tree = mount(bench([set('s0', 0)]));
+      const focus = focusOf(tree, 'LB, set 1');
+      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => Promise.reject(new Error('no haptics')));
+
+      await tapTick(tree, 'Set 1 done');
+
+      expect(focus).toHaveBeenCalledTimes(1);
+    });
+
+    it('the line stays through what the phone does next: the field takes focus and the row draws again (Round 5)', async () => {
+      const ex = bench([set('s0', 0)]);
+      const tree = mount(ex);
+      // The field's own focus handler, if it has one, then a fresh render of the block, as the keyboard coming up does.
+      focusOf(tree, 'LB, set 1').mockImplementation(() => {
+        byLabel(tree, 'LB, set 1').props.onFocus?.({ nativeEvent: {} });
+        tree.update(block(ex));
+      });
+
+      await tapTick(tree, 'Set 1 done');
+
+      expect(shownText(tree)).toContain('Add a weight to tick');
+    });
+
+    it.each([
+      { what: 'the missing field', type: null, line: 'Add a weight to tick' },
+      { what: 'a number to check', type: 'abc', line: 'Check this number' },
+    ])("draws the line for $what above the row's inputs, where the keyboard can't cover it (Round 5, R82)", async ({ type, line }) => {
+      const tree = mount(bench([set('s0', 0)]));
+      if (type !== null) act(() => byLabel(tree, 'LB, set 1').props.onChangeText(type));
+
+      await tapTick(tree, 'Set 1 done');
+
+      // Every node in drawing order (a parent before its children): the line comes before the row's first input.
+      const drawn = tree.root.findAll(() => true);
+      const text = textNode(tree, line);
+      expect(drawn.indexOf(text)).toBeGreaterThan(-1);
+      expect(drawn.indexOf(text)).toBeLessThan(drawn.indexOf(byLabel(tree, 'LB, set 1')));
+      expect(drawn.indexOf(text)).toBeLessThan(drawn.indexOf(byLabel(tree, 'Set 1')));
+      expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 12 });
+    });
+
+    it('says the line to VoiceOver, which does not read a live region on iOS', async () => {
       const tree = mount(bench([set('s0', 0)]));
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
     });
 
-    it('says "Check this number" to VoiceOver when that is the line', () => {
+    it('says "Check this number" to VoiceOver when that is the line', async () => {
       const tree = mount(bench([set('s0', 0)]));
       act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
 
-      act(() => byLabel(tree, 'Set 1 done').props.onPress());
+      await tapTick(tree, 'Set 1 done');
 
       expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
     });
   });
 
-  it('the line goes once a weight is typed', () => {
+  it('the line goes once a weight is typed', async () => {
     const tree = mount(bench([set('s0', 0)]));
-    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    await tapTick(tree, 'Set 1 done');
     expect(shownText(tree)).toContain('Add a weight to tick');
 
     act(() => byLabel(tree, 'LB, set 1').props.onChangeText('135'));
@@ -369,9 +452,9 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(shownText(tree).filter((text) => text.endsWith(' to tick'))).toEqual([]);
   });
 
-  it('the line names the field that is missing now, not the one the tap found (B10)', () => {
+  it('the line names the field that is missing now, not the one the tap found (B10)', async () => {
     const tree = mount(bench([set('s0', 0), set('s1', 1)]));
-    act(() => byLabel(tree, 'Set 2 done').props.onPress());
+    await tapTick(tree, 'Set 2 done');
     expect(shownText(tree)).toContain('Add a weight to tick');
 
     // A weight typed in set 1 and left carries down to set 2: now only its reps are missing.
@@ -404,12 +487,12 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       line: 'Add a distance to tick',
       hint: 'Enter a distance first',
     },
-  ])('with $what missing, it says "$line", focuses that field and announces the line', ({ ex, field, line, hint }) => {
+  ])('with $what missing, it says "$line", focuses that field and announces the line', async ({ ex, field, line, hint }) => {
     const tree = mount(ex());
     expect(byLabel(tree, 'Set 1 done').props.accessibilityHint).toBe(hint);
     const focus = focusOf(tree, field);
 
-    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain(line);
     expect(focus).toHaveBeenCalledTimes(1);
@@ -417,38 +500,38 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(tick).not.toHaveBeenCalled();
   });
 
-  it('"Check this number" focuses the field to check, even with another field missing', () => {
+  it('"Check this number" focuses the field to check, even with another field missing', async () => {
     const tree = mount(bench([set('s0', 0)]));
     act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('x'));
     const weight = focusOf(tree, 'LB, set 1');
     const reps = focusOf(tree, 'REPS, set 1');
 
-    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain('Check this number');
     expect(reps).toHaveBeenCalledTimes(1);
     expect(weight).not.toHaveBeenCalled();
   });
 
-  it('Check this number wins over the nudge', () => {
+  it('Check this number wins over the nudge', async () => {
     const tree = mount(bench([set('s0', 0)]));
     act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
 
-    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+    await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain('Check this number');
     expect(shownText(tree)).not.toContain('Add a weight to tick');
     expect(tick).not.toHaveBeenCalled();
   });
 
-  it("set 2 shows set 1's weight as a ghost and ticks in one tap", () => {
+  it("set 2 shows set 1's weight as a ghost and ticks in one tap", async () => {
     jest.mocked(tick).mockReturnValue(true);
     const tree = mount(oneDone());
 
     expect(byLabel(tree, 'LB, set 2').props.placeholder).toBe('135');
     expect(byLabel(tree, 'REPS, set 2').props.placeholder).toBe('8');
 
-    act(() => byLabel(tree, 'Set 2 done').props.onPress());
+    await tapTick(tree, 'Set 2 done');
 
     expect(tick).toHaveBeenCalledTimes(1);
   });
@@ -619,11 +702,12 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     expect(shownText(mount(bench([])))).not.toContain('0/0');
   });
 
-  it('the name row wraps at large text: the count, + Note and ⋯ drop to a second line together, right-aligned', () => {
+  it('the name row wraps at large text: the count, + Note, Something off and ⋯ drop to a second line together, right-aligned', () => {
     const tree = mount(fourSets());
     const name = tree.root.findAll((n) => n.type === Text && n.props.children === 'Bench Press')[0];
     const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4')[0];
     const addNote = byLabel(tree, 'Add a note for Bench Press');
+    const somethingOff = byLabel(tree, 'Something off for Bench Press');
     const options = byLabel(tree, 'Options for Bench Press');
 
     // The row is the nearest ancestor of the name that also holds the controls.
@@ -637,21 +721,33 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     expect(nameStyle).toEqual(expect.objectContaining({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
     expect(nameStyle.flex).toBeUndefined();
 
-    // The three controls share one parent inside the row, pushed right and never squeezed.
-    const group = row.findAll(
-      (n) => n !== row && n.findAll((m) => m === count).length > 0 && n.findAll((m) => m === addNote).length > 0 && n.findAll((m) => m === options).length > 0,
-    );
+    // The four controls share one parent inside the row, pushed right and never squeezed. Wider than the row (the
+    // largest text), they wrap among themselves, right-aligned, rather than run off the edge.
+    const holds = (n: ReactTestInstance, m: ReactTestInstance) => n.findAll((x) => x === m).length > 0;
+    const group = row.findAll((n) => n !== row && [count, addNote, somethingOff, options].every((m) => holds(n, m)));
     const controls = group[group.length - 1];
     expect(controls).toBeDefined();
     expect(StyleSheet.flatten(controls.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', flexShrink: 0 }),
+      expect.objectContaining({
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginLeft: 'auto',
+        flexShrink: 0,
+        maxWidth: '100%',
+      }),
     );
     expect(controls.findAll((n) => n === name)).toHaveLength(0);
-    // Order stays [name][count][+ Note][⋯], with 44pt targets.
+    // Order stays [name][count][+ Note][Something off][⋯] (R81), with 44pt targets.
     const shown = shownText(tree);
     expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf('1/4'));
     expect(shown.indexOf('1/4')).toBeLessThan(shown.indexOf('+ Note'));
+    expect(shown.indexOf('+ Note')).toBeLessThan(shown.indexOf('Something off'));
+    const drawn = tree.root.findAll(() => true);
+    expect(drawn.indexOf(somethingOff)).toBeLessThan(drawn.indexOf(options));
     expect(StyleSheet.flatten(addNote.props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
+    expect(StyleSheet.flatten(somethingOff.props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
     expect(StyleSheet.flatten(options.props.style({ pressed: false }))).toMatchObject({ width: 44, height: 44 });
   });
 
@@ -873,6 +969,29 @@ describe('ExerciseBlock: the note (UX item 6, R29)', () => {
     expect(noteFields(tree)).toHaveLength(0);
   });
 
+  it("with a saved note there is no + Note, so the note line carries + Note's pencil: it reads as the note, not as the rule under it (Round 5)", () => {
+    const tree = mount({
+      ...withNote(),
+      rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' },
+      plannedWeight: 185,
+      plannedUnit: 'lb',
+    });
+    const line = byLabel(tree, `Note for Bench Press: ${SAVED}`);
+    const icon = (n: ReactTestInstance) => n.props.name !== undefined && n.props.size !== undefined;
+
+    // The same 14pt muted pencil as + Note, before the note's text.
+    const pencils = line.findAll((n) => icon(n) && n.props.name === 'pencil');
+    expect(pencils).toHaveLength(1);
+    expect(pencils[0].props).toMatchObject({ size: 14, color: '#a39d90' });
+    const drawn = tree.root.findAll(() => true);
+    expect(drawn.indexOf(pencils[0])).toBeLessThan(drawn.indexOf(textNode(tree, SAVED)));
+    expect(StyleSheet.flatten(restingStyle(line))).toMatchObject({ flexDirection: 'row', alignItems: 'center' });
+    // The rule paragraph is its own line, outside the note.
+    const rule = tree.root.findAll((n) => n.type === Text && typeof n.props.children === 'string' && n.props.children.startsWith('If every working set'));
+    expect(rule).toHaveLength(1);
+    expect(line.findAll((n) => n === rule[0])).toHaveLength(0);
+  });
+
   it('tapping the saved note opens it for editing; clearing it saves blank', () => {
     const tree = mount(withNote());
 
@@ -931,6 +1050,167 @@ describe('ExerciseBlock: the note (UX item 6, R29)', () => {
   });
 });
 
+describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () => {
+  /** 3 sets of 5–8 at 185 lb planned, add 5 lb. */
+  const ruled = (over: Partial<WorkoutExerciseView> = {}): WorkoutExerciseView => ({
+    ...bench([set('s0', 0)]),
+    rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' },
+    plannedWeight: 185,
+    plannedUnit: 'lb',
+    ...over,
+  });
+  const RULE = 'If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.';
+  const prev = (over: Partial<SetView>) => {
+    const { id: _id, rpe: _rpe, done: _done, completedAt: _completedAt, ...p } = set('p', over.position ?? 0, over);
+    return p;
+  };
+  /** Last time: 3 sets of 8 at 135 lb. */
+  const LAST_135 = [0, 1, 2].map((position) => prev({ position, weight: 135, weightUnit: 'lb', reps: 8 }));
+
+  it('shows the rule then the read as one muted 14pt paragraph, under the name and the note, above the set table', () => {
+    const tree = mount(ruled({ note: SAVED }));
+    const line = `${RULE} Hit 8s on a normal day and next time is 190 lb.`;
+
+    const text = textNode(tree, line);
+    expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+    // No caps: it wraps at any text size.
+    expect(text.props.numberOfLines).toBeUndefined();
+    expect(text.props.maxFontSizeMultiplier).toBeUndefined();
+    const shown = shownText(tree);
+    expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf(SAVED));
+    expect(shown.indexOf(SAVED)).toBeLessThan(shown.indexOf(line));
+    expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('SET'));
+    expect(shown.filter((s) => s.startsWith('Something off:'))).toEqual([]);
+  });
+
+  describe('Something off in the name row (R81, Round 5)', () => {
+    /** The control's 14pt icon and its words, as drawn. */
+    const control = (tree: ReactTestRenderer, label: string) => {
+      const node = byLabel(tree, label);
+      const icons = node.findAll((n) => n.props.name !== undefined && n.props.size !== undefined);
+      const words = node.findAll((n) => n.type === Text).map((n) => n.props.children);
+      return { node, icons, words };
+    };
+
+    it('reads "Something off" beside + Note, quiet and compact like it', () => {
+      const tree = mount(ruled());
+      const { node, icons, words } = control(tree, 'Something off for Bench Press');
+
+      expect(node.props.accessibilityRole).toBe('button');
+      expect(icons.map((i) => i.props)).toEqual([expect.objectContaining({ name: 'alert-circle-outline', size: 14, color: '#a39d90' })]);
+      expect(words).toEqual(['Something off']);
+      expect(StyleSheet.flatten(textNode(tree, 'Something off').props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+      // The same quiet, compact look as + Note.
+      const addNote = byLabel(tree, ADD_NOTE);
+      expect(restingStyle(node)).toEqual(restingStyle(addNote));
+    });
+
+    it('flagged, it shows the reason instead, muted and never red; the read holds the plan; no line of its own (R61)', () => {
+      const tree = mount(ruled({ mark: 'rough_sleep' }));
+      const { words, icons } = control(tree, 'Something off for Bench Press: Rough sleep');
+
+      expect(words).toEqual(['Rough sleep']);
+      expect(icons.map((i) => i.props.color)).toEqual(['#a39d90']);
+      const reason = StyleSheet.flatten(textNode(tree, 'Rough sleep').props.style);
+      expect(reason).toMatchObject({ color: '#a39d90', fontSize: 14 });
+      expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
+      textNode(tree, `${RULE} Hit 8s on a normal day and next time is 190 lb. Rough sleep today, so 185 lb holds.`);
+      expect(shownText(tree).filter((s) => s.startsWith('Something off'))).toEqual([]);
+      expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Something off for Bench Press')).toHaveLength(0);
+    });
+
+    it.each([
+      { what: 'Something off', mark: null, label: 'Something off for Bench Press', words: 'Something off' },
+      { what: 'a long reason', mark: 'short_on_food' as const, label: 'Something off for Bench Press: Short on food', words: 'Short on food' },
+    ])('$what wraps at the largest text instead of cutting off with "…", keeping its 44pt target (Round 5 review)', ({ mark, label, words }) => {
+      const tree = mount(ruled({ mark }));
+      const { node } = control(tree, label);
+      const text = textNode(tree, words);
+
+      expect(text.props.numberOfLines).toBeUndefined();
+      expect(StyleSheet.flatten(text.props.style)).toMatchObject({ flexShrink: 1 });
+      // It may shrink within the controls group, so its words wrap there.
+      expect(restingStyle(node)).toMatchObject({ minHeight: 44, flexShrink: 1 });
+    });
+
+    it('tapping it opens the Something off reasons for this exercise', () => {
+      const onOpenMark = jest.fn();
+      let tree!: ReactTestRenderer;
+      act(() => {
+        tree = create(<ExerciseBlock {...block(ruled({ mark: 'pain' })).props} onOpenMark={onOpenMark} />);
+      });
+
+      act(() => byLabel(tree, 'Something off for Bench Press: Pain').props.onPress());
+
+      expect(onOpenMark).toHaveBeenCalledTimes(1);
+    });
+
+    it('sits on the name row with the note line, not on a row of its own, also with a note saved', () => {
+      const tree = mount(ruled({ note: SAVED, mark: 'sick' }));
+      const drawn = tree.root.findAll(() => true);
+      const flag = byLabel(tree, 'Something off for Bench Press: Sick');
+
+      expect(drawn.indexOf(textNode(tree, 'Bench Press'))).toBeLessThan(drawn.indexOf(flag));
+      expect(drawn.indexOf(flag)).toBeLessThan(drawn.indexOf(byLabel(tree, 'Options for Bench Press')));
+      expect(drawn.indexOf(flag)).toBeLessThan(drawn.indexOf(byLabel(tree, `Note for Bench Press: ${SAVED}`)));
+    });
+  });
+
+  it('an override reads as set by you, and a flag still holds the plan, not the override', () => {
+    textNode(mount(ruled({ overrideWeight: 175, overrideUnit: 'lb' })), `${RULE} Today is set to 175 lb by you. The rule still says 185 lb.`);
+    textNode(
+      mount(ruled({ overrideWeight: 175, overrideUnit: 'lb', mark: 'pain' })),
+      `${RULE} Today is set to 175 lb by you. Pain today, so 185 lb holds.`,
+    );
+  });
+
+  it('with no plan yet, says to pick a starting weight', () => {
+    textNode(mount(ruled({ plannedWeight: null, plannedUnit: null })), `${RULE} Pick a starting weight. Next time builds from it.`);
+  });
+
+  it("reads a plan in the other unit as the set table's target does, in the unit shown", () => {
+    // 80 kg is 176.4 lb, which the lb plates load as 175; 2.5 kg is 5 lb.
+    const tree = mount(ruled({ rule: { setCount: 3, repMin: 5, repMax: 8, increment: 2.5, incrementUnit: 'kg' }, plannedWeight: 80, plannedUnit: 'kg' }));
+    textNode(tree, `${RULE} Hit 8s on a normal day and next time is 180 lb.`);
+  });
+
+  it('shows no read for a timed hold, a distance or an increment of 0', () => {
+    const plank = mount(
+      ruled({
+        loggingType: 'timed',
+        equipment: 'bodyweight',
+        rule: { setCount: 3, repMin: 30, repMax: 60, increment: 0, incrementUnit: 'lb' },
+        plannedWeight: null,
+        plannedUnit: null,
+        previous: [0, 1, 2].map((position) => prev({ position, durationS: 60 })),
+      }),
+    );
+    textNode(plank, "Last time: 3 × 60 s. Timed holds don't go up automatically.");
+
+    const run = mount(
+      ruled({
+        loggingType: 'distance_time',
+        equipment: 'bodyweight',
+        rule: null,
+        plannedWeight: null,
+        plannedUnit: null,
+        previous: [prev({ distance: 5, distanceUnit: 'km', durationS: 1530 })],
+      }),
+    );
+    textNode(run, 'Last time: 5 km in 25:30.');
+
+    const flat = mount(ruled({ rule: { setCount: 3, repMin: 5, repMax: 8, increment: 0, incrementUnit: 'lb' }, mark: 'sick' }));
+    textNode(flat, "No weight to add. Beat last time's reps.");
+    byLabel(flat, 'Something off for Bench Press: Sick');
+    textNode(flat, 'Sick');
+  });
+
+  it("an exercise with no rule shows last time, or that it's the first time", () => {
+    textNode(mount({ ...bench([set('s0', 0)]), previous: LAST_135 }), 'No rule here. Last time: 3 × 8 at 135 lb.');
+    textNode(mount(bench([set('s0', 0)])), 'First time logging this.');
+  });
+});
+
 describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
   /** The add buttons, in the order they are drawn. */
   const addButtons = (tree: ReactTestRenderer) =>
@@ -976,7 +1256,9 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     const tree = mount(oneDone());
 
     expect(restingStyle(byLabel(tree, 'Options for Bench Press'))).toMatchObject({ width: 44, height: 44 });
-    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 0, minHeight: 44 });
+    // + Note shares Something off's control: it keeps its 44pt target, and shrinks (its words wrap) only when it alone is
+    // wider than the controls group, which wraps first (Round 5 review).
+    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 1, minHeight: 44 });
     expect(StyleSheet.flatten(textNode(tree, 'Bench Press').props.style)).toMatchObject({ minWidth: 0 });
     // [name][count][+ Note][⋯], in the order they are drawn: every node, in drawing order (a parent before its children).
     const drawn = tree.root.findAll(() => true);

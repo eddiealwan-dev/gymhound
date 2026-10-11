@@ -1,4 +1,4 @@
-import type { DayMark, DistanceUnit, SetType, WeightUnit } from './types';
+import type { DistanceUnit, ExerciseMark, SetType, WeightUnit } from './types';
 
 /** One CSV field before quoting. Null is an empty field. */
 export type CsvValue = string | number | null;
@@ -95,7 +95,8 @@ export type WorkoutCsvSet = {
   /** Null when the workout was not started from a routine (or the routine is gone). */
   routineName: string | null;
   routineDayName: string | null;
-  dayMark: DayMark;
+  /** The exercise's Something off mark, null when nothing is off. The `day_mark` column carries it (R60). */
+  mark: ExerciseMark | null;
   workoutExerciseId: string;
   exerciseName: string;
   exerciseId: string;
@@ -115,9 +116,10 @@ export type WorkoutCsvSet = {
 /**
  * The CSV rows for done sets, in the order given (by start time, then exercise position, then set position), with
  * one value per `WORKOUT_CSV_COLUMNS` entry. `set_number` is the set's 1-based rank among the sets of its own type in
- * that workout exercise, the rule the previous result matches by. Each time is written at the offset `offsetAt`
- * gives for that instant. The free text (workout, routine, routine day, exercise and note) goes through
- * `neutraliseFormula`; numbers, ids, codes and times are left as they are.
+ * that workout exercise, the rule the previous result matches by. `day_mark` is the exercise's Something off mark,
+ * `normal` when it has none (R60). Each time is written at the offset `offsetAt` gives for that instant. The free
+ * text (workout, routine, routine day, exercise and note) goes through `neutraliseFormula`; numbers, ids, codes and
+ * times are left as they are.
  */
 export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (epochMs: number) => number): CsvValue[][] {
   const seen = new Map<string, number>();
@@ -135,7 +137,7 @@ export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (e
       text(s.workoutName),
       text(s.routineName),
       text(s.routineDayName),
-      s.dayMark,
+      s.mark ?? 'normal',
       text(s.exerciseName),
       s.exerciseId,
       setNumber,

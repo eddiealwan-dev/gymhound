@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, inArray, max, ne, sql } from 'drizzle-orm';
-import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
+import type { DistanceUnit, ExerciseMark, SetType, WeightUnit } from '../../domain/types';
 import { newId } from '../ids';
 import { sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -20,6 +20,14 @@ export type SetPatch = Partial<{
 function requireWorkoutExercise(db: Db, workoutExerciseId: string) {
   const row = db.select().from(workoutExercises).where(eq(workoutExercises.id, workoutExerciseId)).get();
   if (!row) throw new Error(`No workout exercise with id ${workoutExerciseId}.`);
+  return row;
+}
+
+/** The workout exercise, when its workout is the active one. A finished workout's marks and targets are history. */
+function requireActiveWorkoutExercise(db: Db, workoutExerciseId: string) {
+  const row = requireWorkoutExercise(db, workoutExerciseId);
+  const workout = db.select({ status: workouts.status }).from(workouts).where(eq(workouts.id, row.workoutId)).get();
+  if (workout?.status !== 'active') throw new Error(`Workout exercise ${workoutExerciseId} is not in the active workout.`);
   return row;
 }
 
@@ -93,12 +101,12 @@ export function addExerciseToWorkout(db: Db, workoutId: string, exerciseId: stri
 }
 
 /**
- * Swaps in a different exercise. The position, superset group and set count stay. Every set loses its
- * values, its tick and its PR flags. The rule snapshot, planned weight, today's override and the link to the
- * routine exercise go, because they belonged to the old exercise: with no link the row has no rule, and a
- * finished replacement can never feed the old routine slot's progression. A rest started by one of its sets
- * loses its set (`rest_set_id`), so the countdown does not move under the new exercise's empty set; its end stays,
- * and the rest runs on in the rest bar.
+ * Swaps in a different exercise. The position, superset group and set count stay, and so does the Something off mark,
+ * which is about today and not the movement (R60). Every set loses its values, its tick and its PR flags. The rule
+ * snapshot, planned weight, today's override and the link to the routine exercise go, because they belonged to the
+ * old exercise: with no link the row has no rule, and a finished replacement can never feed the old routine slot's
+ * progression. A rest started by one of its sets loses its set (`rest_set_id`), so the countdown does not move under
+ * the new exercise's empty set; its end stays, and the rest runs on in the rest bar.
  */
 export function replaceExercise(db: Db, workoutExerciseId: string, exerciseId: string): void {
   db.transaction((tx) => {
@@ -234,6 +242,30 @@ export function toggleSupersetWithNext(db: Db, workoutExerciseId: string): void 
       (e) => e.id === row.id || e.id === next.id || (e.supersetGroup !== null && merging.includes(e.supersetGroup)),
     );
     setSupersetGroup(tx, joined.map((e) => e.id), group ?? next.supersetGroup ?? highest + 1);
+  });
+}
+
+/** Flags the exercise Something off today with a reason, or clears it with null (R60). Only in the active workout. */
+export function setExerciseMark(db: Db, workoutExerciseId: string, mark: ExerciseMark | null): void {
+  db.transaction((tx) => {
+    requireActiveWorkoutExercise(tx, workoutExerciseId);
+    tx.update(workoutExercises).set({ mark }).where(eq(workoutExercises.id, workoutExerciseId)).run();
+  });
+}
+
+/**
+ * Sets today's weight for the exercise in the unit it was entered in, or clears it with nulls. It changes today's
+ * target only and is never written back to the rule (spec 18.7). Only in the active workout. A weight without its unit,
+ * or a unit without a weight, is refused.
+ */
+export function setOverride(db: Db, workoutExerciseId: string, weight: number | null, unit: WeightUnit | null): void {
+  if ((weight === null) !== (unit === null)) throw new Error('An override needs both a weight and a unit, or neither.');
+  db.transaction((tx) => {
+    requireActiveWorkoutExercise(tx, workoutExerciseId);
+    tx.update(workoutExercises)
+      .set({ overrideWeight: weight, overrideUnit: unit })
+      .where(eq(workoutExercises.id, workoutExerciseId))
+      .run();
   });
 }
 

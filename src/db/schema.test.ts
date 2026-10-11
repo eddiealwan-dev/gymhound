@@ -1,7 +1,34 @@
 /** @jest-environment node */
 import { eq, sql } from 'drizzle-orm';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import * as schema from './schema';
 import { exercises, sets, workoutExercises, workouts } from './schema';
-import { createTestDb } from './testing/createTestDb';
+import { createTestDb, migrateTestDb } from './testing/createTestDb';
+import { openFileDb } from './testing/openFileDb';
+import type { Db } from './types';
+
+/**
+ * Applies only the migrations up to `lastIdx` (by journal index), as an older GymHound left the database. The journal
+ * and SQL files are copied to a temp folder that is removed afterwards.
+ */
+function migrateUpTo(db: Db, lastIdx: number): void {
+  const source = path.resolve(__dirname, 'migrations');
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'gymhound-migrations-'));
+  try {
+    fs.mkdirSync(path.join(folder, 'meta'));
+    const journal = JSON.parse(fs.readFileSync(path.join(source, 'meta', '_journal.json'), 'utf8')) as { entries: { idx: number; tag: string }[] };
+    journal.entries = journal.entries.filter((entry) => entry.idx <= lastIdx);
+    for (const { tag } of journal.entries) fs.copyFileSync(path.join(source, `${tag}.sql`), path.join(folder, `${tag}.sql`));
+    fs.writeFileSync(path.join(folder, 'meta', '_journal.json'), JSON.stringify(journal));
+    migrate(db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+}
 
 it('applies migrations and creates every §6 table', () => {
   const { db } = createTestDb();
@@ -50,6 +77,34 @@ it('migration 0003 adds workouts.rest_set_id, nullable text (R38)', () => {
     .all<{ name: string; type: string; notnull: number }>(sql`pragma table_info(workouts)`)
     .find((c) => c.name === 'rest_set_id');
   expect(col).toEqual(expect.objectContaining({ type: 'TEXT', notnull: 0 }));
+});
+
+it('migration 0004 adds workout_exercises.mark, nullable text (R60)', () => {
+  const { db } = createTestDb();
+  const col = db
+    .all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(sql`pragma table_info(workout_exercises)`)
+    .find((c) => c.name === 'mark');
+  expect(col).toEqual(expect.objectContaining({ type: 'TEXT', notnull: 0, dflt_value: null }));
+});
+
+it('migrates a database at 0003 forward, and its workout exercises get no mark', () => {
+  const { db, close } = openFileDb(':memory:');
+  migrateUpTo(db, 3);
+  expect(db.all<{ name: string }>(sql`pragma table_info(workout_exercises)`).map((c) => c.name)).not.toContain('mark');
+  db.run(sql`
+    INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+    VALUES ('barbell-bench-press', 'Bench press', '[]', '["chest"]', '[]', 'barbell', 'horizontal_push', 'weighted', 0, 0, 1)`);
+  db.run(sql`
+    INSERT INTO workouts (id, name, status, day_mark, started_at, finished_at, local_date, food_offer_shown)
+    VALUES ('w1', 'Push A', 'finished', 'normal', 1, 2, '2026-10-09', 0)`);
+  db.run(sql`
+    INSERT INTO workout_exercises (id, workout_id, exercise_id, position, show_rpe)
+    VALUES ('we1', 'w1', 'barbell-bench-press', 0, 0)`);
+
+  migrateTestDb(db);
+
+  expect(db.select().from(workoutExercises).where(eq(workoutExercises.id, 'we1')).get()).toMatchObject({ id: 'we1', mark: null });
+  close();
 });
 
 it('allows only one active workout', () => {

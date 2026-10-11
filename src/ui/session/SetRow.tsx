@@ -68,14 +68,16 @@ function lightHaptic(): void {
 }
 
 /**
- * A heavy tap when a tick that is not ready is tapped, distinct from the tick's light one. It plays before the keyboard
- * comes up, which can swallow a haptic (Round 4). As with `lightHaptic`, a missing haptic changes nothing.
+ * A heavy tap when a tick that is not ready is tapped, distinct from the tick's light one. It settles once the phone has
+ * played it (or failed to), so the keyboard can wait for it: with the keyboard coming up in the same moment, the phone
+ * gave no buzz (Rounds 4 and 5, R82). As with `lightHaptic`, a missing haptic changes nothing.
  */
-function warningHaptic(): void {
+function warningHaptic(): Promise<void> {
   try {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
   } catch {
     // no haptics here
+    return Promise.resolve();
   }
 }
 
@@ -86,7 +88,7 @@ function warningHaptic(): void {
  */
 const TICK_HIT_SLOP = { top: 4, bottom: 4, right: 4, left: 0 };
 
-/** The line under a row whose tick was tapped before it was ready (spec 18.6). */
+/** The line above a row's inputs once its tick was tapped before it was ready (spec 18.6, R82). */
 const NEED_LINE: Record<FieldKey, string> = {
   weight: 'Add a weight to tick',
   reps: 'Add reps to tick',
@@ -174,8 +176,9 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
   /**
-   * Under the row: a number to check wins over the field a not-ready tick asks for. That is the field missing now, which
-   * a value carried from the row above may have changed since the tap (B10).
+   * Above the row's inputs: a number to check wins over the field a not-ready tick asks for. That is the field missing
+   * now, which a value carried from the row above may have changed since the tap (B10). It sits above them because the
+   * keyboard comes up for the focused field and the session scrolls only that field clear of it (R82).
    */
   const line = showHint
     ? 'Check this number'
@@ -218,7 +221,8 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
    * Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the
    * focused field is the one ticked; other rows are not flushed first (R48). A tick that is not ready ticks nothing: it
    * buzzes first, then points at the number to check, else at the missing field, says the line to VoiceOver (which
-   * does not read a live region on iOS), focuses the field and keeps the keyboard up (spec 18.6, Round 4).
+   * does not read a live region on iOS), and once the buzz has played focuses the field and keeps the keyboard up
+   * (spec 18.6, Round 4, R82).
    */
   const toggle = () => {
     if (set.done) {
@@ -227,17 +231,18 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       return;
     }
     if (!canTick) {
-      warningHaptic();
+      const buzzed = warningHaptic();
       const { invalid, missing } = reading;
       if (invalid.length > 0) {
-        setLeft((l) => [...l, ...invalid.filter((key) => !l.includes(key))]);
+        const key = invalid[0];
+        setLeft((l) => [...l, ...invalid.filter((k) => !l.includes(k))]);
         announce('Check this number');
-        setFocusAsk({ key: invalid[0] });
+        buzzed.then(() => setFocusAsk({ key }));
       } else {
         setAsked(true);
         if (missing !== null) {
           announce(NEED_LINE[missing]);
-          setFocusAsk({ key: missing });
+          buzzed.then(() => setFocusAsk({ key: missing }));
         }
       }
       return;
@@ -368,6 +373,11 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         backgroundColor: set.done ? colors.surfaceRaised : 'transparent',
       }}
     >
+      {line !== null ? (
+        <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 12, marginBottom: 2 }}>
+          {line}
+        </Body>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: COLUMN_GAP }}>
         {columns.map((column) => (
           <View key={column.key} style={cellStyle(column.key)}>
@@ -375,11 +385,6 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
           </View>
         ))}
       </View>
-      {line !== null ? (
-        <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 12, marginTop: 2 }}>
-          {line}
-        </Body>
-      ) : null}
     </Pressable>
   );
 }

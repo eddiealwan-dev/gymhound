@@ -45,6 +45,7 @@ const mockBench: WorkoutExerciseView = {
   plannedUnit: null,
   overrideWeight: null,
   overrideUnit: null,
+  mark: null,
   sets: [set('s1', 0), set('s2', 1)],
   previous: [],
 };
@@ -205,5 +206,19 @@ describe('the countdown opens the rest choices (spec 18.6)', () => {
     act(() => countdown.props.onOpenRest());
 
     expect(mockOrder).toEqual(['flushAll', 'dismiss', 'menu we1 rest']);
+  });
+});
+
+describe('Something off in the name row opens the reasons (R81, Round 5)', () => {
+  it('saves and closes the keyboard first, then opens the ⋯ sheet on the Something off panel', () => {
+    act(() => {
+      tree = create(<Session />);
+    });
+    const [block] = tree!.root.findAllByType(ExerciseBlock);
+    mockOrder.length = 0;
+
+    act(() => block.props.onOpenMark());
+
+    expect(mockOrder).toEqual(['flushAll', 'dismiss', 'menu we1 mark']);
   });
 });

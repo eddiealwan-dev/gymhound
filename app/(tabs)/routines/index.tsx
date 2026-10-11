@@ -1,14 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
 import { listRoutines, setActiveRoutine } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineSummary } from '../../../src/db/repositories/routinesRepo';
+import { getActiveWorkoutId } from '../../../src/db/repositories/workoutsRepo';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { Button } from '../../../src/ui/Button';
 import { Screen } from '../../../src/ui/Screen';
 import { Body, Display } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
+import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
 /** Back to where Routines was opened from (Train). With nothing to go back to (opened by address, or reloaded), it lands on Train. */
 function leave() {
@@ -80,10 +83,15 @@ function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetAc
   );
 }
 
-/** The premade routines, each with a way to make it the active one. Your own routines arrive in a later task. */
+/**
+ * The premade routines, each with a way to make it the active one. Your own routines arrive in a later task. While a
+ * workout runs, the routine can't change: Set active says to finish or discard it first (R80), rather than changing a
+ * routine Train won't show until then.
+ */
 export default function Routines() {
   const db = useDb();
   const premade = useDbQuery(listRoutines).filter((routine) => routine.isPremade);
+  const [blocked, setBlocked] = useState(false);
   return (
     <Screen>
       <BackToTrain />
@@ -97,12 +105,17 @@ export default function Routines() {
             key={routine.id}
             routine={routine}
             onSetActive={() => {
+              if (getActiveWorkoutId(db) !== null) {
+                setBlocked(true);
+                return;
+              }
               setActiveRoutine(db, routine.id);
               bumpData();
             }}
           />
         ))}
       </View>
+      <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />
     </Screen>
   );
 }

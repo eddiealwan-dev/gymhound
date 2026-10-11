@@ -7,13 +7,18 @@ import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { getFinishSummary } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
 import { formatElapsed } from '../../src/domain/dates';
+import { finishLine } from '../../src/domain/ruleLine';
 import { formatVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
-const goToTrain = () => router.replace('/');
+/**
+ * Back to the Train screen already under this one, closing the summary (R78): replacing it with Train would stack a
+ * second Train screen after every workout. Opened by address with nothing under it, it puts Train in its place.
+ */
+const goToTrain = () => router.dismissTo('/');
 
 const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 
@@ -43,9 +48,9 @@ function Figure({ caption, value, label }: { caption: string; value: string; lab
 }
 
 /**
- * Shown the moment a workout is finished: how long it took, how much was lifted, how many sets counted (spec 8.5).
- * A full screen with no header, dock or footer. Done goes back to Train, where Up next already has the next day.
- * Phase 2 adds the next-time lines and phase 4 the PRs.
+ * Shown the moment a workout is finished: how long it took, how much was lifted, how many sets counted, then next
+ * time's weight for each exercise with a rule (spec 8.5, R64). A full screen with no header, dock or footer. Done goes
+ * back to Train, where Up next already has the next day. Phase 4 adds the PRs.
  */
 export default function FinishSummary() {
   const { colors } = useTheme();
@@ -79,6 +84,13 @@ export default function FinishSummary() {
                 label="Sets logged"
                 value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
               />
+              {summary.next.length > 0 && (
+                <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  {summary.next.map((n, i) => (
+                    <Body key={i}>{finishLine(n)}</Body>
+                  ))}
+                </View>
+              )}
             </>
           )}
           <View style={{ flex: 1, minHeight: 24 }} />

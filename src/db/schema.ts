@@ -4,6 +4,7 @@ import type {
   DayMark,
   DistanceUnit,
   Equipment,
+  ExerciseMark,
   LoggingType,
   Muscle,
   Pattern,
@@ -97,6 +98,7 @@ export const workouts = sqliteTable(
     routineId: text('routine_id'),
     routineDayId: text('routine_day_id'),
     status: text('status').$type<WorkoutStatus>().notNull(),
+    // Superseded by the per-exercise `workout_exercises.mark` (R60). Kept, as migrations are additive.
     dayMark: text('day_mark').$type<DayMark>().notNull().default('normal'),
     startedAt: integer('started_at').notNull(),
     finishedAt: integer('finished_at'),
@@ -150,6 +152,8 @@ export const workoutExercises = sqliteTable(
     nextUnit: text('next_unit').$type<WeightUnit>(),
     // The exercise's note as it was when the workout finished. Copied at finish, never changed by later edits.
     note: text('note'),
+    // Something off (R60): why the exercise is flagged today. Null is nothing off. Read by the rule at finish (7.3).
+    mark: text('mark').$type<ExerciseMark>(),
   },
   (t) => [
     index('workout_exercises_workout_id_idx').on(t.workoutId),

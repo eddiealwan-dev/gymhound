@@ -2,12 +2,12 @@
 import { eq } from 'drizzle-orm';
 import { WORKOUT_CSV_COLUMNS } from '../../domain/csv';
 import { toLocalDate } from '../../domain/dates';
-import { sets } from '../schema';
+import { sets, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setExerciseNote } from './exercisesRepo';
 import { workoutCsvRows } from './exportRepo';
-import { addExerciseToWorkout, addWarmupSet } from './workoutEditRepo';
+import { addExerciseToWorkout, addWarmupSet, setExerciseMark } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 
@@ -151,6 +151,25 @@ describe('workoutCsvRows', () => {
     const rows = workoutCsvRows(db, () => 0);
 
     expect(rows.map((r) => r[col('pr')])).toEqual(['', '', 'heaviest|e1rm', '', '']);
+  });
+
+  it("writes each exercise's Something off mark as day_mark, and normal for an exercise with none, never the workout's old day mark (R60)", () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_1);
+    db.update(workouts).set({ dayMark: 'pain' }).where(eq(workouts.id, id)).run();
+    setExerciseMark(db, getActiveWorkoutView(db)!.exercises[0].id, 'rough_sleep');
+    tick(db, setIds(db, 0)[0], 100, 5, 'lb', OCT_1 + MINUTE);
+    tick(db, setIds(db, 0)[1], 100, 5, 'lb', OCT_1 + 2 * MINUTE);
+    tick(db, setIds(db, 1)[0], 65, 8, 'lb', OCT_1 + 3 * MINUTE);
+    finishWorkout(db, id, OCT_1 + 60 * MINUTE);
+
+    const rows = workoutCsvRows(db, () => 0);
+
+    expect(rows.map((r) => [r[col('exercise_id')], r[col('day_mark')]])).toEqual([
+      [BENCH, 'rough_sleep'],
+      [BENCH, 'rough_sleep'],
+      ['barbell-overhead-press', 'normal'],
+    ]);
   });
 
   it('is empty with no finished workouts', () => {

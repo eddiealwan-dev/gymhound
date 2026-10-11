@@ -11,7 +11,7 @@ import { ensureSettings } from './repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './repositories/workoutsRepo';
 import { getActiveWorkoutView, getPreviousSets } from './repositories/workoutViewsRepo';
 import * as schema from './schema';
-import { workouts } from './schema';
+import { workoutExercises, workouts } from './schema';
 import {
   KEEP_SNAPSHOTS,
   newestSnapshot,
@@ -473,12 +473,13 @@ describe('startDatabase', () => {
     expect(finishedIds(result.db)).toEqual(ids);
   });
 
-  it('restores a snapshot taken before migrations 0002 and 0003, and migrates it forward with the finished workout intact (F11)', async () => {
+  it('restores a snapshot taken before migrations 0002 to 0004, and migrates it forward with the finished workout intact (F11)', async () => {
     const { deps, files } = makeDeps();
     const old = livePre0002();
     expect(appliedMigrations(old.db)).toBe(2);
     expect(tableNames(old.db)).not.toContain('exercise_prefs');
     expect(columnNames(old.db, 'workouts')).not.toContain('rest_set_id');
+    expect(columnNames(old.db, 'workout_exercises')).not.toContain('mark');
     const name = writeSnapshot(old.db, files, NOW + 2 * HOUR);
     old.close();
     fs.rmSync(liveFile);
@@ -486,9 +487,11 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(4);
+    expect(appliedMigrations(result.db)).toBe(5);
     expect(tableNames(result.db)).toContain('exercise_prefs');
     expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
+    expect(columnNames(result.db, 'workout_exercises')).toContain('mark');
+    expect(result.db.select().from(workoutExercises).where(eq(workoutExercises.id, 'old-bench')).get()).toMatchObject({ mark: null });
     expect(finishedIds(result.db)).toEqual(['old-workout']);
     expect(result.db.select().from(workouts).where(eq(workouts.id, 'old-workout')).get()).toMatchObject({
       name: 'Push A',

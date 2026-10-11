@@ -15,6 +15,8 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
+// Routines holds the "Workout in progress" sheet (R80), which reads the safe area.
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(), setActiveRoutine: jest.fn() }));
 jest.mock('../state/dataVersion', () => ({
   bumpData: jest.fn(),

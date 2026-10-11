@@ -127,7 +127,7 @@ describe('buildWorkoutCsvRows', () => {
     workoutName: 'Push A',
     routineName: 'Push/pull/legs',
     routineDayName: 'Push A',
-    dayMark: 'normal',
+    mark: null,
     workoutExerciseId: 'we1',
     exerciseName: 'Bench press',
     exerciseId: 'barbell-bench-press',
@@ -231,6 +231,12 @@ describe('buildWorkoutCsvRows', () => {
     expect(row[12]).toBe(-20);
     expect(row[20]).toBe("'- elbows in, slow");
     expect(toCsv(WORKOUT_CSV_COLUMNS, [row]).split('\r\n')[1].endsWith(`,"'- elbows in, slow"`)).toBe(true);
+  });
+
+  it("fills day_mark from the exercise's Something off mark, and normal when nothing is off (R60)", () => {
+    const rows = buildWorkoutCsvRows([{ ...base, mark: 'rough_sleep' }, { ...base, workoutExerciseId: 'we2' }, { ...base, mark: 'sick' }], () => 0);
+
+    expect(rows.map((r) => r[WORKOUT_CSV_COLUMNS.indexOf('day_mark')])).toEqual(['rough_sleep', 'normal', 'sick']);
   });
 
   it('keeps a null routine, routine day and note empty, and plain text as it is', () => {

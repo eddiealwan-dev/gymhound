@@ -4,7 +4,8 @@ import { TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { Button } from '../Button';
-import { setExerciseRest } from '../../state/sessionActions';
+import { announce } from '../../platform/announce';
+import { markExercise, overrideWeight, setExerciseRest } from '../../state/sessionActions';
 import { ExerciseMenu } from './ExerciseMenu';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -13,7 +14,10 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
+jest.mock('../../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../../state/sessionActions', () => ({
+  markExercise: jest.fn(),
+  overrideWeight: jest.fn(),
   moveBlock: jest.fn(),
   removeFromWorkout: jest.fn(),
   setExerciseRest: jest.fn(),
@@ -70,6 +74,8 @@ const exercise = (...done: boolean[]): WorkoutExerciseView =>
     name: 'Bench Press',
     supersetGroup: null,
     showRpe: false,
+    overrideWeight: null,
+    overrideUnit: null,
     sets: done.map((d, i) => ({ id: `s${i}`, done: d })),
   }) as unknown as WorkoutExerciseView;
 
@@ -265,6 +271,8 @@ const withRest = (restSeconds: number | null): WorkoutExerciseView =>
     supersetGroup: null,
     showRpe: false,
     restSeconds,
+    overrideWeight: null,
+    overrideUnit: null,
     sets: [],
   }) as unknown as WorkoutExerciseView;
 
@@ -439,6 +447,23 @@ describe('ExerciseMenu: opened from the countdown (spec 18.6)', () => {
     for (const frame of closing) expect(frame.text).not.toContain('Reorder');
   });
 
+  it('opens straight on the Something off reasons from the name row (R81, Round 5)', () => {
+    jest.mocked(markExercise).mockClear();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ExerciseMenu exercises={[{ ...withRest(null), mark: 'pain' }]} exerciseId="we1" initialPanel="mark" onClose={onClose} />);
+    });
+
+    const shown = shownText(tree);
+    expect(shown).toEqual(expect.arrayContaining(['Something off', 'Bench Press', 'Rough sleep', 'Pain', 'Nothing off', 'Cancel']));
+    expect(shown).not.toContain('Reorder');
+
+    press(tree, 'Nothing off');
+
+    expect(markExercise).toHaveBeenCalledWith('db', 'we1', null);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('opens on the rest choices when it mounts open on them', () => {
     let tree!: ReturnType<typeof create>;
     act(() => {
@@ -446,5 +471,237 @@ describe('ExerciseMenu: opened from the countdown (spec 18.6)', () => {
     });
 
     expect(shownText(tree)).toEqual(expect.arrayContaining(['Rest time', 'Default (2:00)']));
+  });
+});
+
+/** Bench press planned at 135 lb today, with nothing off and no override unless `over` says otherwise. */
+const today = (over: Record<string, unknown> = {}): WorkoutExerciseView =>
+  ({
+    id: 'we1',
+    exerciseId: 'barbell-bench-press',
+    name: 'Bench Press',
+    loggingType: 'weighted',
+    equipment: 'barbell',
+    supersetGroup: null,
+    showRpe: false,
+    restSeconds: null,
+    plannedWeight: 135,
+    plannedUnit: 'lb',
+    overrideWeight: null,
+    overrideUnit: null,
+    mark: null,
+    sets: [],
+    previous: [],
+    ...over,
+  }) as unknown as WorkoutExerciseView;
+
+describe('ExerciseMenu: Something off (spec 18.7, R60)', () => {
+  beforeEach(() => jest.mocked(markExercise).mockClear());
+
+  it('reads "Something off", and "Something off · Pain" when the exercise is flagged', () => {
+    expect(labels(mount(today()))).toContain('Something off');
+    expect(labels(mount(today({ mark: 'pain' })))).toContain('Something off · Pain');
+  });
+
+  it('lists the five reasons and Cancel, under the title and the exercise name', () => {
+    const tree = mount(today());
+    press(tree, 'Something off');
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Something off', 'Bench Press']));
+    expect(labels(tree)).toEqual(['Rough sleep', 'Sick', 'Short on food', 'Pain', 'Cutting', 'Cancel']);
+    expect(selectedLabels(tree)).toEqual([]);
+  });
+
+  it('marks the current reason selected, and offers Nothing off only when flagged', () => {
+    const tree = mount(today({ mark: 'pain' }));
+    press(tree, 'Something off · Pain');
+
+    expect(labels(tree)).toEqual(['Rough sleep', 'Sick', 'Short on food', 'Pain', 'Cutting', 'Nothing off', 'Cancel']);
+    expect(selectedLabels(tree)).toEqual(['Pain']);
+  });
+
+  it('flags the exercise with the reason chosen, and closes', () => {
+    const tree = mount(today());
+    press(tree, 'Something off');
+
+    press(tree, 'Pain');
+
+    expect(markExercise).toHaveBeenCalledTimes(1);
+    expect(markExercise).toHaveBeenCalledWith('db', 'we1', 'pain');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('clears the flag with Nothing off', () => {
+    const tree = mount(today({ mark: 'rough_sleep' }));
+    press(tree, 'Something off · Rough sleep');
+
+    press(tree, 'Nothing off');
+
+    expect(markExercise).toHaveBeenCalledWith('db', 'we1', null);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('changes nothing on Cancel', () => {
+    const tree = mount(today({ mark: 'sick' }));
+    press(tree, 'Something off · Sick');
+
+    press(tree, 'Cancel');
+
+    expect(markExercise).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+});
+
+describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
+  beforeEach(() => {
+    jest.mocked(overrideWeight).mockClear();
+    jest.mocked(announce).mockClear();
+  });
+
+  const field = (tree: ReturnType<typeof create>) =>
+    tree.root.findAllByType(TextInput).find((t) => t.props.accessibilityLabel === "Today's weight, lb")!;
+
+  /** Opens the menu on the exercise, then today's weight once the menu has gone. */
+  function openOverride(ex: WorkoutExerciseView, menuLabel = "Override today's weight") {
+    const tree = mount(ex);
+    press(tree, menuLabel);
+    expect(shownText(tree)).not.toContain("Today's weight");
+    afterSheetCloses();
+    return tree;
+  }
+
+  it("reads \"Override today's weight\", and \" · 145 lb\" when today's weight is set", () => {
+    expect(labels(mount(today()))).toContain("Override today's weight");
+    expect(labels(mount(today({ overrideWeight: 145, overrideUnit: 'lb' })))).toContain("Override today's weight · 145 lb");
+  });
+
+  it.each(['timed', 'distance_time'])('is not offered on a %s exercise', (loggingType) => {
+    const tree = mount(today({ loggingType, plannedWeight: null, plannedUnit: null }));
+    expect(labels(tree).filter((l) => l.startsWith('Override'))).toEqual([]);
+    expect(labels(tree)).toContain('Something off');
+  });
+
+  it.each(['bodyweight_plus', 'assisted', 'weighted_time'])('is offered on a %s exercise', (loggingType) => {
+    expect(labels(mount(today({ loggingType })))).toContain("Override today's weight");
+  });
+
+  it('opens after the menu closes on one field in the display unit, holding the planned weight', () => {
+    const tree = openOverride(today());
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(["Today's weight", 'Bench Press', 'lb']));
+    expect(field(tree).props.value).toBe('135');
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(1);
+    expect(labels(tree)).toEqual(['Save', 'Cancel']);
+  });
+
+  it("holds today's weight when it is set, as the set rows show it in the display unit (R71), and offers Clear", () => {
+    const lb = openOverride(today({ overrideWeight: 145, overrideUnit: 'lb' }), "Override today's weight · 145 lb");
+    expect(field(lb).props.value).toBe('145');
+
+    // 60 kg is 132.28 lb: a barbell rounds to what the lb plates load, anything else to the nearest 0.5.
+    const kg = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
+    expect(field(kg).props.value).toBe('130');
+    expect(labels(kg)).toEqual(['Save', 'Clear', 'Cancel']);
+
+    const dumbbell = openOverride(
+      today({ equipment: 'dumbbell', overrideWeight: 60, overrideUnit: 'kg' }),
+      "Override today's weight · 60 kg",
+    );
+    expect(field(dumbbell).props.value).toBe('132.5');
+  });
+
+  it('keeps an override as it is when Save is pressed unedited (R71)', () => {
+    const tree = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('saves an edited number over an override', () => {
+    const tree = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
+    act(() => field(tree).props.onChangeText('135'));
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 135, 'lb');
+  });
+
+  it('saves the target it shows, in the display unit, when Save is pressed unedited with no override (R71)', () => {
+    const tree = openOverride(today({ plannedWeight: 60, plannedUnit: 'kg' }));
+    expect(field(tree).props.value).toBe('130');
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).toHaveBeenCalledTimes(1);
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 130, 'lb');
+  });
+
+  it('holds the target as the rows show it, to 2 decimals: an assisted 264.6 less 10 reads "254.6"', () => {
+    const tree = openOverride(today({ loggingType: 'assisted', equipment: 'machine', plannedWeight: 264.6 - 10, plannedUnit: 'lb' }));
+    expect(field(tree).props.value).toBe('254.6');
+  });
+
+  it('starts empty with no plan and no override', () => {
+    const tree = openOverride(today({ plannedWeight: null, plannedUnit: null }));
+    expect(field(tree).props.value).toBe('');
+  });
+
+  it('gives the field the decimal pad and the Done key (R43)', () => {
+    const input = field(openOverride(today()));
+    expect(input.props.keyboardType).toBe('decimal-pad');
+    expect(input.props.returnKeyType).toBe('done');
+  });
+
+  it('saves the number in the display unit, and closes', () => {
+    const tree = openOverride(today());
+    act(() => field(tree).props.onChangeText('145'));
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).toHaveBeenCalledTimes(1);
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 145, 'lb');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('says "Check this number" for text that is not a number, and saves nothing', () => {
+    const tree = openOverride(today());
+    act(() => field(tree).props.onChangeText('abc'));
+
+    press(tree, 'Save');
+
+    expect(shownText(tree)).toContain('Check this number');
+    expect(announce).toHaveBeenCalledWith('Check this number');
+    expect(overrideWeight).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    act(() => field(tree).props.onChangeText('150'));
+    expect(shownText(tree)).not.toContain('Check this number');
+  });
+
+  it("clears today's weight with Clear, and closes", () => {
+    const tree = openOverride(today({ overrideWeight: 145, overrideUnit: 'lb' }), "Override today's weight · 145 lb");
+
+    press(tree, 'Clear');
+
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', null, null);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('saves nothing on Cancel', () => {
+    const tree = openOverride(today({ overrideWeight: 145, overrideUnit: 'lb' }), "Override today's weight · 145 lb");
+    act(() => field(tree).props.onChangeText('150'));
+
+    press(tree, 'Cancel');
+
+    expect(overrideWeight).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
   });
 });
