@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
@@ -8,6 +8,7 @@ import type { Db } from '../../src/db/types';
 import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
+import { debugUnlockAllowed, entitlementsFor } from '../../src/platform/entitlements';
 import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
@@ -417,7 +418,33 @@ function ExportSection() {
   );
 }
 
-/** Settings so far: Appearance, Units, Bar, Rest timer, Backups and Export. The rest arrive in later tasks. */
+/**
+ * The Pro debug switch (§9, R126), for testing Pro before it can be bought: it turns Pro on through the app's one
+ * entitlements object, so the routine limit on every screen hears it at once. Shown only where the debug unlock is
+ * allowed: a development build, or one that sets EXPO_PUBLIC_DEBUG_UNLOCK=1.
+ */
+function DeveloperSection() {
+  const db = useDb();
+  const entitlements = entitlementsFor(db);
+  const pro = useSyncExternalStore(entitlements.subscribe, entitlements.isPro);
+  return (
+    <Section title="Developer">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
+        <Body style={{ flexShrink: 1 }}>Unlock Pro for testing</Body>
+        <Toggle
+          accessibilityLabel="Unlock Pro for testing"
+          value={pro}
+          onValueChange={(value) => {
+            entitlements.setDebugUnlock(value);
+            bumpData();
+          }}
+        />
+      </View>
+    </Section>
+  );
+}
+
+/** Settings so far: Appearance, Units, Bar, Rest timer, Backups, Export, and Developer where the debug unlock is allowed. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -432,6 +459,7 @@ export default function Settings() {
         <RestTimerSection />
         <BackupsSection />
         <ExportSection />
+        {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
     </Screen>
   );

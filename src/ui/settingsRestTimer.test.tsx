@@ -159,7 +159,7 @@ describe('Settings: the page (design pass)', () => {
   it('the bell switch reads in dark: a text-coloured thumb on a borderStrong track when on, a border track when off', () => {
     const tree = mount();
 
-    const toggle = tree.root.findByType(Switch);
+    const toggle = tree.root.findAllByType(Switch).find((s) => s.props.accessibilityLabel === 'Bell at the end')!;
     expect(toggle.props.trackColor).toEqual({ false: '#2e2a23', true: '#736c60' });
     expect(toggle.props.ios_backgroundColor).toBe('#2e2a23');
     expect(toggle.props.thumbColor).toBe('#f1ece2');

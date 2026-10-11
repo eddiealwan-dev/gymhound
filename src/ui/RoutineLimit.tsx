@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { userRoutineCount } from '../db/repositories/routinesRepo';
 import { canAddRoutine } from '../domain/routineLimit';
-import { createEntitlements } from '../platform/entitlements';
+import { entitlementsFor } from '../platform/entitlements';
 import { Button } from './Button';
 import { afterSheetCloses, Sheet } from './Sheet';
 import { Body } from './Text';
@@ -19,7 +19,7 @@ type Open = 'limit' | 'coming' | null;
  */
 export function useRoutineLimit(): { whenRoomFor: (add: () => void) => void; sheets: ReactNode } {
   const db = useDb();
-  const entitlements = useMemo(() => createEntitlements(db), [db]);
+  const entitlements = entitlementsFor(db);
   const [open, setOpen] = useState<Open>(null);
   const close = () => setOpen(null);
 
