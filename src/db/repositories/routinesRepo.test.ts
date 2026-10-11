@@ -5,7 +5,7 @@ import { PREMADE_ORDER } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
-import { getSettings } from './settingsRepo';
+import { getSettings, setSetting } from './settingsRepo';
 import { getUpNext, listRoutines, setActiveRoutine } from './routinesRepo';
 import { setExerciseMark } from './workoutEditRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
@@ -237,7 +237,31 @@ describe('getUpNext', () => {
     const [bench, ohp] = getUpNext(db)!.exercises;
     expect(bench).toMatchObject({ lastOutcome: 'raised', lastMark: null, nextWeight: 140, nextWeightUnit: 'lb' });
     // The overhead press had nothing ticked, so finish dropped it: no history yet.
-    expect(ohp).toMatchObject({ exerciseId: 'barbell-overhead-press', lastOutcome: null, lastMark: null });
+    expect(ohp).toMatchObject({
+      exerciseId: 'barbell-overhead-press',
+      lastOutcome: null,
+      lastMark: null,
+      lastWorkingWeight: null,
+      lastWorkingUnit: null,
+      lastNextWeight: null,
+      lastNextUnit: null,
+    });
+  });
+
+  it("carries last time's working and next weights, so the row can show the actual rise (R73)", () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    // Without 2.5 lb plates the raise from 135 rounds up to 145.
+    setSetting(db, 'platesLb', { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1 });
+    finishBench(db, NOW, 135, 8);
+
+    expect(getUpNext(db)!.exercises[0]).toMatchObject({
+      lastOutcome: 'raised',
+      lastWorkingWeight: 135,
+      lastWorkingUnit: 'lb',
+      lastNextWeight: 145,
+      lastNextUnit: 'lb',
+    });
   });
 
   it("a flagged hold carries its reason, and the latest finish is last time's", () => {

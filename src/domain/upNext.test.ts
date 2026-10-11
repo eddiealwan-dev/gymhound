@@ -61,21 +61,56 @@ describe('upNextOutcome', () => {
     increment = 5,
     incrementUnit: WeightUnit = 'lb',
     loggingType: LoggingType = 'weighted',
-  ) => ({ loggingType, lastOutcome, lastMark, increment, incrementUnit });
-
-  it('a raise reads the routine increment: " · ↑ 5 lb"', () => {
-    expect(upNextOutcome(last('raised'), 'lb')).toBe(' · ↑ 5 lb');
+  ) => ({
+    loggingType,
+    lastOutcome,
+    lastMark,
+    increment,
+    incrementUnit,
+    lastWorkingWeight: null,
+    lastWorkingUnit: null,
+    lastNextWeight: null,
+    lastNextUnit: null,
+  });
+  /** A raise last time from `working` to `next`, both in `weightUnit`, on a routine that adds 5 lb. */
+  const raise = (working: number, next: number, weightUnit: WeightUnit, loggingType: LoggingType = 'weighted') => ({
+    ...last('raised', null, 5, 'lb', loggingType),
+    lastWorkingWeight: working,
+    lastWorkingUnit: weightUnit,
+    lastNextWeight: next,
+    lastNextUnit: weightUnit,
   });
 
-  it('a raise reads the increment in the display unit, by the gym convention', () => {
+  it('a raise reads the actual rise: 135 to 145 lb without 2.5 lb plates is " · ↑ 10 lb" (R73)', () => {
+    expect(upNextOutcome(raise(135, 140, 'lb'), 'lb')).toBe(' · ↑ 5 lb');
+    expect(upNextOutcome(raise(135, 145, 'lb'), 'lb')).toBe(' · ↑ 10 lb');
+  });
+
+  it('a rise in the display unit shows exactly; a converted one rounds to the nearest 0.5', () => {
+    expect(upNextOutcome(raise(60, 61.25, 'kg'), 'kg')).toBe(' · ↑ 1.25 kg');
+    // 10 lb is 4.54 kg; 5 lb is 2.27 kg; 2.5 kg is 5.51 lb.
+    expect(upNextOutcome(raise(135, 145, 'lb'), 'kg')).toBe(' · ↑ 4.5 kg');
+    expect(upNextOutcome(raise(135, 140, 'lb'), 'kg')).toBe(' · ↑ 2.5 kg');
+    expect(upNextOutcome(raise(60, 62.5, 'kg'), 'lb')).toBe(' · ↑ 5.5 lb');
+  });
+
+  it('falls back to the routine increment, in the display unit by the gym convention, when the rise rounds to 0', () => {
+    // 0.1 kg is 0.22 lb, which rounds to 0.
+    expect(upNextOutcome(raise(60, 60.1, 'kg'), 'lb')).toBe(' · ↑ 5 lb');
+    expect(upNextOutcome(raise(60, 60.1, 'kg'), 'kg')).toBe(' · ↑ 0.1 kg');
+  });
+
+  it('falls back to the routine increment when last time has no working or next weight', () => {
+    expect(upNextOutcome(last('raised'), 'lb')).toBe(' · ↑ 5 lb');
     expect(upNextOutcome(last('raised', null, 5, 'lb'), 'kg')).toBe(' · ↑ 2.5 kg');
     expect(upNextOutcome(last('raised', null, 2.5, 'kg'), 'lb')).toBe(' · ↑ 5 lb');
-    expect(upNextOutcome(last('raised', null, 2.5, 'kg'), 'kg')).toBe(' · ↑ 2.5 kg');
   });
 
-  it('a raise on an assisted exercise is less assistance: " · ↓ 5 lb" (R72), and its holds read as any other', () => {
-    expect(upNextOutcome(last('raised', null, 5, 'lb', 'assisted'), 'lb')).toBe(' · ↓ 5 lb');
-    expect(upNextOutcome(last('raised', null, 5, 'lb', 'assisted'), 'kg')).toBe(' · ↓ 2.5 kg');
+  it('a raise on an assisted exercise is less assistance: " · ↓ {working − next}" (R72, R73), and its holds read as any other', () => {
+    expect(upNextOutcome(raise(50, 45, 'lb', 'assisted'), 'lb')).toBe(' · ↓ 5 lb');
+    expect(upNextOutcome(raise(50, 40, 'lb', 'assisted'), 'kg')).toBe(' · ↓ 4.5 kg');
+    // No assistance left to take off: nothing changed, so the increment stands in.
+    expect(upNextOutcome(raise(0, 0, 'lb', 'assisted'), 'lb')).toBe(' · ↓ 5 lb');
     expect(upNextOutcome(last('held', null, 5, 'lb', 'assisted'), 'lb')).toBe(' · held');
     expect(upNextOutcome(last('held_marked', 'pain', 5, 'lb', 'assisted'), 'lb')).toBe(' · held · Pain');
   });

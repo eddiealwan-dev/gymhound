@@ -72,11 +72,23 @@ const exercise = (
   nextWeightUnit: null,
   lastOutcome: null,
   lastMark: null,
+  lastWorkingWeight: null,
+  lastWorkingUnit: null,
+  lastNextWeight: null,
+  lastNextUnit: null,
 });
 
 /** The default bars and plate pairs in Settings. */
 const LB_GEAR: Gear = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } };
 const KG_GEAR: Gear = { bar: 20, plates: { '25': 4, '20': 1, '15': 1, '10': 1, '5': 1, '2.5': 1, '1.25': 1 } };
+
+/** Last time's working and next weights, both in `unit`. */
+const lastWeights = (working: number, next: number, unit: 'lb' | 'kg') => ({
+  lastWorkingWeight: working,
+  lastWorkingUnit: unit,
+  lastNextWeight: next,
+  lastNextUnit: unit,
+});
 
 /** The Upper/lower routine's Upper A day, never done, with no weights yet. */
 const upperA = (): UpNext => ({
@@ -92,16 +104,17 @@ const upperA = (): UpNext => ({
   ],
 });
 
-/** Upper A run once, on WED 7 OCT: the bench was raised to 140 lb, the row held at 135 lb on a flagged Rough sleep. */
+/** Upper A run once, on WED 7 OCT: the bench was raised from 135 to 140 lb, the row held at 135 lb on a flagged Rough sleep. */
 const upperARun = (): UpNext => {
   const upNext = upperA();
   const [bench, row, plank] = upNext.exercises;
+  const lb = 'lb' as const;
   return {
     ...upNext,
     lastTime: { localDate: '2026-10-07' },
     exercises: [
-      { ...bench, nextWeight: 140, nextWeightUnit: 'lb', lastOutcome: 'raised' },
-      { ...row, nextWeight: 135, nextWeightUnit: 'lb', lastOutcome: 'held_marked', lastMark: 'rough_sleep' },
+      { ...bench, nextWeight: 140, nextWeightUnit: lb, lastOutcome: 'raised', ...lastWeights(135, 140, lb) },
+      { ...row, nextWeight: 135, nextWeightUnit: lb, lastOutcome: 'held_marked', lastMark: 'rough_sleep', ...lastWeights(135, 135, lb) },
       { ...plank, lastOutcome: 'no_rule' },
     ],
   };
@@ -219,12 +232,21 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
 
   it('a kg user sees the loads and the raise in kg: a 135 lb barbell plan reads 60 kg (R63)', () => {
     const upNext = upperARun();
-    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 135 };
+    // Raised from 130 to 135 lb: 5 lb is 2.27 kg, which rounds to 2.5.
+    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 135, ...lastWeights(130, 135, 'lb') };
     mockRead = { ...mockRead, unit: 'kg', gear: KG_GEAR, upNext };
     const all = lines(mount());
 
     expect(all).toContain('4×5–8 · 60 kg · ↑ 2.5 kg');
     expect(all).toContain('4×6–10 · 60 kg · held · Rough sleep');
+  });
+
+  it('a raise shows the actual rise: 135 to 145 lb without 2.5 lb plates reads ↑ 10 lb (R73)', () => {
+    const upNext = upperARun();
+    upNext.exercises[0] = { ...upNext.exercises[0], nextWeight: 145, ...lastWeights(135, 145, 'lb') };
+    mockRead = { ...mockRead, unit: 'lb', gear: LB_GEAR, upNext };
+
+    expect(lines(mount())).toContain('4×5–8 · 145 lb · ↑ 10 lb');
   });
 
   it('Start empty workout is outlined and after the stat cards', () => {

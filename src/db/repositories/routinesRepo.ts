@@ -27,9 +27,30 @@ export type UpNextExercise = {
   incrementUnit: WeightUnit;
   nextWeight: number | null;
   nextWeightUnit: WeightUnit | null;
-  /** The outcome and Something off mark of the latest finished workout exercise run from this routine exercise. */
+  /**
+   * The latest finished workout exercise run from this routine exercise: its outcome, Something off mark, and working
+   * and next weights (R73: a raise shows the actual rise).
+   */
   lastOutcome: Outcome | null;
   lastMark: ExerciseMark | null;
+  lastWorkingWeight: number | null;
+  lastWorkingUnit: WeightUnit | null;
+  lastNextWeight: number | null;
+  lastNextUnit: WeightUnit | null;
+};
+
+type LastResult = Pick<
+  UpNextExercise,
+  'lastOutcome' | 'lastMark' | 'lastWorkingWeight' | 'lastWorkingUnit' | 'lastNextWeight' | 'lastNextUnit'
+>;
+
+const NO_LAST_RESULT: LastResult = {
+  lastOutcome: null,
+  lastMark: null,
+  lastWorkingWeight: null,
+  lastWorkingUnit: null,
+  lastNextWeight: null,
+  lastNextUnit: null,
 };
 
 export type UpNext = {
@@ -75,19 +96,26 @@ export function setActiveRoutine(db: Db, routineId: string | null): void {
 }
 
 /**
- * The outcome and mark of the latest finished workout exercise run from `routineExerciseId`; both null when it has
- * never been finished (or was finished before the rule wrote outcomes).
+ * The outcome, mark, working weight and next weight of the latest finished workout exercise run from
+ * `routineExerciseId`; all null when it has never been finished (or was finished before the rule wrote outcomes).
  */
-function lastResult(db: Db, routineExerciseId: string): { lastOutcome: Outcome | null; lastMark: ExerciseMark | null } {
+function lastResult(db: Db, routineExerciseId: string): LastResult {
   return (
     db
-      .select({ lastOutcome: workoutExercises.outcome, lastMark: workoutExercises.mark })
+      .select({
+        lastOutcome: workoutExercises.outcome,
+        lastMark: workoutExercises.mark,
+        lastWorkingWeight: workoutExercises.workingWeight,
+        lastWorkingUnit: workoutExercises.workingUnit,
+        lastNextWeight: workoutExercises.nextWeight,
+        lastNextUnit: workoutExercises.nextUnit,
+      })
       .from(workoutExercises)
       .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
       .where(and(eq(workoutExercises.routineExerciseId, routineExerciseId), eq(workouts.status, 'finished')))
       .orderBy(desc(workouts.finishedAt))
       .limit(1)
-      .get() ?? { lastOutcome: null, lastMark: null }
+      .get() ?? NO_LAST_RESULT
   );
 }
 

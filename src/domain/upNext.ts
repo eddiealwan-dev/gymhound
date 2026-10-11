@@ -3,7 +3,7 @@ import { MARK_LABELS } from './labels';
 import { planInUnit, type Gear } from './plates';
 import type { Outcome } from './progression';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
-import { convertIncrement, formatWeight } from './units';
+import { convertIncrement, convertWeight, formatWeight, roundToHalf, toKg } from './units';
 
 /** What the Up next card needs of an exercise to say its load. */
 export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | null; nextWeightUnit: WeightUnit | null };
@@ -48,18 +48,38 @@ export type UpNextOutcomeInput = {
   lastMark: ExerciseMark | null;
   increment: number;
   incrementUnit: WeightUnit;
+  lastWorkingWeight: number | null;
+  lastWorkingUnit: WeightUnit | null;
+  lastNextWeight: number | null;
+  lastNextUnit: WeightUnit | null;
 };
 
 /**
- * Last time's outcome, to follow the load (spec 18.7): " · ↑ 5 lb" for a raise (the routine's increment, in the display
- * unit by the gym convention), or " · ↓ 5 lb" on an assisted exercise, where a raise is less assistance (R72);
- * " · held · Rough sleep" for a hold on a flagged exercise, " · held" otherwise. Null with no history, no rule or no sets.
+ * How far last time's raise moved the load, in `unit` (R73): next − working, or working − next for assisted, computed
+ * in kg. A converted amount rounds to the nearest 0.5, as converted plans do. Null when a weight is missing or the
+ * amount comes to nothing.
+ */
+function actualRise(exercise: UpNextOutcomeInput, unit: WeightUnit): number | null {
+  const { lastWorkingWeight: working, lastWorkingUnit: workingUnit, lastNextWeight: next, lastNextUnit: nextUnit } = exercise;
+  if (working === null || workingUnit === null || next === null || nextUnit === null) return null;
+  const riseKg = toKg(next, nextUnit) - toKg(working, workingUnit);
+  const rise = convertWeight(exercise.loggingType === 'assisted' ? -riseKg : riseKg, 'kg', unit);
+  const shown = workingUnit === unit && nextUnit === unit ? rise : roundToHalf(rise);
+  return shown > 0 ? shown : null;
+}
+
+/**
+ * Last time's outcome, to follow the load (spec 18.7): " · ↑ 10 lb" for a raise, by how much it actually rose (R73),
+ * or " · ↓ 5 lb" on an assisted exercise, where a raise is less assistance (R72); " · held · Rough sleep" for a hold on
+ * a flagged exercise, " · held" otherwise. Null with no history, no rule or no sets. A raise whose amount is unknown
+ * or rounds to 0 reads the routine's increment, in the display unit by the gym convention.
  */
 export function upNextOutcome(exercise: UpNextOutcomeInput, unit: WeightUnit): string | null {
   switch (exercise.lastOutcome) {
     case 'raised': {
       const arrow = exercise.loggingType === 'assisted' ? '↓' : '↑';
-      return ` · ${arrow} ${formatWeight(convertIncrement(exercise.increment, exercise.incrementUnit, unit), unit)}`;
+      const amount = actualRise(exercise, unit) ?? convertIncrement(exercise.increment, exercise.incrementUnit, unit);
+      return ` · ${arrow} ${formatWeight(amount, unit)}`;
     }
     case 'held':
     case 'held_marked':
