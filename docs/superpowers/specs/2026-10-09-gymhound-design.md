@@ -908,7 +908,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
      - **Up next**, when no workout is active and a routine is:
        - The eyebrow "UP NEXT", then the title "{routine} · {day}".
        - One line: "First time on this day." or "Last time: {date} · {mark}".
-       - A filled **Start {day}**, for example "Start Upper A". A day whose name has one or two characters reads "Start {routine} {day}", for example "Start 5×5 A".
+       - A filled **Start {day}**, for example "Start Upper A". A day whose name has one or two characters, or is still named "Day {n}" as the routine editor names a day left unnamed, reads "Start {routine} {day}", for example "Start 5×5 A" or "Start My split Day 1". A workout started from the day is named the same way (R56); workouts already stored keep the names they were stored with.
        - One line per exercise: the name on the left, and the scheme and load on the right ("4×5–8 · 60 kg").
        - A loadable exercise with no weight shows "—" when another exercise that day has a weight.
        - When no exercise has a weight, the rows show no load, and the line under the title ends "Pick weights as you go." The words "pick a weight" are gone.
