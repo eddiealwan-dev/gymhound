@@ -19,6 +19,11 @@ export function exercisePhotos(id: string): readonly [ImageSourcePropType, Image
 /**
  * Whether an exercise can have your own photos (R111): only where none are bundled, which is every custom exercise and
  * the library exercises without photos. A bundled photo is never replaced.
+ *
+ * If a later seed bundles photos for one of the nine library exercises that have none today, the bundled pair shows
+ * instead (§18.9 R111). Own photo files are removed only when a custom exercise is deleted (R109); a library
+ * exercise's own photos stay on the phone until the user removes them. If that seed comes, they can no longer be
+ * removed in the app; they're deleted with the app.
  */
 export function canHaveOwnPhotos(exerciseId: string): boolean {
   return exercisePhotos(exerciseId) === undefined;

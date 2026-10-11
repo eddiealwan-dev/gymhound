@@ -72,7 +72,7 @@ it('gives the slots the workout id, the summary and the workout name', () => {
   mockRead = { unit: 'lb', summary };
   mount();
 
-  expect((FinishPrs as jest.Mock).mock.calls[0][0]).toEqual({ workoutId: 'w1', summary });
+  expect((FinishPrs as jest.Mock).mock.calls[0][0]).toEqual({ summary });
   expect((SaveAsWorkout as jest.Mock).mock.calls[0][0]).toEqual({ workoutId: 'w1', workoutName: 'Push A' });
 });
 

@@ -108,7 +108,7 @@ export function updateCustomExercise(db: Db, id: string, input: CustomExerciseIn
  * gets the names of its own photo files to remove from disk, after the rows are gone.
  *
  * `removePhotoFiles` is the hook for the photo files (R111): the repository never touches the file system, so the
- * caller passes the function that deletes them (Task 7's `deleteExercisePhotoFile` for each name).
+ * caller passes the function that deletes them (`deleteExercisePhotoFile` from `src/platform/exercisePhotoFiles` for each name).
  */
 export function deleteCustomExercise(
   db: Db,

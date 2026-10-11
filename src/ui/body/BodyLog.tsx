@@ -30,11 +30,14 @@ export function bodyNumber(value: number): string {
   return `${Number(value.toFixed(1))}`;
 }
 
-/** "Check this number" under a field, read out as it appears (the caller also announces it, for iOS). */
+/**
+ * "Check this number" under a field. The caller announces it on both phones, so it has no live region: TalkBack would
+ * read it a second time.
+ */
 export function CheckLine({ shown }: { shown: boolean }) {
   if (!shown) return null;
   return (
-    <Body muted accessibilityLiveRegion="polite">
+    <Body muted>
       Check this number
     </Body>
   );
@@ -86,6 +89,8 @@ export function BodyField({
   );
 }
 
+const LOG_FAILED = "Couldn't log. Try again.";
+
 /**
  * Logs a value of `kind` for today (R115) in `unit`: the field, its unit and a filled **Log**. A number outside the
  * R117 bounds, or not a number, shows "Check this number" and writes nothing. An empty field logs nothing.
@@ -94,6 +99,7 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
   const db = useDb();
   const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const log = () => {
     if (draft.trim() === '') return;
@@ -103,7 +109,15 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
       announce('Check this number');
       return;
     }
-    addBodyEntry(db, kind, parsed.value, unit, Date.now());
+    try {
+      addBodyEntry(db, kind, parsed.value, unit, Date.now());
+    } catch {
+      // Nothing was written: the number stays in the field for another go.
+      setFailed(true);
+      announce(LOG_FAILED);
+      return;
+    }
+    setFailed(false);
     announce(`Logged ${formatBodyValue(parsed.value, unit)}.`);
     setDraft('');
     setInvalid(false);
@@ -121,6 +135,7 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
             onChangeText={(text) => {
               setDraft(text);
               setInvalid(false);
+              setFailed(false);
             }}
             onSubmit={log}
             accessibilityLabel={`${BODY_LABELS[kind]}, ${unit}`}
@@ -131,6 +146,7 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
         <Button label="Log" onPress={log} accessibilityLabel={`Log ${BODY_LABELS[kind].toLowerCase()}`} />
       </View>
       <CheckLine shown={invalid} />
+      {failed ? <Body muted>{LOG_FAILED}</Body> : null}
     </View>
   );
 }

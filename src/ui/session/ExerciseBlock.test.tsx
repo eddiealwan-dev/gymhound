@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer, ReactTestRendererJSON } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -443,6 +443,38 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       await tapTick(tree, 'Set 1 done');
 
       expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    });
+
+    describe('on Android, where TalkBack reads the line as a live region', () => {
+      afterEach(() => jest.restoreAllMocks());
+      const liveRegion = (tree: ReactTestRenderer, line: string) =>
+        tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite' && n.props.accessibilityLabel === line).length;
+
+      it.each([
+        { what: 'a number to check', type: 'abc', line: 'Check this number' },
+        { what: 'the missing field', type: null, line: 'Add a weight to tick' },
+      ])('says $what once: the new line is read by its live region, not announced as well', async ({ type, line }) => {
+        jest.replaceProperty(Platform, 'OS', 'android');
+        const tree = mount(bench([set('s0', 0)]));
+        if (type !== null) act(() => byLabel(tree, 'LB, set 1').props.onChangeText(type));
+
+        await tapTick(tree, 'Set 1 done');
+
+        expect(liveRegion(tree, line)).toBeGreaterThan(0);
+        expect(mockAnnounce).not.toHaveBeenCalledWith(line);
+      });
+
+      it('announces "Check this number" when the line already shows it, as the live region does not change', async () => {
+        jest.replaceProperty(Platform, 'OS', 'android');
+        const tree = mount(bench([set('s0', 0)]));
+        act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
+        act(() => byLabel(tree, 'LB, set 1').props.onBlur());
+        expect(shownText(tree)).toContain('Check this number');
+
+        await tapTick(tree, 'Set 1 done');
+
+        expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+      });
     });
   });
 

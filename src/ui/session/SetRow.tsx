@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Keyboard, Pressable, TextInput, View } from 'react-native';
+import { Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -212,6 +212,15 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
    * does not read a live region on iOS). It focuses nothing and leaves the keyboard as it was: the keyboard coming up
    * swallowed the buzz and hid the line (spec 18.6, R99).
    */
+  /**
+   * Says `next`, the line a not-ready tick shows. TalkBack reads the line's live region as it changes, so on Android it
+   * is announced only when the line already shows it (the live region stays quiet); VoiceOver reads no live region.
+   */
+  const say = (next: string) => {
+    if (Platform.OS === 'android' && line !== next) return;
+    announce(next);
+  };
+
   const toggle = () => {
     if (set.done) {
       untick(db, set.id);
@@ -223,10 +232,10 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       const { invalid, missing } = reading;
       if (invalid.length > 0) {
         setLeft((l) => [...l, ...invalid.filter((k) => !l.includes(k))]);
-        announce('Check this number');
+        say('Check this number');
       } else {
         setAsked(true);
-        if (missing !== null) announce(NEED_LINE[missing]);
+        if (missing !== null) say(NEED_LINE[missing]);
       }
       return;
     }

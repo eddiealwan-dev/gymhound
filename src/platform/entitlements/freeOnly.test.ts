@@ -26,5 +26,8 @@ describe('free-only entitlements (R133): a build with no store and no debug unlo
     expect(entitlements.offer()).toBeNull();
     await expect(entitlements.purchase()).resolves.toBe('unavailable');
     await expect(entitlements.restore()).resolves.toBe('unavailable');
+    expect(entitlements.canRestore()).toBe(false);
+    expect(() => entitlements.refreshOffer()).not.toThrow();
+    await expect(entitlements.manageSubscription()).resolves.toBe(false);
   });
 });

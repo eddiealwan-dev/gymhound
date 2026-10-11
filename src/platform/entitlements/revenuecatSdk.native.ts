@@ -14,7 +14,8 @@ const toInfo = (info: CustomerInfo) => ({ activeEntitlements: Object.keys(info.e
  * `PurchasesSdk`.
  */
 export function loadPurchasesSdk(): PurchasesSdk | null {
-  const Purchases = (require('react-native-purchases') as PurchasesModule).default;
+  const rc = require('react-native-purchases') as PurchasesModule;
+  const Purchases = rc.default;
   /** The packages handed out by `getDefaultPackage`, by identifier, so `purchase` can buy the store's own object. */
   const packages = new Map<string, PurchasesPackage>();
 
@@ -43,11 +44,21 @@ export function loadPurchasesSdk(): PurchasesSdk | null {
     async purchase(packageId) {
       const pkg = packages.get(packageId);
       if (pkg === undefined) throw new Error(`No package ${packageId}`);
-      const result = await Purchases.purchasePackage(pkg);
-      return toInfo(result.customerInfo);
+      try {
+        const result = await Purchases.purchasePackage(pkg);
+        return toInfo(result.customerInfo);
+      } catch (error) {
+        // Ask to Buy or a delayed payment: not a failure, the store finishes it later.
+        const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
+        if (code === rc.PURCHASES_ERROR_CODE.PAYMENT_PENDING_ERROR) throw { paymentPending: true };
+        throw error;
+      }
     },
     async restore() {
       return toInfo(await Purchases.restorePurchases());
+    },
+    async showManageSubscriptions() {
+      await Purchases.showManageSubscriptions();
     },
   };
 }
