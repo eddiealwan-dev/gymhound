@@ -56,10 +56,10 @@ const track = () => tree.root.find((n) => n.type === View && n.props.accessibili
 
 const styleOf = (node: ReactTestInstance) => [node.props.style].flat(Infinity).reduce((all, s) => ({ ...all, ...s }), {});
 
-/** The time box: the button that reads "Rest 1:45" and opens the rest choices. */
+/** The time box: the button that reads "Rest, 1 minute 45 seconds left" and opens the rest choices. */
 const timerBox = () =>
   tree.root.find(
-    (n) => n.type === View && n.props.accessibilityRole === 'button' && String(n.props.accessibilityLabel ?? '').startsWith('Rest '),
+    (n) => n.type === View && n.props.accessibilityRole === 'button' && String(n.props.accessibilityLabel ?? '').startsWith('Rest, '),
   );
 /** The row holding the time box, −15s, +15s and Skip. */
 const row = () => tree.root.find((n) => n.type === View && styleOf(n).flexWrap === 'wrap');
@@ -71,7 +71,13 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
     const time = tree.root.find((n) => n.type === Text && n.props.children === '1:45');
     expect(styleOf(time)).toMatchObject({ fontSize: 32, fontFamily: 'BarlowCondensed_800ExtraBold' });
     expect(shownText()).toContain('REST');
-    expect(timerBox().props.accessibilityLabel).toBe('Rest 1:45');
+    expect(timerBox().props.accessibilityLabel).toBe('Rest, 1 minute 45 seconds left');
+  });
+
+  it('reads the time left to VoiceOver as a duration, not a clock (B9)', () => {
+    advance(60_000);
+
+    expect(timerBox().props.accessibilityLabel).toBe('Rest, 45 seconds left');
   });
 
   it('has −15s, +15s and Skip as compact outlined pills', () => {
@@ -109,7 +115,7 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
   it('tapping the time opens the rest choices', () => {
     expect(timerBox().props.accessibilityHint).toBe('Changes the rest time');
 
-    const pressable = tree.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Rest 1:45')[0];
+    const pressable = tree.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Rest, 1 minute 45 seconds left')[0];
     act(() => pressable.props.onPress());
 
     expect(onOpenRest).toHaveBeenCalledTimes(1);

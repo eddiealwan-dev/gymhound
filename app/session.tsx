@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
@@ -141,10 +141,7 @@ function SessionHeader({
           variant="secondary"
           size="compact"
           maxFontSizeMultiplier={1.3}
-          onPress={() => {
-            Keyboard.dismiss();
-            onFinish();
-          }}
+          onPress={onFinish}
         />
       </View>
       <View
@@ -177,6 +174,8 @@ export default function Session() {
   const [ask, setAsk] = useState<Ask | null>(null);
   /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
+  /** Set by Finish anyway until its finish runs (B1): Finish, Discard and a second Finish anyway then do nothing. */
+  const finishing = useRef(false);
   /** How tall the bars docked at the bottom are (0 with none), so the content can scroll clear of them. */
   const [dockHeight, setDockHeight] = useState(0);
   /** The header's count and the next set's ring, worked out once per data change rather than on every tick of the clock. */
@@ -222,6 +221,7 @@ export default function Session() {
   /**
    * Finishes and shows the summary. The finish refuses with nothing ticked, and that answer wins over the check made a
    * moment ago. Any other error is logged and told to the user: the workout is still active, and a press handler must not throw.
+   * Either way the workout is still there, so Finish and Discard work again.
    */
   const finishNow = () => {
     setAsk(null);
@@ -230,10 +230,12 @@ export default function Session() {
       result = finish(db, workout.id);
     } catch (error) {
       console.warn('GymHound could not finish the workout.', error);
+      finishing.current = false;
       setAsk('finish_failed');
       return;
     }
     if (result === 'nothing_ticked') {
+      finishing.current = false;
       setAsk('nothing_ticked');
       return;
     }
@@ -241,14 +243,21 @@ export default function Session() {
   };
 
   /**
-   * Saves what is typed, then reads the workout from the database (not from what was last rendered): with nothing
-   * ticked it says so; with every set ticked it finishes; otherwise it asks first, since unticked sets will be dropped.
+   * Puts the keyboard away (it opens a sheet), saves what is typed, then reads the workout from the database (not from
+   * what was last rendered): with nothing ticked it says so; with every set ticked it finishes; otherwise it asks first,
+   * since unticked sets will be dropped. While Finish anyway waits for its sheet to go, it does nothing.
    */
   const onFinish = () => {
+    if (finishing.current) return;
+    Keyboard.dismiss();
     flushAll();
     const view = getActiveWorkoutView(db);
-    const check = view === null ? null : finishCheck(view.exercises);
-    if (view === null || check === null || check.done === 0) {
+    if (view === null) {
+      setAsk('nothing_ticked');
+      return;
+    }
+    const check = finishCheck(view.exercises);
+    if (check.done === 0) {
       setAsk('nothing_ticked');
       return;
     }
@@ -260,12 +269,22 @@ export default function Session() {
     setAsk('confirm_finish');
   };
 
+  /** Finish anyway: the finish runs once the sheet has gone (R55), and only once, however often it is tapped as it fades. */
+  const onFinishAnyway = () => {
+    if (finishing.current) return;
+    finishing.current = true;
+    setAsk(null);
+    afterSheetCloses(finishNow);
+  };
+
   const onDiscard = () => {
+    if (finishing.current) return;
     flushAll();
     setAsk('discard');
   };
 
   const discardNow = () => {
+    if (finishing.current) return;
     setAsk(null);
     discard(db, workout.id);
     router.replace('/');
@@ -369,10 +388,7 @@ export default function Session() {
         confirmLabel="Finish anyway"
         cancelLabel="Keep logging"
         primary={finishAsk?.safeDefault ? 'cancel' : 'confirm'}
-        onConfirm={() => {
-          setAsk(null);
-          afterSheetCloses(finishNow);
-        }}
+        onConfirm={onFinishAnyway}
         onCancel={() => setAsk(null)}
       />
       <ConfirmSheet

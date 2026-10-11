@@ -150,8 +150,8 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   const [drafts, setDrafts] = useState<Drafts>({});
   /** Inputs that have been left since they were typed in. A half-typed number is only called wrong once it is left. */
   const [left, setLeft] = useState<InputKey[]>([]);
-  /** The field a tap on the not-ready tick asked for. Typing clears it. */
-  const [need, setNeed] = useState<FieldKey | null>(null);
+  /** Whether the tick was tapped before it was ready. Typing clears it. */
+  const [asked, setAsked] = useState(false);
   const inputs = useRef<Partial<Record<InputKey, TextInput | null>>>({});
   /**
    * The field a not-ready tap asked to focus. It is focused once the row has drawn its line, so nothing that tap
@@ -165,14 +165,21 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   const reading = readRow(row, drafts, unit);
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
-  /** Under the row: a number to check wins over the field a not-ready tick asked for. */
-  const line = showHint ? 'Check this number' : need !== null && !set.done && !canTick ? NEED_LINE[need] : null;
+  /**
+   * Under the row: a number to check wins over the field a not-ready tick asks for. That is the field missing now, which
+   * a value carried from the row above may have changed since the tap (B10).
+   */
+  const line = showHint
+    ? 'Check this number'
+    : asked && !set.done && !canTick && reading.missing !== null
+      ? NEED_LINE[reading.missing]
+      : null;
 
   const type = (key: InputKey, text: string) => {
     setDrafts((d) => ({ ...d, [key]: text }));
     // Typing again means it has not been left since: the hint waits until it is.
     setLeft((l) => l.filter((k) => k !== key));
-    setNeed(null);
+    setAsked(false);
   };
 
   const leave = (key: InputKey) => {
@@ -219,7 +226,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         announce('Check this number');
         setFocusAsk({ key: invalid[0] });
       } else {
-        setNeed(missing);
+        setAsked(true);
         if (missing !== null) {
           announce(NEED_LINE[missing]);
           setFocusAsk({ key: missing });
@@ -232,7 +239,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
       setDrafts({});
       setLeft([]);
-      setNeed(null);
+      setAsked(false);
       lightHaptic();
     }
     Keyboard.dismiss();
@@ -273,7 +280,8 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         returnKeyType="done"
         selectTextOnFocus
         accessibilityLabel={`${header}, set ${row.label}`}
-        accessibilityHint={look === 'suggested' ? SUGGESTED_HINT : undefined}
+        // Not on a ticked set, whose tick would untick it (B2).
+        accessibilityHint={look === 'suggested' && !set.done ? SUGGESTED_HINT : undefined}
         style={{
           minHeight: 44,
           paddingHorizontal: 2,

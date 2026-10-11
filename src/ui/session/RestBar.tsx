@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
-import { restRemainingSeconds } from '../../domain/rest';
+import { restRemainingSeconds, spokenRest } from '../../domain/rest';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Num } from '../Text';
@@ -74,7 +74,8 @@ export function RestBar({ workoutId, endsAt, bottomInset }: Props) {
         />
         <Num
           accessibilityRole="timer"
-          accessibilityLabel={`Rest ${formatRest(remaining)}`}
+          // Read as a duration, not a clock (B9).
+          accessibilityLabel={`Rest, ${spokenRest(remaining)} left`}
           style={{ flexGrow: 1, flexBasis: 'auto', fontSize: 40, textAlign: 'center' }}
         >
           {formatRest(remaining)}

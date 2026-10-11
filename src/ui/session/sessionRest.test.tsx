@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Session from '../../../app/session';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
+import { ExerciseBlock } from './ExerciseBlock';
 import { RestBar } from './RestBar';
 import { RestInline } from './RestInline';
 
@@ -48,7 +49,10 @@ const mockBench: WorkoutExerciseView = {
   previous: [],
 };
 
-const mockState: { restEndsAt: number | null; restSetId: string | null } = { restEndsAt: null, restSetId: null };
+const mockState: { restEndsAt: number | null; restSetId: string | null; exercises?: WorkoutExerciseView[] } = {
+  restEndsAt: null,
+  restSetId: null,
+};
 /** What happened, in order: saves, the keyboard closing, and the panel the ⋯ menu was drawn with. */
 const mockOrder: string[] = [];
 
@@ -70,7 +74,14 @@ jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.f
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
   useDbQuery: () => ({
-    workout: { id: 'w1', name: 'Push A', startedAt: 1_000, ...mockState, exercises: [mockBench] },
+    workout: {
+      id: 'w1',
+      name: 'Push A',
+      startedAt: 1_000,
+      restEndsAt: mockState.restEndsAt,
+      restSetId: mockState.restSetId,
+      exercises: mockState.exercises ?? [mockBench],
+    },
     unit: 'lb',
     gear: { bar: 45, plates: { '45': 4, '25': 1, '10': 2, '5': 1, '2.5': 1 } },
     distanceUnit: 'mi',
@@ -116,6 +127,7 @@ let tree: ReactTestRenderer | undefined;
 
 beforeEach(() => {
   mockOrder.length = 0;
+  mockState.exercises = undefined;
   jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => void mockOrder.push('dismiss'));
 });
 
@@ -146,6 +158,37 @@ describe('a running rest shows exactly one countdown (Task 26, R41)', () => {
     const [countdown] = shown === 'under its set' ? inline : bars;
     expect(countdown).toBeDefined();
     expect(countdown.props).toMatchObject({ workoutId: 'w1', endsAt: ENDS_AT });
+  });
+});
+
+describe("Rest's up under its set once the rest runs out (spec 18.6)", () => {
+  it('passes the held rest and its words to the block holding the set, which draws its row under that set', () => {
+    const benchOneTicked: WorkoutExerciseView = {
+      ...mockBench,
+      sets: [{ ...set('s1', 0), done: true, weight: 135, weightUnit: 'lb', reps: 5, completedAt: 1 }, set('s2', 1)],
+    };
+    const squat: WorkoutExerciseView = { ...mockBench, id: 'we2', exerciseId: 'barbell-squat', name: 'Squat', position: 1, sets: [set('q1', 0)] };
+    mockState.exercises = [benchOneTicked, squat];
+    mockState.restEndsAt = ENDS_AT;
+    mockState.restSetId = 's1';
+    act(() => {
+      tree = create(<Session />);
+    });
+    expect(tree!.root.findByType(RestInline).props.endsAt).toBe(ENDS_AT);
+
+    // The rest watcher clears the rest at zero (ENDS_AT is long past).
+    mockState.restEndsAt = null;
+    mockState.restSetId = null;
+    act(() => tree!.update(<Session />));
+
+    const [benchBlock, squatBlock] = tree!.root.findAllByType(ExerciseBlock);
+    expect(benchBlock.props).toMatchObject({ restUp: { setId: 's1', endsAt: ENDS_AT }, upText: "Rest's up · Set 2 next" });
+    const rows = tree!.root.findAllByType(RestInline);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].props).toMatchObject({ endsAt: ENDS_AT, upText: "Rest's up · Set 2 next" });
+    expect(benchBlock.findAllByType(RestInline)).toHaveLength(1);
+    expect(squatBlock.findAllByType(RestInline)).toHaveLength(0);
+    expect(tree!.root.findAllByType(RestBar)).toHaveLength(0);
   });
 });
 

@@ -8,9 +8,12 @@ type Input = { restEndsAt: number | null; restSetId: string | null; doneCount: n
 
 /** What the hook returned on the last render. */
 let held: ReturnType<typeof useRestUp> = null;
+/** What the hook returned on every render, in order, including a render React redoes before it commits. */
+let renders: ReturnType<typeof useRestUp>[] = [];
 
 function Probe({ restEndsAt, restSetId, doneCount }: Input) {
   held = useRestUp(restEndsAt, restSetId, doneCount);
+  renders.push(held);
   return null;
 }
 
@@ -31,6 +34,7 @@ function update(input: Input) {
 beforeEach(() => {
   jest.useFakeTimers().setSystemTime(NOW);
   held = null;
+  renders = [];
 });
 
 afterEach(() => {
@@ -47,6 +51,18 @@ describe("useRestUp: the rest that just ran out, held for its Rest's up (spec 18
     update({ restEndsAt: null, restSetId: null, doneCount: 1 });
 
     expect(held).toEqual({ setId: 's1', endsAt: E });
+  });
+
+  it('hands over from the running rest to the hold in the same render, so no frame is drawn without the row', () => {
+    mount({ restEndsAt: E, restSetId: 's1', doneCount: 1 });
+    jest.setSystemTime(E);
+    renders = [];
+
+    // The watcher clears the end at zero: the row, which drew the running rest, must draw the hold in the same render.
+    update({ restEndsAt: null, restSetId: null, doneCount: 1 });
+
+    expect(renders.length).toBeGreaterThan(0);
+    expect(renders).toEqual(renders.map(() => ({ setId: 's1', endsAt: E })));
   });
 
   it('holds nothing after Skip, even once the old end passes', () => {

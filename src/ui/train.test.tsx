@@ -195,10 +195,24 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(link.length).toBeGreaterThan(0);
     expect(link[0].props.accessibilityRole).toBe('button');
     expect(lines(tree)).toContain('Change routine');
+    // A 44pt target.
+    expect(StyleSheet.flatten(link[0].props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
 
     act(() => link[0].props.onPress());
 
     expect(router.push).toHaveBeenCalledWith('/routines');
+  });
+
+  it('no routine: Start empty workout starts one and opens the session', () => {
+    mockRead = { ...mockRead, upNext: null };
+    const tree = mount();
+
+    press(tree, 'Start empty workout');
+
+    expect(startEmpty).toHaveBeenCalledTimes(1);
+    expect(startEmpty).toHaveBeenCalledWith('db');
+    expect(router.push).toHaveBeenCalledWith('/session');
+    expect(jest.mocked(startEmpty).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(router.push).mock.invocationCallOrder[0]);
   });
 
   it('no routine: one card, Choose a routine filled, Start empty workout outlined', () => {

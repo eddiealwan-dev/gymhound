@@ -56,6 +56,11 @@ describe('the rest bar, for a rest no set row can show (R41)', () => {
     expect(styleOf(rowWithPills).flexWrap).toBe('wrap');
   });
 
+  it('reads the time left to VoiceOver as a duration, not a clock (B9)', () => {
+    const [timer] = tree.root.findAll((n) => n.props.accessibilityRole === 'timer');
+    expect(timer.props.accessibilityLabel).toBe('Rest, 1 minute 45 seconds left');
+  });
+
   it('has no tap-to-change: its set is gone', () => {
     expect(tree.root.findAll((n) => n.props.accessibilityHint === 'Changes the rest time')).toHaveLength(0);
   });

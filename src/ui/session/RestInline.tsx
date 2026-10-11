@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
-import { restRowPhase, restTrackFraction } from '../../domain/rest';
+import { restRowPhase, restTrackFraction, spokenRest } from '../../domain/rest';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Body, Num } from '../Text';
@@ -84,7 +84,8 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
         <>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Rest ${formatRest(phase.remaining)}`}
+            // Read as a duration, not a clock (B9).
+            accessibilityLabel={`Rest, ${spokenRest(phase.remaining)} left`}
             accessibilityHint="Changes the rest time"
             onPress={onOpenRest}
             // It takes the width of its text (not `flex: 1`, whose zero basis never needs room), then grows into what is left.

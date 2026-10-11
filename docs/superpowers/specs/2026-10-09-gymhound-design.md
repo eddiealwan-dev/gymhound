@@ -937,6 +937,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - The field to focus is the first missing one in column order (weight before reps). It is focused once the row has drawn its line, so nothing that tap re-renders (the line, or a blur that saves another field) comes after the focus.
     - The line is also announced (`announce`), since VoiceOver does not read a live region on iOS. "Check this number" is announced the same way.
   - A number that needs another look shows "Check this number" instead.
+  - The line names the field that is missing now, which a value carried from the set above can change after the tap. Typing in the row clears the line until the next tap.
   - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").
 - **Finish confirm** (replaces "{n} sets aren't ticked" in §8.4):
   - Finish first saves whatever is typed, then reads the workout.
@@ -949,6 +950,8 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - The word "Unticked" is not used in this sheet.
   - The buttons are **Keep logging** and **Finish anyway**. Keep logging is the filled default when a whole exercise has no tick. Otherwise Finish anyway is.
   - Counts include warmups. An exercise with no sets is never listed.
+  - Finish anyway finishes once the sheet has gone (R55). Until then, a second tap on Finish anyway, Finish or Discard does nothing. If the finish fails or is refused, they work again.
+  - Finish puts the keyboard away first, since it can open a sheet.
 - **Session header** (replaces the §8.4 Header; §18.1 already dropped the day-mark chip):
   - Back, then the workout name with a muted line under it, "{done}/{total} sets · {elapsed}". A workout with no sets shows only the time.
   - Then Music (phones only) and a small outlined **Finish**.
@@ -964,9 +967,9 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - The next set to do has a bolder tick ring (2.5pt, text colour). It is the first unticked set in workout order. In a superset, it is in the member with the fewest ticked sets, with the earlier member winning a tie.
 - **Suggested values look like suggestions:**
   - Today's target and every placeholder (from last time, the rule or a carry) draw with no fill, a dashed `borderStrong` outline, `textFaint` and Barlow 600.
-    - VoiceOver adds the hint "Suggested. Tick the set to log it."
+    - VoiceOver adds the hint "Suggested. Tick the set to log it.", except on a ticked set, where a tap on the tick would untick it.
   - A typed, saved or ticked value draws solid: a `surface` fill, a `borderStrong` outline, the `text` colour and Barlow 800.
-  - A cleared weight field on a row with a target shows the target as its placeholder, which is what the tick logs.
+  - A cleared weight field on a row with a target shows the target as its placeholder, which is what the tick logs. A ticked set does too: leaving the weight blank takes the tick off, and the open row then shows the target.
 - **Slimmer exercise blocks** (replaces the always-open note in §8.4 and the §18.2 button labels):
   - An empty note shows a quiet **+ Note** with a pencil in the name row. It opens the note field, focused.
   - A saved note shows in full as a muted line under the name. Tap it to edit.
@@ -987,4 +990,6 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - **VoiceOver:**
     - A tick announces "Set 2 logged. Rest 2 minutes.", or "Set 2 logged." when no rest starts.
     - The bell announces "Rest over".
+    - On iOS every announcement is said half a second later, so VoiceOver reading the tapped tick again does not cut it off.
+    - The countdown reads as a duration: "Rest, 1 minute 45 seconds left". The bottom bar's countdown does too.
   - The fallback bottom bar (R41) gets +15s and the same pills.

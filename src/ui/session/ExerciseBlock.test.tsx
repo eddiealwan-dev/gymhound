@@ -365,7 +365,69 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
     act(() => byLabel(tree, 'LB, set 1').props.onChangeText('135'));
 
+    // The reps are still missing, but typing clears the line until the tick is tapped again.
+    expect(shownText(tree).filter((text) => text.endsWith(' to tick'))).toEqual([]);
+  });
+
+  it('the line names the field that is missing now, not the one the tap found (B10)', () => {
+    const tree = mount(bench([set('s0', 0), set('s1', 1)]));
+    act(() => byLabel(tree, 'Set 2 done').props.onPress());
+    expect(shownText(tree)).toContain('Add a weight to tick');
+
+    // A weight typed in set 1 and left carries down to set 2: now only its reps are missing.
+    act(() => tree.update(block(bench([set('s0', 0, { weight: 135, weightUnit: 'lb' }), set('s1', 1)]))));
+
+    expect(byLabel(tree, 'LB, set 2').props.placeholder).toBe('135');
+    expect(shownText(tree)).toContain('Add reps to tick');
     expect(shownText(tree)).not.toContain('Add a weight to tick');
+  });
+
+  it.each([
+    {
+      what: 'reps',
+      ex: () => bench([set('s0', 0, { weight: 135, weightUnit: 'lb' })]),
+      field: 'REPS, set 1',
+      line: 'Add reps to tick',
+      hint: 'Enter reps first',
+    },
+    {
+      what: 'a time',
+      ex: (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), loggingType: 'timed' }),
+      field: 'TIME, set 1',
+      line: 'Add a time to tick',
+      hint: 'Enter a time first',
+    },
+    {
+      what: 'a distance',
+      ex: (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), loggingType: 'distance_time' }),
+      field: 'DIST, set 1',
+      line: 'Add a distance to tick',
+      hint: 'Enter a distance first',
+    },
+  ])('with $what missing, it says "$line", focuses that field and announces the line', ({ ex, field, line, hint }) => {
+    const tree = mount(ex());
+    expect(byLabel(tree, 'Set 1 done').props.accessibilityHint).toBe(hint);
+    const focus = focusOf(tree, field);
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(shownText(tree)).toContain(line);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(mockAnnounce).toHaveBeenCalledWith(line);
+    expect(tick).not.toHaveBeenCalled();
+  });
+
+  it('"Check this number" focuses the field to check, even with another field missing', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('x'));
+    const weight = focusOf(tree, 'LB, set 1');
+    const reps = focusOf(tree, 'REPS, set 1');
+
+    act(() => byLabel(tree, 'Set 1 done').props.onPress());
+
+    expect(shownText(tree)).toContain('Check this number');
+    expect(reps).toHaveBeenCalledTimes(1);
+    expect(weight).not.toHaveBeenCalled();
   });
 
   it('Check this number wins over the nudge', () => {
@@ -680,6 +742,53 @@ describe('ExerciseBlock: suggested values look like suggestions (spec 18.6)', ()
     expect(byLabel(tree, 'LB, set 1').props.placeholder).toBe('135');
     expect(byLabel(tree, 'LB, set 1').props.accessibilityHint).toBe(SUGGESTED_HINT);
   });
+
+  it("a ticked set's field cleared mid-edit shows the target as its ghost, and never says to tick the set (B2)", () => {
+    const ex: WorkoutExerciseView = {
+      ...planned(),
+      sets: [set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 1 })],
+      previous: [{ position: 0, setType: 'working', weight: 130, weightUnit: 'lb', reps: 6, durationS: null, distance: null, distanceUnit: null }],
+    };
+    const tree = mount(ex);
+
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText(''));
+    act(() => byLabel(tree, 'REPS, set 1').props.onChangeText(''));
+
+    // Left blank, the weight takes the tick off and the open row shows the target: the ghost is that, not last time's 130.
+    expect(byLabel(tree, 'LB, set 1').props.placeholder).toBe('135');
+    expect(byLabel(tree, 'REPS, set 1').props.placeholder).toBe('6');
+    for (const label of ['LB, set 1', 'REPS, set 1']) {
+      expect(look(tree, label)).toMatchObject(suggested);
+      // A tap on the tick would untick the set.
+      expect(byLabel(tree, label).props.accessibilityHint).toBeUndefined();
+    }
+  });
+
+  it('an empty field with nothing to suggest is drawn solid, with no ghost and no hint', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    for (const label of ['LB, set 1', 'REPS, set 1']) {
+      const field = byLabel(tree, label);
+      expect(field.props.value).toBe('');
+      expect(field.props.placeholder).toBe('');
+      expect(look(tree, label)).toMatchObject(entered);
+      expect(field.props.accessibilityHint).toBeUndefined();
+    }
+  });
+
+  it('a number to check gets the heavier muted underline on its solid edge, once it is left', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('abc'));
+    expect(look(tree, 'LB, set 1')).toMatchObject(entered);
+    expect(look(tree, 'LB, set 1').borderBottomWidth).toBeUndefined();
+
+    act(() => byLabel(tree, 'LB, set 1').props.onBlur());
+
+    expect(look(tree, 'LB, set 1')).toMatchObject({ ...entered, borderBottomWidth: 2, borderBottomColor: '#a39d90' });
+    expect(look(tree, 'REPS, set 1').borderBottomWidth).toBeUndefined();
+    expect(shownText(tree)).toContain('Check this number');
+    expect(commitSetField).not.toHaveBeenCalled();
+  });
 });
 
 /** The note field, which shows only while the note is being edited. */
@@ -869,15 +978,17 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     expect(restingStyle(byLabel(tree, 'Options for Bench Press'))).toMatchObject({ width: 44, height: 44 });
     expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 0, minHeight: 44 });
     expect(StyleSheet.flatten(textNode(tree, 'Bench Press').props.style)).toMatchObject({ minWidth: 0 });
-    // [name][count][+ Note][⋯], in the order they are drawn.
-    const labels = [
-      ...new Set(tree.root.findAll((n) => typeof n.props.accessibilityLabel === 'string').map((n) => n.props.accessibilityLabel as string)),
-    ];
-    const order = ['1 of 2 sets done', ADD_NOTE, 'Options for Bench Press'].map((l) => labels.indexOf(l));
+    // [name][count][+ Note][⋯], in the order they are drawn: every node, in drawing order (a parent before its children).
+    const drawn = tree.root.findAll(() => true);
+    const order = [
+      textNode(tree, 'Bench Press'),
+      textNode(tree, '1/2'),
+      byLabel(tree, ADD_NOTE),
+      byLabel(tree, 'Options for Bench Press'),
+    ].map((node) => drawn.indexOf(node));
     expect(order.every((i) => i >= 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    const shown = shownText(tree);
-    expect(shown.indexOf('1/2')).toBeGreaterThan(shown.indexOf('Bench Press'));
-    expect(shown.indexOf('+ Note')).toBeGreaterThan(shown.indexOf('1/2'));
+    expect(order[0]).toBeLessThan(order[1]);
+    expect(order[1]).toBeLessThan(order[2]);
+    expect(order[2]).toBeLessThan(order[3]);
   });
 });

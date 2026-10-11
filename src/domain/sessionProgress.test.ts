@@ -109,6 +109,17 @@ describe('nextSetId: the next set to do (spec 18.6)', () => {
     const w = (id: string, position: number) => ({ id, position, setType: 'warmup' as const, done: false });
     expect(nextSetId([ex('A', 0, [s('a1', 0), s('a2', 1)], 1), ex('B', 1, [w('bw1', 0), s('b1', 1)], 1)])).toBe('bw1');
   });
+
+  it('a lone exercise after a superset run waits for the run, though it has fewer sets ticked', () => {
+    const a = ex('A', 0, [s('a1', 0, true), s('a2', 1)], 1);
+    const b = ex('B', 1, [s('b1', 0, true), s('b2', 1)], 1);
+    const c = ex('C', 2, [s('c1', 0), s('c2', 1)]);
+    expect(nextSetId([a, b, c])).toBe('a2');
+
+    // The run is done: the lone exercise is next.
+    const runDone = [ex('A', 0, [s('a1', 0, true), s('a2', 1, true)], 1), ex('B', 1, [s('b1', 0, true), s('b2', 1, true)], 1), c];
+    expect(nextSetId(runDone)).toBe('c1');
+  });
 });
 
 describe("restUpText: what the rest row says once the rest is up (spec 18.6)", () => {

@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
+import { Keyboard } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { getNextDayTitle } from '../../db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../../db/repositories/workoutViewsRepo';
 import { flushAll } from '../../state/draftFlush';
-import { finish } from '../../state/sessionActions';
+import { discard, finish } from '../../state/sessionActions';
 import Session from '../../../app/session';
 import { Button } from '../Button';
 
@@ -86,6 +87,7 @@ let warn: jest.SpyInstance;
 beforeEach(() => {
   jest.mocked(router.replace).mockClear();
   jest.mocked(finish).mockReset();
+  jest.mocked(discard).mockClear();
   jest.mocked(flushAll).mockClear();
   jest.mocked(getActiveWorkoutView).mockClear();
   jest.mocked(getNextDayTitle).mockClear();
@@ -289,5 +291,101 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     expect(flushed.length).toBeGreaterThan(0);
     expect(read.length).toBeGreaterThan(0);
     expect(Math.min(...flushed)).toBeLessThan(Math.min(...read));
+  });
+
+  it('puts the keyboard away before it saves, reads and opens its sheet', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    untouched();
+    const tree = mount();
+
+    press(tree, 'Finish');
+
+    expect(dismiss).toHaveBeenCalled();
+    expect(dismiss.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(flushAll).mock.invocationCallOrder[0]);
+    expect(dismiss.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(getActiveWorkoutView).mock.invocationCallOrder[0]);
+  });
+});
+
+describe('the session screen after Finish anyway, while the finish waits for the sheet to go (R55, B1)', () => {
+  /** Bench half done and the overhead press not started, so Finish asks first. */
+  const untouched = () =>
+    viewWith([
+      { name: 'Barbell bench press', sets: [done, open] },
+      { name: 'Overhead press', sets: [open] },
+    ]);
+
+  /** Opens the question and returns its Finish anyway: on a phone the sheet still shows it while it fades. */
+  function askAndGetFinishAnyway(tree: ReturnType<typeof create>) {
+    press(tree, 'Finish');
+    const finishAnyway = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Finish anyway');
+    expect(finishAnyway).toHaveLength(1);
+    return finishAnyway[0].props.onPress as () => void;
+  }
+
+  it('a second Finish anyway, Finish or Discard does nothing: the workout finishes once', () => {
+    jest.useFakeTimers();
+    untouched();
+    jest.mocked(finish).mockReturnValue('finished');
+    const tree = mount();
+    const finishAnyway = askAndGetFinishAnyway(tree);
+    expect(getActiveWorkoutView).toHaveBeenCalledTimes(1);
+
+    act(() => finishAnyway());
+    // A double tap on the fading sheet.
+    act(() => finishAnyway());
+
+    // Finish does not ask again, nor read the workout again.
+    press(tree, 'Finish');
+    expect(shownText(tree)).not.toContain('Overhead press has nothing logged');
+    expect(getActiveWorkoutView).toHaveBeenCalledTimes(1);
+
+    // Discard does not ask.
+    press(tree, 'Discard workout');
+    expect(shownText(tree)).not.toContain('Discard this workout?');
+
+    act(() => void jest.runAllTimers());
+
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(router.replace).toHaveBeenCalledTimes(1);
+    expect(router.replace).toHaveBeenCalledWith('/finish/w1');
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  it('a finish that fails lets Finish be tried again', () => {
+    jest.useFakeTimers();
+    untouched();
+    jest.mocked(finish).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount();
+    const finishAnyway = askAndGetFinishAnyway(tree);
+    act(() => finishAnyway());
+    act(() => void jest.runAllTimers());
+    expect(shownText(tree)).toContain(FAILED);
+    press(tree, 'OK');
+
+    press(tree, 'Finish');
+
+    expect(shownText(tree)).toContain('Overhead press has nothing logged');
+  });
+
+  it('a finish refused with nothing ticked still lets the workout be discarded', () => {
+    jest.useFakeTimers();
+    untouched();
+    jest.mocked(finish).mockReturnValue('nothing_ticked');
+    const tree = mount();
+    const finishAnyway = askAndGetFinishAnyway(tree);
+    act(() => finishAnyway());
+    act(() => void jest.runAllTimers());
+    expect(shownText(tree)).toContain('Nothing is ticked yet.');
+
+    // The sheet's own Discard workout (the page's is quiet).
+    const sheetDiscard = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Discard workout' && b.props.variant === 'secondary');
+    expect(sheetDiscard).toHaveLength(1);
+    act(() => sheetDiscard[0].props.onPress());
+    press(tree, 'Discard');
+
+    expect(discard).toHaveBeenCalledWith('db', 'w1');
+    expect(router.replace).toHaveBeenCalledWith('/');
   });
 });

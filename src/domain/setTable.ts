@@ -251,14 +251,15 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): strin
 }
 
 /**
- * The greyed-out hint for an input: "135", "8", "40s" or "1:30". Empty when there is none. RPE has none. An open
- * row's load hints today's target over last time's weight (R49): a cleared weight shows what its tick logs.
+ * The greyed-out hint for an input: "135", "8", "40s" or "1:30". Empty when there is none. RPE has none. A row with
+ * a target hints it over last time's weight (R49): a cleared weight shows what its tick logs. A ticked row too (B2):
+ * clearing its weight takes the tick off, and the open row then shows the target.
  */
 export function hintText(row: RowModel, key: InputKey): string {
   const { placeholders } = row;
   switch (key) {
     case 'weight':
-      if (row.target !== null && !row.set.done) return numberText(row.target);
+      if (row.target !== null) return numberText(row.target);
       return placeholders.weight === null ? '' : numberText(placeholders.weight);
     case 'reps':
       return placeholders.reps === null ? '' : String(placeholders.reps);

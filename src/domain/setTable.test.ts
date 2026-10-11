@@ -624,10 +624,12 @@ describe('isTargetValue and fieldLook (spec 18.6: suggested values look like sug
     expect(fieldLook(ticked, 'reps', undefined)).toBe('entered');
   });
 
-  it('a done row never shows the target as a suggestion (R29)', () => {
+  it('a done row never takes the target as its value (R29); with its weight cleared, the target is only its ghost (B2)', () => {
     const r = row({ ...plan, rule: null }, set('working', { done: true, reps: 8 }));
     expect(isTargetValue(r, 'weight')).toBe(false);
-    expect(fieldLook(r, 'weight', undefined)).toBe('empty');
+    expect(valueText(r, 'weight', 'lb')).toBe('');
+    expect(hintText(r, 'weight')).toBe('135');
+    expect(fieldLook(r, 'weight', undefined)).toBe('suggested');
   });
 
   it('placeholders from last time are suggestions', () => {
@@ -651,6 +653,15 @@ describe('isTargetValue and fieldLook (spec 18.6: suggested values look like sug
     const r = row({ ...plan, rule: null }, set('warmup'));
     expect(isTargetValue(r, 'weight')).toBe(false);
     expect(fieldLook(r, 'weight', undefined)).toBe('empty');
+  });
+
+  it("a ticked set's cleared weight field shows the target as its ghost, not last time's weight (B2)", () => {
+    // Leaving it blank takes the tick off, and the open row then shows the target: the ghost says so first.
+    const r = row({ ...plan, previous: [prev(0, 'working', 130, 8)] }, set('working', { done: true, weight: 135, weightUnit: 'lb', reps: 8 }));
+    expect(hintText(r, 'weight')).toBe('135');
+    expect(fieldLook(r, 'weight', '')).toBe('suggested');
+    // The value is still only what was saved (R29).
+    expect(valueText(r, 'weight', 'lb')).toBe('135');
   });
 
   it('a cleared target field shows the target as its ghost (R49)', () => {
