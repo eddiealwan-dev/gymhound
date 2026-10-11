@@ -9,6 +9,8 @@ import {
   removeExercise,
   removeSet,
   replaceExercise,
+  setExerciseMark,
+  setOverride,
   setShowRpe,
   toggleSupersetWithNext,
   updateSet,
@@ -33,7 +35,7 @@ import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
-import type { DistanceUnit, WeightUnit } from '../domain/types';
+import type { DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
 import { announce } from '../platform/announce';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
@@ -244,6 +246,18 @@ export function moveBlock(db: Db, workoutExerciseId: string, dir: 'up' | 'down')
 /** Links the exercise with the next one into a superset, or breaks that link. */
 export function toggleSuperset(db: Db, workoutExerciseId: string): void {
   toggleSupersetWithNext(db, workoutExerciseId);
+  bumpData();
+}
+
+/** Flags the exercise Something off with a reason, or clears it with null (Nothing off). Throws outside the active workout. */
+export function markExercise(db: Db, workoutExerciseId: string, mark: ExerciseMark | null): void {
+  setExerciseMark(db, workoutExerciseId, mark);
+  bumpData();
+}
+
+/** Sets today's weight for the exercise, or clears it with nulls. Today only: never written back to the rule. Throws outside the active workout. */
+export function overrideWeight(db: Db, workoutExerciseId: string, weight: number | null, unit: WeightUnit | null): void {
+  setOverride(db, workoutExerciseId, weight, unit);
   bumpData();
 }
 

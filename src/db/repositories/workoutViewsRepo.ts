@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
 import type { PrevSet } from '../../domain/setEntry';
-import type { DayMark, Equipment, LoggingType, WeightUnit } from '../../domain/types';
+import type { DayMark, Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -32,6 +32,8 @@ export type WorkoutExerciseView = {
   plannedUnit: WeightUnit | null;
   overrideWeight: number | null;
   overrideUnit: WeightUnit | null;
+  /** Something off today (R60): the reason the exercise is flagged, or null when nothing is off. */
+  mark: ExerciseMark | null;
   sets: SetView[];
   previous: PrevSet[];
 };
@@ -182,6 +184,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       plannedUnit: we.plannedUnit,
       overrideWeight: we.overrideWeight,
       overrideUnit: we.overrideUnit,
+      mark: we.mark,
       sets: setsByExercise.get(we.id) ?? [],
       previous: getPreviousSets(db, we.exerciseId, workout.id),
     })),

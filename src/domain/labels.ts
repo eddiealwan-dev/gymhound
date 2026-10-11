@@ -1,12 +1,18 @@
-import type { DayMark, Equipment, LoggingType } from './types';
+import type { DayMark, Equipment, ExerciseMark, LoggingType } from './types';
+
+/** How each Something off reason reads on screen, in the sheet's order (spec 18.7). */
+export const MARK_LABELS: Record<ExerciseMark, string> = {
+  rough_sleep: 'Rough sleep',
+  sick: 'Sick',
+  short_on_food: 'Short on food',
+  pain: 'Pain',
+  cutting: 'Cutting',
+};
 
 /** How each day mark reads on screen. */
 export const DAY_MARK_LABELS: Record<DayMark, string> = {
   normal: 'Normal',
-  rough_sleep: 'Rough sleep',
-  short_on_food: 'Short on food',
-  pain: 'Pain',
-  cutting: 'Cutting',
+  ...MARK_LABELS,
 };
 
 /** Types whose rep range counts seconds. */

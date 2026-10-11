@@ -73,6 +73,7 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
   plannedUnit: null,
   overrideWeight: null,
   overrideUnit: null,
+  mark: null,
   sets,
   previous: [],
 });

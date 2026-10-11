@@ -45,6 +45,7 @@ const mockBench: WorkoutExerciseView = {
   plannedUnit: null,
   overrideWeight: null,
   overrideUnit: null,
+  mark: null,
   sets: [set('s1', 0), set('s2', 1)],
   previous: [],
 };

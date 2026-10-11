@@ -26,7 +26,9 @@ import {
   commitSetField,
   discard,
   finish,
+  markExercise,
   moveBlock,
+  overrideWeight,
   removeFromWorkout,
   removeSetFrom,
   replaceWith,
@@ -1141,6 +1143,63 @@ describe('setRpeShown', () => {
     setRpeShown(db, bench().id, false);
     expect(bench().showRpe).toBe(false);
     expect(version()).toBe(before + 2);
+  });
+});
+
+// ---- Something off and today's override (phase 2, Task 1) ----
+
+/** The bench press of a Push A finished just now, with one set ticked. Nothing is active afterwards. */
+function finishedBenchId(): string {
+  startFromDay(db, PUSH_A);
+  const ex = bench();
+  tick(db, ex, ex.sets[0], VALUES);
+  finishWorkout(db, workoutId(), NOW + 3_600_000);
+  return ex.id;
+}
+
+describe('markExercise', () => {
+  it('flags the exercise Something off, then clears it, bumping the data version each time (R60)', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    markExercise(db, bench().id, 'short_on_food');
+    expect(activeView().exercises.map((e) => e.mark)).toEqual(['short_on_food', null, null, null, null]);
+
+    markExercise(db, bench().id, null);
+    expect(bench().mark).toBeNull();
+    expect(version()).toBe(before + 2);
+  });
+
+  it('throws for an exercise of a finished workout, leaving the version alone', () => {
+    const id = finishedBenchId();
+    const before = version();
+
+    expect(() => markExercise(db, id, 'pain')).toThrow('is not in the active workout');
+
+    expect(version()).toBe(before);
+  });
+});
+
+describe('overrideWeight', () => {
+  it("sets today's weight in its unit, then clears it, bumping the data version each time", () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    overrideWeight(db, bench().id, 80, 'kg');
+    expect(bench()).toMatchObject({ overrideWeight: 80, overrideUnit: 'kg' });
+
+    overrideWeight(db, bench().id, null, null);
+    expect(bench()).toMatchObject({ overrideWeight: null, overrideUnit: null });
+    expect(version()).toBe(before + 2);
+  });
+
+  it('throws for an exercise of a finished workout, leaving the version alone', () => {
+    const id = finishedBenchId();
+    const before = version();
+
+    expect(() => overrideWeight(db, id, 200, 'lb')).toThrow('is not in the active workout');
+
+    expect(version()).toBe(before);
   });
 });
 

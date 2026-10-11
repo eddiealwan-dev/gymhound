@@ -41,7 +41,9 @@ export type Muscle =
   | 'calves';
 
 export type SetType = 'working' | 'warmup' | 'drop' | 'failure';
-export type DayMark = 'normal' | 'rough_sleep' | 'short_on_food' | 'pain' | 'cutting';
+/** Something off (spec 18.7, R60): why an exercise is flagged today. Stored per workout exercise; null is nothing off. */
+export type ExerciseMark = 'rough_sleep' | 'sick' | 'short_on_food' | 'pain' | 'cutting';
+export type DayMark = 'normal' | ExerciseMark;
 
 export type BellSound = 'bell' | 'chime' | 'ding';
 

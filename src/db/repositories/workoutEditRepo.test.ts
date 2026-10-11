@@ -13,6 +13,8 @@ import {
   removeExercise,
   removeSet,
   replaceExercise,
+  setExerciseMark,
+  setOverride,
   setShowRpe,
   toggleSupersetWithNext,
   updateSet,
@@ -601,6 +603,21 @@ describe('replaceExercise', () => {
     expect(rawWorkoutExercise(db, bench.id).routineExerciseId).toBeNull();
   });
 
+  it("keeps today's Something off mark, which is about today and not the movement, and still clears the override (R60)", () => {
+    const { db, ids } = startPushA();
+    setExerciseMark(db, ids[0], 'rough_sleep');
+    setOverride(db, ids[0], 190, 'lb');
+
+    replaceExercise(db, ids[0], 'dumbbell-bench-press');
+
+    expect(view(db).exercises[0]).toMatchObject({
+      exerciseId: 'dumbbell-bench-press',
+      mark: 'rough_sleep',
+      overrideWeight: null,
+      overrideUnit: null,
+    });
+  });
+
   it('leaves the other exercises and the superset group alone', () => {
     const { db, ids } = startPushA();
     toggleSupersetWithNext(db, ids[0]);
@@ -706,5 +723,102 @@ describe('setShowRpe', () => {
     expect(view(db).exercises.map((e) => e.showRpe)).toEqual([true, false, false, false, false]);
     setShowRpe(db, ids[0], false);
     expect(view(db).exercises[0].showRpe).toBe(false);
+  });
+});
+
+/** A finished Push A and the id of its bench press. Nothing is active afterwards. */
+function finishedBench(): { db: Db; benchId: string } {
+  const { db, workoutId, ids } = startPushA();
+  const [first] = view(db).exercises[0].sets;
+  tickSet(db, first.id, { weight: 135, reps: 5, durationS: null, distance: null }, 'lb', NOW, 'mi');
+  finishWorkout(db, workoutId, NOW + HOUR);
+  return { db, benchId: ids[0] };
+}
+
+describe('setExerciseMark', () => {
+  it('starts with no mark on every exercise', () => {
+    const { db } = startPushA();
+    expect(view(db).exercises.map((e) => e.mark)).toEqual([null, null, null, null, null]);
+  });
+
+  it('marks one exercise Something off, and the view reads it back', () => {
+    const { db, ids } = startPushA();
+    setExerciseMark(db, ids[1], 'sick');
+    expect(view(db).exercises.map((e) => e.mark)).toEqual([null, 'sick', null, null, null]);
+  });
+
+  it('changes the reason, and Nothing off (null) clears it', () => {
+    const { db, ids } = startPushA();
+    setExerciseMark(db, ids[0], 'rough_sleep');
+    setExerciseMark(db, ids[0], 'pain');
+    expect(view(db).exercises[0].mark).toBe('pain');
+
+    setExerciseMark(db, ids[0], null);
+    expect(view(db).exercises[0].mark).toBeNull();
+  });
+
+  it('marks an exercise added to an empty workout', () => {
+    const db = seededDb();
+    const workoutId = startEmptyWorkout(db, NOW);
+    const id = addExerciseToWorkout(db, workoutId, 'face-pull');
+    setExerciseMark(db, id, 'cutting');
+    expect(view(db).exercises[0].mark).toBe('cutting');
+  });
+
+  it('refuses an exercise of a finished workout, and changes nothing', () => {
+    const { db, benchId } = finishedBench();
+    expect(() => setExerciseMark(db, benchId, 'rough_sleep')).toThrow(`Workout exercise ${benchId} is not in the active workout.`);
+    expect(rawWorkoutExercise(db, benchId).mark).toBeNull();
+  });
+
+  it('refuses an exercise that does not exist', () => {
+    const { db } = startPushA();
+    expect(() => setExerciseMark(db, 'nope', 'pain')).toThrow('No workout exercise with id nope.');
+  });
+});
+
+describe('setOverride', () => {
+  it("sets today's weight with its unit on one exercise, and the view reads it back", () => {
+    const { db, ids } = startPushA();
+    setOverride(db, ids[0], 82.5, 'kg');
+    expect(view(db).exercises[0]).toMatchObject({ overrideWeight: 82.5, overrideUnit: 'kg' });
+    expect(view(db).exercises[1]).toMatchObject({ overrideWeight: null, overrideUnit: null });
+  });
+
+  it('replaces an override, and Clear (null, null) removes it', () => {
+    const { db, ids } = startPushA();
+    setOverride(db, ids[0], 185, 'lb');
+    setOverride(db, ids[0], 190, 'lb');
+    expect(view(db).exercises[0]).toMatchObject({ overrideWeight: 190, overrideUnit: 'lb' });
+
+    setOverride(db, ids[0], null, null);
+    expect(view(db).exercises[0]).toMatchObject({ overrideWeight: null, overrideUnit: null });
+  });
+
+  it("is never written back to the rule: the planned weight and the routine's next weight stay", () => {
+    const db = seededDb();
+    const benchRule = `${PUSH_A}:barbell-bench-press`;
+    db.update(routineExercises).set({ nextWeight: 185, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, benchRule)).run();
+    startWorkoutFromDay(db, PUSH_A, NOW);
+    const benchId = view(db).exercises[0].id;
+
+    setOverride(db, benchId, 175, 'lb');
+
+    expect(view(db).exercises[0]).toMatchObject({ plannedWeight: 185, plannedUnit: 'lb', overrideWeight: 175 });
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, benchRule)).get()).toMatchObject({
+      nextWeight: 185,
+      nextWeightUnit: 'lb',
+    });
+  });
+
+  it('refuses an exercise of a finished workout, and changes nothing', () => {
+    const { db, benchId } = finishedBench();
+    expect(() => setOverride(db, benchId, 200, 'lb')).toThrow(`Workout exercise ${benchId} is not in the active workout.`);
+    expect(rawWorkoutExercise(db, benchId)).toMatchObject({ overrideWeight: null, overrideUnit: null });
+  });
+
+  it('refuses an exercise that does not exist', () => {
+    const { db } = startPushA();
+    expect(() => setOverride(db, 'nope', 100, 'lb')).toThrow('No workout exercise with id nope.');
   });
 });
