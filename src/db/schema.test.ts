@@ -352,7 +352,7 @@ describe('migration 0007 (phase 5, R132, R158)', () => {
       INSERT INTO food_log (id, local_date, logged_at, food_id, name, servings, kcal, protein_g, carbs_g, fat_g)
       VALUES ('f1', '2026-10-10', 1, NULL, 'Quick add', 1, 500, 40, 0, 0)`);
 
-    migrateTestDb(db);
+    migrateUpTo(db, 7);
 
     expect(tableNames(db).sort()).toEqual([...before, 'water_log'].sort());
     expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
@@ -360,6 +360,50 @@ describe('migration 0007 (phase 5, R132, R158)', () => {
       expect.objectContaining({ id: 'f1', kcal: 500, proteinG: 40, servingLabel: null }),
     ]);
     expect(db.select().from(schema.waterLog).all()).toEqual([]);
+    close();
+  });
+});
+
+describe('migration 0008 (phase 6, R162)', () => {
+  type Column = { name: string; type: string; notnull: number; dflt_value: string | null; pk: number };
+  const columns = (db: Db, table: string) =>
+    db.all<Column>(sql.raw(`pragma table_info(${table})`)).map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, pk: c.pk }));
+  const indexes = (db: Db, table: string) => db.all<{ name: string }>(sql.raw(`pragma index_list(${table})`)).map((i) => i.name);
+  const tableNames = (db: Db) => db.all<{ name: string }>(sql`select name from sqlite_master where type='table'`).map((r) => r.name);
+
+  it('adds only the progress_photos table, with its local date index', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'progress_photos')).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'local_date', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'taken_at', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'file_name', type: 'TEXT', notnull: 1, pk: 0 },
+    ]);
+    expect(indexes(db, 'progress_photos')).toContain('progress_photos_local_date_idx');
+  });
+
+  it('round-trips a progress photo row: the file name only', () => {
+    const { db } = createTestDb();
+    db.insert(schema.progressPhotos).values({ id: 'pp1', localDate: '2026-10-11', takenAt: 1, fileName: 'progress-1.jpg' }).run();
+    expect(db.select().from(schema.progressPhotos).all()).toEqual([{ id: 'pp1', localDate: '2026-10-11', takenAt: 1, fileName: 'progress-1.jpg' }]);
+  });
+
+  it('migrates a database at 0007 forward: its data is kept and progress_photos starts empty', () => {
+    const { db, close } = openFileDb(':memory:');
+    migrateUpTo(db, 7);
+    const before = tableNames(db);
+    expect(before).not.toContain('progress_photos');
+    db.run(sql`
+      INSERT INTO workouts (id, name, status, day_mark, started_at, finished_at, local_date, food_offer_shown, saved_workout_id)
+      VALUES ('w1', 'Push A', 'finished', 'normal', 1, 2, '2026-10-10', 0, NULL)`);
+    db.run(sql`INSERT INTO water_log (id, local_date, logged_at, amount_ml) VALUES ('wl1', '2026-10-10', 1, 500)`);
+
+    migrateTestDb(db);
+
+    expect(tableNames(db).sort()).toEqual([...before, 'progress_photos'].sort());
+    expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
+    expect(db.select().from(schema.waterLog).all()).toEqual([{ id: 'wl1', localDate: '2026-10-10', loggedAt: 1, amountMl: 500 }]);
+    expect(db.select().from(schema.progressPhotos).all()).toEqual([]);
     close();
   });
 });

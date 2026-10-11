@@ -17,7 +17,10 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -28,9 +31,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "GymHound uses your photos only for exercise pictures you choose.",
-          "cameraPermission": "GymHound uses the camera only to take an exercise picture.",
+          "photosPermission": "GymHound uses your photos only for exercise and progress pictures you choose.",
+          "cameraPermission": "GymHound uses the camera only to take exercise and progress pictures.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "GymHound reads your step count only to show your steps on Stats."
         }
       ]
     ],

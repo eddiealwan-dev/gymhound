@@ -89,3 +89,6 @@ export type Macros = { kcal: number; protein: number; carbs: number | null; fat:
 export type FuelTargets = { training: Macros; rest: Macros };
 /** How water is shown and typed: ml for kg users, fl oz for lb users (R150). Always stored in ml. */
 export type WaterUnit = 'ml' | 'fl_oz';
+
+/** A progress photo (R181): the row holds the file name only; the file is in the documents folder's `progress-photos/`. */
+export type ProgressPhoto = { id: string; localDate: string; takenAt: number; fileName: string };

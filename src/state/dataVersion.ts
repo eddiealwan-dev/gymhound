@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useDb } from '../db/DbProvider';
 import type { Db } from '../db/types';
@@ -40,4 +40,49 @@ export function useDbQuery<T>(query: (db: Db) => T): T {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- version and focusCount are the triggers
   return useMemo(() => query(db), [db, query, version, focusCount]);
+}
+
+/**
+ * As useDbQuery, but a bump while the screen is not focused only marks it stale; it reads again on focus if stale (R185).
+ * A focus with no bump since the last read reads nothing. For History, Stats and their sections, which scan all history:
+ * every tick in a workout bumps the data version, and they should not read again while out of sight.
+ *
+ * `query` must be stable: a module-level function, or a `useCallback` whose dependencies are the values it reads with
+ * (such as `today`). A new function each render reads on every render.
+ */
+export function useFocusedDbQuery<T>(query: (db: Db) => T): T {
+  const db = useDb();
+  // The data version the current read reflects. It follows the store only while the screen is focused.
+  const [seen, setSeen] = useState(() => useDataVersion.getState().version);
+  const seenRef = useRef(seen);
+  seenRef.current = seen;
+  // A screen is focused when it mounts; its focus effect says so again, and its cleanup says when it loses focus.
+  const focused = useRef(true);
+
+  const catchUp = useCallback(() => {
+    const version = useDataVersion.getState().version;
+    if (version !== seenRef.current) setSeen(version);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = useDataVersion.subscribe(() => {
+      if (focused.current) catchUp();
+    });
+    // A bump between the first render and this subscription is not missed.
+    if (focused.current) catchUp();
+    return unsubscribe;
+  }, [catchUp]);
+
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      catchUp();
+      return () => {
+        focused.current = false;
+      };
+    }, [catchUp]),
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- seen is the trigger
+  return useMemo(() => query(db), [db, query, seen]);
 }

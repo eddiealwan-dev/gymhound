@@ -183,6 +183,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="paywall" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="food/add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="food/[id]" options={{ presentation: 'modal' }} />
+        {/* Phase 6 (R181): a progress photo opens full screen, with no dock. */}
+        <Stack.Screen name="photo/[id]" options={{ presentation: 'fullScreenModal' }} />
       </Stack>
       {/* Rings the end of the rest timer wherever the user is in the app. */}
       <RestWatcher />

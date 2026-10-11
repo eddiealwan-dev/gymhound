@@ -16,6 +16,12 @@ export default function TabsLayout() {
       <Tabs.Screen name="saved/[id]" options={{ href: null }} />
       <Tabs.Screen name="body/[kind]" options={{ href: null }} />
       <Tabs.Screen name="fuel-targets" options={{ href: null }} />
+      {/* Phase 6 (R172): a workout and its editor under History; the lifts and the progress photos under Stats. */}
+      <Tabs.Screen name="history/[id]" options={{ href: null }} />
+      <Tabs.Screen name="history/edit/[id]" options={{ href: null }} />
+      <Tabs.Screen name="lifts" options={{ href: null }} />
+      <Tabs.Screen name="lift/[id]" options={{ href: null }} />
+      <Tabs.Screen name="photos" options={{ href: null }} />
     </Tabs>
   );
 }
