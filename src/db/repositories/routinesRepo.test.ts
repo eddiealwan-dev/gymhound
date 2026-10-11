@@ -1,12 +1,22 @@
 /** @jest-environment node */
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { canAddRoutine } from '../../domain/routineLimit';
 import type { ExerciseMark } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getSettings, setSetting } from './settingsRepo';
-import { getUpNext, listRoutines, setActiveRoutine } from './routinesRepo';
+import {
+  deleteRoutine,
+  duplicateRoutine,
+  getRoutineDetail,
+  getUpNext,
+  listRoutines,
+  PremadeRoutineError,
+  setActiveRoutine,
+  userRoutineCount,
+} from './routinesRepo';
 import { setExerciseMark } from './workoutEditRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 
@@ -301,5 +311,230 @@ describe('getUpNext', () => {
     setExerciseMark(db, benchIn(db, active).id, 'pain');
 
     expect(getUpNext(db)!.exercises[0]).toMatchObject({ lastOutcome: 'raised', lastMark: null });
+  });
+});
+
+/** The days of a routine in position order, each with its exercise rows in position order. */
+function rowsOf(db: Db, routineId: string) {
+  return db
+    .select()
+    .from(routineDays)
+    .where(eq(routineDays.routineId, routineId))
+    .orderBy(asc(routineDays.position))
+    .all()
+    .map((day) => ({
+      day,
+      exercises: db
+        .select()
+        .from(routineExercises)
+        .where(eq(routineExercises.routineDayId, day.id))
+        .orderBy(asc(routineExercises.position))
+        .all(),
+    }));
+}
+
+type ExerciseRow = typeof routineExercises.$inferSelect;
+
+/** A routine exercise row without its ids and progress: the rule as the editor sets it. */
+function ruleOfRow({ id: _id, routineDayId: _day, nextWeight: _w, nextWeightUnit: _u, ...rule }: ExerciseRow) {
+  return rule;
+}
+
+describe('getRoutineDetail', () => {
+  it('is null for a routine that does not exist', () => {
+    expect(getRoutineDetail(seededDb(), 'no-such-routine')).toBeNull();
+  });
+
+  it("shows a premade's days in order, each with its exercises and their rules", () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    db.update(routineExercises)
+      .set({ nextWeight: 135, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, `${PUSH_A}:barbell-bench-press`))
+      .run();
+
+    const detail = getRoutineDetail(db, PPL)!;
+    expect([detail.id, detail.name, detail.isPremade, detail.isActive]).toEqual([PPL, 'Push/pull/legs', true, true]);
+    expect(detail.days.map((d) => d.name)).toEqual(['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B']);
+    expect(detail.days[0].id).toBe(PUSH_A);
+    expect(detail.days[0].exercises.map((e) => e.exerciseId)).toEqual([
+      'barbell-bench-press',
+      'barbell-overhead-press',
+      'incline-dumbbell-press',
+      'dumbbell-lateral-raise',
+      'cable-triceps-pushdown',
+    ]);
+    expect(detail.days[0].exercises[0]).toEqual({
+      id: `${PUSH_A}:barbell-bench-press`,
+      exerciseId: 'barbell-bench-press',
+      name: 'Barbell bench press',
+      loggingType: 'weighted',
+      equipment: 'barbell',
+      setCount: 4,
+      repMin: 5,
+      repMax: 8,
+      increment: 5,
+      incrementUnit: 'lb',
+      supersetGroup: null,
+      nextWeight: 135,
+      nextWeightUnit: 'lb',
+    });
+  });
+
+  it('is not active when another routine is', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-fullbody-3');
+    expect(getRoutineDetail(db, PPL)!.isActive).toBe(false);
+  });
+});
+
+describe('userRoutineCount', () => {
+  it('counts only your own routines', () => {
+    const db = seededDb();
+    expect(userRoutineCount(db)).toBe(0);
+    insertUserRoutine(db, 'user-a', 1_000);
+    insertUserRoutine(db, 'user-b', 2_000);
+    expect(userRoutineCount(db)).toBe(2);
+  });
+});
+
+describe('duplicateRoutine', () => {
+  it('copies a premade as your own routine named "{name} copy", created now, from its first day', () => {
+    const db = seededDb();
+    db.update(routines).set({ nextDayIndex: 4 }).where(eq(routines.id, PPL)).run();
+
+    const id = duplicateRoutine(db, PPL, NOW);
+    expect(id).not.toBe(PPL);
+    expect(db.select().from(routines).where(eq(routines.id, id)).get()).toEqual({
+      id,
+      name: 'Push/pull/legs copy',
+      isPremade: false,
+      nextDayIndex: 0,
+      createdAt: NOW,
+    });
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, id]);
+  });
+
+  it('copies every day and exercise with new ids, the same rules and superset groups, and no next weights', () => {
+    const db = seededDb();
+    db.update(routineExercises)
+      .set({ nextWeight: 140, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, `${PUSH_A}:barbell-bench-press`))
+      .run();
+    db.update(routineExercises)
+      .set({ supersetGroup: 1, increment: 2.5, incrementUnit: 'kg' })
+      .where(inArray(routineExercises.id, [`${PUSH_A}:dumbbell-lateral-raise`, `${PUSH_A}:cable-triceps-pushdown`]))
+      .run();
+
+    const id = duplicateRoutine(db, PPL, NOW);
+    const source = rowsOf(db, PPL);
+    const copy = rowsOf(db, id);
+
+    expect(copy.map((d) => [d.day.name, d.day.position])).toEqual(source.map((d) => [d.day.name, d.day.position]));
+    const sourceIds = new Set(source.flatMap((d) => [d.day.id, ...d.exercises.map((e) => e.id)]));
+    for (const { day, exercises } of copy) {
+      expect(sourceIds.has(day.id)).toBe(false);
+      for (const e of exercises) {
+        expect(sourceIds.has(e.id)).toBe(false);
+        expect(e.routineDayId).toBe(day.id);
+        expect([e.nextWeight, e.nextWeightUnit]).toEqual([null, null]);
+      }
+    }
+    expect(copy.map((d) => d.exercises.map(ruleOfRow))).toEqual(source.map((d) => d.exercises.map(ruleOfRow)));
+    expect(copy[0].exercises.map((e) => [e.supersetGroup, e.increment, e.incrementUnit])).toEqual([
+      [null, 5, 'lb'],
+      [null, 5, 'lb'],
+      [null, 5, 'lb'],
+      [1, 2.5, 'kg'],
+      [1, 2.5, 'kg'],
+    ]);
+  });
+
+  it('leaves the source untouched', () => {
+    const db = seededDb();
+    const before = rowsOf(db, PPL);
+    duplicateRoutine(db, PPL, NOW);
+    expect(rowsOf(db, PPL)).toEqual(before);
+  });
+
+  it('copies your own routine too, and the copy counts toward the free limit', () => {
+    const db = seededDb();
+    const first = duplicateRoutine(db, 'premade-fullbody-3', NOW);
+    expect(userRoutineCount(db)).toBe(1);
+    expect(canAddRoutine(userRoutineCount(db), false)).toBe(false);
+
+    const second = duplicateRoutine(db, first, NOW + HOUR);
+    expect(getRoutineDetail(db, second)!.name).toBe('Full body copy copy');
+    expect(userRoutineCount(db)).toBe(2);
+  });
+
+  it('throws for a routine that does not exist, adding nothing', () => {
+    const db = seededDb();
+    expect(() => duplicateRoutine(db, 'no-such-routine', NOW)).toThrow();
+    expect(userRoutineCount(db)).toBe(0);
+  });
+});
+
+describe('deleteRoutine (R90)', () => {
+  it('refuses a premade, which stays as it was', () => {
+    const db = seededDb();
+    const before = rowsOf(db, PPL);
+    expect(() => deleteRoutine(db, PPL)).toThrow(PremadeRoutineError);
+    expect(getRoutineDetail(db, PPL)).not.toBeNull();
+    expect(rowsOf(db, PPL)).toEqual(before);
+  });
+
+  it('deletes your routine with its days and exercises, and frees the slot', () => {
+    const db = seededDb();
+    const id = duplicateRoutine(db, PPL, NOW);
+    const dayIds = rowsOf(db, id).map((d) => d.day.id);
+
+    deleteRoutine(db, id);
+    expect(getRoutineDetail(db, id)).toBeNull();
+    expect(db.select().from(routineDays).where(eq(routineDays.routineId, id)).all()).toEqual([]);
+    expect(db.select().from(routineExercises).where(inArray(routineExercises.routineDayId, dayIds)).all()).toEqual([]);
+    expect(userRoutineCount(db)).toBe(0);
+    expect(canAddRoutine(userRoutineCount(db), false)).toBe(true);
+    // The premade it was copied from is untouched.
+    expect(rowsOf(db, PPL)).toHaveLength(6);
+  });
+
+  it('keeps the finished workouts run from it, and no routine is active when it was the active one', () => {
+    const db = seededDb();
+    const id = duplicateRoutine(db, PPL, NOW);
+    setActiveRoutine(db, id);
+    const firstDay = rowsOf(db, id)[0].day.id;
+    const workoutId = startWorkoutFromDay(db, firstDay, NOW);
+    const bench = benchIn(db, workoutId);
+    const benchSets = db.select({ id: sets.id }).from(sets).where(eq(sets.workoutExerciseId, bench.id)).all();
+    benchSets.forEach((s, i) =>
+      tickSet(db, s.id, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', NOW + (i + 1) * 60_000, 'mi'),
+    );
+    finishWorkout(db, workoutId, NOW + HOUR);
+
+    deleteRoutine(db, id);
+    expect(db.select().from(workouts).where(eq(workouts.id, workoutId)).get()).toMatchObject({
+      status: 'finished',
+      routineId: id,
+      routineDayId: firstDay,
+    });
+    expect(db.select().from(sets).where(eq(sets.workoutExerciseId, bench.id)).all()).toHaveLength(benchSets.length);
+    expect(getSettings(db).activeRoutineId).toBeNull();
+    expect(getUpNext(db)).toBeNull();
+  });
+
+  it('leaves another active routine active', () => {
+    const db = seededDb();
+    const id = duplicateRoutine(db, PPL, NOW);
+    setActiveRoutine(db, PPL);
+    deleteRoutine(db, id);
+    expect(getSettings(db).activeRoutineId).toBe(PPL);
+  });
+
+  it('does nothing for a routine that does not exist', () => {
+    const db = seededDb();
+    setActiveRoutine(db, PPL);
+    expect(() => deleteRoutine(db, 'no-such-routine')).not.toThrow();
+    expect(getSettings(db).activeRoutineId).toBe(PPL);
   });
 });
