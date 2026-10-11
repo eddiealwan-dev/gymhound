@@ -4,7 +4,8 @@
  * where it is allowed; else free-only. Screens use `entitlementsFor(db)` (one object per app, R126) or the hooks.
  */
 
-export type PurchaseResult = 'purchased' | 'cancelled' | 'unavailable' | 'failed';
+/** `pending`: the store is waiting for approval (Ask to Buy, a delayed payment); Pro comes on when it is approved. */
+export type PurchaseResult = 'purchased' | 'cancelled' | 'pending' | 'unavailable' | 'failed';
 export type RestoreResult = 'restored' | 'none' | 'unavailable' | 'failed';
 
 /** A subscription's billing period (R157): `{ count: 3, unit: 'month' }` renews every 3 months. */
@@ -23,12 +24,18 @@ export interface Entitlements {
   subscribe(onChange: () => void): () => void;
   /** Whether a store is configured and its `default` offering has a package to buy. */
   canPurchase(): boolean;
+  /** Whether a store is configured, so Restore purchases can ask it, even when there is nothing to buy right now. */
+  canRestore(): boolean;
+  /** Asks the store for its `default` offering again (the paywall opening); keeps the last one if the store fails. */
+  refreshOffer(): void;
   /** The package Unlock would buy, or null when there is none (yet). */
   offer(): StoreOffer | null;
   /** Buys Pro (R136). */
   purchase(): Promise<PurchaseResult>;
   /** Restores an earlier purchase (R136). */
   restore(): Promise<RestoreResult>;
+  /** Opens the store's page for managing subscriptions. False when there is no store or it couldn't open; never throws. */
+  manageSubscription(): Promise<boolean>;
 }
 
 export type EntitlementsKind = 'free' | 'debug' | 'revenuecat';
@@ -45,7 +52,7 @@ export type AppEntitlements = Entitlements & {
 
 /**
  * The narrow adapter over the RevenueCat SDK: only what GymHound calls. `revenuecatSdk.native.ts` maps the real
- * package; tests pass a fake. `purchase` rejects with `{ userCancelled: true }` when the user cancels.
+ * package; tests pass a fake.
  */
 export type PurchasesSdk = {
   configure(apiKey: string): void;
@@ -53,8 +60,11 @@ export type PurchasesSdk = {
   onCustomerInfo(listener: (info: { activeEntitlements: string[] }) => void): () => void;
   /** The `default` offering's first package, or null when there is none. */
   getDefaultPackage(): Promise<{ id: string; priceString: string; period: StoreOffer['period'] } | null>;
+  /** Rejects with `{ userCancelled: true }` on a cancel and `{ paymentPending: true }` while a payment awaits approval. */
   purchase(packageId: string): Promise<{ activeEntitlements: string[] }>;
   restore(): Promise<{ activeEntitlements: string[] }>;
+  /** The store's own page for managing subscriptions. */
+  showManageSubscriptions(): Promise<void>;
 };
 
 export { debugUnlockAllowed, createDebugEntitlements } from './debug';

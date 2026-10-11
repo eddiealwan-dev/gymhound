@@ -15,6 +15,7 @@ import { Button } from './Button';
 let mockDb: Db;
 let mockState: EntitlementsState;
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
+const mockManage = jest.fn<Promise<boolean>, []>();
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
@@ -24,7 +25,7 @@ jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise
 jest.mock('../platform/entitlements', () => ({
   debugUnlockAllowed: () => false,
   useEntitlementsState: () => mockState,
-  entitlementsFor: () => ({ restore: mockRestore, purchase: jest.fn() }),
+  entitlementsFor: () => ({ restore: mockRestore, purchase: jest.fn(), manageSubscription: mockManage }),
 }));
 jest.mock('../state/backup', () => ({
   snapshotListing: () => ({ path: null, names: [], error: null }),
@@ -47,7 +48,7 @@ const FREE_LINE = 'Free holds one routine of your own. Pro adds more routines an
 const UNAVAILABLE = "Purchases aren't available in this build.";
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, offer: null, kind: 'revenuecat', ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: null, kind: 'revenuecat', ...over };
 }
 
 function mount(): ReactTestRenderer {
@@ -65,6 +66,8 @@ beforeEach(() => {
   mockDb = seededDb();
   mockState = state();
   mockRestore.mockReset();
+  mockManage.mockReset();
+  mockManage.mockResolvedValue(true);
   jest.mocked(announce).mockClear();
   jest.mocked(router.push).mockClear();
 });
@@ -83,6 +86,16 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
     expect(texts(tree)).not.toContain('Pro is on.');
     act(() => buttons(tree, 'See Pro')[0].props.onPress());
     expect(router.push).toHaveBeenCalledWith('/paywall');
+  });
+
+  it('a double tap on See Pro opens one paywall', () => {
+    const tree = mount();
+    const [seePro] = buttons(tree, 'See Pro');
+    act(() => {
+      seePro.props.onPress();
+      seePro.props.onPress();
+    });
+    expect(router.push).toHaveBeenCalledTimes(1);
   });
 
   it('Pro from the store: "Pro is on.", no See Pro', () => {
@@ -104,13 +117,20 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
   });
 
   it('Restore purchases is always there, secondary; disabled with one line when there is no store', () => {
-    mockState = state({ kind: 'debug', canPurchase: false });
+    mockState = state({ kind: 'debug', canPurchase: false, canRestore: false });
     const tree = mount();
 
     const [restore] = buttons(tree, 'Restore purchases');
     expect(restore.props.variant).toBe('secondary');
     expect(restore.props.disabled).toBe(true);
     expect(texts(tree).filter((line) => line === UNAVAILABLE)).toHaveLength(1);
+  });
+
+  it('with a store that has nothing to sell yet, Restore purchases still works', () => {
+    mockState = state({ canPurchase: false, canRestore: true });
+    const tree = mount();
+    expect(buttons(tree, 'Restore purchases')[0].props.disabled).toBeFalsy();
+    expect(texts(tree)).not.toContain(UNAVAILABLE);
   });
 
   it('with a store, Restore purchases is enabled and says what happened, announced', async () => {
@@ -143,7 +163,40 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
 
     await act(async () => buttons(tree, 'Restore purchases')[0].props.onPress());
     expect(buttons(tree, 'Restore purchases')[0].props.disabled).toBe(true);
+    expect(texts(tree)).toContain('Working…');
+    expect(announce).toHaveBeenCalledWith('Working…');
     await act(async () => finish('none'));
     expect(buttons(tree, 'Restore purchases')[0].props.disabled).toBeFalsy();
+  });
+
+  describe('Manage subscription', () => {
+    const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
+
+    it('shows a quiet Manage subscription when Pro comes from a store subscription; it opens the store page', async () => {
+      mockState = state({ isPro: true, offer: MONTHLY });
+      const tree = mount();
+      const [manage] = buttons(tree, 'Manage subscription');
+      expect(manage.props.variant).toBe('quiet');
+      await act(async () => manage.props.onPress());
+      expect(mockManage).toHaveBeenCalledTimes(1);
+    });
+
+    it('a store page that cannot open changes nothing and throws nothing', async () => {
+      mockState = state({ isPro: true, offer: MONTHLY });
+      mockManage.mockResolvedValue(false);
+      const tree = mount();
+      await act(async () => buttons(tree, 'Manage subscription')[0].props.onPress());
+      expect(texts(tree)).toContain('Pro is on.');
+    });
+
+    it.each([
+      ['a one-time unlock', { isPro: true, offer: { priceString: '$24.99', period: null } }],
+      ['the debug unlock', { isPro: true, isDebugPro: true, kind: 'debug' as const, canRestore: false, canPurchase: false, offer: null }],
+      ['free', { offer: MONTHLY }],
+      ['no store', { isPro: true, canRestore: false, canPurchase: false, offer: MONTHLY }],
+    ])('is hidden for %s', (_name, over) => {
+      mockState = state(over);
+      expect(buttons(mount(), 'Manage subscription')).toHaveLength(0);
+    });
   });
 });

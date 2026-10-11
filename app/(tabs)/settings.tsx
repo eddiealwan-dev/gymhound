@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
@@ -18,6 +17,7 @@ import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersio
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { PlatesEditor } from '../../src/ui/PlatesEditor';
+import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
@@ -503,12 +503,16 @@ function ExportSection() {
 
 /**
  * GymHound Pro (§8.11, R138): whether Pro is on (from the store, or only for testing), or what it adds with **See Pro**
- * (the paywall); and **Restore purchases**, always, saying what happened as the paywall does. With no store to buy
- * from, Restore purchases is disabled under one line.
+ * (the paywall, once per tap); and **Restore purchases**, always, saying what happened as the paywall does. With no
+ * store in the build, Restore purchases is disabled under one line. A store subscription adds a quiet **Manage
+ * subscription**, which opens the store's own page.
  */
 function ProSection() {
-  const { isPro, isDebugPro, canPurchase } = useEntitlementsState();
-  const { busy, message, run } = useStoreAction();
+  const db = useDb();
+  const { isPro, isDebugPro, canRestore, offer, kind } = useEntitlementsState();
+  const { busy, status, run } = useStoreAction();
+  const openPaywall = useOpenPaywall();
+  const subscribed = kind === 'revenuecat' && canRestore && isPro && !isDebugPro && offer !== null && offer.period !== null;
   return (
     <Section title="GymHound Pro">
       {isPro ? (
@@ -516,13 +520,24 @@ function ProSection() {
       ) : (
         <View style={{ gap: 8 }}>
           <Body>Free holds one routine of your own. Pro adds more routines and Fuel.</Body>
-          <Button label="See Pro" onPress={() => router.push('/paywall')} />
+          <Button label="See Pro" onPress={openPaywall} />
         </View>
       )}
       <View style={{ gap: 8 }}>
-        <Button label="Restore purchases" variant="secondary" disabled={!canPurchase || busy} onPress={() => run('restore')} />
-        {!canPurchase ? <Body muted>{PURCHASES_UNAVAILABLE}</Body> : null}
-        {message !== null ? <Body muted>{message}</Body> : null}
+        <Button label="Restore purchases" variant="secondary" disabled={!canRestore || busy} onPress={() => run('restore')} />
+        {!canRestore ? <Body muted>{PURCHASES_UNAVAILABLE}</Body> : null}
+        {status !== null ? <Body muted>{status}</Body> : null}
+        {subscribed ? (
+          <Button
+            label="Manage subscription"
+            variant="quiet"
+            onPress={() => {
+              entitlementsFor(db)
+                .manageSubscription()
+                .catch(() => false);
+            }}
+          />
+        ) : null}
       </View>
     </Section>
   );

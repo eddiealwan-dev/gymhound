@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { Linking, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import PaywallRoute from '../../app/paywall';
@@ -17,6 +17,7 @@ import { priceLine, ProPitch } from './pro/ProPitch';
 let mockState: EntitlementsState;
 const mockPurchase = jest.fn<Promise<PurchaseResult>, []>();
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
+const mockRefreshOffer = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: function Ionicons() { return null; } }));
@@ -25,7 +26,7 @@ jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({
   useEntitlementsState: () => mockState,
-  entitlementsFor: () => ({ purchase: mockPurchase, restore: mockRestore }),
+  entitlementsFor: () => ({ purchase: mockPurchase, restore: mockRestore, refreshOffer: mockRefreshOffer }),
 }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -39,6 +40,10 @@ const FUEL = 'Fuel: calories and protein, with training and rest day targets, an
 const FREE =
   'Everything else stays free: logging, history, premade routines, your first routine, saved workouts, timer, plates, PRs, Something off, body measurements and water.';
 const UNAVAILABLE = "Purchases aren't available in this build.";
+const NOT_ANSWERING = "The store isn't answering. Try again later.";
+const RENEWS = 'Renews automatically until you cancel in your App Store or Google Play account.';
+const PENDING = "Waiting for approval. Pro comes on once it's approved.";
+const WORKING = 'Working…';
 const PURCHASE_FAILED = "Couldn't finish the purchase. Try again.";
 const NONE_FOUND = 'No earlier purchase found.';
 const RESTORE_FAILED = "Couldn't reach the store. Try again.";
@@ -46,7 +51,7 @@ const RESTORE_FAILED = "Couldn't reach the store. Try again.";
 const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, offer: MONTHLY, kind: 'revenuecat', ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: MONTHLY, kind: 'revenuecat', ...over };
 }
 
 function render(element: React.ReactElement): ReactTestRenderer {
@@ -85,6 +90,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   mockState = state();
+  mockRefreshOffer.mockClear();
   mockPurchase.mockReset();
   mockRestore.mockReset();
   jest.mocked(announce).mockClear();
@@ -101,8 +107,8 @@ describe('priceLine (§8.12, R157)', () => {
     expect(priceLine({ priceString: '$9.99', period: { count: 2, unit: 'week' } })).toBe('$9.99 every 2 weeks');
   });
 
-  it('says nothing for a one-time unlock or no offer', () => {
-    expect(priceLine({ priceString: '$24.99', period: null })).toBeNull();
+  it('says "{price} once" for a one-time unlock (R159), and nothing with no offer', () => {
+    expect(priceLine({ priceString: '$24.99', period: null })).toBe('$24.99 once');
     expect(priceLine(null)).toBeNull();
   });
 });
@@ -143,14 +149,78 @@ describe('ProPitch (§8.12, R137)', () => {
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
   });
 
-  it('writes no price for a one-time unlock', () => {
-    mockState = state({ offer: { priceString: '$24.99', period: null } });
+  it('says a subscription renews until cancelled in the store (R159)', () => {
     const tree = render(<ProPitch context="screen" />);
-    expect(shownText(tree).join(' ')).not.toContain('$24.99');
+    const shown = shownText(tree);
+    expect(shown).toContain(RENEWS);
+    expect(shown.indexOf(RENEWS)).toBeGreaterThan(shown.indexOf('$4.99 a month'));
   });
 
-  it('with no store (Expo Go, the debug unlock, no products) disables Unlock and Restore under one line', () => {
-    mockState = state({ kind: 'debug', canPurchase: false, offer: null });
+  it('shows a one-time price as "{price} once", with no renewal line (R159)', () => {
+    mockState = state({ offer: { priceString: '$24.99', period: null } });
+    const tree = render(<ProPitch context="screen" />);
+    expect(shownText(tree)).toContain('$24.99 once');
+    expect(shownText(tree)).not.toContain(RENEWS);
+  });
+
+  it('asks the store for its offer again when it opens', () => {
+    render(<ProPitch context="screen" />);
+    expect(mockRefreshOffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('with a store that has nothing to sell yet, disables Unlock only and says the store is not answering', () => {
+    mockState = state({ canPurchase: false, offer: null });
+    const tree = render(<ProPitch context="screen" />);
+
+    expect(button(tree, 'Unlock').props.disabled).toBe(true);
+    expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
+    expect(shownText(tree)).toContain(NOT_ANSWERING);
+    expect(shownText(tree)).not.toContain(UNAVAILABLE);
+    expect(shownText(tree)).not.toContain(RENEWS);
+  });
+
+  describe('Terms and Privacy (R159)', () => {
+    const saved = { terms: process.env.EXPO_PUBLIC_TERMS_URL, privacy: process.env.EXPO_PUBLIC_PRIVACY_URL };
+    afterEach(() => {
+      for (const [key, value] of [['EXPO_PUBLIC_TERMS_URL', saved.terms], ['EXPO_PUBLIC_PRIVACY_URL', saved.privacy]] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    });
+
+    const links = (tree: ReactTestRenderer) =>
+      tree.root.findAll((n) => n.props.accessibilityRole === 'link' && typeof n.props.onPress === 'function');
+
+    it('shows no links until the build sets them', () => {
+      delete process.env.EXPO_PUBLIC_TERMS_URL;
+      delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+      const tree = render(<ProPitch context="screen" />);
+      expect(links(tree)).toHaveLength(0);
+    });
+
+    it('opens each link the build sets', () => {
+      process.env.EXPO_PUBLIC_TERMS_URL = 'https://example.com/terms';
+      process.env.EXPO_PUBLIC_PRIVACY_URL = 'https://example.com/privacy';
+      const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      const tree = render(<ProPitch context="tab" />);
+      const found = links(tree);
+      expect(found.map((l) => l.props.accessibilityLabel)).toEqual(['Terms of use', 'Privacy policy']);
+      act(() => found[0].props.onPress());
+      act(() => found[1].props.onPress());
+      expect(open.mock.calls).toEqual([['https://example.com/terms'], ['https://example.com/privacy']]);
+      open.mockRestore();
+    });
+
+    it('shows only the one that is set', () => {
+      delete process.env.EXPO_PUBLIC_TERMS_URL;
+      process.env.EXPO_PUBLIC_PRIVACY_URL = 'https://example.com/privacy';
+      const tree = render(<ProPitch context="screen" />);
+      expect(links(tree).map((l) => l.props.accessibilityLabel)).toEqual(['Privacy policy']);
+    });
+  });
+
+  it('with no store (Expo Go, the debug unlock, free) disables Unlock and Restore under one line', () => {
+    mockState = state({ kind: 'debug', canPurchase: false, canRestore: false, offer: null });
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
 
     expect(button(tree, 'Unlock').props.disabled).toBe(true);
@@ -176,9 +246,12 @@ describe('ProPitch (§8.12, R137)', () => {
     expect(mockPurchase).toHaveBeenCalledTimes(1);
     expect(button(tree, 'Unlock').props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBe(true);
+    expect(shownText(tree)).toContain(WORKING);
+    expect(announce).toHaveBeenCalledWith(WORKING);
     expect(onDone).not.toHaveBeenCalled();
 
     await act(async () => pending.resolve('purchased'));
+    expect(shownText(tree)).not.toContain(WORKING);
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith('Pro is on.');
   });
@@ -192,7 +265,8 @@ describe('ProPitch (§8.12, R137)', () => {
 
     expect(onDone).not.toHaveBeenCalled();
     expect(shownText(tree)).not.toContain(PURCHASE_FAILED);
-    expect(announce).not.toHaveBeenCalled();
+    expect(shownText(tree)).not.toContain(WORKING);
+    expect(jest.mocked(announce).mock.calls).toEqual([[WORKING]]);
     expect(button(tree, 'Unlock').props.disabled).toBeFalsy();
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
   });
@@ -208,12 +282,22 @@ describe('ProPitch (§8.12, R137)', () => {
     expect(button(tree, 'Unlock').props.disabled).toBeFalsy();
   });
 
-  it('a purchase the store could not offer says purchases are not available', async () => {
+  it('a purchase the store could not offer says the store is not answering', async () => {
     mockPurchase.mockResolvedValue('unavailable');
     const tree = render(<ProPitch context="screen" />);
     await press(tree, 'Unlock');
-    expect(shownText(tree)).toContain(UNAVAILABLE);
-    expect(announce).toHaveBeenCalledWith(UNAVAILABLE);
+    expect(shownText(tree)).toContain(NOT_ANSWERING);
+    expect(announce).toHaveBeenCalledWith(NOT_ANSWERING);
+  });
+
+  it('a payment waiting for approval says so, announced, and stays on the pitch', async () => {
+    const onDone = jest.fn();
+    mockPurchase.mockResolvedValue('pending');
+    const tree = render(<ProPitch context="screen" onDone={onDone} />);
+    await press(tree, 'Unlock');
+    expect(shownText(tree)).toContain(PENDING);
+    expect(announce).toHaveBeenLastCalledWith(PENDING);
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('a purchase call that throws counts as failed', async () => {
@@ -272,6 +356,18 @@ describe('/paywall (§8.12, R154)', () => {
     expect(shownText(tree)).toEqual(expect.arrayContaining([TITLE, ROUTINES, FUEL, FREE]));
     expect(tree.root.findAllByType(Footer)).toHaveLength(0);
     act(() => button(tree, 'Not now').props.onPress());
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back only once: a purchase that goes through after Not now does not leave a second screen', async () => {
+    let finish!: (result: PurchaseResult) => void;
+    mockPurchase.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const tree = render(<PaywallRoute />);
+
+    await press(tree, 'Unlock');
+    act(() => button(tree, 'Not now').props.onPress());
+    act(() => button(tree, 'Not now').props.onPress());
+    await act(async () => finish('purchased'));
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 

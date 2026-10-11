@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
@@ -7,18 +6,21 @@ import { userRoutineCount } from '../db/repositories/routinesRepo';
 import { canAddRoutine } from '../domain/routineLimit';
 import { entitlementsFor } from '../platform/entitlements';
 import { Button } from './Button';
+import { useOpenPaywall } from './pro/openPaywall';
 import { afterSheetCloses, Sheet } from './Sheet';
 import { Body } from './Text';
 
 /**
  * The free limit (§8.6, R88): free holds one routine of your own. `whenRoomFor(add)` runs `add` when another fits (Pro
  * is on, or there is none of your own yet), counting when it is tapped, so deleting your routine frees the slot.
- * Otherwise it opens the limit sheet, whose **See Pro** closes it and, once it has gone, opens the paywall (R138).
+ * Otherwise it opens the limit sheet, whose **See Pro** closes it and, once it has gone, opens the paywall (R138), once
+ * however fast a second tap lands.
  * New routine, Duplicate and the editor's Save of a new routine all go through it; render `sheets` once.
  */
 export function useRoutineLimit(): { whenRoomFor: (add: () => void) => void; sheets: ReactNode } {
   const db = useDb();
   const entitlements = entitlementsFor(db);
+  const openPaywall = useOpenPaywall();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
@@ -35,7 +37,7 @@ export function useRoutineLimit(): { whenRoomFor: (add: () => void) => void; she
           label="See Pro"
           onPress={() => {
             close();
-            afterSheetCloses(() => router.push('/paywall'));
+            afterSheetCloses(openPaywall);
           }}
         />
         <Button label="Not now" variant="secondary" onPress={close} />

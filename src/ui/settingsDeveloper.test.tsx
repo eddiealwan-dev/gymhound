@@ -155,6 +155,7 @@ describe('Settings: Developer (R126)', () => {
       getDefaultPackage: async () => null,
       purchase: async () => ({ activeEntitlements: ['pro'] }),
       restore: async () => ({ activeEntitlements: ['pro'] }),
+      showManageSubscriptions: async () => {},
     };
     mockEntitlements = createRevenueCatEntitlements(mockDb, sdk, 'key', true);
     const tree = mount();

@@ -228,6 +228,20 @@ describe('Routines: the free limit (R88)', () => {
     expect(shownText(tree)).not.toContain(LIMIT);
   });
 
+  it('a double tap on See Pro opens one paywall', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount();
+
+    press(tree, 'New routine');
+    const [seePro] = buttons(tree, 'See Pro');
+    act(() => {
+      seePro.props.onPress();
+      seePro.props.onPress();
+    });
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.push).toHaveBeenCalledTimes(1);
+  });
+
   it('See Pro closes the limit sheet and, once it has gone, opens the paywall (R138)', () => {
     jest.mocked(userRoutineCount).mockReturnValue(1);
     const tree = mount();
