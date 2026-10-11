@@ -3,6 +3,10 @@ import { computePrFlags, pickHighlights, type PrCandidate, type PrHighlight } fr
 import type { LoggingType } from '../../domain/types';
 import { exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { getSettings, setSetting } from './settingsRepo';
+
+/** Set ids per UPDATE, well under SQLite's 999 bound variables. */
+const UPDATE_CHUNK = 500;
 
 const CANDIDATE_COLUMNS = {
   id: sets.id,
@@ -20,8 +24,12 @@ const CANDIDATE_COLUMNS = {
  * Rewrites `sets.pr_flags` (spec 7.6) for every set of each exercise in finished workouts, from the whole history in
  * time order (R103): the workout's start, then the set's tick time (unticked last), then the exercise's position in the
  * workout, then the set's position. The logging type is the exercise's current one. Sets of the active workout are
- * neither read nor written. Only rows whose flags change are updated. Spec 7.12 step 2 (phase 6) reuses this after an
- * edit to history.
+ * neither read nor written. Only rows whose flags change are updated, batched by flag value.
+ *
+ * Spec 7.12 step 2 (phase 6) reuses this after an edit to history. The caller passes every exercise whose history
+ * changed: on a replace, both the old and the new exercise id (the old one's later sets may now be PRs, the new one's
+ * may stop being); before deleting a workout, collect its exercise ids first (the rows are gone afterwards), then
+ * recompute them once the delete is done.
  */
 export function recomputePrFlags(db: Db, exerciseIds: readonly string[]): void {
   if (exerciseIds.length === 0) return;
@@ -50,11 +58,44 @@ export function recomputePrFlags(db: Db, exerciseIds: readonly string[]): void {
       .all();
 
     const flags = computePrFlags(loggingType, rows);
+    // At most 16 flag values: one UPDATE per value per chunk, however long the history.
+    const changed = new Map<number, string[]>();
     for (const row of rows) {
       const f = flags.get(row.id) ?? 0;
-      if (f !== row.prFlags) db.update(sets).set({ prFlags: f }).where(eq(sets.id, row.id)).run();
+      if (f === row.prFlags) continue;
+      const ids = changed.get(f);
+      if (ids) ids.push(row.id);
+      else changed.set(f, [row.id]);
+    }
+    for (const [f, ids] of changed) {
+      for (let i = 0; i < ids.length; i += UPDATE_CHUNK) {
+        db.update(sets).set({ prFlags: f }).where(inArray(sets.id, ids.slice(i, i + UPDATE_CHUNK))).run();
+      }
     }
   }
+}
+
+/**
+ * Writes the PR flags of workouts finished before phase 4 (R127), once: at launch, after the seed, while
+ * `prFlagsBackfilled` is off, every exercise in a finished workout is recomputed in one transaction and the setting
+ * is turned on. A fresh install finds no finished workout and just turns it on; once on, this only reads settings. A
+ * restored older snapshot has no such setting, so it is backfilled on the launch that opens it. Returns how many
+ * exercises were recomputed.
+ */
+export function backfillPrFlags(db: Db): number {
+  if (getSettings(db).prFlagsBackfilled) return 0;
+  return db.transaction((tx) => {
+    const exerciseIds = tx
+      .selectDistinct({ exerciseId: workoutExercises.exerciseId })
+      .from(workoutExercises)
+      .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
+      .where(eq(workouts.status, 'finished'))
+      .all()
+      .map((r) => r.exerciseId);
+    recomputePrFlags(tx, exerciseIds);
+    setSetting(tx, 'prFlagsBackfilled', true);
+    return exerciseIds.length;
+  });
 }
 
 /** The ids of the exercises logged in a workout, without repeats. */

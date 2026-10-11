@@ -4,8 +4,9 @@ import { PR_BIT } from '../../domain/prs';
 import { sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
-import { getWorkoutPrs, recomputePrFlags, writePrFlags } from './prRepo';
-import { addExerciseToWorkout, addSet } from './workoutEditRepo';
+import { backfillPrFlags, getWorkoutPrs, recomputePrFlags, writePrFlags } from './prRepo';
+import { getSettings, setSetting } from './settingsRepo';
+import { addExerciseToWorkout, addSet, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 
@@ -246,5 +247,111 @@ describe('getWorkoutPrs (R105)', () => {
     expect(() => writePrFlags(db, 'missing')).not.toThrow();
     expect(db.select().from(workouts).all()).toEqual([]);
     expect(db.select().from(workoutExercises).all()).toEqual([]);
+  });
+});
+
+describe('first session with warm-ups only before it (R103)', () => {
+  it('a workout whose only earlier bench sets were warm-ups is still the first session', () => {
+    const db = seededDb();
+    const warmups = workout(db, OCT_1, [[BENCH, [lb(45, 10), lb(95, 5)]]], false);
+    warmups.sets[0].forEach((id) => updateSet(db, id, { setType: 'warmup' }));
+    finishWorkout(db, warmups.id, OCT_1 + 60 * MINUTE);
+    const second = workout(db, OCT_1 + DAY, [[BENCH, [lb(135, 5)]]]);
+    const third = workout(db, OCT_1 + 2 * DAY, [[BENCH, [lb(140, 5)]]]);
+
+    expect(flagsOf(db, warmups.sets[0])).toEqual([0, 0]);
+    expect(flagsOf(db, second.sets[0])).toEqual([0]);
+    expect(getWorkoutPrs(db, second.id)).toEqual([]);
+    expect(flagsOf(db, third.sets[0])).toEqual([HEAVIEST | E1RM]);
+  });
+});
+
+describe('backfillPrFlags: workouts finished before phase 4 (R127)', () => {
+  /** A phase 3 history: two finished workouts with no flags written, and the backfill not yet run. */
+  function phase3History(db: Db) {
+    const first = workout(db, OCT_1, [
+      [BENCH, [lb(135, 5)]],
+      [PLANK, [hold(40)]],
+    ]);
+    const second = workout(db, OCT_1 + DAY, [
+      [BENCH, [lb(140, 5)]],
+      [PLANK, [hold(45)]],
+    ]);
+    db.update(sets).set({ prFlags: 0 }).run();
+    setSetting(db, 'prFlagsBackfilled', false);
+    return { first, second };
+  }
+
+  it('fills the flags of every exercise in a finished workout once, then sets the flag', () => {
+    const db = seededDb();
+    const { first, second } = phase3History(db);
+
+    expect(backfillPrFlags(db)).toBe(2);
+
+    expect(flagsOf(db, first.sets.flat())).toEqual([0, 0]);
+    expect(flagsOf(db, second.sets.flat())).toEqual([HEAVIEST | E1RM, PR_BIT.longest_hold]);
+    expect(getSettings(db).prFlagsBackfilled).toBe(true);
+  });
+
+  it('does not run a second time', () => {
+    const db = seededDb();
+    const { second } = phase3History(db);
+    backfillPrFlags(db);
+    db.update(sets).set({ prFlags: 0 }).run();
+
+    expect(backfillPrFlags(db)).toBe(0);
+    expect(flagsOf(db, second.sets.flat())).toEqual([0, 0]);
+  });
+
+  it('leaves the active workout out', () => {
+    const db = seededDb();
+    phase3History(db);
+    const active = workout(db, OCT_1 + 2 * DAY, [[BENCH, [lb(150, 5)]]], false);
+
+    expect(backfillPrFlags(db)).toBe(2);
+    expect(flagsOf(db, active.sets[0])).toEqual([0]);
+  });
+
+  it('on a fresh install sets the flag without recomputing anything', () => {
+    const db = seededDb();
+    expect(getSettings(db).prFlagsBackfilled).toBe(false);
+
+    expect(backfillPrFlags(db)).toBe(0);
+    expect(getSettings(db).prFlagsBackfilled).toBe(true);
+  });
+
+  it('fills a big history quickly, in batches', () => {
+    const db = seededDb();
+    // 200 workouts of 10 bench sets each, rising 1 lb a workout: every set after the first workout's is a PR.
+    for (let w = 0; w < 200; w++) {
+      const id = `w${w}`;
+      const started = OCT_1 + w * DAY;
+      db.insert(workouts).values({ id, name: 'Bench', status: 'finished', startedAt: started, finishedAt: started + 60 * MINUTE, localDate: '2026-10-01' }).run();
+      db.insert(workoutExercises).values({ id: `${id}-we`, workoutId: id, exerciseId: BENCH, position: 0, showRpe: false }).run();
+      db.insert(sets)
+        .values(
+          Array.from({ length: 10 }, (_, i) => ({
+            id: `${id}-s${i}`,
+            workoutExerciseId: `${id}-we`,
+            position: i,
+            setType: 'working' as const,
+            weight: 100 + w,
+            weightUnit: 'lb' as const,
+            reps: 5,
+            done: true,
+            completedAt: started + i * MINUTE,
+          })),
+        )
+        .run();
+    }
+    setSetting(db, 'prFlagsBackfilled', false);
+
+    const t = Date.now();
+    expect(backfillPrFlags(db)).toBe(1);
+    expect(Date.now() - t).toBeLessThan(2000);
+
+    const flagged = db.select({ prFlags: sets.prFlags }).from(sets).all().filter((r) => r.prFlags !== 0);
+    // The first set of each later workout is heavier than everything before it.
+    expect(flagged).toHaveLength(199);
   });
 });

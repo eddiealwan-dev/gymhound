@@ -33,6 +33,8 @@ export type Settings = {
   proDebugUnlock: boolean;
   proCached: boolean;
   seedVersion: number;
+  /** Whether the PR flags of workouts finished before phase 4 have been written (R127). Runs once at launch. */
+  prFlagsBackfilled: boolean;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -58,6 +60,7 @@ const KEYS: Record<keyof Settings, string> = {
   proDebugUnlock: 'pro_debug_unlock',
   proCached: 'pro_cached',
   seedVersion: 'seed_version',
+  prFlagsBackfilled: 'pr_flags_backfilled',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -86,6 +89,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     proDebugUnlock: false,
     proCached: false,
     seedVersion: 0,
+    prFlagsBackfilled: false,
   };
 }
 
