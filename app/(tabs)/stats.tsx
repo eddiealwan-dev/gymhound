@@ -4,8 +4,8 @@ import { Pressable, View } from 'react-native';
 import { latestBodyEntries, listBodyEntries } from '../../src/db/repositories/bodyRepo';
 import { getSettings } from '../../src/db/repositories/settingsRepo';
 import type { Db } from '../../src/db/types';
-import { BODY_KINDS, BODY_LABELS, bodyUnit, convertBody, formatBodyValue } from '../../src/domain/body';
-import type { BodyEntry, BodyKind, BodyUnit } from '../../src/domain/body';
+import { BODY_KINDS, BODY_LABELS, bodyUnit, formatBodyValue } from '../../src/domain/body';
+import type { BodyEntry, BodyKind } from '../../src/domain/body';
 import { toLocalDate } from '../../src/domain/dates';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
@@ -28,13 +28,13 @@ function openKind(kind: BodyKind) {
   router.push(`/body/${kind}` as Href);
 }
 
-/** A latest entry shown in the unit the screen uses now (it keeps its own unit in the database, R112). */
-const shownValue = (entry: BodyEntry, unit: BodyUnit) => convertBody(entry.value, entry.unit, unit);
-
-/** A measurement: its name, its latest "{value} · {date}" or "No entries", and a chevron to its detail. */
-function MeasurementRow({ kind, entry, unit, today, locale }: { kind: BodyKind; entry?: BodyEntry; unit: BodyUnit; today: string; locale: string }) {
+/**
+ * A measurement: its name, its latest "{value} · {date}" or "No entries", and a chevron to its detail. A logged value
+ * shows in the unit it was logged in (spec §7, R112); only the chart converts.
+ */
+function MeasurementRow({ kind, entry, today, locale }: { kind: BodyKind; entry?: BodyEntry; today: string; locale: string }) {
   const { colors } = useTheme();
-  const latest = entry ? `${formatBodyValue(shownValue(entry, unit), unit)} · ${formatEntryDate(entry.localDate, today, locale)}` : null;
+  const latest = entry ? `${formatBodyValue(entry.value, entry.unit)} · ${formatEntryDate(entry.localDate, today, locale)}` : null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -89,11 +89,12 @@ export default function Stats() {
           {lastWeight ? (
             <View
               accessible
-              accessibilityLabel={`${formatBodyValue(shownValue(lastWeight, weightUnit), weightUnit)}, ${formatEntryDate(lastWeight.localDate, today, locale)}`}
+              accessibilityLabel={`${formatBodyValue(lastWeight.value, lastWeight.unit)}, ${formatEntryDate(lastWeight.localDate, today, locale)}`}
               style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8 }}
             >
-              <Num style={{ fontSize: 44 }}>{bodyNumber(shownValue(lastWeight, weightUnit))}</Num>
-              <Body muted>{weightUnit}</Body>
+              {/* In the unit it was logged in (spec §7); the chart below converts it. */}
+              <Num style={{ fontSize: 44 }}>{bodyNumber(lastWeight.value)}</Num>
+              <Body muted>{lastWeight.unit}</Body>
               <Body muted>{formatEntryDate(lastWeight.localDate, today, locale)}</Body>
             </View>
           ) : (
@@ -104,13 +105,13 @@ export default function Stats() {
         <BodyChart kind="bodyweight" entries={bodyweight} unit={weightUnit} today={today} locale={locale} />
         {/* A quiet button steps back by its padding, so its label lines up with the card's content edge. */}
         <View style={{ alignSelf: 'flex-start', marginLeft: -20, marginVertical: -4 }}>
-          <Button label="All entries ›" variant="quiet" accessibilityLabel="All bodyweight entries" onPress={() => openKind('bodyweight')} />
+          <Button label="All entries ›" variant="quiet" accessibilityLabel="All entries, bodyweight" onPress={() => openKind('bodyweight')} />
         </View>
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Measurements</Label>
       <View>
         {MEASUREMENT_KINDS.map((kind) => (
-          <MeasurementRow key={kind} kind={kind} entry={latest[kind]} unit={bodyUnit(kind, displayUnit)} today={today} locale={locale} />
+          <MeasurementRow key={kind} kind={kind} entry={latest[kind]} today={today} locale={locale} />
         ))}
       </View>
     </Screen>

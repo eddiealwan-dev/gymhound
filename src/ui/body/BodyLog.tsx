@@ -8,6 +8,7 @@ import type { BodyEntry, BodyKind, BodyUnit } from '../../domain/body';
 import { chartSummary, formatChartDate, pointsInRange } from '../../domain/chart';
 import type { ChartRange } from '../../domain/chart';
 import { fromLocalDate } from '../../domain/dates';
+import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { LineChart } from '../charts/LineChart';
@@ -27,6 +28,16 @@ export function formatEntryDate(localDate: string, today: string, locale: string
 /** A body value's number alone, as `formatBodyValue` rounds it: "182.5". */
 export function bodyNumber(value: number): string {
   return `${Number(value.toFixed(1))}`;
+}
+
+/** "Check this number" under a field, read out as it appears (the caller also announces it, for iOS). */
+export function CheckLine({ shown }: { shown: boolean }) {
+  if (!shown) return null;
+  return (
+    <Body muted accessibilityLiveRegion="polite">
+      Check this number
+    </Body>
+  );
 }
 
 /** The number field the body screens share: Barlow, centred, a heavier muted underline when the number needs a look. */
@@ -53,8 +64,10 @@ export function BodyField({
       // iOS adds its own Done bar above the number pad with this key (R43).
       returnKeyType="done"
       accessibilityLabel={accessibilityLabel}
+      // Capped so a value like "182.5" stays whole in the field at the largest text size.
+      maxFontSizeMultiplier={1.5}
       style={{
-        width: 112,
+        minWidth: 112,
         minHeight: 44,
         paddingHorizontal: 8,
         borderRadius: 8,
@@ -87,9 +100,11 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
     const parsed = parseBodyValue(kind, draft, unit);
     if (!parsed.valid || parsed.value === null) {
       setInvalid(true);
+      announce('Check this number');
       return;
     }
     addBodyEntry(db, kind, parsed.value, unit, Date.now());
+    announce(`Logged ${formatBodyValue(parsed.value, unit)}.`);
     setDraft('');
     setInvalid(false);
     Keyboard.dismiss();
@@ -115,15 +130,15 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
         </View>
         <Button label="Log" onPress={log} accessibilityLabel={`Log ${BODY_LABELS[kind].toLowerCase()}`} />
       </View>
-      {invalid ? <Body muted>Check this number</Body> : null}
+      <CheckLine shown={invalid} />
     </View>
   );
 }
 
 const RANGES: { value: ChartRange; label: string; spoken: string }[] = [
-  { value: '3M', label: '3M', spoken: 'Last 3 months' },
-  { value: '1Y', label: '1Y', spoken: 'Last year' },
-  { value: 'All', label: 'All', spoken: 'All time' },
+  { value: '3M', label: '3M', spoken: '3M, last 3 months' },
+  { value: '1Y', label: '1Y', spoken: '1Y, last year' },
+  { value: 'All', label: 'All', spoken: 'All, all time' },
 ];
 
 /** 3M, 1Y and All as a segmented control: the chosen one filled with the text colour. */

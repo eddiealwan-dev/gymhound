@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { router } from 'expo-router';
-import { TextInput } from 'react-native';
+import { AccessibilityInfo, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import BodyDetail from '../../app/(tabs)/body/[kind]';
@@ -28,6 +28,8 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
+const mockAnnounce = jest.fn();
+jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -47,6 +49,7 @@ beforeEach(() => {
   mockKind = 'bodyweight';
   jest.spyOn(Date, 'now').mockReturnValue(NOW);
   jest.mocked(router.push).mockClear();
+  mockAnnounce.mockClear();
 });
 
 afterEach(() => {
@@ -119,6 +122,7 @@ describe('Stats: Body (R114)', () => {
     expect(t).toContain('Oct 11');
     expect(field(tree, 'Bodyweight, lb').props.value).toBe('');
     expect(chartPoints(tree)).toEqual([{ localDate: '2026-10-11', value: 182.5 }]);
+    expect(mockAnnounce).toHaveBeenCalledWith('Logged 182.5 lb.');
   });
 
   it.each(['1855', 'abc', '-3', '19'])('shows "Check this number" for %s and writes nothing', (text) => {
@@ -127,6 +131,10 @@ describe('Stats: Body (R114)', () => {
     press(tree, 'Log');
     expect(listBodyEntries(mockDb, 'bodyweight')).toEqual([]);
     expect(shownText(tree)).toContain('Check this number');
+    expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
+    const line = tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite' && n.findAll((c) => c.children.includes('Check this number')).length > 0);
+    expect(line.length).toBeGreaterThan(0);
     // Typing again clears it.
     type(tree, 'Bodyweight, lb', '180');
     expect(shownText(tree)).not.toContain('Check this number');
@@ -150,12 +158,21 @@ describe('Stats: Body (R114)', () => {
     expect(tree.root.findByType(LineChart).props.accessibilityLabel).toMatch(/^Bodyweight\. Oct 1 to Oct 11: 100 kg to 99\.5 kg\./);
   });
 
-  it('shows the latest bodyweight in the display unit when it was logged in the other', () => {
+  it('shows the latest bodyweight in the unit it was logged in (spec 7), while the chart converts it', () => {
     setSetting(mockDb, 'unit', 'kg');
     addBodyEntry(mockDb, 'bodyweight', 220.5, 'lb', NOW - DAY);
-    const t = shownText(mount(<Stats />));
-    expect(t).toContain('100');
+    const tree = mount(<Stats />);
+    const t = shownText(tree);
+    expect(t).toContain('220.5');
+    expect(t).toContain('lb');
+    expect(t).not.toContain('100');
     expect(t).toContain('Oct 10');
+    expect(chartPoints(tree)[0].value).toBeCloseTo(100.017, 2);
+  });
+
+  it('shows a measurement in the unit it was logged in', () => {
+    addBodyEntry(mockDb, 'waist', 86.4, 'cm', NOW - DAY);
+    expect(shownText(mount(<Stats />))).toContain('86.4 cm · Oct 10');
   });
 
   it('lists each measurement with its latest value and date, or "No entries", and opens its detail', () => {
@@ -175,7 +192,7 @@ describe('Stats: Body (R114)', () => {
 
   it('opens all bodyweight entries', () => {
     const tree = mount(<Stats />);
-    press(tree, 'All bodyweight entries');
+    press(tree, 'All entries, bodyweight');
     expect(router.push).toHaveBeenCalledWith('/body/bodyweight');
   });
 
@@ -185,16 +202,16 @@ describe('Stats: Body (R114)', () => {
     addBodyEntry(mockDb, 'bodyweight', 182, 'lb', NOW - 5 * DAY);
     const tree = mount(<Stats />);
     const chip = (label: string) => pressable(tree, label);
-    expect(chip('Last 3 months').props.accessibilityRole).toBe('radio');
-    expect(chip('Last 3 months').props.accessibilityState).toEqual({ checked: true });
+    expect(chip('3M, last 3 months').props.accessibilityRole).toBe('radio');
+    expect(chip('3M, last 3 months').props.accessibilityState).toEqual({ checked: true });
     expect(chartPoints(tree).map((p) => p.value)).toEqual([182]);
 
-    press(tree, 'Last year');
-    expect(chip('Last year').props.accessibilityState).toEqual({ checked: true });
-    expect(chip('Last 3 months').props.accessibilityState).toEqual({ checked: false });
+    press(tree, '1Y, last year');
+    expect(chip('1Y, last year').props.accessibilityState).toEqual({ checked: true });
+    expect(chip('3M, last 3 months').props.accessibilityState).toEqual({ checked: false });
     expect(chartPoints(tree).map((p) => p.value)).toEqual([186, 182]);
 
-    press(tree, 'All time');
+    press(tree, 'All, all time');
     expect(chartPoints(tree).map((p) => p.value)).toEqual([190, 186, 182]);
   });
 
@@ -203,7 +220,7 @@ describe('Stats: Body (R114)', () => {
     const tree = mount(<Stats />);
     expect(tree.root.findAllByType(LineChart).length).toBe(0);
     expect(shownText(tree)).toContain('No entries in this range.');
-    press(tree, 'Last year');
+    press(tree, '1Y, last year');
     expect(tree.root.findAllByType(LineChart).length).toBe(1);
   });
 
@@ -260,12 +277,24 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     act(() => edit().props.onChangeText('200'));
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Check this number');
+    expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
     expect(listBodyEntries(mockDb, 'waist')[0].value).toBe(33.75);
 
     act(() => edit().props.onChangeText('33'));
     press(tree, 'Save');
     expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 33, unit: 'in', localDate: '2026-10-10' })]);
     expect(shownText(tree)).toContain('33 in');
+  });
+
+  it('an untouched Save closes without checking a stored value outside the bounds', () => {
+    mockKind = 'bodyweight';
+    addBodyEntry(mockDb, 'bodyweight', 1500, 'lb', NOW);
+    const tree = mount(<BodyDetail />);
+    press(tree, 'Oct 11, 1500 lb');
+    press(tree, 'Save');
+    expect(shownText(tree)).not.toContain('Check this number');
+    expect(shownText(tree)).not.toContain('Bodyweight on Oct 11');
+    expect(listBodyEntries(mockDb, 'bodyweight')[0].value).toBe(1500);
   });
 
   it('Cancel leaves the entry as it was', () => {
@@ -283,10 +312,21 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     mockKind = 'waist';
     addBodyEntry(mockDb, 'waist', 34, 'in', NOW);
     const tree = mount(<BodyDetail />);
+    const focus = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
     press(tree, 'Oct 11, 34 in');
+    expect(focus).not.toHaveBeenCalled();
     press(tree, 'Delete');
     expect(shownText(tree)).toContain('Delete this entry?');
+    // VoiceOver moves to the question's title, a header.
+    expect(focus).toHaveBeenCalledTimes(1);
+    // In tests Text is a mock component, so the ref is that instance and carries the title's props.
+    type Sent = [{ props: { children: unknown; accessibilityRole?: string } }, string];
+    const [node, event] = focus.mock.calls[0] as unknown as Sent;
+    expect(event).toBe('focus');
+    expect(node.props.children).toBe('Delete this entry?');
+    expect(node.props.accessibilityRole).toBe('header');
     press(tree, 'Keep');
+    expect((focus.mock.calls[1] as unknown as Sent)[0].props.children).toBe('Waist on Oct 11');
     expect(listBodyEntries(mockDb, 'waist')).toHaveLength(1);
     expect(shownText(tree)).toContain('Waist on Oct 11');
 
