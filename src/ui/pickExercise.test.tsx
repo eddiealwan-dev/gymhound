@@ -421,6 +421,14 @@ describe('the exercise picker: your own exercises (R110)', () => {
     expect(router.back).not.toHaveBeenCalled();
   });
 
+  it('lets the form demo offer Edit exercise, except for a routine, whose unsaved draft may hold the exercise', () => {
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(true);
+    mockParams = { mode: 'replace', workoutExerciseId: 'we1' };
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(true);
+    mockParams = { mode: 'routine' };
+    expect(mount().root.findByType(FormDemo).props.canEdit).toBe(false);
+  });
+
   it('drops an exercise left over from an earlier picker when it opens, choosing nothing', () => {
     useCreatedExercise.getState().set('stale');
     mount();

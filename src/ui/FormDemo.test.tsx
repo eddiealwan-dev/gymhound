@@ -394,6 +394,15 @@ describe('the form demo of your own exercise', () => {
     expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: MINE.id } });
   });
 
+  it('offers no Edit exercise when it may not be edited from here (the picker for a routine)', async () => {
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<FormDemo exerciseId={MINE.id} onClose={() => {}} canEdit={false} />);
+    });
+    expect(buttons(tree, 'Edit exercise')).toHaveLength(0);
+    expect(texts(tree)).toContain('No steps for your own exercise.');
+  });
+
   it('a library exercise offers no Edit exercise', async () => {
     for (const id of ['wall-sit', 'barbell-bench-press']) {
       const tree = await open(id);

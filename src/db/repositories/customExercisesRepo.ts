@@ -59,6 +59,11 @@ export function createCustomExercise(db: Db, input: CustomExerciseInput, now: nu
   return id;
 }
 
+/** Whether the exercise is archived (R109): already out of the picker, so there is nothing left to delete. */
+export function isExerciseArchived(db: Db, id: string): boolean {
+  return db.select({ archived: exercises.archived }).from(exercises).where(eq(exercises.id, id)).get()?.archived === true;
+}
+
 /**
  * Whether anything refers to the exercise: a workout of any status (history or the one in progress), a routine or a
  * saved workout. A used exercise keeps its logging type (R108) and is archived rather than deleted (R109).

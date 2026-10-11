@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { BackHandler, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { AccessibilityInfo, BackHandler, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
-import { createCustomExercise, deleteCustomExercise, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
+import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
 import { getExercise, listExercises } from '../../src/db/repositories/exercisesRepo';
-import { normalizeCustomExercise, validateCustomExercise, type CustomExerciseInput } from '../../src/domain/customExercise';
+import { normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
 import { EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
 import type { LoggingType, Muscle } from '../../src/domain/types';
 import { useCreatedExercise } from '../../src/state/createdExercise';
@@ -21,8 +21,11 @@ import { useTheme } from '../../src/ui/ThemeProvider';
 /** The logging types in the order the editor lists them. */
 const LOGGING_TYPES = Object.keys(LOGGING_TYPE_LABELS) as LoggingType[];
 
-/** A new exercise starts as the app's commonest kind: a barbell lift logged by weight and reps. */
-const BLANK: Omit<CustomExerciseInput, 'name'> = { primaryMuscles: [], secondaryMuscles: [], equipment: 'barbell', loggingType: 'weighted' };
+/**
+ * A new exercise starts logged by weight and reps, with no equipment chosen (R128): a default barbell would turn on
+ * barbell rounding and the plate calculator unseen.
+ */
+const BLANK: Omit<CustomExerciseDraft, 'name'> = { primaryMuscles: [], secondaryMuscles: [], equipment: null, loggingType: 'weighted' };
 
 /** Back to what the editor opened over: the picker or the form demo's screen; with nothing behind it, Train. */
 function goBack() {
@@ -79,7 +82,7 @@ function RadioRow({ label, checked, onPress }: { label: string; checked: boolean
 /** `list` with `muscle` added at the end, or taken out if it is there. */
 const toggled = (list: readonly Muscle[], muscle: Muscle) => (list.includes(muscle) ? list.filter((m) => m !== muscle) : [...list, muscle]);
 
-const same = (a: CustomExerciseInput, b: CustomExerciseInput) => JSON.stringify(a) === JSON.stringify(b);
+const same = (a: CustomExerciseDraft, b: CustomExerciseDraft) => JSON.stringify(a) === JSON.stringify(b);
 
 type EditorProps = {
   /** The exercise to edit, or null to make a new one. */
@@ -92,9 +95,9 @@ type EditorProps = {
 
 /**
  * The custom exercise editor (§8.7, R108): a name, primary and secondary muscles (the three delts apart), one
- * equipment and one logging type. Once the exercise is used anywhere its logging type is shown, not offered. What stops
- * Save is listed over it once Save is tapped. **Delete exercise** archives a used exercise and deletes an unused one
- * (R109). Closing with changes not saved asks "Discard changes?" first, by the close button, the Android back button or
+ * equipment (none chosen for a new one, R128) and one logging type. Once the exercise is used anywhere its logging type
+ * is shown, not offered. What stops Save is listed over it once Save is tapped, and said to the screen reader.
+ * **Delete exercise** archives a used exercise and deletes an unused one (R109); an archived one does not offer it. Closing with changes not saved asks "Discard changes?" first, by the close button, the Android back button or
  * (held while there are changes) the swipe down.
  */
 function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
@@ -102,7 +105,9 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
   const { colors } = useTheme();
   const [existing] = useState(() => (exerciseId === null ? null : getExercise(db, exerciseId)));
   const [used] = useState(() => (existing === null ? false : isExerciseUsed(db, existing.id)));
-  const [initial] = useState<CustomExerciseInput | null>(() => {
+  /** Already archived: out of the picker, so there is nothing left to delete. */
+  const [archived] = useState(() => (existing === null ? false : isExerciseArchived(db, existing.id)));
+  const [initial] = useState<CustomExerciseDraft | null>(() => {
     if (exerciseId === null) return { name: prefill, ...BLANK };
     if (existing === null || !existing.isCustom) return null;
     const { name, primaryMuscles, secondaryMuscles, equipment, loggingType } = existing;
@@ -167,7 +172,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
     );
   }
 
-  const update = (patch: Partial<CustomExerciseInput>) => {
+  const update = (patch: Partial<CustomExerciseDraft>) => {
     setFailure(null);
     setDraft((d) => (d === null ? d : { ...d, ...patch }));
   };
@@ -183,16 +188,24 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
   const save = () => {
     Keyboard.dismiss();
     setTried(true);
-    if (validateCustomExercise(clean, otherNames).length > 0) return;
+    const refused = validateCustomExercise(clean, otherNames);
+    const { equipment } = clean;
+    if (refused.length > 0 || equipment === null) {
+      // The live region over Save speaks on Android only; VoiceOver is told here.
+      AccessibilityInfo.announceForAccessibility(refused.join(' '));
+      return;
+    }
     try {
       if (exerciseId === null) {
-        const id = createCustomExercise(db, clean, Date.now());
+        const id = createCustomExercise(db, { ...clean, equipment }, Date.now());
         if (fromPicker) useCreatedExercise.getState().set(id);
       } else {
-        updateCustomExercise(db, exerciseId, clean);
+        updateCustomExercise(db, exerciseId, { ...clean, equipment });
       }
     } catch (e) {
-      setFailure(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setFailure(message);
+      AccessibilityInfo.announceForAccessibility(message);
       return;
     }
     done.current = true;
@@ -274,7 +287,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
           {used ? (
             <View style={{ gap: 4 }}>
               <Body weight={600}>{LOGGING_TYPE_LABELS[draft.loggingType]}</Body>
-              <Body muted>It's been logged, so this stays.</Body>
+              <Body muted>It's in use, so this stays.</Body>
             </View>
           ) : (
             <View accessibilityRole="radiogroup">
@@ -297,7 +310,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
           </View>
         ) : null}
         <Button label="Save" onPress={save} />
-        {existing !== null ? (
+        {existing !== null && !archived ? (
           <View style={{ alignItems: 'center' }}>
             <Button
               label="Delete exercise"
@@ -310,7 +323,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
           </View>
         ) : null}
       </View>
-      {existing !== null ? (
+      {existing !== null && !archived ? (
         <ConfirmSheet
           visible={askDelete}
           title={`Delete ${existing.name}?`}

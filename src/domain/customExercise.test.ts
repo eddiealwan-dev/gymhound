@@ -34,10 +34,15 @@ describe('validateCustomExercise (R108)', () => {
     expect(validateCustomExercise({ ...INPUT, primaryMuscles: [] }, [])).toEqual(['Pick at least one primary muscle.']);
   });
 
-  it('lists every problem, the name first', () => {
-    expect(validateCustomExercise({ ...INPUT, name: '', primaryMuscles: [] }, [])).toEqual([
+  it('asks for the equipment: a new exercise has none chosen (R128)', () => {
+    expect(validateCustomExercise({ ...INPUT, equipment: null }, [])).toEqual(['Pick the equipment.']);
+  });
+
+  it('lists every problem in the order of the form', () => {
+    expect(validateCustomExercise({ ...INPUT, name: '', primaryMuscles: [], equipment: null }, [])).toEqual([
       'Give the exercise a name.',
       'Pick at least one primary muscle.',
+      'Pick the equipment.',
     ]);
   });
 });

@@ -291,7 +291,8 @@ export default function PickExercise() {
           }
         />
       </View>
-      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} />
+      {/* A routine's unsaved draft may hold the exercise, so it is not edited from here (review of R110). */}
+      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} canEdit={!forRoutine} />
     </View>
   );
 }

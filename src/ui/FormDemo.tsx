@@ -122,7 +122,7 @@ function Steps({ steps }: { steps: readonly string[] }) {
   );
 }
 
-function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: () => void }) {
+function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => void) | null }) {
   const photos = exercisePhotos(exercise.id);
   /** Your own exercise has no steps: the demo says so and offers its editor instead. */
   const yours = exercise.isCustom && exercise.instructions.length === 0;
@@ -147,7 +147,7 @@ function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: () => vo
       {yours ? (
         <View style={{ marginTop: 16, gap: 16 }}>
           <Body muted>No steps for your own exercise.</Body>
-          <Button label="Edit exercise" variant="secondary" onPress={onEdit} />
+          {onEdit ? <Button label="Edit exercise" variant="secondary" onPress={onEdit} /> : null}
         </View>
       ) : null}
     </>
@@ -158,6 +158,11 @@ type Props = {
   /** The exercise to show, or null while the sheet is closed. */
   exerciseId: string | null;
   onClose: () => void;
+  /**
+   * Whether your own exercise offers **Edit exercise** (default true). The picker for a routine says false: the routine
+   * editor's unsaved draft may hold the exercise, which an edit could delete or retype under it.
+   */
+  canEdit?: boolean;
 };
 
 /**
@@ -167,7 +172,7 @@ type Props = {
  * says it has no steps and offers **Edit exercise**, which opens its editor once the sheet has closed. It opens when
  * given an exercise and reads it then, never before.
  */
-export function FormDemo({ exerciseId, onClose }: Props) {
+export function FormDemo({ exerciseId, onClose, canEdit = true }: Props) {
   const db = useDb();
   // The exercise last opened, kept after it closes so the sheet does not empty while it fades.
   const [shownId, setShownId] = useState(exerciseId);
@@ -179,11 +184,15 @@ export function FormDemo({ exerciseId, onClose }: Props) {
       {exercise ? (
         <Demo
           exercise={exercise}
-          onEdit={() => {
-            const id = exercise.id;
-            onClose();
-            afterSheetCloses(() => router.push({ pathname: '/exercise/[id]', params: { id } }));
-          }}
+          onEdit={
+            canEdit
+              ? () => {
+                  const id = exercise.id;
+                  onClose();
+                  afterSheetCloses(() => router.push({ pathname: '/exercise/[id]', params: { id } }));
+                }
+              : null
+          }
         />
       ) : null}
       <View style={{ marginTop: 16 }}>

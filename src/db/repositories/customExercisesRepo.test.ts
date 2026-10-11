@@ -6,7 +6,7 @@ import { exercisePhotos, exercises, routineDays, routineExercises, routines, sav
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getRestSeconds, setRestSeconds } from './exercisePrefsRepo';
-import { createCustomExercise, deleteCustomExercise, isExerciseUsed, updateCustomExercise } from './customExercisesRepo';
+import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from './customExercisesRepo';
 import { getExercise, getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
 import { addExerciseToWorkout } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, tickSet } from './workoutsRepo';
@@ -141,6 +141,14 @@ function putInSavedWorkout(db: Db, exerciseId: string) {
   db.insert(savedWorkoutExercises).values({ id: 'sw:1', savedWorkoutId: 'sw', exerciseId, position: 0 }).run();
 }
 
+describe('isExerciseArchived', () => {
+  it('is false for an exercise you can see and for one that is not there', () => {
+    const db = seededDb();
+    expect(isExerciseArchived(db, createCustomExercise(db, LANDMINE, NOW))).toBe(false);
+    expect(isExerciseArchived(db, 'nope')).toBe(false);
+  });
+});
+
 describe('isExerciseUsed', () => {
   it('is false for a new exercise and true once anything refers to it', () => {
     const db = seededDb();
@@ -209,6 +217,7 @@ describe('deleteCustomExercise (R109)', () => {
 
     expect(getExercise(db, id)?.name).toBe('Landmine press');
     expect(row(db, id)?.archived).toBe(true);
+    expect(isExerciseArchived(db, id)).toBe(true);
     expect(listExercises(db).some((e) => e.id === id)).toBe(false);
     expect(getExerciseNote(db, id)).toBe('Elbows in');
     expect(removePhotoFiles).not.toHaveBeenCalled();

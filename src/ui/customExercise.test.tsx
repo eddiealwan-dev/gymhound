@@ -1,9 +1,9 @@
 import { router, Stack } from 'expo-router';
-import { BackHandler, Text, TextInput } from 'react-native';
+import { AccessibilityInfo, BackHandler, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import ExerciseEditorScreen from '../../app/exercise/[id]';
-import { createCustomExercise, deleteCustomExercise, isExerciseUsed, updateCustomExercise } from '../db/repositories/customExercisesRepo';
+import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../db/repositories/customExercisesRepo';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { bumpData } from '../state/dataVersion';
 import { useCreatedExercise } from '../state/createdExercise';
@@ -32,6 +32,7 @@ jest.mock('../db/repositories/customExercisesRepo', () => ({
   updateCustomExercise: jest.fn(),
   deleteCustomExercise: jest.fn(() => 'deleted'),
   isExerciseUsed: jest.fn(() => false),
+  isExerciseArchived: jest.fn(() => false),
 }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
@@ -93,6 +94,7 @@ beforeEach(() => {
   jest.mocked(updateCustomExercise).mockClear();
   jest.mocked(deleteCustomExercise).mockClear();
   jest.mocked(isExerciseUsed).mockReturnValue(false);
+  jest.mocked(isExerciseArchived).mockReturnValue(false);
   jest.mocked(bumpData).mockClear();
   jest.mocked(Stack.Screen).mockClear();
 });
@@ -120,12 +122,21 @@ describe('a new exercise (R108)', () => {
     expect(radio(tree, 'Weight and reps').props.accessibilityState).toEqual({ checked: true });
   });
 
-  it('lists what stops it above Save once Save is tapped, and saves nothing', () => {
+  it('chooses no equipment for you (R128)', () => {
+    const tree = mount();
+    for (const label of ['Barbell', 'Dumbbell', 'Other']) expect(button(tree, label).props.selected).toBe(false);
+  });
+
+  it('lists what stops it above Save once Save is tapped, says it to the screen reader, and saves nothing', () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
     const tree = mount();
     expect(shows(tree, 'Give the exercise a name.')).toBe(false);
     tap(tree, 'Save');
     expect(shows(tree, 'Give the exercise a name.')).toBe(true);
     expect(shows(tree, 'Pick at least one primary muscle.')).toBe(true);
+    expect(shows(tree, 'Pick the equipment.')).toBe(true);
+    expect(announce).toHaveBeenCalledWith('Give the exercise a name. Pick at least one primary muscle. Pick the equipment.');
+    announce.mockRestore();
     expect(createCustomExercise).not.toHaveBeenCalled();
 
     typeName(tree, 'barbell bench press');
@@ -168,6 +179,7 @@ describe('a new exercise (R108)', () => {
     const tree = mount();
     typeName(tree, 'Landmine row');
     tap(tree, 'Chest, primary muscle');
+    tap(tree, 'Machine');
     tap(tree, 'Save');
     expect(createCustomExercise).toHaveBeenCalled();
     expect(useCreatedExercise.getState().id).toBeNull();
@@ -200,7 +212,7 @@ describe('editing an exercise of your own', () => {
     const tree = mount();
     expect(tree.root.findAll((n) => n.props.accessibilityRole === 'radio')).toHaveLength(0);
     expect(shows(tree, 'Weight and reps')).toBe(true);
-    expect(shows(tree, "It's been logged, so this stays.")).toBe(true);
+    expect(shows(tree, "It's in use, so this stays.")).toBe(true);
   });
 
   it('a library exercise is not here to edit', () => {
@@ -232,6 +244,15 @@ describe('Delete exercise (R109)', () => {
     expect(bumpData).toHaveBeenCalled();
     act(() => void jest.runAllTimers());
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not offered for an exercise already archived', () => {
+    mockParams = { id: 'mine' };
+    jest.mocked(isExerciseUsed).mockReturnValue(true);
+    jest.mocked(isExerciseArchived).mockReturnValue(true);
+    const tree = mount();
+    expect(tree.root.findAllByType(Button).some((b) => b.props.label === 'Delete exercise')).toBe(false);
+    expect(tree.root.findAllByType(ConfirmSheet).some((s) => s.props.title === 'Delete Landmine press?')).toBe(false);
   });
 
   it('says an unused one can not be brought back, and Keep deletes nothing', () => {
