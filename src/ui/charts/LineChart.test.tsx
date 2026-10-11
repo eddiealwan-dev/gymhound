@@ -12,6 +12,16 @@ jest.mock('../ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
+let mockFontScale = 1;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }),
+}));
+
+beforeEach(() => {
+  mockFontScale = 1;
+});
+
 const fmt = (v: number) => `${v}`;
 const pts = [
   { localDate: '2026-08-03', value: 180 },
@@ -110,6 +120,39 @@ describe('LineChart', () => {
     expect(accessible).toHaveLength(1);
     expect(accessible[0].props).toMatchObject({ accessibilityRole: 'image', accessibilityLabel: 'Bodyweight, 3 Aug to 10 Oct' });
     expect(tree.root.findAllByType(View)[0].props.accessible).toBe(true);
+  });
+
+  it('pads the plot by half a label line, scaled with the text size, so the top and bottom labels stay inside', () => {
+    const labelColumn = (tree: ReactTestRenderer) =>
+      tree.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.justifyContent === 'space-between' && StyleSheet.flatten(n.props.style)?.alignItems === 'flex-end')[0];
+    const tree = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    layOut(tree);
+    expect(StyleSheet.flatten(labelColumn(tree).props.style)).toMatchObject({ paddingTop: 8, paddingBottom: 8 });
+    const lines = tree.root.findAllByType(Line).map((l) => l.props.y1);
+    expect(Math.min(...lines)).toBe(8);
+    expect(Math.max(...lines)).toBe(172);
+
+    mockFontScale = 2;
+    const big = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    layOut(big);
+    expect(StyleSheet.flatten(labelColumn(big).props.style)).toMatchObject({ paddingTop: 16, paddingBottom: 16 });
+    const bigLines = big.root.findAllByType(Line).map((l) => l.props.y1);
+    expect(Math.min(...bigLines)).toBe(16);
+    expect(Math.max(...bigLines)).toBe(164);
+  });
+
+  it('caps the y label column at 30% of the width and shrinks a label to fit on one line', () => {
+    const tree = render(<LineChart points={pts} formatValue={(v) => `${v} lb`} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    layOut(tree);
+    const label = tree.root.findAllByType(Text).find((t) => t.props.children === '186 lb')!;
+    expect(label.props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true });
+    const column = tree.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.maxWidth === '30%');
+    expect(column).toHaveLength(1);
+  });
+
+  it('draws nothing when no value is a finite number', () => {
+    const tree = render(<LineChart points={[{ localDate: '2026-08-03', value: NaN }]} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
+    expect(tree.toJSON()).toBeNull();
   });
 
   it('never uses red', () => {

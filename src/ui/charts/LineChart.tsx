@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
-import { Text, View } from 'react-native';
+import { Text, useWindowDimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { formatChartDate, plotSeries } from '../../domain/chart';
@@ -10,9 +10,11 @@ import { useTheme } from '../ThemeProvider';
 
 /** Dots are 4px across. Exported so phase 6's marked points can match. */
 export const DOT_RADIUS = 2;
-/** Room inside the plot: the dots stay whole at the sides, and the top and bottom y labels stay whole above and below. */
-const INSET = { left: DOT_RADIUS + 1, right: DOT_RADIUS + 1, top: 8, bottom: 8 } as const;
+/** The axis labels' line height at the default text size; it grows with the phone's text size. */
+const LABEL_LINE_HEIGHT = 16;
 const LABEL_GAP = 8;
+/** The y labels take at most this share of the width; a longer label shrinks to fit on its line. */
+const LABEL_COLUMN_MAX = '30%';
 
 export type LineChartProps = {
   /** The series, any order; drawn oldest to newest. Filter it to a range with `pointsInRange` first. */
@@ -34,23 +36,39 @@ export type LineChartProps = {
  */
 export function LineChart({ points, formatValue, locale, height = 180, accessibilityLabel }: LineChartProps): ReactElement | null {
   const { colors } = useTheme();
+  const { fontScale } = useWindowDimensions();
   const [width, setWidth] = useState(0);
-  if (points.length === 0) return null;
+  const drawable = points.filter((pt) => Number.isFinite(pt.value));
+  if (drawable.length === 0) return null;
 
-  const plotted = plotSeries(points, { width: Math.max(width, 1), height, ...INSET });
-  const days = points.map((pt) => pt.localDate).sort();
+  // Room inside the plot: the dots stay whole at the sides, and half a (scaled) label line above the top tick and below
+  // the bottom one, so the y labels centred on those ticks stay inside the chart at any text size.
+  const halfLine = Math.ceil((LABEL_LINE_HEIGHT * fontScale) / 2);
+  const inset = { left: DOT_RADIUS + 1, right: DOT_RADIUS + 1, top: halfLine, bottom: halfLine };
+  const plotted = plotSeries(drawable, { width: Math.max(width, 1), height, ...inset });
+  const days = drawable.map((pt) => pt.localDate).sort();
   const dates = days[0] === days[days.length - 1] ? [days[0]] : [days[0], days[days.length - 1]];
-  const smallText = { fontFamily: fonts.body400, fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums' as const] };
+  const smallText = { fontFamily: fonts.body400, fontSize: 12, lineHeight: LABEL_LINE_HEIGHT, color: colors.textMuted, fontVariant: ['tabular-nums' as const] };
   const onLayout = (e: LayoutChangeEvent) => setWidth(Math.floor(e.nativeEvent.layout.width));
 
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
       <View
-        style={{ height, paddingTop: INSET.top, paddingBottom: INSET.bottom, marginRight: LABEL_GAP, justifyContent: 'space-between', alignItems: 'flex-end' }}
+        style={{
+          height,
+          maxWidth: LABEL_COLUMN_MAX,
+          paddingTop: inset.top,
+          paddingBottom: inset.bottom,
+          marginRight: LABEL_GAP,
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+        }}
       >
         {[...plotted.yTicks].reverse().map((tick) => (
-          <View key={tick.value} style={{ height: 0, justifyContent: 'center' }}>
-            <Text style={smallText}>{formatValue(tick.value)}</Text>
+          <View key={tick.value} style={{ height: 0, justifyContent: 'center', alignSelf: 'stretch', alignItems: 'flex-end' }}>
+            <Text style={smallText} numberOfLines={1} adjustsFontSizeToFit>
+              {formatValue(tick.value)}
+            </Text>
           </View>
         ))}
       </View>

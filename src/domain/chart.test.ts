@@ -25,6 +25,19 @@ describe('pointsInRange', () => {
     expect(pointsInRange(shuffled, 'All', today).map((x) => x.localDate)).toEqual(['2025-10-11', '2026-07-13', '2026-10-11']);
   });
 
+  it('drops dates after today from 3M and 1Y, but All keeps them', () => {
+    const withFuture = [...points, p('2026-10-12', 6)];
+    expect(pointsInRange(withFuture, '3M', today).map((x) => x.value)).toEqual([4, 5]);
+    expect(pointsInRange(withFuture, '1Y', today).map((x) => x.value)).toEqual([2, 3, 4, 5]);
+    expect(pointsInRange(withFuture, 'All', today).map((x) => x.value)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('drops values that are not finite numbers', () => {
+    const odd = [p('2026-10-01', NaN), p('2026-10-02', Infinity), p('2026-10-03', -Infinity), p('2026-10-04', 80)];
+    expect(pointsInRange(odd, 'All', today).map((x) => x.value)).toEqual([80]);
+    expect(pointsInRange(odd, '3M', today).map((x) => x.value)).toEqual([80]);
+  });
+
   it('does not change the input', () => {
     const input = [points[4], points[0]];
     pointsInRange(input, 'All', today);
@@ -49,6 +62,24 @@ describe('niceTicks', () => {
     expect(niceTicks(0, 20)).toEqual([0, 5, 10, 15, 20]);
     // step 20 would need 140 … 240, six ticks; step 50 needs three
     expect(niceTicks(150, 230)).toEqual([150, 200, 250]);
+  });
+
+  it('gives nothing for values that are not finite, rather than looping', () => {
+    expect(niceTicks(NaN, 80)).toEqual([]);
+    expect(niceTicks(0, Infinity)).toEqual([]);
+    expect(niceTicks(-Infinity, Infinity)).toEqual([]);
+  });
+
+  it('treats maxTicks below 3 as 3, so a flat series still widens', () => {
+    expect(niceTicks(0, 0, 2)).toEqual([-1, 0, 1]);
+    expect(niceTicks(80, 80, 1)).toEqual([79, 80, 81]);
+    expect(niceTicks(0, 100, 0)).toEqual([0, 50, 100]);
+  });
+
+  it('ends on a huge range instead of looping', () => {
+    const ticks = niceTicks(-1e300, 1e300);
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks.length).toBeLessThanOrEqual(5);
   });
 
   it('honours maxTicks', () => {
@@ -95,6 +126,13 @@ describe('plotSeries', () => {
     expect(out.dots.map((d) => d.y)).toEqual([88, 88]);
   });
 
+  it('skips values that are not finite numbers', () => {
+    const out = plotSeries([p('2026-08-01', 178), p('2026-08-05', NaN), p('2026-08-08', Infinity), p('2026-08-11', 186)], box);
+    expect(out.path).toBe('M10 168 L294 8');
+    expect(out.dots).toHaveLength(2);
+    expect(plotSeries([p('2026-08-05', NaN)], box)).toEqual({ path: '', dots: [], yTicks: [] });
+  });
+
   it('no points draws nothing', () => {
     expect(plotSeries([], box)).toEqual({ path: '', dots: [], yTicks: [] });
   });
@@ -112,6 +150,11 @@ describe('chartSummary', () => {
 
   it('says nothing for no points', () => {
     expect(chartSummary([], fmt, 'en-GB')).toBe('');
+  });
+
+  it('leaves out values that are not finite numbers', () => {
+    expect(chartSummary([p('2026-08-02', NaN), p('2026-08-03', 180)], fmt, 'en-GB')).toBe('3 Aug: 180 lb.');
+    expect(chartSummary([p('2026-08-02', NaN)], fmt, 'en-GB')).toBe('');
   });
 
   it('reads one point as its date and value', () => {
