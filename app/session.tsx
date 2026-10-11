@@ -13,7 +13,8 @@ import { finishCheck, finishConfirm, type FinishConfirm } from '../src/domain/fi
 import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
-import { joinsNextInSuperset } from '../src/domain/sessionMenu';
+import { joinsNextInSuperset, restWaitsFor, startsSuperset } from '../src/domain/sessionMenu';
+import type { WorkoutExerciseView } from '../src/db/repositories/workoutViewsRepo';
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -167,6 +168,14 @@ function SessionHeader({
 }
 
 /** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, Finish in the header, and Discard. */
+/** The superset member a tick of this exercise waits for before its rest (R100): its name and its latest tick. */
+function waitsFor(exercises: WorkoutExerciseView[], id: string): { name: string; lastTickAt: number | null } | null {
+  const last = restWaitsFor(exercises, id);
+  if (last === null) return null;
+  const ticks = last.sets.flatMap((s) => (s.done && s.completedAt !== null ? [s.completedAt] : []));
+  return { name: last.name, lastTickAt: ticks.length > 0 ? Math.max(...ticks) : null };
+}
+
 export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
@@ -328,6 +337,8 @@ export default function Session() {
               distanceUnit={distanceUnit}
               inSuperset={ex.supersetGroup !== null}
               joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
+              startsSuperset={startsSuperset(workout.exercises, ex.id)}
+              restWaitsFor={waitsFor(workout.exercises, ex.id)}
               restEndsAt={restEndsAt}
               restSetId={restSetId}
               nextSetId={next}

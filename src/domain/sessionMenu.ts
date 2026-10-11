@@ -27,6 +27,25 @@ export function joinsNextInSuperset(exercises: Linked[], id: string): boolean {
   return group !== null && exercises[index + 1]?.supersetGroup === group;
 }
 
+/** Whether the exercise starts a superset: it is in one, and the exercise before it is not in the same one. */
+export function startsSuperset(exercises: Linked[], id: string): boolean {
+  const index = exercises.findIndex((e) => e.id === id);
+  const group = exercises[index]?.supersetGroup ?? null;
+  return group !== null && exercises[index - 1]?.supersetGroup !== group;
+}
+
+/**
+ * The superset member whose tick starts the rest, when that is not this exercise (R100): the last member of its
+ * superset. Null outside a superset and for the last member itself, whose tick starts the rest as usual.
+ */
+export function restWaitsFor<T extends Linked & { position: number }>(exercises: T[], id: string): T | null {
+  const ex = exercises.find((e) => e.id === id);
+  if (!ex || ex.supersetGroup === null) return null;
+  const members = exercises.filter((e) => e.supersetGroup === ex.supersetGroup);
+  const last = members.reduce((a, b) => (b.position > a.position ? b : a));
+  return last.id === ex.id ? null : last;
+}
+
 /**
  * Whether Reorder's up or down changes anything. A block is one exercise outside a superset, or the run of
  * consecutive exercises sharing a superset group, and moves as a whole (`moveExercise`).

@@ -41,6 +41,13 @@ type Props = {
   inSuperset: boolean;
   /** Whether the next exercise is in the same superset: the bar then runs on through the gap between them. */
   joinsNext: boolean;
+  /** Whether this is the first exercise of a superset: it says "Superset" above its name (R100). */
+  startsSuperset?: boolean;
+  /**
+   * The superset member whose tick starts the rest, when that is not this exercise (R100): its name, and when it was
+   * last ticked. Until it is ticked after this exercise's latest tick, "Rest after {name}" shows where the rest row would.
+   */
+  restWaitsFor?: { name: string; lastTickAt: number | null } | null;
   /** When the running rest ends (`rest_ends_at`), or null when none is running. */
   restEndsAt: number | null;
   /**
@@ -135,6 +142,8 @@ export function ExerciseBlock({
   onOpenMenu,
   inSuperset,
   joinsNext,
+  startsSuperset = false,
+  restWaitsFor = null,
   restEndsAt,
   restSetId,
   nextSetId,
@@ -169,6 +178,14 @@ export function ExerciseBlock({
     if (restEndsAt !== null) return setId === restSetId ? restEndsAt : null;
     return restUp?.setId === setId ? restUp.endsAt : null;
   };
+
+  /** This exercise's latest ticked set, when its rest waits for the superset's last member (R100). */
+  const waitingSetId = (() => {
+    if (restWaitsFor === null) return null;
+    let latest: { id: string; at: number } | null = null;
+    for (const s of ex.sets) if (s.done && s.completedAt !== null && (latest === null || s.completedAt > latest.at)) latest = { id: s.id, at: s.completedAt };
+    return latest !== null && latest.at > (restWaitsFor.lastTickAt ?? 0) ? latest.id : null;
+  })();
 
   /** The note while its field is open; null closes the field and shows the saved note, or + Note when there is none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -225,6 +242,12 @@ export function ExerciseBlock({
           importantForAccessibility="no-hide-descendants"
           style={{ position: 'absolute', left: -11, width: 3, top: 0, bottom: joinsNext ? -BLOCK_GAP : 0, backgroundColor: colors.text }}
         />
+      ) : null}
+      {startsSuperset ? (
+        // The bar alone said nothing; the superset says so in words (R100).
+        <Body muted style={{ fontSize: 14, marginBottom: 2 }}>
+          Superset
+        </Body>
       ) : null}
       {/*
         The name row, in the order [name][count][+ Note][Something off][⋯] (R81). ⋯ keeps the right edge, over the tick
@@ -417,6 +440,11 @@ export function ExerciseBlock({
                   upText={upText}
                   onOpenRest={onOpenRest}
                 />
+              ) : restWaitsFor !== null && row.set.id === waitingSetId ? (
+                // Mid-superset, a tick starts no rest: it waits for the last member (spec 8.4, R100).
+                <Body muted style={{ fontSize: 14, paddingVertical: 4 }}>
+                  {`Rest after ${restWaitsFor.name}`}
+                </Body>
               ) : null}
             </Fragment>
           );

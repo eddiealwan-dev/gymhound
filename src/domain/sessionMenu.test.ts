@@ -1,4 +1,4 @@
-import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, supersetAction } from './sessionMenu';
+import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, restWaitsFor, startsSuperset, supersetAction } from './sessionMenu';
 import type { PrevSet } from './setEntry';
 import type { SetType, WeightUnit } from './types';
 
@@ -189,5 +189,22 @@ describe('plateTarget: the weight the plate calculator starts from (Task 20, R35
 
   it('reads a value with no stored unit as the display unit', () => {
     expect(plateTarget(exercise([set(0, false, 100, null)]), 'kg')).toBe(100);
+  });
+});
+
+describe('startsSuperset and restWaitsFor: a superset in words (R100)', () => {
+  const at = (id: string, position: number, supersetGroup: number | null = null) => ({ id, position, supersetGroup });
+  const day = [at('a', 0), at('b', 1, 1), at('c', 2, 1), at('d', 3, 1), at('e', 4, 2), at('f', 5, 2)];
+
+  it('marks only the first member of each superset', () => {
+    expect(day.filter((e) => startsSuperset(day, e.id)).map((e) => e.id)).toEqual(['b', 'e']);
+  });
+
+  it('names the last member for every other member, and nothing for the last member or an exercise outside one', () => {
+    expect(restWaitsFor(day, 'a')).toBeNull();
+    expect(restWaitsFor(day, 'b')?.id).toBe('d');
+    expect(restWaitsFor(day, 'c')?.id).toBe('d');
+    expect(restWaitsFor(day, 'd')).toBeNull();
+    expect(restWaitsFor(day, 'e')?.id).toBe('f');
   });
 });

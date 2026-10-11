@@ -1435,3 +1435,18 @@ describe('Up next after finish and discard', () => {
     expect(upNextDay()).toBe('Push A');
   });
 });
+
+describe('Round 6: the ab roller (bodyweight_plus) with its own rest, not in a superset', () => {
+  it('a tick with no added weight starts its rest', () => {
+    startEmpty(db);
+    addExercise(db, 'fedb-ab-roller');
+    setExerciseRest(db, 'fedb-ab-roller', 60);
+    const ex = activeView().exercises[0];
+    expect(ex).toMatchObject({ loggingType: 'bodyweight_plus', supersetGroup: null, restSeconds: 60 });
+
+    expect(tick(db, ex, ex.sets[0], { ...NOTHING, reps: 10 })).toBe(true);
+
+    expect(restEndsAt()).toBe(NOW + 60_000);
+    expect(activeView().restSetId).toBe(ex.sets[0].id);
+  });
+});

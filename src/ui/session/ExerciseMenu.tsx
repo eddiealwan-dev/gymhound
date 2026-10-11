@@ -10,7 +10,7 @@ import { parseDecimal } from '../../domain/input';
 import { MARK_LABELS } from '../../domain/labels';
 import { gearFor } from '../../domain/plates';
 import { REST_CHOICES } from '../../domain/rest';
-import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
+import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, restWaitsFor, supersetAction } from '../../domain/sessionMenu';
 import { HAS_LOAD, round2, targetFor } from '../../domain/setTable';
 import type { ExerciseMark } from '../../domain/types';
 import { formatWeight } from '../../domain/units';
@@ -173,6 +173,8 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
   }
   const ex = exercises.find((e) => e.id === exerciseId) ?? null;
   const superset = ex ? supersetAction(exercises, ex.id) : 'hidden';
+  /** The superset member whose tick starts the rest, when that is not this exercise (R100). */
+  const waitsFor = ex ? restWaitsFor(exercises, ex.id) : null;
   const { restSeconds: settingsRest, unit } = useDbQuery(getSettings);
   const defaultLabel = `Default (${restLabel(settingsRest)})`;
   const currentRest = ex === null || ex.restSeconds === null ? defaultLabel : restLabel(ex.restSeconds);
@@ -280,9 +282,12 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
             <Display weight={700} numberOfLines={1}>
               Rest time
             </Display>
-            <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+            <Body muted numberOfLines={1} style={{ marginBottom: waitsFor ? 4 : 12 }}>
               {ex?.name ?? ''}
             </Body>
+            {waitsFor ? (
+              <Body style={{ marginBottom: 12 }}>{`In a superset, the rest comes after ${waitsFor.name}.`}</Body>
+            ) : null}
             <View style={{ gap: 8 }}>
               <Button
                 label={defaultLabel}

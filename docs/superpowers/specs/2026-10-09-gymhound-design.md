@@ -476,6 +476,7 @@ In order:
   - **Prefill:** working sets start with today's target weight. With no target, the previous set's weight is the placeholder, converted to the entry unit. Reps show the previous reps as a placeholder, or `rep_max` if there is no previous. For timed and weight-and-time sets, the duration placeholder is the previous duration, or `rep_max` seconds.
   - **Ticking a set with empty fields accepts the placeholders.** If a field is empty and has no placeholder, the tick stays disabled until it has a value.
   - **Ticking** gives a light haptic. It starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
+  - A superset says so in words (R100): its first member has a quiet "Superset" label above its name, by the bar. A tick on a member that isn't last shows a quiet "Rest after {last member}" where the rest row would be, until that member is ticked. That member's ⋯ Rest panel says "In a superset, the rest comes after {last member}."
 - **⋯ menu:**
   - Override today's weight.
   - Plate calculator.
@@ -942,6 +943,7 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - Round 5 (still no line and no buzz on the phone, R82):
     - The line sits above the row's inputs, not under them. It was drawn, but the keyboard comes up for the focused field and the session scrolls only that field clear of it, so a line under the row was under the keyboard.
     - The heavy haptic is still the first thing the tap does. The field is focused only once the haptic has played (its promise settles), so the keyboard no longer comes up in the same moment as the buzz.
+  - Round 6 (still no line and no buzz, and the keyboard opened on the weight, R99): the tap focuses nothing and leaves the keyboard as it was. It gives the warning notification (`Haptics.notificationAsync(Warning)`), shows the line above the inputs in the full text colour at body size with an `alert-circle-outline` icon (still not red), and gives the missing field a heavier 2pt edge in the text colour so the person taps it themselves. A change event that changes nothing (iOS can send one as a field takes focus) does not clear the line. This replaces the focus rules of Rounds 4 and 5.
   - A number that needs another look shows "Check this number" instead.
   - The line names the field that is missing now, which a value carried from the set above can change after the tap. Typing in the row clears the line until the next tap.
   - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").

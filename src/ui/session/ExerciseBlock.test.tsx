@@ -1,3 +1,4 @@
+import React from 'react';
 import * as Haptics from 'expo-haptics';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -1446,5 +1447,37 @@ describe('ExerciseBlock: the form demo (R86)', () => {
     expect(restingStyle(byLabel(tree, SHOW_FORM))).toEqual(expect.objectContaining({ flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
     expect(restingStyle(byLabel(tree, SHOW_FORM)).flexGrow).toBeUndefined();
     expect(restingStyle(byLabel(tree, SHOW_FORM)).flex).toBeUndefined();
+  });
+});
+
+describe('ExerciseBlock: a superset in words (R100)', () => {
+  const mountWith = (ex: WorkoutExerciseView, extra: Partial<React.ComponentProps<typeof ExerciseBlock>>) => {
+    let tree!: ReactTestRenderer;
+    act(() => {
+      tree = create(React.cloneElement(block(ex), extra));
+    });
+    return tree;
+  };
+
+  it('the first member says "Superset"; other blocks do not', () => {
+    expect(shownText(mountWith(bench([set('s0', 0)]), { inSuperset: true, startsSuperset: true }))).toContain('Superset');
+    expect(shownText(mountWith(bench([set('s0', 0)]), { inSuperset: true }))).not.toContain('Superset');
+    expect(shownText(mount(bench([set('s0', 0)])))).not.toContain('Superset');
+  });
+
+  it('a tick mid-superset shows "Rest after {last member}" under the latest ticked set, until that member is ticked', () => {
+    const ex = bench([
+      set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 100 }),
+      set('s1', 1, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 200 }),
+      set('s2', 2),
+    ]);
+    const waiting = mountWith(ex, { inSuperset: true, restWaitsFor: { name: 'Ab roller', lastTickAt: 150 } });
+    const drawn = waiting.root.findAll(() => true);
+    const line = textNode(waiting, 'Rest after Ab roller');
+    expect(drawn.indexOf(line)).toBeGreaterThan(drawn.indexOf(byLabel(waiting, 'Set 2 done')));
+    expect(drawn.indexOf(line)).toBeLessThan(drawn.indexOf(byLabel(waiting, 'Set 3 done')));
+
+    const done = mountWith(ex, { inSuperset: true, restWaitsFor: { name: 'Ab roller', lastTickAt: 250 } });
+    expect(shownText(done)).not.toContain('Rest after Ab roller');
   });
 });

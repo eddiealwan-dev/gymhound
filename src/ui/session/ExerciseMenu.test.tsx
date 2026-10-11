@@ -82,11 +82,11 @@ const exercise = (...done: boolean[]): WorkoutExerciseView =>
 const onClose = jest.fn();
 
 /** The menu open on the exercise, closing itself the way the session screen does when it is told to. */
-function Host({ ex }: { ex: WorkoutExerciseView }) {
+function Host({ ex, others = [] }: { ex: WorkoutExerciseView; others?: WorkoutExerciseView[] }) {
   const [id, setId] = useState<string | null>(ex.id);
   return (
     <ExerciseMenu
-      exercises={[ex]}
+      exercises={[ex, ...others]}
       exerciseId={id}
       onClose={() => {
         onClose();
@@ -96,10 +96,10 @@ function Host({ ex }: { ex: WorkoutExerciseView }) {
   );
 }
 
-function mount(ex: WorkoutExerciseView) {
+function mount(ex: WorkoutExerciseView, others: WorkoutExerciseView[] = []) {
   let tree!: ReturnType<typeof create>;
   act(() => {
-    tree = create(<Host ex={ex} />);
+    tree = create(<Host ex={ex} others={others} />);
   });
   return tree;
 }
@@ -292,6 +292,22 @@ describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
     expect(labels(mount(withRest(null)))).toContain('Rest time · Default (2:00)');
     expect(labels(mount(withRest(0)))).toContain('Rest time · Off');
     expect(labels(mount(withRest(90)))).toContain('Rest time · 1:30');
+  });
+
+  it('in a superset, says the rest comes after its last member (R100)', () => {
+    const first = { ...withRest(90), supersetGroup: 1, position: 0 };
+    const last = { ...withRest(null), id: 'we2', name: 'Ab roller', supersetGroup: 1, position: 1 };
+    const tree = mount(first, [last]);
+    press(tree, 'Rest time · 1:30');
+
+    expect(shownText(tree)).toContain('In a superset, the rest comes after Ab roller.');
+  });
+
+  it('says nothing of a superset outside one', () => {
+    const tree = mount(withRest(90));
+    press(tree, 'Rest time · 1:30');
+
+    expect(shownText(tree).some((t) => t.startsWith('In a superset'))).toBe(false);
   });
 
   it('lists Default, then Off and every choice in m:ss, with the current one highlighted', () => {
