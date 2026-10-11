@@ -311,7 +311,7 @@ describe('migration 0006 (phase 4, R102)', () => {
   });
 });
 
-describe('migration 0007 (phase 5, R132)', () => {
+describe('migration 0007 (phase 5, R132, R158)', () => {
   type Column = { name: string; type: string; notnull: number; dflt_value: string | null; pk: number };
   const columns = (db: Db, table: string) =>
     db.all<Column>(sql.raw(`pragma table_info(${table})`)).map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, pk: c.pk }));
@@ -327,6 +327,11 @@ describe('migration 0007 (phase 5, R132)', () => {
       { name: 'amount_ml', type: 'REAL', notnull: 1, pk: 0 },
     ]);
     expect(indexes(db, 'water_log')).toContain('water_log_local_date_idx');
+  });
+
+  it('adds food_log.serving_label, nullable text (R158)', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'food_log')).toContainEqual({ name: 'serving_label', type: 'TEXT', notnull: 0, pk: 0 });
   });
 
   it('round-trips a water entry in ml', () => {
@@ -351,7 +356,9 @@ describe('migration 0007 (phase 5, R132)', () => {
 
     expect(tableNames(db).sort()).toEqual([...before, 'water_log'].sort());
     expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
-    expect(db.select().from(schema.foodLog).all()).toEqual([expect.objectContaining({ id: 'f1', kcal: 500, proteinG: 40 })]);
+    expect(db.select().from(schema.foodLog).all()).toEqual([
+      expect.objectContaining({ id: 'f1', kcal: 500, proteinG: 40, servingLabel: null }),
+    ]);
     expect(db.select().from(schema.waterLog).all()).toEqual([]);
     close();
   });

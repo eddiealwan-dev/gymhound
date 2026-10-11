@@ -6,3 +6,5 @@ CREATE TABLE `water_log` (
 );
 --> statement-breakpoint
 CREATE INDEX `water_log_local_date_idx` ON `water_log` (`local_date`);
+--> statement-breakpoint
+ALTER TABLE `food_log` ADD `serving_label` text;
