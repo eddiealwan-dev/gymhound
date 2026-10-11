@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
@@ -14,6 +14,7 @@ import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
+import { nextSetId, progressLabel, progressText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
 import { discard, finish } from '../src/state/sessionActions';
@@ -25,7 +26,7 @@ import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
-import { Body, Display, Num } from '../src/ui/Text';
+import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
 /** Leaves the session without touching the workout. With nothing to go back to (the page was opened by address, or reloaded), it lands on Train. */
@@ -48,14 +49,30 @@ type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed';
 const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
 
 /**
- * The back chevron, the workout name, the running clock and, on a phone, the music button, whose sheet shows `musicApp`
- * as picked. There is no app header and no dock here.
+ * The back chevron, the workout name with its progress and time under it, on a phone the music button, whose sheet shows
+ * `musicApp` as picked, and Finish (spec 18.6). A 2pt line along the bottom fills with the share of sets ticked. The name,
+ * the line under it and the Finish label stop growing at 1.3× the text size, so the header stays one row. There is no
+ * app header and no dock here.
  */
-function SessionHeader({ name, startedAt, musicApp }: { name: string; startedAt: number; musicApp: MusicAppId | null }) {
+function SessionHeader({
+  name,
+  startedAt,
+  musicApp,
+  progress,
+  onFinish,
+}: {
+  name: string;
+  startedAt: number;
+  musicApp: MusicAppId | null;
+  progress: Progress;
+  onFinish: () => void;
+}) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const now = useNow(1000);
   const [musicOpen, setMusicOpen] = useState(false);
+  const elapsed = formatElapsed(now - startedAt);
+  const { done, total } = progress;
   return (
     <View style={{ backgroundColor: colors.bg, paddingTop: insets.top, borderBottomWidth: 1, borderBottomColor: colors.border }}>
       <View
@@ -79,16 +96,14 @@ function SessionHeader({ name, startedAt, musicApp }: { name: string; startedAt:
         >
           <Ionicons name="chevron-back" size={28} color={colors.text} />
         </Pressable>
-        <Display weight={700} numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 26 }}>
-          {name}
-        </Display>
-        <Num
-          weight={600}
-          accessibilityLabel={`Workout time ${formatElapsed(now - startedAt)}`}
-          style={{ fontSize: 24, paddingRight: MUSIC_APPS_HERE.length > 0 ? 0 : 8 }}
-        >
-          {formatElapsed(now - startedAt)}
-        </Num>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Display weight={700} numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 22 }}>
+            {name}
+          </Display>
+          <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} accessibilityLabel={progressLabel(progress, elapsed)} style={{ fontSize: 13 }}>
+            {progressText(progress, elapsed)}
+          </Body>
+        </View>
         {MUSIC_APPS_HERE.length > 0 ? (
           <Pressable
             accessibilityRole="button"
@@ -103,7 +118,29 @@ function SessionHeader({ name, startedAt, musicApp }: { name: string; startedAt:
             <Ionicons name="musical-notes" size={24} color={colors.text} />
           </Pressable>
         ) : null}
+        <Button
+          label="Finish"
+          variant="secondary"
+          size="compact"
+          maxFontSizeMultiplier={1.3}
+          onPress={() => {
+            Keyboard.dismiss();
+            onFinish();
+          }}
+        />
       </View>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          position: 'absolute',
+          left: 0,
+          bottom: 0,
+          height: 2,
+          width: `${total === 0 ? 0 : (done / total) * 100}%`,
+          backgroundColor: colors.text,
+        }}
+      />
       {MUSIC_APPS_HERE.length > 0 ? (
         <MusicSheet visible={musicOpen} apps={MUSIC_APPS_HERE} musicApp={musicApp} onClose={() => setMusicOpen(false)} />
       ) : null}
@@ -111,7 +148,7 @@ function SessionHeader({ name, startedAt, musicApp }: { name: string; startedAt:
   );
 }
 
-/** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, and Finish and Discard. */
+/** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, Finish in the header, and Discard. */
 export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
@@ -124,6 +161,14 @@ export default function Session() {
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
   /** How tall the bars docked at the bottom are (0 with none), so the content can scroll clear of them. */
   const [dockHeight, setDockHeight] = useState(0);
+  /** The header's count and the next set's ring, worked out once per data change rather than on every tick of the clock. */
+  const { progress, next } = useMemo(
+    () => ({
+      progress: workoutProgress(workout?.exercises ?? []),
+      next: workout === null ? null : nextSetId(workout.exercises),
+    }),
+    [workout],
+  );
 
   // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
   // what is typed first (R29, R31). The browser's back button does not remove it (expo-router resets the navigator, which
@@ -206,7 +251,7 @@ export default function Session() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <SessionHeader name={workout.name} startedAt={workout.startedAt} musicApp={musicApp} />
+      <SessionHeader name={workout.name} startedAt={workout.startedAt} musicApp={musicApp} progress={progress} onFinish={onFinish} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1 }}
@@ -238,6 +283,7 @@ export default function Session() {
               joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
               restEndsAt={restEndsAt}
               restSetId={restSetId}
+              nextSetId={next}
               onOpenMenu={() => {
                 flushAll();
                 Keyboard.dismiss();
@@ -254,8 +300,7 @@ export default function Session() {
               router.push({ pathname: '/pick-exercise', params: { mode: 'add' } });
             }}
           />
-          <View style={{ gap: 8, marginTop: 24 }}>
-            <Button label="Finish" onPress={onFinish} />
+          <View style={{ marginTop: 24 }}>
             <Button label="Discard workout" variant="quiet" onPress={onDiscard} />
           </View>
         </View>

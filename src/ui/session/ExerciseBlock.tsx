@@ -4,13 +4,14 @@ import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import type { Gear } from '../../domain/plates';
+import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
-import { Body, Display } from '../Text';
+import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
 import { RestInline } from './RestInline';
@@ -43,16 +44,19 @@ type Props = {
    * set is in this block. A removed set shows none, and the rest bar still does.
    */
   restSetId: string | null;
+  /** The next set to do in the whole workout (spec 18.6), or null: its tick gets the bolder ring when it is in this block. */
+  nextSetId: string | null;
 };
 
 /** Space below a block. A superset's bar crosses it to join the members. */
 const BLOCK_GAP = 28;
 
 /**
- * One exercise: its name, its ⋯ menu, its note, the set table with each set's last result beside the inputs, and the
- * Add warmup and Add set buttons. Tapping a set number opens the set-type sheet, which also removes the set;
- * pressing and holding the row opens a sheet that removes it too. A ticked set is removed only after "Remove set n?".
- * The running rest shows under the set that started it.
+ * One exercise: its name, how many of its sets are ticked, its ⋯ menu, its note, the set table with each set's last
+ * result beside the inputs, and the Add warmup and Add set buttons. The next set to do has the bolder tick ring.
+ * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
+ * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
+ * started it.
  */
 export function ExerciseBlock({
   workoutId,
@@ -65,12 +69,14 @@ export function ExerciseBlock({
   joinsNext,
   restEndsAt,
   restSetId,
+  nextSetId,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
   // Each row's previous is worked out once for the whole block.
   const rows = buildRows(ex, unit, gear);
+  const progress = exerciseProgress(ex);
 
   /** The note while it is being typed; null shows the saved one. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -120,6 +126,12 @@ export function ExerciseBlock({
         <Display weight={700} style={{ flex: 1, minWidth: 0, fontSize: 22 }}>
           {ex.name}
         </Display>
+        {progress.total > 0 ? (
+          // No text-size cap: the name wraps instead.
+          <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
+            {`${progress.done}/${progress.total}`}
+          </Num>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Options for ${ex.name}`}
@@ -188,6 +200,7 @@ export function ExerciseBlock({
                 Keyboard.dismiss();
                 setRemoveFor(row.set.id);
               }}
+              isNext={row.set.id === nextSetId}
             />
             {restEndsAt !== null && row.set.id === restSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
           </Fragment>

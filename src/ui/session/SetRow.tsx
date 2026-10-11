@@ -96,6 +96,8 @@ type Props = {
   distanceUnit: DistanceUnit;
   onChangeType: () => void;
   onLongPress: () => void;
+  /** Whether this is the next set to do (spec 18.6): its open tick gets the bolder ring. */
+  isNext: boolean;
 };
 
 /**
@@ -104,7 +106,7 @@ type Props = {
  * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, focuses the field
  * and says why (spec 18.6).
  */
-export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onLongPress }: Props) {
+export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onLongPress, isNext }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const { set } = row;
@@ -186,7 +188,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     Keyboard.dismiss();
   };
 
-  /** The tick's look: filled when done; otherwise an open ring, dashed while it is not ready. */
+  /** The tick's look: filled when done; otherwise an open ring, bolder on the next set and dashed while it is not ready. */
   const tickStyle = ({ pressed }: PressableStateCallbackType): ViewStyle => {
     const shape: ViewStyle = {
       width: 40,
@@ -199,7 +201,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     if (set.done) {
       return { ...shape, borderWidth: 1.5, borderColor: colors.text, borderStyle: 'solid', backgroundColor: colors.text };
     }
-    const ring: ViewStyle = { borderWidth: 1.5, borderColor: colors.textMuted };
+    const ring: ViewStyle = { borderWidth: isNext ? 2.5 : 1.5, borderColor: isNext ? colors.text : colors.textMuted };
     return { ...shape, ...ring, borderStyle: canTick ? 'solid' : 'dashed', backgroundColor: 'transparent' };
   };
 

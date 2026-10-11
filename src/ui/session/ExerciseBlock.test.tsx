@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Keyboard, TextInput } from 'react-native';
+import { Keyboard, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -75,7 +75,7 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
 
 type Rest = { restEndsAt: number | null; restSetId: string | null };
 
-function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }): ReactTestRenderer {
+function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(
@@ -90,6 +90,7 @@ function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSet
         joinsNext={false}
         restEndsAt={rest.restEndsAt}
         restSetId={rest.restSetId}
+        nextSetId={nextSetId}
       />,
     );
   });
@@ -391,5 +392,43 @@ describe('ExerciseBlock: the countdown under its set (Task 26, R41)', () => {
     const tree = mount(threeSets(), { restEndsAt: null, restSetId: 's1' });
 
     expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+});
+
+describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
+  const NO_REST: Rest = { restEndsAt: null, restSetId: null };
+  const ticked = { done: true, weight: 135, weightUnit: 'lb' as const, reps: 8, completedAt: 1 };
+  /** Set 1 ticked, sets 2 to 4 open. */
+  const fourSets = () => bench([set('a', 0, ticked), set('b', 1), set('c', 2), set('d', 3)]);
+
+  it('shows how many sets are ticked before ⋯', () => {
+    const tree = mount(fourSets());
+
+    const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4');
+    expect(count).toHaveLength(1);
+    expect(count[0].props.accessibilityLabel).toBe('1 of 4 sets done');
+    expect(count[0].props.maxFontSizeMultiplier).toBeUndefined();
+    // It comes before the ⋯ button in the name row.
+    const order = shownText(tree).indexOf('1/4');
+    expect(order).toBeGreaterThan(shownText(tree).indexOf('Bench Press'));
+
+    expect(shownText(mount(bench([])))).not.toContain('0/0');
+  });
+
+  it("the next set's tick has the bolder ring", () => {
+    const tree = mount(fourSets(), NO_REST, 'b');
+
+    expect(tree.root.findAllByType(SetRow).map((r) => r.props.isNext)).toEqual([false, true, false, false]);
+    expect(byLabel(tree, 'Set 2 done').props.style({ pressed: false })).toMatchObject({ borderWidth: 2.5, borderColor: '#f1ece2' });
+    expect(byLabel(tree, 'Set 3 done').props.style({ pressed: false })).toMatchObject({ borderWidth: 1.5, borderColor: '#a39d90' });
+
+    const doneNext = mount(fourSets(), NO_REST, 'a');
+    expect(byLabel(doneNext, 'Set 1 done').props.style({ pressed: false })).toMatchObject({ borderWidth: 1.5 });
+  });
+
+  it('the next set keeps the bold ring while not ready', () => {
+    const tree = mount(bench([set('s0', 0)]), NO_REST, 's0');
+
+    expect(byLabel(tree, 'Set 1 done').props.style({ pressed: false })).toMatchObject({ borderWidth: 2.5, borderStyle: 'dashed' });
   });
 });

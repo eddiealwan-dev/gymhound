@@ -73,7 +73,7 @@ const buttonLabels = (tree: ReactTestRenderer) => tree.root.findAllByType(Button
 const dock = (tree: ReactTestRenderer): ReactTestInstance =>
   tree.root.findAll((n) => n.type === View && typeof n.props.onLayout === 'function')[0];
 
-/** The bottom padding of the scrolling content: what keeps Finish clear of the bars. */
+/** The bottom padding of the scrolling content: what keeps Discard workout, now the last thing on the page, clear of the bars. */
 const contentPaddingBottom = (tree: ReactTestRenderer): number => {
   const content = tree.root.findByType(ScrollView).findAll((n) => n.type === View && n.props.style?.maxWidth === 512)[0];
   return content.props.style.paddingBottom;
