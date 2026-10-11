@@ -354,6 +354,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     setSaved(next);
     reset(next);
     setTried(false);
+    setSaveFailed(false);
   };
 
   /** Takes `leave` over when there are changes to lose, opening "Discard changes?"; false lets it go now. */
@@ -371,15 +372,20 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
 
   useFocusEffect(
     useCallback(() => {
-      // A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
-      // editor). With nothing unsaved here, read it again; changes not yet saved are kept as they are.
+      // In this order: (1) read the routine again if nothing is unsaved, (2) add what the picker chose, (3) a library
+      // re-check (another branch adds it here).
+      // 1. A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
+      // editor). With nothing unsaved here, read it again as the saved version, so nothing looks unsaved, and clear the
+      // last Save's notices; changes not yet saved are kept as they are.
       if (routineId !== null && !premade && !unsaved(savedRef.current, latest.current)) {
         const fresh = routineToDraft(db, routineId);
         savedRef.current = fresh;
         setSaved(fresh);
         reset(fresh);
+        setTried(false);
+        setSaveFailed(false);
       }
-      // The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
+      // 2. The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
       const exerciseId = usePendingPick.getState().take();
       const dayKey = pickFor.current;
       pickFor.current = null;
@@ -392,13 +398,17 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
           increment: defaultIncrement(getSettings(db)),
         });
       }
+      // 3. (Another branch adds the library re-check here.)
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const back = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(() => goBack(backTo)));
       return () => {
         unguard();
         back.remove();
         // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
-        if (!unsaved(savedRef.current, latest.current)) setTried(false);
+        if (!unsaved(savedRef.current, latest.current)) {
+          setTried(false);
+          setSaveFailed(false);
+        }
       };
     }, [db, apply, reset, backTo, routineId, premade]),
   );
@@ -462,7 +472,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     else write();
   };
 
-  const problems = tried ? validateDraft(draft) : [];
+  const problems = [...(tried ? validateDraft(draft) : [])];
   if (saveFailed) problems.push("Couldn't save. Try again.");
 
   return (

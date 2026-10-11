@@ -387,6 +387,51 @@ describe('the routine editor: your own routine', () => {
     warn.mockRestore();
   });
 
+  it('a failed Save, then Back and Discard: opened again, it shows no error', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Renamed');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+
+    press(tree, 'Back to My split');
+    press(tree, 'Discard');
+    act(() => void jest.advanceTimersByTime(400));
+    leaveAndReturn();
+
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    warn.mockRestore();
+  });
+
+  it('a failed Save with nothing changed: shown again, the routine is read again and the error is gone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+
+    act(() => {
+      if (typeof mockFocus.cleanup === 'function') mockFocus.cleanup();
+      mockFocus.cleanup = undefined;
+    });
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+    act(() => {
+      mockFocus.cleanup = mockFocus.effect?.();
+    });
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    const toTrain = jest.fn();
+    act(() => leaveGuarded(toTrain));
+    expect(toTrain).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it('says so when the routine is not there', () => {
     jest.mocked(routineToDraft).mockReturnValue(null);
     const tree = mount('gone');
