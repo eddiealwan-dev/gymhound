@@ -102,16 +102,16 @@ async function open(exerciseId: string | null, onClose: () => void = () => {}): 
 
 const texts = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === Text).map((t) => t.props.children);
 const buttons = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).filter((b) => b.props.label === label);
-/** The drawn photo the screen reader names `label`. */
-const photo = (tree: ReactTestRenderer, label: string): ReactTestInstance => {
-  const found = tree.root.findAll((n) => n.type === Image && n.props.accessibilityLabel === label);
+/** The drawn start or end photo. The screen reader never lands on either: their frame is one element (review of R86). */
+const photo = (tree: ReactTestRenderer, which: 'start' | 'end'): ReactTestInstance => {
+  const found = tree.root.findAll((n) => n.type === Image && n.props.testID === `form-demo-${which}`);
   expect(found).toHaveLength(1);
   return found[0];
 };
 const photos = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === Image);
 const opacity = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style).opacity;
-const START = 'Barbell bench press, start position';
-const END = 'Barbell bench press, end position';
+const START = 'start';
+const END = 'end';
 
 describe('the form demo (R86)', () => {
   it('shows the name, the start and end photos, the muscles and the first three steps, numbered', async () => {
@@ -311,8 +311,8 @@ describe('the form demo: the photos (R86)', () => {
   it('an exercise with photos and no steps shows the photos alone', async () => {
     const tree = await open('side-plank');
 
-    expect(photo(tree, 'Side plank, start position')).toBeDefined();
-    expect(photo(tree, 'Side plank, end position')).toBeDefined();
+    expect(photo(tree, START)).toBeDefined();
+    expect(photo(tree, END)).toBeDefined();
     expect(texts(tree)).toEqual(['Side plank', 'Obliques', 'Close']);
   });
 });
@@ -332,5 +332,31 @@ describe('the form demo without photos (R86)', () => {
 
     expect(photos(tree)).toHaveLength(0);
     expect(texts(tree)).toEqual(['Wall sit', 'Quads · Glutes', 'Close']);
+  });
+});
+
+describe('the form demo: the photos and the screen reader (review of R86)', () => {
+  /** What the screen reader can land on in the photo frame: elements marked accessible, with their labels. */
+  const stops = (tree: ReactTestRenderer) =>
+    tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessible === true && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.includes('position'));
+
+  it.each([
+    { motion: 'swapping', reduced: false },
+    { motion: 'side by side (Reduce Motion)', reduced: true },
+  ])('$motion, the photos are one element, "{name}, start and end positions", and neither photo is a stop', async ({ reduced }) => {
+    reduceMotion = reduced;
+    const tree = await open('barbell-bench-press');
+
+    const frames = stops(tree);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].props.accessibilityLabel).toBe('Barbell bench press, start and end positions');
+    expect(frames[0].props.accessibilityRole).toBe('image');
+    for (const image of photos(tree)) {
+      expect(image.props.accessible).toBe(false);
+      expect(image.props.accessibilityLabel).toBeUndefined();
+    }
+    expect(photos(tree)).toHaveLength(2);
+    // Both photos sit inside it.
+    expect(frames[0].findAll((n) => n.type === Image)).toHaveLength(2);
   });
 });

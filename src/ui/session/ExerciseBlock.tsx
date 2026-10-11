@@ -13,7 +13,7 @@ import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { flushAll, useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
-import { FormDemo } from '../FormDemo';
+import type { FormDemo as FormDemoType } from '../FormDemo';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
@@ -228,10 +228,16 @@ export function ExerciseBlock({
 
   /** Whether the form demo is open (R86). */
   const [demoOpen, setDemoOpen] = useState(false);
+  /**
+   * The form demo, loaded the first time it opens and kept after: it reads the photo index (about 1,746 requires), which
+   * the session screen should not load until a demo is asked for.
+   */
+  const [FormDemo, setFormDemo] = useState<typeof FormDemoType | null>(null);
   /** Saves every draft and puts the keyboard away before the sheet opens over the session (R29). */
   const openDemo = () => {
     flushAll();
     Keyboard.dismiss();
+    if (FormDemo === null) setFormDemo(() => (require('../FormDemo') as typeof import('../FormDemo')).FormDemo);
     setDemoOpen(true);
   };
 
@@ -532,7 +538,7 @@ export function ExerciseBlock({
         onCancel={() => setConfirmFor(null)}
       />
 
-      <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} />
+      {FormDemo !== null ? <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} /> : null}
     </View>
   );
 }

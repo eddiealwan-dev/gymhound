@@ -1458,14 +1458,15 @@ describe('ExerciseBlock: the form demo (R86)', () => {
   const demo = (tree: ReactTestRenderer) => tree.root.findByType(FormDemo);
   const SHOW_FORM = 'Show form for Bench Press';
 
-  it('the name is a button, "Show form for {name}", with a 44pt target, and the demo starts closed', () => {
+  it('the name is a button, "Show form for {name}", with a 44pt target, and the demo starts closed (not even drawn)', () => {
     const tree = mount(bench([set('s0', 0)]));
 
     const name = byLabel(tree, SHOW_FORM);
     expect(name.props.accessibilityRole).toBe('button');
     expect(targetHeight(name)).toBe(44);
     expect(name.findAll((n) => n.type === Text && ([] as unknown[]).concat(n.props.children).includes('Bench Press'))).toHaveLength(1);
-    expect(demo(tree).props.exerciseId).toBeNull();
+    // It is loaded and drawn only once it is first opened (formDemoLazy.test.tsx).
+    expect(tree.root.findAllByType(FormDemo)).toHaveLength(0);
   });
 
   it('a muted ⓘ follows the last word of the name, inside its text, so it wraps and scales with it (R94)', () => {
@@ -1487,7 +1488,7 @@ describe('ExerciseBlock: the form demo (R86)', () => {
       act(() => noteFields(tree)[0].props.onChangeText('Elbows in'));
       /** Which demo was open at each Keyboard.dismiss. */
       const openAtDismiss: (string | null)[] = [];
-      dismiss.mockImplementation(() => void openAtDismiss.push(demo(tree).props.exerciseId));
+      dismiss.mockImplementation(() => void openAtDismiss.push(tree.root.findAllByType(FormDemo)[0]?.props.exerciseId ?? null));
 
       act(() => byLabel(tree, SHOW_FORM).props.onPress());
 
