@@ -4,13 +4,12 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
 import FoodRoute from '../../app/food/[id]';
 import AddFoodRoute from '../../app/food/add';
-import { FuelTrends } from './fuel/FuelTrends';
 import { Footer } from './Footer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * Phase 5 Task 1 (R155): the stubs and placeholder routes later tasks fill. The stubs draw nothing; each route says
+ * Phase 5 Task 1 (R155): the placeholder routes later tasks fill (every stub is filled now). Each route says
  * "Not built yet." and can be left. The food screens have no footer (§18.4). The paywall and ProPitch are tested in
  * paywall.test.tsx.
  */
@@ -72,14 +71,6 @@ describe('the placeholder routes', () => {
     );
     act(() => control.props.onPress());
     expect(router.back).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('the stubs draw nothing until their task fills them', () => {
-  it.each([
-    ['FuelTrends', <FuelTrends key="r" today="2026-10-11" />],
-  ])('%s', (_name, element) => {
-    expect(render(element).toJSON()).toBeNull();
   });
 });
 

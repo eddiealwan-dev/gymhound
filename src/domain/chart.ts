@@ -27,13 +27,22 @@ function finitePoints(points: readonly SeriesPoint[]): SeriesPoint[] {
  * and nothing after it. All keeps every date.
  */
 export function pointsInRange(points: readonly SeriesPoint[], range: ChartRange, today: string): SeriesPoint[] {
-  const sorted = finitePoints(points).sort(byDate);
-  if (range === 'All') return sorted;
-  const days = RANGE_DAYS[range];
-  return sorted.filter((pt) => {
-    const ago = daysBetween(pt.localDate, today);
-    return ago >= 0 && ago < days;
-  });
+  if (range === 'All') return finitePoints(points).sort(byDate);
+  return pointsInDays(points, RANGE_DAYS[range], today);
+}
+
+/**
+ * The points in the last `days` days, oldest first, finite values only, by the same rules as `pointsInRange`: today
+ * included and nothing after it, so 30 days is today and the 29 before it (R149). 0, a negative or a non-number count
+ * gives nothing.
+ */
+export function pointsInDays(points: readonly SeriesPoint[], days: number, today: string): SeriesPoint[] {
+  return finitePoints(points)
+    .sort(byDate)
+    .filter((pt) => {
+      const ago = daysBetween(pt.localDate, today);
+      return ago >= 0 && ago < days;
+    });
 }
 
 /** Steps stop growing here, so even an absurd range ends: the last step tried covers any finite range. */
