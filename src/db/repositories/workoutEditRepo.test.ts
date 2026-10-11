@@ -821,4 +821,15 @@ describe('setOverride', () => {
     const { db } = startPushA();
     expect(() => setOverride(db, 'nope', 100, 'lb')).toThrow('No workout exercise with id nope.');
   });
+
+  it.each([
+    ['a weight without its unit', 190, null],
+    ['a unit without a weight', null, 'lb'],
+  ] as const)('refuses %s, and keeps the override it had', (_, weight, unit) => {
+    const { db, ids } = startPushA();
+    setOverride(db, ids[0], 185, 'lb');
+
+    expect(() => setOverride(db, ids[0], weight, unit)).toThrow('An override needs both a weight and a unit, or neither.');
+    expect(view(db).exercises[0]).toMatchObject({ overrideWeight: 185, overrideUnit: 'lb' });
+  });
 });
