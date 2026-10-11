@@ -95,6 +95,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -207,7 +208,8 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it('Finish anyway finishes and goes to the summary', () => {
+  it('Finish anyway finishes and goes to the summary once the sheet has closed', () => {
+    jest.useFakeTimers();
     untouched();
     jest.mocked(finish).mockReturnValue('finished');
     const tree = mount();
@@ -215,9 +217,26 @@ describe('the session screen asks before Finish drops untouched sets (§18.6)', 
 
     press(tree, 'Finish anyway');
 
+    // The sheet goes away first: nothing finishes while it fades.
+    expect(shownText(tree)).not.toContain(ASKED);
+    expect(finish).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    act(() => void jest.runAllTimers());
+
     expect(finish).toHaveBeenCalledWith('db', 'w1');
     expect(router.replace).toHaveBeenCalledWith('/finish/w1');
-    expect(shownText(tree)).not.toContain(ASKED);
+  });
+
+  it('finishes and goes to the summary at once when every set is ticked (no sheet to wait for)', () => {
+    jest.useFakeTimers();
+    jest.mocked(finish).mockReturnValue('finished');
+    const tree = mount();
+
+    press(tree, 'Finish');
+
+    expect(finish).toHaveBeenCalledWith('db', 'w1');
+    expect(router.replace).toHaveBeenCalledWith('/finish/w1');
   });
 
   it('asks with Finish anyway filled when every exercise has a tick', () => {

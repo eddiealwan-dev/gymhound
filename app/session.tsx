@@ -24,7 +24,7 @@ import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
 import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
-import { ConfirmSheet, Sheet } from '../src/ui/Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display, Num } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
@@ -279,7 +279,8 @@ export default function Session() {
         </Display>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
-      {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer. */}
+      {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer.
+          Finish anyway waits for the sheet to go: iOS can't present the summary or another sheet while one is closing. */}
       <ConfirmSheet
         visible={ask === 'confirm_finish'}
         title={finishAsk?.title ?? ''}
@@ -287,7 +288,10 @@ export default function Session() {
         confirmLabel="Finish anyway"
         cancelLabel="Keep logging"
         primary={finishAsk?.safeDefault ? 'cancel' : 'confirm'}
-        onConfirm={finishNow}
+        onConfirm={() => {
+          setAsk(null);
+          afterSheetCloses(finishNow);
+        }}
         onCancel={() => setAsk(null)}
       />
       <ConfirmSheet
