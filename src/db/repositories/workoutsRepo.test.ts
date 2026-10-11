@@ -30,6 +30,7 @@ import { ensureSettings, getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, replaceExercise, setExerciseMark, setOverride } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
+  assertNoActiveWorkout,
   clearRestEndsAtIf,
   discardWorkout,
   finishWorkout,
@@ -45,6 +46,18 @@ import {
   untickSet,
 } from './workoutsRepo';
 import { getActiveWorkoutView, getPreviousSets, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
+import { writePrFlags } from './prRepo';
+import { rememberSavedWorkout } from './savedWorkoutsRepo';
+
+// The finish contracts (phase 4, R123) are wrapped, not replaced: every test runs their real code, and can check the calls.
+jest.mock('./prRepo', () => {
+  const actual = jest.requireActual('./prRepo');
+  return { ...actual, writePrFlags: jest.fn(actual.writePrFlags) };
+});
+jest.mock('./savedWorkoutsRepo', () => {
+  const actual = jest.requireActual('./savedWorkoutsRepo');
+  return { ...actual, rememberSavedWorkout: jest.fn(actual.rememberSavedWorkout) };
+});
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const HOUR = 3_600_000;
@@ -299,6 +312,68 @@ describe('several workouts on one day', () => {
     // The streak counts the date once.
     expect(getTrainingDates(db)).toEqual([today]);
     expect(computeStreak(getTrainingDates(db), today)).toBe(1);
+  });
+});
+
+describe('assertNoActiveWorkout', () => {
+  it('passes with no active workout and throws ActiveWorkoutExistsError with one', () => {
+    const db = seededDb();
+    expect(() => assertNoActiveWorkout(db)).not.toThrow();
+    startEmptyWorkout(db, NOW);
+    expect(() => assertNoActiveWorkout(db)).toThrow(ActiveWorkoutExistsError);
+  });
+});
+
+describe('finishWorkout calls the phase 4 contracts (R102, R123)', () => {
+  const writePrFlagsMock = writePrFlags as jest.MockedFunction<typeof writePrFlags>;
+  const rememberMock = rememberSavedWorkout as jest.MockedFunction<typeof rememberSavedWorkout>;
+
+  beforeEach(() => {
+    writePrFlagsMock.mockClear();
+    rememberMock.mockClear();
+  });
+
+  it('writes PR flags, then remembers the saved workout, after the workout is marked finished', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    const order: string[] = [];
+    const statusSeen: (string | undefined)[] = [];
+    writePrFlagsMock.mockImplementationOnce((tx, workoutId) => {
+      order.push(`pr:${workoutId}`);
+      statusSeen.push(tx.select().from(workouts).where(eq(workouts.id, workoutId)).get()?.status);
+    });
+    rememberMock.mockImplementationOnce((tx, workoutId) => {
+      order.push(`saved:${workoutId}`);
+      statusSeen.push(tx.select().from(workouts).where(eq(workouts.id, workoutId)).get()?.status);
+    });
+
+    finishWorkout(db, id, NOW + HOUR);
+
+    expect(order).toEqual([`pr:${id}`, `saved:${id}`]);
+    expect(statusSeen).toEqual(['finished', 'finished']);
+  });
+
+  it('runs them inside the finish transaction: a contract that throws leaves the workout active', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    rememberMock.mockImplementationOnce(() => {
+      throw new Error('remember exploded');
+    });
+
+    expect(() => finishWorkout(db, id, NOW + HOUR)).toThrow('remember exploded');
+
+    expect(getActiveWorkoutId(db)).toBe(id);
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({ status: 'active', finishedAt: null });
+  });
+
+  it('calls neither when nothing is ticked', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(() => finishWorkout(db, id, NOW + HOUR)).toThrow(NothingTickedError);
+    expect(writePrFlagsMock).not.toHaveBeenCalled();
+    expect(rememberMock).not.toHaveBeenCalled();
   });
 });
 

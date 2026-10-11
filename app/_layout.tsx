@@ -174,6 +174,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="session" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         {/* The exercise picker rises over the session. */}
         <Stack.Screen name="pick-exercise" options={{ presentation: 'modal' }} />
+        {/* Your own exercise: the editor opens over the picker (phase 4). */}
+        <Stack.Screen name="exercise/[id]" options={{ presentation: 'modal' }} />
         {/* The summary of the workout just finished. Done leaves it. */}
         <Stack.Screen name="finish/[id]" options={{ presentation: 'fullScreenModal' }} />
       </Stack>

@@ -184,3 +184,129 @@ it('cascades workout deletes to exercises and sets', () => {
   expect(db.select().from(sets).all()).toEqual([]);
   expect(db.select().from(exercises).all()).toHaveLength(1);
 });
+
+describe('migration 0006 (phase 4, R102)', () => {
+  type Column = { name: string; type: string; notnull: number; dflt_value: string | null; pk: number };
+  const columns = (db: Db, table: string) =>
+    db.all<Column>(sql.raw(`pragma table_info(${table})`)).map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, pk: c.pk }));
+  const indexes = (db: Db, table: string) => db.all<{ name: string }>(sql.raw(`pragma index_list(${table})`)).map((i) => i.name);
+  const insertBench = (db: Db) =>
+    db.run(sql`
+      INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+      VALUES ('barbell-bench-press', 'Barbell bench press', '[]', '["chest"]', '[]', 'barbell', 'horizontal_push', 'weighted', 0, 0, 1)`);
+
+  it('adds the measurements table with its kind and date index', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'measurements')).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'kind', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'local_date', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'measured_at', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'value', type: 'REAL', notnull: 1, pk: 0 },
+      { name: 'unit', type: 'TEXT', notnull: 1, pk: 0 },
+    ]);
+    expect(indexes(db, 'measurements')).toContain('measurements_kind_date_idx');
+  });
+
+  it('adds exercise_photos, keyed by exercise, holding file names (R111)', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'exercise_photos')).toEqual([
+      { name: 'exercise_id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'start_file', type: 'TEXT', notnull: 0, pk: 0 },
+      { name: 'end_file', type: 'TEXT', notnull: 0, pk: 0 },
+      { name: 'updated_at', type: 'INTEGER', notnull: 1, pk: 0 },
+    ]);
+    const fks = db.all<{ table: string; from: string; to: string }>(sql`pragma foreign_key_list(exercise_photos)`);
+    expect(fks).toEqual([expect.objectContaining({ table: 'exercises', from: 'exercise_id', to: 'id', on_delete: 'CASCADE' })]);
+  });
+
+  it('removes an exercise photo row with its exercise', () => {
+    const { db } = createTestDb();
+    insertBench(db);
+    db.insert(schema.exercisePhotos).values({ exerciseId: 'barbell-bench-press', startFile: 'a.jpg', endFile: null, updatedAt: 1 }).run();
+    db.delete(exercises).where(eq(exercises.id, 'barbell-bench-press')).run();
+    expect(db.select().from(schema.exercisePhotos).all()).toEqual([]);
+  });
+
+  it('adds saved_workouts and saved_workout_exercises, whose sets default to an empty list', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'saved_workouts')).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'name', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'created_at', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'updated_at', type: 'INTEGER', notnull: 1, pk: 0 },
+    ]);
+    expect(columns(db, 'saved_workout_exercises')).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 1, pk: 1 },
+      { name: 'saved_workout_id', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'exercise_id', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'position', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'superset_group', type: 'INTEGER', notnull: 0, pk: 0 },
+      { name: 'sets', type: 'TEXT', notnull: 1, pk: 0 },
+    ]);
+    expect(indexes(db, 'saved_workout_exercises')).toContain('saved_workout_exercises_saved_workout_id_idx');
+    insertBench(db);
+    db.insert(schema.savedWorkouts).values({ id: 'sw1', name: 'Push A', createdAt: 1, updatedAt: 1 }).run();
+    db.insert(schema.savedWorkoutExercises)
+      .values({ id: 'swe1', savedWorkoutId: 'sw1', exerciseId: 'barbell-bench-press', position: 0 })
+      .run();
+    expect(db.select().from(schema.savedWorkoutExercises).get()).toMatchObject({ sets: [], supersetGroup: null });
+  });
+
+  it('round-trips a saved set list as JSON', () => {
+    const { db } = createTestDb();
+    insertBench(db);
+    db.insert(schema.savedWorkouts).values({ id: 'sw1', name: 'Push A', createdAt: 1, updatedAt: 1 }).run();
+    const saved = [
+      { setType: 'warmup', weight: 95, weightUnit: 'lb', reps: 5, durationS: null, distance: null, distanceUnit: null },
+      { setType: 'working', weight: 185, weightUnit: 'lb', reps: 5, durationS: null, distance: null, distanceUnit: null },
+    ] as const;
+    db.insert(schema.savedWorkoutExercises)
+      .values({ id: 'swe1', savedWorkoutId: 'sw1', exerciseId: 'barbell-bench-press', position: 0, supersetGroup: 1, sets: [...saved] })
+      .run();
+    expect(db.select().from(schema.savedWorkoutExercises).get()!.sets).toEqual(saved);
+  });
+
+  it('cascades a saved workout delete to its exercises, and leaves the exercise rows', () => {
+    const { db } = createTestDb();
+    insertBench(db);
+    db.insert(schema.savedWorkouts).values({ id: 'sw1', name: 'Push A', createdAt: 1, updatedAt: 1 }).run();
+    db.insert(schema.savedWorkoutExercises)
+      .values({ id: 'swe1', savedWorkoutId: 'sw1', exerciseId: 'barbell-bench-press', position: 0 })
+      .run();
+    db.delete(schema.savedWorkouts).where(eq(schema.savedWorkouts.id, 'sw1')).run();
+    expect(db.select().from(schema.savedWorkoutExercises).all()).toEqual([]);
+    expect(db.select().from(exercises).all()).toHaveLength(1);
+  });
+
+  it('adds workouts.saved_workout_id, nullable text and not a foreign key', () => {
+    const { db } = createTestDb();
+    expect(columns(db, 'workouts').find((c) => c.name === 'saved_workout_id')).toEqual({ name: 'saved_workout_id', type: 'TEXT', notnull: 0, pk: 0 });
+    expect(db.all<{ from: string }>(sql`pragma foreign_key_list(workouts)`).map((f) => f.from)).not.toContain('saved_workout_id');
+    // History survives a saved workout that no longer exists.
+    db.insert(workouts)
+      .values({ id: 'w1', name: 'W', status: 'finished', startedAt: 1, finishedAt: 2, localDate: '2026-10-11', savedWorkoutId: 'gone' })
+      .run();
+    expect(db.select().from(workouts).get()).toMatchObject({ savedWorkoutId: 'gone' });
+  });
+
+  it('migrates a database at 0005 forward: its workouts have no saved workout and the new tables are empty', () => {
+    const { db, close } = openFileDb(':memory:');
+    migrateUpTo(db, 5);
+    expect(db.all<{ name: string }>(sql`pragma table_info(workouts)`).map((c) => c.name)).not.toContain('saved_workout_id');
+    insertBench(db);
+    db.run(sql`
+      INSERT INTO workouts (id, name, status, day_mark, started_at, finished_at, local_date, food_offer_shown)
+      VALUES ('w1', 'Push A', 'finished', 'normal', 1, 2, '2026-10-09', 0)`);
+    db.run(sql`INSERT INTO bodyweight (id, local_date, measured_at, weight, unit) VALUES ('bw1', '2026-10-09', 1, 182.5, 'lb')`);
+
+    migrateTestDb(db);
+
+    expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', savedWorkoutId: null });
+    expect(db.select().from(schema.bodyweight).all()).toHaveLength(1);
+    expect(db.select().from(schema.measurements).all()).toEqual([]);
+    expect(db.select().from(schema.exercisePhotos).all()).toEqual([]);
+    expect(db.select().from(schema.savedWorkouts).all()).toEqual([]);
+    close();
+  });
+});

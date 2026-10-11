@@ -11,6 +11,8 @@ import { finishLine } from '../../src/domain/ruleLine';
 import { formatVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
+import { FinishPrs } from '../../src/ui/finish/FinishPrs';
+import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
@@ -50,7 +52,8 @@ function Figure({ caption, value, label }: { caption: string; value: string; lab
 /**
  * Shown the moment a workout is finished: how long it took, how much was lifted, how many sets counted, then next
  * time's weight for each exercise with a rule (spec 8.5, R64). A full screen with no header, dock or footer. Done goes
- * back to Train, where Up next already has the next day. Phase 4 adds the PRs.
+ * back to Train, where Up next already has the next day. Phase 4 adds the personal bests (`FinishPrs`) after the
+ * next-time lines and **Save as a workout** (`SaveAsWorkout`) just above Done.
  */
 export default function FinishSummary() {
   const { colors } = useTheme();
@@ -91,9 +94,11 @@ export default function FinishSummary() {
                   ))}
                 </View>
               )}
+              <FinishPrs workoutId={id} summary={summary} />
             </>
           )}
           <View style={{ flex: 1, minHeight: 24 }} />
+          {summary !== null && <SaveAsWorkout workoutId={id} workoutName={summary.name} />}
           <Button label={summary === null ? 'Back to Train' : 'Done'} onPress={goToTrain} />
         </View>
       </ScrollView>
