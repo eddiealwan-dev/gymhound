@@ -176,7 +176,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row, entered set fields and the selected bar choice.
 - **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars.
 - **Seam** (border-dark / border-light): card, sheet and dock edges, the set-number chip, regular secondary buttons.
-- **Strong Seam** (border-strong-dark / border-strong-light): set-field edges, compact pill outlines and the off track of a switch only: the edges a control needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
+- **Strong Seam** (border-strong-dark / border-strong-light): set-field edges, compact pill outlines, the rest row's edge and the off track of a switch only: the edges a control needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
 - **Chalk / Ink** (text-dark / text-light): text, primary-button fill, tick fill, the progress line, the superset bar, the selected segment.
 - **Worn Chalk / Worn Ink** (text-muted-dark / text-muted-light): secondary lines, labels, the rule line, previous results, open tick rings.
 - **Ghost Chalk / Ghost Ink** (text-faint-dark / text-faint-light): suggested values in empty set fields only. It holds 3:1 on bg and surface.
@@ -203,7 +203,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, upper case, muted; `Label` in src/ui/Text.tsx, read as a heading): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings (APPEARANCE, UNITS, BAR, REST TIMER, BACKUPS, EXPORT) and Routines (PREMADE).
+- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, REST TIMER, BACKUPS, EXPORT on Settings). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
 
 ### Named Rules
@@ -237,7 +237,7 @@ Plain, confident and quiet about it.
 - **Shape:** gently rounded rectangle (12px) at 48pt, or a full pill (18px) at 36pt for compact.
 - **Primary:** filled with the text colour, labelled in the background colour, Inter 600 16px, 20px side padding. One per sheet or card.
 - **Secondary:** transparent with a 1px border (Seam at regular size, Strong Seam at compact size), labelled in the text colour.
-- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout). A row of quiet buttons steps back by their 12px padding so the first label lines up with the content edge.
+- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout). The session's + Set / + Warmup row steps back by the buttons' 12px padding so "+ Set" lines up with the set column; Discard workout stays centred.
 - **Compact for a row's own action:** an action that belongs to one row of a list (Set active on a routine, the rest pills, Finish in the session header) is a compact secondary pill; full-size buttons are for a card's or a sheet's main answers.
 - **A state is not a button:** a row's current state (the routine in use) is a text-colour checkmark and a word, with no edge or fill.
 - **Pressed / disabled:** pressed drops opacity to 0.8; disabled to 0.4 and ignores presses.
@@ -272,7 +272,7 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 A 40px circle in a 44pt column. Open, it is a 1.5px muted ring; on the next set to do it is a 2.5px ring in the text colour; while not ready the ring is dashed. Done, it fills with the text colour and shows a background-colour checkmark, and the row behind it tints surfaceRaised.
 
 ### The exercise name row (signature)
-The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt box centred on the name's first line and over the tick column. The count, + Note and Something off are one quiet group that follows the name: beside it when both fit, otherwise under it as a 24pt line left-aligned with the name. + Note and Something off are a 14px muted icon and 14px muted words with a 10pt hit slop above and below (44pt targets) and 6pt to the sides (half the 12pt gap), so the dropped line costs 26pt instead of a 44pt row; the whole header is 53pt on a phone. Flagged, Something off shows its reason, still muted. At large text the name wraps, the group wraps among itself 20pt apart, and words wrap rather than truncate. Whatever sits under the row (the saved note line, the note field) starts 10pt down, clear of the hit slop.
+The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt box centred on the name's first line and over the tick column. The count, + Note and Something off are one quiet group that follows the name: beside it when both fit, otherwise under it as a 24pt line left-aligned with the name. + Note and Something off are a 14px muted icon and 14px muted words with a 10pt hit slop above and below (44pt targets) and 6pt to the sides (half the 12pt gap), so the dropped line costs 26pt instead of a 44pt row; the whole header is 53pt on a phone. Flagged, Something off shows its reason, still muted. At large text the name wraps, the group wraps among itself 20pt apart, and words wrap rather than truncate. Whatever is drawn under the row (the saved note line, the note field, the rule line) starts 10pt down, clear of the hit slop: drawn later, it would otherwise win the hit test where they overlap.
 
 ### The rest row (signature)
 Under the set that started it: a surface panel with a Strong Seam edge, a REST label over a Barlow 800 countdown, then −15s, +15s and Skip as compact pills, over a 3px text-colour track that drains with the time left. At zero it holds a check and "Rest's up" at the same height.
@@ -290,7 +290,7 @@ Under the set that started it: a surface panel with a Strong Seam edge, a REST l
 ### Don't:
 - **Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.
 - **Don't** add shadows, gradients or glass; move a tonal step instead.
-- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines and a switch's off track.
+- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines, the rest row's edge and a switch's off track.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
 - **Don't** add motivational quotes, flames or skulls.
 - **Don't** truncate a row's text at large text sizes when it can wrap.

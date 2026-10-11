@@ -331,8 +331,9 @@ export function ExerciseBlock({
         </Pressable>
       ) : null}
 
-      {/* No text-size cap: it wraps. 8pt under the name row's quiet line, so it reads as the next thing, not more of it. */}
-      <Body muted style={{ fontSize: 14, marginTop: 8 }}>
+      {/* No text-size cap: it wraps. It starts below the name row's 10pt reach: drawn later, it would win the hit test where
+          the two overlap and cut + Note and Something off short of 44pt. */}
+      <Body muted style={{ fontSize: 14, marginTop: NAME_ROW_HIT_SLOP.bottom }}>
         {read === null ? sentence : `${sentence} ${read}`}
       </Body>
 
