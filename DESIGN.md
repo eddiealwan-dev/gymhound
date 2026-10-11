@@ -271,6 +271,9 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 ### The tick (signature)
 A 40px circle in a 44pt column. Open, it is a 1.5px muted ring; on the next set to do it is a 2.5px ring in the text colour; while not ready the ring is dashed. Done, it fills with the text colour and shows a background-colour checkmark, and the row behind it tints surfaceRaised.
 
+### The exercise name row (signature)
+The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt box centred on the name's first line and over the tick column. The count, + Note and Something off are one quiet group that follows the name: beside it when both fit, otherwise under it as a 24pt line left-aligned with the name. + Note and Something off are a 14px muted icon and 14px muted words with a 10pt hit slop above and below (44pt targets) and 6pt to the sides (half the 12pt gap), so the dropped line costs 26pt instead of a 44pt row; the whole header is 53pt on a phone. Flagged, Something off shows its reason, still muted. At large text the name wraps, the group wraps among itself 20pt apart, and words wrap rather than truncate. Whatever sits under the row (the saved note line, the note field) starts 10pt down, clear of the hit slop.
+
 ### The rest row (signature)
 Under the set that started it: a surface panel with a Strong Seam edge, a REST label over a Barlow 800 countdown, then −15s, +15s and Skip as compact pills, over a 3px text-colour track that drains with the time left. At zero it holds a check and "Rest's up" at the same height.
 

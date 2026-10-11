@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-11T12:42:52.258Z",
+  "generatedAt": "2026-10-11T13:02:58.838Z",
   "title": "Design System: GymHound",
   "extensions": {
     "colorMeta": {
@@ -368,7 +368,7 @@
       "name": "Compact Pill",
       "kind": "button",
       "refersTo": "button-compact",
-      "description": "A 36pt pill with a 4pt hit slop: Finish, the rest pills, + Set and + Warmup (quiet).",
+      "description": "A 36pt pill with a 4pt hit slop: Finish, the rest pills, Set active on a routine.",
       "html": "<button class=\"ds-pill\">+15s</button>",
       "css": ".ds-pill { min-height: 36px; min-width: 44px; padding: 0 12px; border-radius: 18px; border: 1px solid #736c60; background: transparent; color: #f1ece2; font: 600 15px 'Inter', sans-serif; } .ds-pill:active { opacity: 0.8; } .ds-pill:focus-visible { outline: 2px solid #f1ece2; outline-offset: 2px; }"
     },
@@ -462,7 +462,7 @@
     "donts": [
       "**Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.",
       "**Don't** add shadows, gradients or glass; move a tonal step instead.",
-      "**Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges and compact pill outlines.",
+      "**Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines and a switch's off track.",
       "**Don't** put the footer on the session or the finish summary, or the hound in the footer.",
       "**Don't** add motivational quotes, flames or skulls.",
       "**Don't** truncate a row's text at large text sizes when it can wrap."
