@@ -7,12 +7,13 @@ import { duplicateRoutine, getRoutineDetail, setActiveRoutine } from '../db/repo
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getPreviousSets } from '../db/repositories/workoutViewsRepo';
-import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../db/schema';
+import { exercises, foods, routineDays, routineExercises, routines, workoutExercises, workouts } from '../db/schema';
 import { createTestDb } from '../db/testing/createTestDb';
 import { seededDb } from '../db/testing/fixtures';
 import { V1_ROUTINES, V1_SEEDED_AT, seededV1Db } from '../db/testing/seedV1';
 import type { Db } from '../db/types';
 import { SEED_EXERCISES } from './exercises';
+import { loadSeedFoods } from './foods';
 import { LIBRARY_EXERCISES } from './library.generated';
 import { PREMADE_ORDER, SEED_ROUTINES } from './routines';
 import { SEED_VERSION, runSeed } from './seed';
@@ -54,6 +55,7 @@ const rowCounts = (db: Db) => ({
   routines: db.select().from(routines).all().length,
   routineDays: db.select().from(routineDays).all().length,
   routineExercises: db.select().from(routineExercises).all().length,
+  foods: db.select().from(foods).all().length,
 });
 
 /** Forces the seed to run again, as an app update with a newer seed would. */
@@ -260,12 +262,12 @@ describe('runSeed', () => {
     expect(exercise(db, 'fedb-smith-machine-pistol-squat').instructions[1]).toBe(
       'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs.',
     );
-    expect(getSettings(db).seedVersion).toBe(4);
+    expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(4);
+    expect(SEED_VERSION).toBe(5);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
@@ -277,6 +279,7 @@ describe('runSeed', () => {
       routines: 8,
       routineDays: 31,
       routineExercises: SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises)).length,
+      foods: loadSeedFoods().length,
     });
     runSeed(db, 2);
     expect(rowCounts(db)).toEqual(before);
@@ -379,7 +382,7 @@ describe('runSeed', () => {
     db.run(sql`CREATE TRIGGER reject_routine_exercises BEFORE INSERT ON routine_exercises
       BEGIN SELECT RAISE(ABORT, 'seed failed'); END`);
     expect(() => runSeed(db, 1)).toThrow('seed failed');
-    expect(rowCounts(db)).toEqual({ exercises: 0, routines: 0, routineDays: 0, routineExercises: 0 });
+    expect(rowCounts(db)).toEqual({ exercises: 0, routines: 0, routineDays: 0, routineExercises: 0, foods: 0 });
     expect(getSettings(db).seedVersion).toBe(0);
   });
 
@@ -412,7 +415,7 @@ describe('seed version 2 over a version 1 database', () => {
   it('starts from the 55 exercises and six premades version 1 wrote', () => {
     const db = seededV1Db();
     expect(getSettings(db).seedVersion).toBe(1);
-    expect(rowCounts(db)).toEqual({ exercises: 55, routines: 6, routineDays: 21, routineExercises: 104 });
+    expect(rowCounts(db)).toEqual({ exercises: 55, routines: 6, routineDays: 21, routineExercises: 104, foods: 0 });
   });
 
   it('keeps the 55 ids with their names, aliases, muscles and creation time, and adds their steps and source', () => {
@@ -598,5 +601,74 @@ describe('seed version 2 over a version 1 database', () => {
     runSeed(db, NOW);
     expect(exercise(db, 'old-bundled-lift')).toMatchObject({ name: 'Old bundled lift' });
     expect(rowCounts(db).exercises).toBe(LIBRARY_EXERCISES.length + 1);
+  });
+});
+
+describe('seed version 5: the bundled foods (R139)', () => {
+  const food = (db: Db, id: string) => db.select().from(foods).where(eq(foods.id, id)).get()!;
+  const EGG = 'fdc-171287';
+
+  it('inserts every bundled food as it is listed, from USDA, not archived and with no barcode', () => {
+    const db = seededDb('us');
+    const rows = db.select().from(foods).orderBy(asc(foods.id)).all();
+    const listed = [...loadSeedFoods()].sort((a, b) => (a.id < b.id ? -1 : 1));
+    expect(rows).toEqual(listed.map((f) => ({ ...f, source: 'bundled', barcode: null, archived: false })));
+  });
+
+  it('refreshes a bundled food on a re-seed but keeps it archived', () => {
+    const db = seededDb('us');
+    db.update(foods).set({ name: 'Edited', servingLabel: 'Edited', servingGrams: 1, kcal: 1, proteinG: 1, carbsG: 1, fatG: 1, archived: true }).where(eq(foods.id, EGG)).run();
+
+    reseed(db);
+
+    const listed = loadSeedFoods().find((f) => f.id === EGG)!;
+    expect(food(db, EGG)).toEqual({ ...listed, source: 'bundled', barcode: null, archived: true });
+  });
+
+  it('never touches your own foods, even one under a bundled id', () => {
+    const db = seededDb('us');
+    const mine = { id: 'custom-1', name: 'My shake', servingLabel: '1 bottle', servingGrams: null, kcal: 300, proteinG: 40, carbsG: 20, fatG: 5, source: 'custom' as const, barcode: '123', archived: true };
+    db.insert(foods).values(mine).run();
+    db.update(foods).set({ name: 'My egg', source: 'custom', kcal: 99 }).where(eq(foods.id, EGG)).run();
+    const myEgg = food(db, EGG);
+
+    reseed(db);
+
+    expect(food(db, 'custom-1')).toEqual(mine);
+    expect(food(db, EGG)).toEqual(myEgg);
+    expect(rowCounts(db).foods).toBe(loadSeedFoods().length + 1);
+  });
+
+  it('adds the foods to a phone seeded at version 4, and changes nothing else', () => {
+    const { db } = createTestDb();
+    runSeed(db, 1234);
+    db.delete(foods).run();
+    setSetting(db, 'seedVersion', 4);
+    const before = seedRows(db);
+
+    runSeed(db, 5678);
+
+    expect(rowCounts(db).foods).toBe(loadSeedFoods().length);
+    expect(food(db, EGG)).toMatchObject({ name: 'Egg, large', source: 'bundled' });
+    expect(seedRows(db)).toEqual(before);
+    expect(getSettings(db).seedVersion).toBe(5);
+  });
+
+  it('loads the foods only when the stored seed version is behind', () => {
+    const db = seededDb('us');
+    const loads = jest.fn();
+    jest.isolateModules(() => {
+      jest.doMock('./foods.json', () => {
+        loads();
+        return jest.requireActual('./foods.json');
+      });
+      const isolated = require('./seed') as typeof import('./seed');
+      isolated.runSeed(db, 2);
+      expect(loads).not.toHaveBeenCalled();
+      setSetting(db, 'seedVersion', 4);
+      isolated.runSeed(db, 3);
+      expect(loads).toHaveBeenCalledTimes(1);
+    });
+    jest.dontMock('./foods.json');
   });
 });
