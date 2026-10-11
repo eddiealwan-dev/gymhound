@@ -452,6 +452,42 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     expect(shownText(mount(bench([])))).not.toContain('0/0');
   });
 
+  it('the name row wraps at large text: the count, + Note and ⋯ drop to a second line together, right-aligned', () => {
+    const tree = mount(fourSets());
+    const name = tree.root.findAll((n) => n.type === Text && n.props.children === 'Bench Press')[0];
+    const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4')[0];
+    const addNote = byLabel(tree, 'Add a note for Bench Press');
+    const options = byLabel(tree, 'Options for Bench Press');
+
+    // The row is the nearest ancestor of the name that also holds the controls.
+    let row = name.parent!;
+    while (!row.findAll((n) => n === options).length) row = row.parent!;
+    expect(StyleSheet.flatten(row.props.style)).toEqual(
+      expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }),
+    );
+    // flex: 1 would give the name a flex basis of 0, so the row would never wrap and the name would be squeezed.
+    const nameStyle = StyleSheet.flatten(name.props.style);
+    expect(nameStyle).toEqual(expect.objectContaining({ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
+    expect(nameStyle.flex).toBeUndefined();
+
+    // The three controls share one parent inside the row, pushed right and never squeezed.
+    const group = row.findAll(
+      (n) => n !== row && n.findAll((m) => m === count).length > 0 && n.findAll((m) => m === addNote).length > 0 && n.findAll((m) => m === options).length > 0,
+    );
+    const controls = group[group.length - 1];
+    expect(controls).toBeDefined();
+    expect(StyleSheet.flatten(controls.props.style)).toEqual(
+      expect.objectContaining({ flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', flexShrink: 0 }),
+    );
+    expect(controls.findAll((n) => n === name)).toHaveLength(0);
+    // Order stays [name][count][+ Note][⋯], with 44pt targets.
+    const shown = shownText(tree);
+    expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf('1/4'));
+    expect(shown.indexOf('1/4')).toBeLessThan(shown.indexOf('+ Note'));
+    expect(StyleSheet.flatten(addNote.props.style({ pressed: false }))).toMatchObject({ minHeight: 44 });
+    expect(StyleSheet.flatten(options.props.style({ pressed: false }))).toMatchObject({ width: 44, height: 44 });
+  });
+
   it("the next set's tick has the bolder ring", () => {
     const tree = mount(fourSets(), NO_REST, 'b');
 

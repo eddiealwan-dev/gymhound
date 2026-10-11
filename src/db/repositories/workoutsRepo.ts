@@ -80,14 +80,21 @@ export function startEmptyWorkout(db: Db, now: number): string {
 export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): string {
   return db.transaction((tx) => {
     assertNoActiveWorkout(tx);
-    const day = tx.select().from(routineDays).where(eq(routineDays.id, routineDayId)).get();
-    if (!day) throw new Error(`No routine day with id ${routineDayId}.`);
+    const row = tx
+      .select({ day: routineDays, routineName: routines.name })
+      .from(routineDays)
+      .innerJoin(routines, eq(routines.id, routineDays.routineId))
+      .where(eq(routineDays.id, routineDayId))
+      .get();
+    if (!row) throw new Error(`No routine day with id ${routineDayId}.`);
+    const { day, routineName } = row;
 
     const workoutId = newId();
     tx.insert(workouts)
       .values({
         id: workoutId,
-        name: day.name,
+        // Named as Train names the day ("5×5 A", R56); a finished workout keeps the name it was stored with.
+        name: dayTitle(routineName, day.name),
         routineId: day.routineId,
         routineDayId: day.id,
         status: 'active',

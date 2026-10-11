@@ -37,8 +37,9 @@ const firstOpen = (ex: ProgressExercise) => byPosition(ex.sets).find((set) => !s
 /**
  * The next set to do (spec 18.6), or null when every set is ticked. Exercises go in workout order, as runs: one exercise
  * alone, or consecutive exercises in the same superset. The first run with an unticked set gives it. A lone exercise
- * gives its first unticked set; a superset gives it from the member with the fewest ticked sets among those with one
- * left, the earlier member winning a tie.
+ * gives its first unticked set. In a superset, a member whose first unticked set is a warmup does its warmups first (the
+ * earlier such member first); otherwise the turn goes to the member with the fewest ticked non-warmup sets among those
+ * with one left, the earlier member winning a tie.
  */
 export function nextSetId(exercises: readonly ProgressExercise[]): string | null {
   const ordered = byPosition(exercises);
@@ -51,7 +52,8 @@ export function nextSetId(exercises: readonly ProgressExercise[]): string | null
     for (const ex of ordered.slice(i, end)) {
       const open = firstOpen(ex);
       if (open === undefined) continue;
-      const { done } = exerciseProgress(ex);
+      if (open.setType === 'warmup') return open.id;
+      const done = ex.sets.filter((set) => set.done && set.setType !== 'warmup').length;
       if (pick === null || done < pick.done) pick = { done, setId: open.id };
     }
     if (pick !== null) return pick.setId;

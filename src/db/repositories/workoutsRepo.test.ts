@@ -103,6 +103,16 @@ describe('startWorkoutFromDay', () => {
     );
   });
 
+  it("names the workout as Train does: the routine's name before a one- or two-character day (R56)", () => {
+    const db = seededDb();
+    const five = startWorkoutFromDay(db, FIVE_B, NOW);
+    expect(db.select().from(workouts).where(eq(workouts.id, five)).get()!.name).toBe('5×5 B');
+    discardWorkout(db, five);
+
+    const push = startWorkoutFromDay(db, PUSH_A, NOW);
+    expect(db.select().from(workouts).where(eq(workouts.id, push)).get()!.name).toBe('Push A');
+  });
+
   it('copies the day, the exercise order, supersets and the rest of the view', () => {
     const db = seededDb();
     db.update(routineExercises)

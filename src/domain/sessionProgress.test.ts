@@ -53,7 +53,7 @@ describe('countLabel: the block count in words', () => {
 
 describe('nextSetId: the next set to do (spec 18.6)', () => {
   const s = (id: string, position: number, done = false) => ({ id, position, setType: 'working' as const, done });
-  const ex = (id: string, position: number, sets: ReturnType<typeof s>[], supersetGroup: number | null = null): ProgressExercise => ({
+  const ex = (id: string, position: number, sets: ProgressExercise['sets'], supersetGroup: number | null = null): ProgressExercise => ({
     id,
     name: id,
     position,
@@ -90,6 +90,25 @@ describe('nextSetId: the next set to do (spec 18.6)', () => {
   it('skips a superset member with nothing left to do', () => {
     expect(nextSetId([ex('A', 0, [s('a1', 0)], 1), ex('B', 1, [s('b1', 0, true), s('b2', 1, true)], 1)])).toBe('a1');
   });
+
+  it("in a superset, a member's warmups come first, then the members alternate by ticked non-warmup sets", () => {
+    const w = (id: string, position: number) => ({ id, position, setType: 'warmup' as const, done: false });
+    const a = ex('A', 0, [w('aw1', 0), w('aw2', 1), s('a1', 2), s('a2', 3), s('a3', 4)], 1);
+    const b = ex('B', 1, [s('b1', 0), s('b2', 1), s('b3', 2)], 1);
+    const order: string[] = [];
+    let workout = [a, b];
+    for (let next = nextSetId(workout); next !== null; next = nextSetId(workout)) {
+      order.push(next);
+      const done = next;
+      workout = workout.map((e) => ({ ...e, sets: e.sets.map((set) => (set.id === done ? { ...set, done: true } : set)) }));
+    }
+    expect(order).toEqual(['aw1', 'aw2', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3']);
+  });
+
+  it("in a superset, a later member's warmups still come before an earlier member's working sets", () => {
+    const w = (id: string, position: number) => ({ id, position, setType: 'warmup' as const, done: false });
+    expect(nextSetId([ex('A', 0, [s('a1', 0), s('a2', 1)], 1), ex('B', 1, [w('bw1', 0), s('b1', 1)], 1)])).toBe('bw1');
+  });
 });
 
 describe("restUpText: what the rest row says once the rest is up (spec 18.6)", () => {
@@ -115,6 +134,18 @@ describe("restUpText: what the rest row says once the rest is up (spec 18.6)", (
     expect(restUpText([ex('bench', 'Bench Press', 0, [s('w0', 0, true, 'warmup'), s('w1', 1, false, 'warmup'), s('s0', 2)])], 'w0')).toBe(
       "Rest's up · Warmup next",
     );
+  });
+
+  it("in a superset, names the member whose turn it is, warmups not counting toward the turn", () => {
+    const sup = (id: string, name: string, position: number, sets: ReturnType<typeof s>[]): ProgressExercise => ({
+      ...ex(id, name, position, sets),
+      supersetGroup: 1,
+    });
+    const exercises = [
+      sup('bench', 'Bench Press', 0, [s('aw1', 0, true, 'warmup'), s('aw2', 1, true, 'warmup'), s('a1', 2, true), s('a2', 3), s('a3', 4)]),
+      sup('row', 'Barbell row', 1, [s('b1', 0, true), s('b2', 1), s('b3', 2)]),
+    ];
+    expect(restUpText(exercises, 'b1')).toBe("Rest's up · Bench Press next");
   });
 
   it("is Rest's up alone when every set is done", () => {

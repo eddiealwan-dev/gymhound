@@ -145,46 +145,49 @@ export function ExerciseBlock({
           style={{ position: 'absolute', left: -11, width: 3, top: 0, bottom: joinsNext ? -BLOCK_GAP : 0, backgroundColor: colors.text }}
         />
       ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Display weight={700} style={{ flex: 1, minWidth: 0, fontSize: 22 }}>
+      {/* At large text the controls drop to a second line together instead of squeezing the name (R54). */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8 }}>
+        <Display weight={700} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
           {ex.name}
         </Display>
-        {progress.total > 0 ? (
-          // No text-size cap: the name wraps instead.
-          <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
-            {`${progress.done}/${progress.total}`}
-          </Num>
-        ) : null}
-        {!ex.note && !editingNote ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+          {progress.total > 0 ? (
+            // No text-size cap: the row wraps instead.
+            <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
+              {`${progress.done}/${progress.total}`}
+            </Num>
+          ) : null}
+          {!ex.note && !editingNote ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Add a note for ${ex.name}`}
+              onPress={openNote}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                paddingHorizontal: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                flexShrink: 0,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Ionicons name="pencil" size={14} color={colors.textMuted} />
+              <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
+                + Note
+              </Body>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Add a note for ${ex.name}`}
-            onPress={openNote}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              paddingHorizontal: 8,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              flexShrink: 0,
-              opacity: pressed ? 0.8 : 1,
-            })}
+            accessibilityLabel={`Options for ${ex.name}`}
+            onPress={onOpenMenu}
+            hitSlop={4}
+            style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
           >
-            <Ionicons name="pencil" size={14} color={colors.textMuted} />
-            <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
-              + Note
-            </Body>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
           </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Options for ${ex.name}`}
-          onPress={onOpenMenu}
-          hitSlop={4}
-          style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
-        >
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
-        </Pressable>
+        </View>
       </View>
 
       {editingNote ? (
