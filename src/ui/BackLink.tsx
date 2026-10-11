@@ -5,14 +5,14 @@ import { useTheme } from './ThemeProvider';
 
 /**
  * The chevron and the name of where it goes, above a screen's title ("Train" on Routines, "Routines" on a routine).
- * The screen reader hears "Back to {label}".
+ * The screen reader hears "Back to {label}", or `accessibilityLabel` when a screen names no place (a plain "Back").
  */
-export function BackLink({ label, onPress }: { label: string; onPress: () => void }) {
+export function BackLink({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel?: string }) {
   const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Back to ${label}`}
+      accessibilityLabel={accessibilityLabel ?? `Back to ${label}`}
       hitSlop={4}
       onPress={onPress}
       style={({ pressed }) => ({

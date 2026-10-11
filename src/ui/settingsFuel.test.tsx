@@ -132,6 +132,8 @@ describe('Settings: Fuel (§8.11, R145)', () => {
       expect(fuelLines(tree)).toEqual(['No targets yet.', 'Set targets']);
       const [set] = fuelButtons(tree);
       expect(set.props.label).toBe('Set targets');
+      // The only action in the group, so it is filled.
+      expect(set.props.variant ?? 'primary').toBe('primary');
       act(() => set.props.onPress());
       expect(router.push).toHaveBeenCalledWith('/fuel-targets');
     });
@@ -164,6 +166,14 @@ describe('Settings: Fuel (§8.11, R145)', () => {
       expect(textNode(tree, 'Rest day: 2,100 kcal · 166 g protein').props.accessibilityLabel).toBe(
         'Rest day: 2,100 calories, 166 grams of protein',
       );
+    });
+
+    it('says "1 gram", not "1 grams", to the screen reader', () => {
+      setFuelTargets(mockDb, { training: { kcal: 1, protein: 1, carbs: null, fat: null }, rest: { kcal: 1000, protein: 0.6, carbs: null, fat: null } });
+      const tree = mount();
+
+      expect(textNode(tree, 'Training day: 1 kcal · 1 g protein').props.accessibilityLabel).toBe('Training day: 1 calorie, 1 gram of protein');
+      expect(textNode(tree, 'Rest day: 1,000 kcal · 1 g protein').props.accessibilityLabel).toBe('Rest day: 1,000 calories, 1 gram of protein');
     });
 
     it('Edit targets opens Targets, once for a double tap', () => {

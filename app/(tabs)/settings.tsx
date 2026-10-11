@@ -405,8 +405,11 @@ const ONCE_MS = 1000;
 function TargetLine({ day, macros }: { day: 'Training day' | 'Rest day'; macros: Macros }) {
   const kcal = fuelNumber(macros.kcal);
   const protein = fuelNumber(macros.protein);
+  // Spoken in words, singular for exactly 1 as shown (rounded): "1 calorie", "1 gram of protein".
+  const calories = kcal === '1' ? 'calorie' : 'calories';
+  const grams = protein === '1' ? 'gram' : 'grams';
   return (
-    <Body accessibilityLabel={`${day}: ${kcal} calories, ${protein} grams of protein`}>
+    <Body accessibilityLabel={`${day}: ${kcal} ${calories}, ${protein} ${grams} of protein`}>
       {`${day}: ${kcal} kcal · ${protein} g protein`}
     </Body>
   );
@@ -414,7 +417,7 @@ function TargetLine({ day, macros }: { day: 'Training day' | 'Rest day'; macros:
 
 /**
  * Fuel targets (§8.11, R145). With Pro and targets: each day's calories and protein, and a secondary **Edit targets**;
- * with Pro and none: "No targets yet." and **Set targets**; both open Fuel → Targets, once per tap. Without Pro
+ * with Pro and none: "No targets yet." and a filled **Set targets** (the only action); both open Fuel → Targets, once per tap. Without Pro
  * (free, or lapsed with targets kept, §9): a line saying targets are Pro, and **See Pro**, which opens the paywall.
  * It follows Pro as it turns on or off, with the screen open.
  */
@@ -440,7 +443,7 @@ function FuelSection() {
         ) : targets === null ? (
           <View style={{ gap: 8 }}>
             <Body>No targets yet.</Body>
-            <Button label="Set targets" variant="secondary" onPress={openTargets} />
+            <Button label="Set targets" onPress={openTargets} />
           </View>
         ) : (
           <View style={{ gap: 8 }}>

@@ -147,6 +147,7 @@ describe('Settings: Export (Task 27)', () => {
     await press(tree, EXPORT);
 
     expect(exportLines(tree)).toEqual([EXPORT, 'No finished workouts yet.', FOOD]);
+    expect(announce).toHaveBeenCalledWith('No finished workouts yet.');
   });
 
   it("says the share sheet couldn't open when sharing is unavailable", async () => {
@@ -156,6 +157,7 @@ describe('Settings: Export (Task 27)', () => {
     await press(tree, EXPORT);
 
     expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD]);
+    expect(announce).toHaveBeenCalledWith(SHARE_FAILED);
   });
 
   it("says the share sheet couldn't open when the export throws, and clears the message on the next try", async () => {
@@ -164,9 +166,11 @@ describe('Settings: Export (Task 27)', () => {
 
     await press(tree, EXPORT);
     expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD]);
+    expect(announce).toHaveBeenCalledWith(SHARE_FAILED);
 
     await press(tree, EXPORT);
     expect(exportLines(tree)).toEqual([EXPORT, FOOD]);
+    expect(announce).toHaveBeenCalledTimes(1);
   });
 
   it('shows a muted message, never red', async () => {
