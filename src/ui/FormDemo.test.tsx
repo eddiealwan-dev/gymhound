@@ -30,7 +30,6 @@ const BENCH: ExerciseDetail = {
   pattern: 'horizontal_push',
   loggingType: 'weighted',
   isCustom: false,
-  hasPhotos: true,
   instructions: STEPS,
   sourceId: 'Barbell_Bench_Press_-_Medium_Grip',
 };
@@ -42,7 +41,6 @@ const HALO: ExerciseDetail = {
   primaryMuscles: ['front_delts'],
   secondaryMuscles: [],
   equipment: 'kettlebell',
-  hasPhotos: false,
   instructions: ['Hold the bell by its horns.', 'Circle it around your head.'],
   sourceId: 'Kettlebell_Halo',
 };
@@ -55,7 +53,6 @@ const WALL_SIT: ExerciseDetail = {
   secondaryMuscles: ['glutes'],
   equipment: 'bodyweight',
   loggingType: 'timed',
-  hasPhotos: false,
   instructions: [],
   sourceId: null,
 };
@@ -68,7 +65,6 @@ const SIDE_PLANK: ExerciseDetail = {
   secondaryMuscles: [],
   equipment: 'bodyweight',
   loggingType: 'timed',
-  hasPhotos: true,
   instructions: [],
 };
 

@@ -2,7 +2,6 @@
 import { eq } from 'drizzle-orm';
 import { exerciseNotes, exercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
-import { EXERCISE_PHOTOS } from '../../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../../seed/library.generated';
 import { getExercise, getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
 import { startWorkoutFromDay } from './workoutsRepo';
@@ -11,6 +10,26 @@ import { getActiveWorkoutView } from './workoutViewsRepo';
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const PUSH_A = 'premade-ppl-6:push-a';
 const BENCH = 'barbell-bench-press';
+
+describe('the launch path', () => {
+  it('loads neither the photo index (about 1,746 requires) nor the library file: the screens that show photos load them', () => {
+    const loaded: string[] = [];
+    jest.isolateModules(() => {
+      jest.doMock('../../seed/exercisePhotos.generated', () => {
+        loaded.push('photos');
+        return { EXERCISE_PHOTOS: {} };
+      });
+      jest.doMock('../../seed/library.generated', () => {
+        loaded.push('library');
+        return { LIBRARY_EXERCISES: [] };
+      });
+      require('./exercisesRepo');
+      jest.dontMock('../../seed/exercisePhotos.generated');
+      jest.dontMock('../../seed/library.generated');
+    });
+    expect(loaded).toEqual([]);
+  });
+});
 
 describe('listExercises', () => {
   it('returns every library exercise, alphabetical without regard to case, starting with 3/4 sit-up', () => {
@@ -33,16 +52,7 @@ describe('listExercises', () => {
       pattern: 'horizontal_push',
       loggingType: 'weighted',
       isCustom: false,
-      hasPhotos: true,
     });
-  });
-
-  it('says whether each exercise has its start and end photos, for the picker thumbnail and the form demo (§18.8)', () => {
-    const rows = listExercises(seededDb());
-    const withPhotos = rows.filter((r) => r.hasPhotos).map((r) => r.id);
-    expect(withPhotos.sort()).toEqual(Object.keys(EXERCISE_PHOTOS).sort());
-    expect(rows.find((r) => r.id === 'wall-sit')?.hasPhotos).toBe(false);
-    expect(rows.find((r) => r.id === 'fedb-kettlebell-halo')?.hasPhotos).toBe(false);
   });
 
   it('leaves out archived exercises', () => {
@@ -72,7 +82,7 @@ describe('listExercises', () => {
     const rows = listExercises(db);
     expect(rows).toHaveLength(LIBRARY_EXERCISES.length + 1);
     const at = rows.findIndex((r) => r.id === 'custom-1');
-    expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true, hasPhotos: false });
+    expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true });
     expect([rows[at - 1].name, rows[at + 1].name]).toEqual(['90/90 hamstring', 'Ab crunch machine']);
   });
 });

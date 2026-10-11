@@ -1,6 +1,5 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Equipment, LoggingType, Muscle, Pattern } from '../../domain/types';
-import { EXERCISE_PHOTOS } from '../../seed/exercisePhotos.generated';
 import { exerciseNotes, exercises } from '../schema';
 import type { Db } from '../types';
 
@@ -14,15 +13,7 @@ export type ExerciseRow = {
   pattern: Pattern;
   loggingType: LoggingType;
   isCustom: boolean;
-  /** Whether its start and end photos are bundled (`EXERCISE_PHOTOS`): the picker's thumbnail and the form demo. */
-  hasPhotos: boolean;
 };
-
-/** The row with whether its photos are bundled. Custom exercises and a few library ones have none (§18.8). */
-const withPhotos = <T extends { id: string }>(row: T): T & { hasPhotos: boolean } => ({
-  ...row,
-  hasPhotos: Object.prototype.hasOwnProperty.call(EXERCISE_PHOTOS, row.id),
-});
 
 /** Every exercise that is not archived, sorted by name without regard to letter case. */
 export function listExercises(db: Db): ExerciseRow[] {
@@ -41,8 +32,7 @@ export function listExercises(db: Db): ExerciseRow[] {
     .from(exercises)
     .where(eq(exercises.archived, false))
     .orderBy(sql`${exercises.name} collate nocase`, asc(exercises.id))
-    .all()
-    .map(withPhotos);
+    .all();
 }
 
 export type ExerciseDetail = ExerciseRow & {
@@ -71,7 +61,7 @@ export function getExercise(db: Db, id: string): ExerciseDetail | null {
     .from(exercises)
     .where(eq(exercises.id, id))
     .get();
-  return row ? withPhotos(row) : null;
+  return row ?? null;
 }
 
 /** The exercise's sticky note, or null if it has none. */
