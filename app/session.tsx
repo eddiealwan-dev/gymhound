@@ -14,7 +14,7 @@ import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
 import { joinsNextInSuperset } from '../src/domain/sessionMenu';
-import { nextSetId, progressLabel, progressText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
+import { nextSetId, progressLabel, progressText, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
 import { discard, finish } from '../src/state/sessionActions';
@@ -25,6 +25,7 @@ import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
 import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
+import { useRestUp } from '../src/ui/session/useRestUp';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
@@ -38,8 +39,8 @@ function leave() {
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
   const settings = getSettings(db);
-  const { unit, distanceUnit, musicApp } = settings;
-  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp };
+  const { unit, distanceUnit, musicApp, restSeconds } = settings;
+  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds };
 }
 
 /** The question open over the session, if any. Only one at a time. */
@@ -153,9 +154,9 @@ export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, gear, distanceUnit, musicApp } = useDbQuery(readSession);
-  /** The exercise whose ⋯ menu is open. */
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useDbQuery(readSession);
+  /** The exercise whose ⋯ menu is open, and what it opens on: its menu, or its rest choices from the countdown. */
+  const [menuFor, setMenuFor] = useState<{ id: string; panel: 'menu' | 'rest' } | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
   /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
@@ -169,6 +170,8 @@ export default function Session() {
     }),
     [workout],
   );
+  /** The rest that has just run out, whose "Rest's up" still shows under its set. Hooks run before the early return. */
+  const restUp = useRestUp(workout?.restEndsAt ?? null, workout?.restSetId ?? null, progress.done);
 
   // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
   // what is typed first (R29, R31). The browser's back button does not remove it (expo-router resets the navigator, which
@@ -188,6 +191,8 @@ export default function Session() {
   }
 
   const { restEndsAt, restSetId } = workout;
+  /** What the rest row says at zero, by the set the rest is (or was) under. */
+  const upText = restUpText(workout.exercises, restSetId ?? restUp?.setId ?? '');
   /**
    * The rest bar is the fallback for a rest no set row can show (R41): one started without a set, or by a set that has
    * since gone. Otherwise the countdown is only under its set (`RestInline`, Task 26).
@@ -284,10 +289,19 @@ export default function Session() {
               restEndsAt={restEndsAt}
               restSetId={restSetId}
               nextSetId={next}
+              restUp={restUp}
+              upText={upText}
+              settingsRestSeconds={restSeconds}
               onOpenMenu={() => {
                 flushAll();
                 Keyboard.dismiss();
-                setMenuFor(ex.id);
+                setMenuFor({ id: ex.id, panel: 'menu' });
+              }}
+              // A rest length chosen here sets future rests only; the running rest keeps its end (R50).
+              onOpenRest={() => {
+                flushAll();
+                Keyboard.dismiss();
+                setMenuFor({ id: ex.id, panel: 'rest' });
               }}
             />
           ))}
@@ -305,7 +319,12 @@ export default function Session() {
           </View>
         </View>
       </ScrollView>
-      <ExerciseMenu exercises={workout.exercises} exerciseId={menuFor} onClose={() => setMenuFor(null)} />
+      <ExerciseMenu
+        exercises={workout.exercises}
+        exerciseId={menuFor?.id ?? null}
+        initialPanel={menuFor?.panel}
+        onClose={() => setMenuFor(null)}
+      />
       {/* Nothing ticked: the finish is refused. Keep logging is the safe answer, so it is the primary button. */}
       <Sheet visible={ask === 'nothing_ticked'} onClose={() => setAsk(null)}>
         <Display weight={700} style={{ marginBottom: 16 }}>

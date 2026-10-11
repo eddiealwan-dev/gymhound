@@ -19,6 +19,7 @@ jest.mock('../../state/sessionActions', () => ({
   setExerciseRest: jest.fn(),
   setRpeShown: jest.fn(),
   toggleSuperset: jest.fn(),
+  restPlus15: jest.fn(),
 }));
 jest.mock('../../db/repositories/settingsRepo', () => ({
   getSettings: () => ({
@@ -331,5 +332,55 @@ describe('ExerciseMenu: rest time per exercise (Task 21)', () => {
     press(tree, 'Default (2:00)');
 
     expect(setExerciseRest).toHaveBeenCalledWith('db', 'barbell-bench-press', null);
+  });
+});
+
+describe('ExerciseMenu: opened from the countdown (spec 18.6)', () => {
+  /** Opens the menu as the session screen does: the ⋯ button with no panel, the countdown with 'rest'. */
+  let open: (panel?: 'menu' | 'rest') => void = () => {};
+
+  function OpenHost({ ex }: { ex: WorkoutExerciseView }) {
+    const [menuFor, setMenuFor] = useState<{ panel?: 'menu' | 'rest' } | null>(null);
+    open = (panel) => setMenuFor({ panel });
+    return (
+      <ExerciseMenu
+        exercises={[ex]}
+        exerciseId={menuFor === null ? null : ex.id}
+        initialPanel={menuFor?.panel}
+        onClose={() => {
+          onClose();
+          setMenuFor(null);
+        }}
+      />
+    );
+  }
+
+  it('opens straight on the rest choices', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<OpenHost ex={withRest(90)} />);
+    });
+    expect(shownText(tree)).toEqual([]);
+
+    act(() => open('rest'));
+
+    const shown = shownText(tree);
+    expect(shown).toEqual(expect.arrayContaining(['Rest time', 'Bench Press', 'Default (2:00)', '1:30']));
+    expect(shown).not.toContain('Reorder');
+
+    press(tree, 'Cancel');
+    act(() => open());
+
+    expect(shownText(tree)).toContain('Reorder');
+    expect(shownText(tree)).not.toContain('Rest time');
+  });
+
+  it('opens on the rest choices when it mounts open on them', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ExerciseMenu exercises={[withRest(null)]} exerciseId="we1" initialPanel="rest" onClose={onClose} />);
+    });
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Rest time', 'Default (2:00)']));
   });
 });

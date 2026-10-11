@@ -54,6 +54,13 @@ export function setLabels(types: SetType[]): string[] {
   return types.map((t) => (t === 'working' ? String(++working) : OTHER_SET_LABELS[t]));
 }
 
+const SET_NAMES: Record<string, string> = { W: 'Warmup', D: 'Drop set', F: 'Failure set' };
+
+/** A set label (`setLabels`) in words, for the screen reader and "Rest's up": '2' is "Set 2", 'W' is "Warmup". */
+export function setName(label: string): string {
+  return SET_NAMES[label] ?? `Set ${label}`;
+}
+
 /**
  * Matches each current set to the same set last time (spec 8.4): the previous set with the same
  * type and the same number within that type. Working set 2 gets last time's working set 2, and a

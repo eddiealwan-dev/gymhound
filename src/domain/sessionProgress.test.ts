@@ -1,4 +1,13 @@
-import { countLabel, exerciseProgress, nextSetId, progressLabel, progressText, workoutProgress, type ProgressExercise } from './sessionProgress';
+import {
+  countLabel,
+  exerciseProgress,
+  nextSetId,
+  progressLabel,
+  progressText,
+  restUpText,
+  workoutProgress,
+  type ProgressExercise,
+} from './sessionProgress';
 
 describe('workoutProgress: every set of the workout, warmups included', () => {
   it('counts the done sets and all the sets', () => {
@@ -80,5 +89,35 @@ describe('nextSetId: the next set to do (spec 18.6)', () => {
 
   it('skips a superset member with nothing left to do', () => {
     expect(nextSetId([ex('A', 0, [s('a1', 0)], 1), ex('B', 1, [s('b1', 0, true), s('b2', 1, true)], 1)])).toBe('a1');
+  });
+});
+
+describe("restUpText: what the rest row says once the rest is up (spec 18.6)", () => {
+  const s = (id: string, position: number, done = false, setType: 'working' | 'warmup' = 'working') => ({ id, position, setType, done });
+  const ex = (id: string, name: string, position: number, sets: ReturnType<typeof s>[]): ProgressExercise => ({
+    id,
+    name,
+    position,
+    supersetGroup: null,
+    sets,
+  });
+
+  it('names the next set when it is in the same exercise', () => {
+    expect(restUpText([ex('bench', 'Bench Press', 0, [s('s0', 0, true), s('s1', 1), s('s2', 2)])], 's0')).toBe("Rest's up · Set 2 next");
+  });
+
+  it('names the next exercise when the next set is in another one', () => {
+    const exercises = [ex('bench', 'Bench Press', 0, [s('s0', 0, true), s('s1', 1, true)]), ex('row', 'Barbell row', 1, [s('r0', 0)])];
+    expect(restUpText(exercises, 's1')).toBe("Rest's up · Barbell row next");
+  });
+
+  it('says Warmup when the next set is a warmup in the same exercise', () => {
+    expect(restUpText([ex('bench', 'Bench Press', 0, [s('w0', 0, true, 'warmup'), s('w1', 1, false, 'warmup'), s('s0', 2)])], 'w0')).toBe(
+      "Rest's up · Warmup next",
+    );
+  });
+
+  it("is Rest's up alone when every set is done", () => {
+    expect(restUpText([ex('bench', 'Bench Press', 0, [s('s0', 0, true), s('s1', 1, true)])], 's1')).toBe("Rest's up");
   });
 });

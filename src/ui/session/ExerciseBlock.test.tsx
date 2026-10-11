@@ -29,6 +29,7 @@ jest.mock('../../state/sessionActions', () => ({
   saveNote: jest.fn(),
   tick: jest.fn(),
   untick: jest.fn(),
+  restPlus15: jest.fn(),
 }));
 // It draws nothing here: where it sits, and its props, are what the tests read.
 jest.mock('./RestInline', () => ({ RestInline: () => null }));
@@ -74,7 +75,7 @@ const bench = (sets: SetView[]): WorkoutExerciseView => ({
   previous: [],
 });
 
-type Rest = { restEndsAt: number | null; restSetId: string | null };
+type Rest = { restEndsAt: number | null; restSetId: string | null; restUp?: { setId: string; endsAt: number } | null };
 
 function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSetId: null }, nextSetId: string | null = null): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -91,6 +92,10 @@ function mount(ex: WorkoutExerciseView, rest: Rest = { restEndsAt: null, restSet
         joinsNext={false}
         restEndsAt={rest.restEndsAt}
         restSetId={rest.restSetId}
+        restUp={rest.restUp ?? null}
+        upText="Rest's up · Set 3 next"
+        settingsRestSeconds={120}
+        onOpenRest={() => {}}
         nextSetId={nextSetId}
       />,
     );
@@ -382,7 +387,13 @@ describe('ExerciseBlock: the countdown under its set (Task 26, R41)', () => {
 
     const rests = tree.root.findAllByType(RestInline);
     expect(rests).toHaveLength(1);
-    expect(rests[0].props).toEqual({ workoutId: 'w1', endsAt });
+    expect(rests[0].props).toMatchObject({
+      workoutId: 'w1',
+      endsAt,
+      lengthSeconds: 120,
+      upText: expect.any(String),
+      onOpenRest: expect.any(Function),
+    });
     expect(rowsAndRests(tree)).toEqual(['s0', 's1', 'rest', 's2']);
   });
 
@@ -396,6 +407,28 @@ describe('ExerciseBlock: the countdown under its set (Task 26, R41)', () => {
     const tree = mount(threeSets(), { restEndsAt: null, restSetId: 's1' });
 
     expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+
+  it("holds Rest's up under the set whose rest just ran out", () => {
+    const endsAt = Date.now() - 1_000;
+    const tree = mount(threeSets(), { restEndsAt: null, restSetId: null, restUp: { setId: 's1', endsAt } });
+
+    const rests = tree.root.findAllByType(RestInline);
+    expect(rests).toHaveLength(1);
+    expect(rests[0].props).toMatchObject({ workoutId: 'w1', endsAt, lengthSeconds: 120, upText: "Rest's up · Set 3 next" });
+    expect(rowsAndRests(tree)).toEqual(['s0', 's1', 'rest', 's2']);
+  });
+
+  it("holds none for another exercise's set", () => {
+    const tree = mount(threeSets(), { restEndsAt: null, restSetId: null, restUp: { setId: 'other-exercise-s1', endsAt: Date.now() } });
+
+    expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+
+  it("times the track by the exercise's own rest", () => {
+    const tree = mount({ ...threeSets(), restSeconds: 90 }, { restEndsAt: Date.now() + 60_000, restSetId: 's1' });
+
+    expect(tree.root.findByType(RestInline).props.lengthSeconds).toBe(90);
   });
 });
 

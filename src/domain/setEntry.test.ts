@@ -5,6 +5,7 @@ import {
   placeholdersFor,
   resolveTick,
   setLabels,
+  setName,
   type Carried,
   type PrevSet,
 } from './setEntry';
@@ -50,6 +51,15 @@ describe('setLabels (spec 8.4)', () => {
       'F',
       '3',
     ]);
+  });
+});
+
+describe('setName: a set label in words', () => {
+  it('names working sets by number and the others by type', () => {
+    expect(setName('2')).toBe('Set 2');
+    expect(setName('W')).toBe('Warmup');
+    expect(setName('D')).toBe('Drop set');
+    expect(setName('F')).toBe('Failure set');
   });
 });
 

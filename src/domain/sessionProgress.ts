@@ -1,3 +1,4 @@
+import { setLabels, setName } from './setEntry';
 import type { SetType } from './types';
 
 /** How many sets are done of how many. Every set counts, warmups included (as `FinishSummary.setCount`). */
@@ -57,6 +58,20 @@ export function nextSetId(exercises: readonly ProgressExercise[]): string | null
     i = end;
   }
   return null;
+}
+
+/**
+ * What the rest row says once the rest is up (spec 18.6): "Rest's up · Set 2 next" when the next set (`nextSetId`) is in
+ * the exercise holding `afterSetId`, "Rest's up · Barbell row next" when it is in another, and "Rest's up" when none is left.
+ */
+export function restUpText(exercises: readonly ProgressExercise[], afterSetId: string): string {
+  const next = nextSetId(exercises);
+  if (next === null) return "Rest's up";
+  const holder = exercises.find((ex) => ex.sets.some((set) => set.id === next))!;
+  if (!holder.sets.some((set) => set.id === afterSetId)) return `Rest's up · ${holder.name} next`;
+  const ordered = byPosition(holder.sets);
+  const label = setLabels(ordered.map((set) => set.setType))[ordered.findIndex((set) => set.id === next)];
+  return `Rest's up · ${setName(label)} next`;
 }
 
 const sets = (n: number) => (n === 1 ? 'set' : 'sets');

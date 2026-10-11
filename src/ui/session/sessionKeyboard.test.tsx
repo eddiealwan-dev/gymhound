@@ -23,9 +23,9 @@ jest.mock('../../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() 
 jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
-  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km' }),
+  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km', restSeconds: 120 }),
 }));
-jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn() }));
+jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../../state/useNow', () => ({ useNow: () => 2_000 }));
 jest.mock('./ExerciseBlock', () => ({
   ExerciseBlock: (props: { onOpenMenu: () => void }) => {

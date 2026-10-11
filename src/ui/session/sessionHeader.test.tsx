@@ -44,11 +44,11 @@ jest.mock('../../db/repositories/settingsRepo', () => ({ getSettings: jest.fn(),
 jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
-  useDbQuery: () => ({ workout: mockState.workout, unit: 'kg', distanceUnit: 'km', musicApp: mockState.musicApp }),
+  useDbQuery: () => ({ workout: mockState.workout, unit: 'kg', distanceUnit: 'km', musicApp: mockState.musicApp, restSeconds: 120 }),
   bumpData: jest.fn(),
 }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
-jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn() }));
+jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../../state/useNow', () => ({ useNow: () => 2_000 }));
 jest.mock('./ExerciseBlock', () => ({
   ExerciseBlock: (props: { nextSetId: string | null }) => {

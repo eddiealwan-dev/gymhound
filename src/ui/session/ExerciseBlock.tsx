@@ -4,6 +4,7 @@ import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import type { Gear } from '../../domain/plates';
+import { restLengthFor } from '../../domain/rest';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
@@ -46,6 +47,14 @@ type Props = {
   restSetId: string | null;
   /** The next set to do in the whole workout (spec 18.6), or null: its tick gets the bolder ring when it is in this block. */
   nextSetId: string | null;
+  /** The rest that has just run out (`useRestUp`): its "Rest's up" shows under its set, when that set is in this block. */
+  restUp: { setId: string; endsAt: number } | null;
+  /** What the rest row says once the rest is up (`restUpText`). */
+  upText: string;
+  /** The rest in Settings, in seconds: the length of a rest of an exercise with none of its own. */
+  settingsRestSeconds: number;
+  /** Opens this exercise's rest choices: the countdown was tapped. */
+  onOpenRest: () => void;
 };
 
 /** Space below a block. A superset's bar crosses it to join the members. */
@@ -57,7 +66,7 @@ const BLOCK_GAP = 28;
  * beside the inputs, and the compact + Set and + Warmup buttons. The next set to do has the bolder tick ring.
  * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
- * started it.
+ * started it, and holds "Rest's up" there for a moment after it runs out.
  */
 export function ExerciseBlock({
   workoutId,
@@ -71,6 +80,10 @@ export function ExerciseBlock({
   restEndsAt,
   restSetId,
   nextSetId,
+  restUp,
+  upText,
+  settingsRestSeconds,
+  onOpenRest,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
@@ -78,6 +91,12 @@ export function ExerciseBlock({
   // Each row's previous is worked out once for the whole block.
   const rows = buildRows(ex, unit, gear);
   const progress = exerciseProgress(ex);
+  const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
+  /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
+  const restUnder = (setId: string): number | null => {
+    if (restEndsAt !== null) return setId === restSetId ? restEndsAt : null;
+    return restUp?.setId === setId ? restUp.endsAt : null;
+  };
 
   /** The note while its field is open; null closes the field and shows the saved note, or + Note when there is none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
@@ -223,28 +242,33 @@ export function ExerciseBlock({
       </View>
 
       <View style={{ gap: 2 }}>
-        {rows.map((row) => (
-          <Fragment key={row.set.id}>
-            <SetRow
-              ex={ex}
-              row={row}
-              columns={columns}
-              unit={unit}
-              distanceUnit={distanceUnit}
-              // The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too).
-              onChangeType={() => {
-                Keyboard.dismiss();
-                setTypeFor(row.set.id);
-              }}
-              onLongPress={() => {
-                Keyboard.dismiss();
-                setRemoveFor(row.set.id);
-              }}
-              isNext={row.set.id === nextSetId}
-            />
-            {restEndsAt !== null && row.set.id === restSetId ? <RestInline workoutId={workoutId} endsAt={restEndsAt} /> : null}
-          </Fragment>
-        ))}
+        {rows.map((row) => {
+          const restEnd = restUnder(row.set.id);
+          return (
+            <Fragment key={row.set.id}>
+              <SetRow
+                ex={ex}
+                row={row}
+                columns={columns}
+                unit={unit}
+                distanceUnit={distanceUnit}
+                // The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too).
+                onChangeType={() => {
+                  Keyboard.dismiss();
+                  setTypeFor(row.set.id);
+                }}
+                onLongPress={() => {
+                  Keyboard.dismiss();
+                  setRemoveFor(row.set.id);
+                }}
+                isNext={row.set.id === nextSetId}
+              />
+              {restEnd !== null ? (
+                <RestInline workoutId={workoutId} endsAt={restEnd} lengthSeconds={restLength} upText={upText} onOpenRest={onOpenRest} />
+              ) : null}
+            </Fragment>
+          );
+        })}
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>

@@ -30,10 +30,11 @@ import {
 } from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
-import { restAfterMinus15, restAfterTick, restLengthFor, type RestChange } from '../domain/rest';
+import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import type { WeightUnit } from '../domain/types';
+import { announce } from '../platform/announce';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
 import { bumpData } from './dataVersion';
@@ -69,7 +70,8 @@ export function commitSetField(db: Db, setId: string, patch: SetPatch): void {
  * left out: a weight typed or stored keeps its unit, so one logged before a unit switch is ticked as it was logged
  * (spec 7.1), and a weight from the target or a placeholder is recorded in the unit in Settings, which they are in.
  * A tick starts the rest timer for the exercise's own rest (or the rest in Settings when it has none), unless that is Off,
- * or the exercise is in a superset and is not the last member of its round.
+ * or the exercise is in a superset and is not the last member of its round. The screen reader is then told the set and the
+ * rest: "Set 2 logged. Rest 2 minutes."
  */
 export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, entered: TickValues, enteredUnit?: WeightUnit): boolean {
   const settings = getSettings(db);
@@ -82,11 +84,15 @@ export function tick(db: Db, ex: WorkoutExerciseView, set: Pick<SetView, 'id'>, 
   const weightUnit = entered.weight !== null ? (enteredUnit ?? unit) : unit;
   tickSet(db, set.id, values, weightUnit, now, distanceUnit);
   const view = getActiveWorkoutView(db);
+  let restStarted: number | null = null;
   if (view) {
     const length = restLengthFor(ex.restSeconds, settings.restSeconds);
-    applyRest(db, view.id, restAfterTick(view.exercises, ex.id, now, length), settings.restBell, set.id);
+    const change = restAfterTick(view.exercises, ex.id, now, length);
+    applyRest(db, view.id, change, settings.restBell, set.id);
+    if (change.kind === 'start') restStarted = length;
   }
   bumpData();
+  announce(tickAnnouncement(row.label, restStarted));
   return true;
 }
 
@@ -107,8 +113,8 @@ function onSurface(call: (surface: RestTimerSurface) => Promise<void>): void {
 
 /**
  * Writes the rest change to the workout and tells the surface. Does not bump: the caller does, once. A start stores
- * `startedBy`, the ticked set, with its end, and the countdown shows under that set (R38); -15s keeps it and a skip
- * clears it.
+ * `startedBy`, the ticked set, with its end, and the countdown shows under that set (R38); -15s and +15s move the
+ * end and keep it, and a skip clears it.
  */
 function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boolean, startedBy?: string): void {
   switch (change.kind) {
@@ -118,6 +124,7 @@ function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boo
       onSurface((surface) => surface.start(change.endsAt, withSound));
       break;
     case 'shorten':
+    case 'extend':
       setRestEndsAt(db, workoutId, change.endsAt);
       onSurface((surface) => surface.update(change.endsAt, withSound));
       break;
@@ -133,6 +140,12 @@ function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boo
 /** The -15s button: the running rest ends 15 seconds sooner, or is skipped when that would end it. */
 export function restMinus15(db: Db, workoutId: string, endsAt: number): void {
   applyRest(db, workoutId, restAfterMinus15(endsAt, Date.now()), getSettings(db).restBell);
+  bumpData();
+}
+
+/** The +15s button: the running rest ends 15 seconds later, under the same set. A rest already over is left alone. */
+export function restPlus15(db: Db, workoutId: string, endsAt: number): void {
+  applyRest(db, workoutId, restAfterPlus15(endsAt, Date.now()), getSettings(db).restBell);
   bumpData();
 }
 

@@ -49,6 +49,8 @@ const mockBench: WorkoutExerciseView = {
 };
 
 const mockState: { restEndsAt: number | null; restSetId: string | null } = { restEndsAt: null, restSetId: null };
+/** What happened, in order: saves, the keyboard closing, and the panel the ⋯ menu was drawn with. */
+const mockOrder: string[] = [];
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), back: jest.fn(), push: jest.fn(), canGoBack: () => true },
@@ -73,8 +75,13 @@ jest.mock('../../state/dataVersion', () => ({
     gear: { bar: 45, plates: { '45': 4, '25': 1, '10': 2, '5': 1, '2.5': 1 } },
     distanceUnit: 'mi',
     musicApp: null,
+    restSeconds: 120,
   }),
   bumpData: jest.fn(),
+}));
+jest.mock('../../state/draftFlush', () => ({
+  ...jest.requireActual('../../state/draftFlush'),
+  flushAll: jest.fn(() => void mockOrder.push('flushAll')),
 }));
 jest.mock('../../state/sessionActions', () => ({
   addSetTo: jest.fn(),
@@ -86,9 +93,17 @@ jest.mock('../../state/sessionActions', () => ({
   untick: jest.fn(),
   finish: jest.fn(),
   discard: jest.fn(),
+  restMinus15: jest.fn(),
+  restPlus15: jest.fn(),
+  restSkip: jest.fn(),
 }));
 jest.mock('../../state/useNow', () => ({ useNow: () => 2_000 }));
-jest.mock('./ExerciseMenu', () => ({ ExerciseMenu: () => null }));
+jest.mock('./ExerciseMenu', () => ({
+  ExerciseMenu: ({ exerciseId, initialPanel }: { exerciseId: string | null; initialPanel?: string }) => {
+    mockOrder.push(`menu ${exerciseId ?? 'closed'} ${initialPanel ?? '-'}`);
+    return null;
+  },
+}));
 // Both countdowns draw nothing here: which one is placed, and with what, is what the tests read.
 jest.mock('./RestBar', () => ({ RestBar: () => null }));
 jest.mock('./RestInline', () => ({ RestInline: () => null }));
@@ -100,7 +115,8 @@ jest.mock('../ThemeProvider', () => {
 let tree: ReactTestRenderer | undefined;
 
 beforeEach(() => {
-  jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+  mockOrder.length = 0;
+  jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => void mockOrder.push('dismiss'));
 });
 
 afterEach(() => {
@@ -130,5 +146,21 @@ describe('a running rest shows exactly one countdown (Task 26, R41)', () => {
     const [countdown] = shown === 'under its set' ? inline : bars;
     expect(countdown).toBeDefined();
     expect(countdown.props).toMatchObject({ workoutId: 'w1', endsAt: ENDS_AT });
+  });
+});
+
+describe('the countdown opens the rest choices (spec 18.6)', () => {
+  it('tapping the countdown saves and closes the keyboard first', () => {
+    mockState.restEndsAt = ENDS_AT;
+    mockState.restSetId = 's1';
+    act(() => {
+      tree = create(<Session />);
+    });
+    const countdown = tree!.root.findByType(RestInline);
+    mockOrder.length = 0;
+
+    act(() => countdown.props.onOpenRest());
+
+    expect(mockOrder).toEqual(['flushAll', 'dismiss', 'menu we1 rest']);
   });
 });

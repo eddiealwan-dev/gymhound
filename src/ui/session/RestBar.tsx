@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
 import { restRemainingSeconds } from '../../domain/rest';
-import { restMinus15, restSkip } from '../../state/sessionActions';
+import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -21,7 +21,8 @@ type Props = {
 const TICK_MS = 250;
 
 /**
- * The rest timer docked at the bottom of the session: -15s, the clock, Skip. Since Task 26 it is only the fallback for a
+ * The rest timer docked at the bottom of the session: −15s, the clock, +15s and Skip, as compact pills that wrap with
+ * large text. It has no tap-to-change, because its set is gone. Since Task 26 it is only the fallback for a
  * rest that no set row can show (R41): the countdown otherwise lives under its set (`RestInline`). It is driven by
  * `rest_ends_at`, so a rest survives a reload, and a stored end that has passed shows nothing. It only shows and steers
  * the rest: ringing at the end, wherever the user is, is `RestWatcher`'s job. The session's dock places it and measures it.
@@ -57,15 +58,35 @@ export function RestBar({ workoutId, endsAt, bottomInset }: Props) {
           paddingHorizontal: 16,
           paddingVertical: 10,
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
-          gap: 12,
+          justifyContent: 'center',
+          columnGap: 12,
+          rowGap: 4,
         }}
       >
-        <Button label="−15s" variant="secondary" onPress={() => restMinus15(db, workoutId, endsAt)} />
-        <Num accessibilityRole="timer" accessibilityLabel={`Rest ${formatRest(remaining)}`} style={{ flex: 1, fontSize: 40, textAlign: 'center' }}>
+        <Button
+          label="−15s"
+          variant="secondary"
+          size="compact"
+          accessibilityLabel="Take 15 seconds off the rest"
+          onPress={() => restMinus15(db, workoutId, endsAt)}
+        />
+        <Num
+          accessibilityRole="timer"
+          accessibilityLabel={`Rest ${formatRest(remaining)}`}
+          style={{ flexGrow: 1, flexBasis: 'auto', fontSize: 40, textAlign: 'center' }}
+        >
           {formatRest(remaining)}
         </Num>
-        <Button label="Skip" variant="quiet" onPress={() => restSkip(db, workoutId)} />
+        <Button
+          label="+15s"
+          variant="secondary"
+          size="compact"
+          accessibilityLabel="Add 15 seconds to the rest"
+          onPress={() => restPlus15(db, workoutId, endsAt)}
+        />
+        <Button label="Skip" variant="secondary" size="compact" accessibilityLabel="Skip the rest" onPress={() => restSkip(db, workoutId)} />
       </View>
     </View>
   );

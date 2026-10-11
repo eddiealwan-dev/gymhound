@@ -6,6 +6,7 @@ import { getSettings } from '../../db/repositories/settingsRepo';
 import { getActiveRest } from '../../db/repositories/workoutsRepo';
 import type { Db } from '../../db/types';
 import { restPhase, wasAwayAt, type AwaySpan } from '../../domain/rest';
+import { announce } from '../../platform/announce';
 import { playBell } from '../../platform/restTimer/bell';
 import { useDbQuery } from '../../state/dataVersion';
 import { restEnded } from '../../state/sessionActions';
@@ -33,7 +34,7 @@ function endHaptic(): void {
  * Rings the end of the rest timer wherever the user is in the app, so leaving the session for Train mid-rest changes nothing.
  * Mounted once at the root. It draws nothing, and ticks only while a rest is running.
  *
- * When the time runs out while it is watching: a haptic (native), then the bell, at its volume, if Settings has it on (the bell ducks
+ * When the time runs out while it is watching: a haptic (native) and "Rest over" for the screen reader, then the bell, at its volume, if Settings has it on (the bell ducks
  * any music), then it clears the rest (`restEnded`, which leaves the notification alone: it fires on its own). Once per
  * rest end. A rest that ended while the app was away or closed is cleared quietly (see `restPhase`): on the phone the
  * notification already rang, and ringing again on return would double it. The web has no notification, so it rings.
@@ -88,6 +89,7 @@ export function RestWatcher(): null {
     handled.current = endsAt;
     if (phase === 'ring') {
       endHaptic();
+      announce('Rest over');
       if (bell) void playBell(sound, volume);
     }
     restEnded(db, workoutId, endsAt);

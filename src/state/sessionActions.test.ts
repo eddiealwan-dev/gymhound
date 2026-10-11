@@ -32,6 +32,7 @@ import {
   replaceWith,
   restEnded,
   restMinus15,
+  restPlus15,
   restSkip,
   saveNote,
   setExerciseRest,
@@ -54,6 +55,10 @@ const mockSurface = {
 };
 jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
+// What VoiceOver is told. Its own module is a thin wrapper over AccessibilityInfo.
+const mockAnnounce = jest.fn((_text: string) => {});
+jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+
 // The snapshot writes a file on the phone and does nothing on web. Tests watch the calls (its own tests are in backup.test.ts).
 const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
 jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
@@ -70,6 +75,7 @@ beforeEach(() => {
   mockSurface.update.mockClear();
   mockSurface.cancel.mockClear();
   mockSnapshot.mockClear();
+  mockAnnounce.mockClear();
 });
 
 afterEach(() => {
@@ -683,6 +689,81 @@ describe('restMinus15', () => {
   });
 });
 
+describe('restPlus15', () => {
+  it('moves the end 15 seconds later and reschedules', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 10_000);
+    const before = version();
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 135_000);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true);
+    expect(mockSurface.cancel).not.toHaveBeenCalled();
+    expect(version()).toBe(before + 1);
+  });
+
+  it('passes the bell setting on', () => {
+    setSetting(db, 'restBell', false);
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false);
+  });
+
+  it('does nothing once the rest is over', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+    jest.setSystemTime(NOW + 120_000);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 120_000);
+    expect(mockSurface.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('tick tells VoiceOver what it logged', () => {
+  it('a tick announces the set and the rest', () => {
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged. Rest 2 minutes.');
+  });
+
+  it('names the set alone when the rest is Off', () => {
+    setExerciseRest(db, BENCH, 0);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged.');
+  });
+
+  it('says the rest length in words', () => {
+    setSetting(db, 'restSeconds', 90);
+    startFromDay(db, PUSH_A);
+
+    tickSetOf(0, 0);
+
+    expect(mockAnnounce).toHaveBeenCalledWith('Set 1 logged. Rest 1 minute 30 seconds.');
+  });
+
+  it('announces nothing when the tick is refused', () => {
+    startFromDay(db, PUSH_A);
+    const ex = bench();
+
+    expect(tick(db, ex, ex.sets[0], { weight: null, reps: 8, durationS: null, distance: null })).toBe(false);
+
+    expect(mockAnnounce).not.toHaveBeenCalled();
+  });
+});
+
 describe('restSkip', () => {
   it('clears the end time and cancels the surface, then bumps the data version', () => {
     startFromDay(db, PUSH_A);
@@ -784,6 +865,16 @@ describe('restSetId: the set that started the rest', () => {
     restMinus15(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBe(NOW + 105_000);
+    expect(restSetId()).toBe(setId(0, 0));
+  });
+
+  it('the rest stays under its set through +15s', () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restPlus15(db, workoutId(), NOW + 120_000);
+
+    expect(restEndsAt()).toBe(NOW + 135_000);
     expect(restSetId()).toBe(setId(0, 0));
   });
 
