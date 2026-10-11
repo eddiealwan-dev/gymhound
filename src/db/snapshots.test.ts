@@ -7,8 +7,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SEED_EXERCISES } from '../seed/exercises';
-import { runSeed } from '../seed/seed';
-import { ensureSettings } from './repositories/settingsRepo';
+import { LIBRARY_EXERCISES } from '../seed/library.generated';
+import { PREMADE_ORDER, runSeed, SEED_VERSION } from '../seed/seed';
+import { getExercise, getExerciseNote } from './repositories/exercisesRepo';
+import { listRoutines } from './repositories/routinesRepo';
+import { ensureSettings, getSettings, setSetting } from './repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './repositories/workoutsRepo';
 import { getActiveWorkoutView, getPreviousSets } from './repositories/workoutViewsRepo';
 import * as schema from './schema';
@@ -28,6 +31,7 @@ import {
 import { createTestDb, migrateTestDb } from './testing/createTestDb';
 import { nodeSnapshotFiles } from './testing/nodeSnapshotFiles';
 import { openFileDb } from './testing/openFileDb';
+import { writeSeedV1 } from './testing/seedV1';
 import type { Db } from './types';
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -108,8 +112,9 @@ const appliedMigrations = (db: Db) => db.all<{ hash: string }>(sql`SELECT hash F
 
 /**
  * A live database as GymHound left it before migration 0002: migrations 0000 and 0001 only (no `exercise_prefs`, no
- * `workouts.rest_set_id`), holding the 55 exercises it bundled then, with one finished Push A holding bench 185 lb x 8.
- * Rows are written with that schema's own columns, since the code's tables now have more. Returns the open handle.
+ * `workouts.rest_set_id`), seeded as seed version 1 left it (the 55 exercises and six premades), with one finished
+ * Push A holding bench 185 lb x 8. Rows are written with that schema's own columns, since the code's tables now have
+ * more. Returns the open handle.
  */
 function livePre0002(): { db: Db; close(): void } {
   const source = path.resolve(__dirname, 'migrations');
@@ -123,12 +128,7 @@ function livePre0002(): { db: Db; close(): void } {
   const handle = track(openFileDb(liveFile));
   migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
   ensureSettings(handle.db, 'us');
-  for (const e of SEED_EXERCISES) {
-    handle.db.run(sql`
-      INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
-      VALUES (${e.id}, ${e.name}, ${JSON.stringify(e.aliases)}, ${JSON.stringify(e.primaryMuscles)}, ${JSON.stringify(e.secondaryMuscles)},
-        ${e.equipment}, ${e.pattern}, ${e.loggingType}, 0, 0, ${NOW})`);
-  }
+  writeSeedV1(handle.db, NOW);
   handle.db.run(sql`
     INSERT INTO workouts (id, name, routine_id, routine_day_id, status, day_mark, started_at, finished_at, local_date, rest_ends_at, food_offer_shown)
     VALUES ('old-workout', 'Push A', 'premade-ppl-6', ${PUSH_A}, 'finished', 'normal', ${NOW}, ${NOW + HOUR}, '2026-10-09', NULL, 0)`);
@@ -515,6 +515,54 @@ describe('startDatabase', () => {
     expect(getPreviousSets(result.db, 'barbell-bench-press', 'none')).toEqual([
       { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null },
     ]);
+  });
+
+  it('restores a version 1 snapshot from before 0002; migrated and seeded to version 2, it keeps its history and legacy ids', async () => {
+    const { deps, files } = makeDeps();
+    const old = livePre0002();
+    old.db.run(sql`INSERT INTO exercise_notes (exercise_id, text, updated_at) VALUES ('barbell-bench-press', 'Elbows in', ${NOW})`);
+    old.db.run(sql`UPDATE routine_exercises SET next_weight = 190, next_weight_unit = 'lb' WHERE id = ${`${PUSH_A}:barbell-bench-press`}`);
+    old.db.run(sql`UPDATE routines SET next_day_index = 1 WHERE id = 'premade-ppl-6'`);
+    setSetting(old.db, 'activeRoutineId', 'premade-5x5-3');
+    const name = writeSnapshot(old.db, files, NOW + 2 * HOUR);
+    old.close();
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+    expect(result.restoredFrom).toBe(name);
+    expect(getSettings(result.db).seedVersion).toBe(1);
+    runSeed(result.db, NOW + DAY);
+
+    const db = result.db;
+    expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
+    expect(db.select().from(schema.exercises).all()).toHaveLength(LIBRARY_EXERCISES.length);
+    const ids = new Set(db.select({ id: schema.exercises.id }).from(schema.exercises).all().map((e) => e.id));
+    expect(SEED_EXERCISES.filter((e) => !ids.has(e.id))).toEqual([]);
+    // Bench keeps its id and name, and gains its steps and source.
+    const bench = getExercise(db, 'barbell-bench-press')!;
+    expect(bench).toMatchObject({ name: 'Barbell bench press', sourceId: 'Barbell_Bench_Press_-_Medium_Grip' });
+    expect(bench.instructions.length).toBeGreaterThan(0);
+    // History, the note and progress read as before.
+    expect(finishedIds(db)).toEqual(['old-workout']);
+    expect(db.select().from(workoutExercises).where(eq(workoutExercises.id, 'old-bench')).get()).toMatchObject({
+      exerciseId: 'barbell-bench-press',
+      note: 'Pause on the chest',
+      mark: null,
+    });
+    expect(getPreviousSets(db, 'barbell-bench-press', 'none')).toEqual([
+      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null },
+    ]);
+    expect(getExerciseNote(db, 'barbell-bench-press')).toBe('Elbows in');
+    expect(db.select().from(schema.routineExercises).where(eq(schema.routineExercises.id, `${PUSH_A}:barbell-bench-press`)).get()).toMatchObject({
+      nextWeight: 190,
+      nextWeightUnit: 'lb',
+    });
+    expect(db.select().from(schema.routines).where(eq(schema.routines.id, 'premade-ppl-6')).get()).toMatchObject({
+      nextDayIndex: 1,
+      retired: false,
+    });
+    // The retired 5×5 is still the active routine, so it stays listed after the eight programs.
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, 'premade-5x5-3']);
   });
 
   it('leaves a healthy live database alone', async () => {
