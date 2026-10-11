@@ -120,6 +120,30 @@ describe('bundled foods (USDA FoodData Central SR Legacy, R139)', () => {
     expect(byName.get('White rice, cooked')).toMatchObject({ servingLabel: '1 cup', servingGrams: 158 });
     expect(byName.get('Olive oil')).toMatchObject({ servingLabel: '1 tbsp', fatG: 13.5 });
   });
+
+  it('weighs chicken pieces by the 3 oz serving, like the breast, not by a whole piece', () => {
+    const byName = new Map(FOODS.map((f) => [f.name, f]));
+    for (const name of ['Chicken breast, cooked', 'Chicken thigh, cooked', 'Chicken drumstick, cooked', 'Chicken wing, roasted, with skin']) {
+      expect(byName.get(name)).toMatchObject({ servingLabel: '3 oz', servingGrams: 85 });
+    }
+  });
+
+  it('serves mixed dishes by the cup, not by a restaurant plate', () => {
+    const byName = new Map(FOODS.map((f) => [f.name, f]));
+    expect(byName.get('Spaghetti with meat sauce')).toMatchObject({ servingLabel: '1 cup', servingGrams: 248, kcal: 300 });
+    for (const f of FOODS) expect(f.servingLabel).not.toMatch(/restaurant/i);
+  });
+
+  it('keeps every serving a portion one person eats: no more than 400 g', () => {
+    expect(FOODS.filter((f) => f.servingGrams > 400).map((f) => f.name)).toEqual([]);
+  });
+
+  it('uses generic names, not trademarks, and ½ rather than 0.5 in labels', () => {
+    const names = FOODS.map((f) => f.name);
+    expect(names).toContain('Farina, cooked');
+    expect(names.filter((n) => /cream of wheat/i.test(n))).toEqual([]);
+    expect(FOODS.filter((f) => /\b0\.5\b/.test(f.servingLabel)).map((f) => f.name)).toEqual([]);
+  });
 });
 
 describe('loadSeedFoods', () => {
