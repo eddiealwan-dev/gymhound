@@ -19,9 +19,6 @@ export type FedbExercise = {
   images: string[];
 };
 
-/** GymHound's equipment plus the six kinds the library brings (R85). Task 2 adds these to `Equipment` itself. */
-export type LibraryEquipment = Equipment | 'ez_bar' | 'band' | 'medicine_ball' | 'exercise_ball' | 'foam_roller' | 'other';
-
 /** One of the 55 exercises GymHound bundled before the library. */
 export type LegacyExercise = SeedExercise;
 
@@ -32,7 +29,7 @@ export type LibraryExercise = {
   sourceId: string | null;
   name: string;
   aliases: string[];
-  equipment: LibraryEquipment;
+  equipment: Equipment;
   loggingType: LoggingType;
   pattern: Pattern;
   primaryMuscles: Muscle[];
@@ -110,7 +107,7 @@ export const LEGACY_SOURCE: Readonly<Record<string, string | null>> = {
   'bird-dog': null,
 };
 
-const EQUIPMENT: Readonly<Record<string, LibraryEquipment>> = {
+const EQUIPMENT: Readonly<Record<string, Equipment>> = {
   barbell: 'barbell',
   'e-z curl bar': 'ez_bar',
   dumbbell: 'dumbbell',
@@ -148,7 +145,7 @@ const MUSCLE: Readonly<Record<string, Muscle>> = {
 const lower = (e: FedbExercise) => e.name.toLowerCase();
 
 /** The equipment (R85): free-exercise-db's kinds one to one; body only and none are bodyweight. */
-export function mapEquipment(e: FedbExercise): LibraryEquipment {
+export function mapEquipment(e: FedbExercise): Equipment {
   if (e.equipment === null) return 'bodyweight';
   const equipment = EQUIPMENT[e.equipment];
   if (!equipment) throw new Error(`Unknown free-exercise-db equipment "${e.equipment}" on ${e.id}`);

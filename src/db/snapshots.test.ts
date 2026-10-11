@@ -6,6 +6,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { SEED_EXERCISES } from '../seed/exercises';
 import { runSeed } from '../seed/seed';
 import { ensureSettings } from './repositories/settingsRepo';
 import { finishWorkout, startWorkoutFromDay, tickSet } from './repositories/workoutsRepo';
@@ -107,8 +108,8 @@ const appliedMigrations = (db: Db) => db.all<{ hash: string }>(sql`SELECT hash F
 
 /**
  * A live database as GymHound left it before migration 0002: migrations 0000 and 0001 only (no `exercise_prefs`, no
- * `workouts.rest_set_id`), seeded, with one finished Push A holding bench 185 lb x 8. The workout is written with that
- * schema's own columns, since the code's tables now have more. Returns the open handle.
+ * `workouts.rest_set_id`), holding the 55 exercises it bundled then, with one finished Push A holding bench 185 lb x 8.
+ * Rows are written with that schema's own columns, since the code's tables now have more. Returns the open handle.
  */
 function livePre0002(): { db: Db; close(): void } {
   const source = path.resolve(__dirname, 'migrations');
@@ -122,7 +123,12 @@ function livePre0002(): { db: Db; close(): void } {
   const handle = track(openFileDb(liveFile));
   migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
   ensureSettings(handle.db, 'us');
-  runSeed(handle.db, NOW);
+  for (const e of SEED_EXERCISES) {
+    handle.db.run(sql`
+      INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+      VALUES (${e.id}, ${e.name}, ${JSON.stringify(e.aliases)}, ${JSON.stringify(e.primaryMuscles)}, ${JSON.stringify(e.secondaryMuscles)},
+        ${e.equipment}, ${e.pattern}, ${e.loggingType}, 0, 0, ${NOW})`);
+  }
   handle.db.run(sql`
     INSERT INTO workouts (id, name, routine_id, routine_day_id, status, day_mark, started_at, finished_at, local_date, rest_ends_at, food_offer_shown)
     VALUES ('old-workout', 'Push A', 'premade-ppl-6', ${PUSH_A}, 'finished', 'normal', ${NOW}, ${NOW + HOUR}, '2026-10-09', NULL, 0)`);
@@ -473,7 +479,7 @@ describe('startDatabase', () => {
     expect(finishedIds(result.db)).toEqual(ids);
   });
 
-  it('restores a snapshot taken before migrations 0002 to 0004, and migrates it forward with the finished workout intact (F11)', async () => {
+  it('restores a snapshot taken before migrations 0002 to 0005, and migrates it forward with the finished workout intact (F11)', async () => {
     const { deps, files } = makeDeps();
     const old = livePre0002();
     expect(appliedMigrations(old.db)).toBe(2);
@@ -487,10 +493,15 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(5);
+    expect(appliedMigrations(result.db)).toBe(6);
     expect(tableNames(result.db)).toContain('exercise_prefs');
     expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
     expect(columnNames(result.db, 'workout_exercises')).toContain('mark');
+    expect(result.db.select().from(schema.exercises).where(eq(schema.exercises.id, 'barbell-bench-press')).get()).toMatchObject({
+      name: 'Barbell bench press',
+      instructions: [],
+      sourceId: null,
+    });
     expect(result.db.select().from(workoutExercises).where(eq(workoutExercises.id, 'old-bench')).get()).toMatchObject({ mark: null });
     expect(finishedIds(result.db)).toEqual(['old-workout']);
     expect(result.db.select().from(workouts).where(eq(workouts.id, 'old-workout')).get()).toMatchObject({

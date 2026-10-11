@@ -1,11 +1,18 @@
 /** @jest-environment node */
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { getRestSeconds, setRestSeconds } from '../db/repositories/exercisePrefsRepo';
+import { getExerciseNote, setExerciseNote } from '../db/repositories/exercisesRepo';
+import { duplicateRoutine, getRoutineDetail, setActiveRoutine } from '../db/repositories/routinesRepo';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
-import { exercises, routineDays, routineExercises, routines } from '../db/schema';
+import { finishWorkout, startWorkoutFromDay, tickSet } from '../db/repositories/workoutsRepo';
+import { getActiveWorkoutView, getPreviousSets } from '../db/repositories/workoutViewsRepo';
+import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../db/schema';
 import { createTestDb } from '../db/testing/createTestDb';
 import { seededDb } from '../db/testing/fixtures';
+import { V1_SEEDED_AT, seededV1Db } from '../db/testing/seedV1';
 import type { Db } from '../db/types';
 import { SEED_EXERCISES } from './exercises';
+import { LIBRARY_EXERCISES } from './library.generated';
 import { PREMADE_ORDER, SEED_ROUTINES } from './routines';
 import { SEED_VERSION, runSeed } from './seed';
 
@@ -16,6 +23,16 @@ const routineExercise = (db: Db, id: string) =>
   db.select().from(routineExercises).where(eq(routineExercises.id, id)).get()!;
 
 const exercise = (db: Db, id: string) => db.select().from(exercises).where(eq(exercises.id, id)).get()!;
+
+const routine = (db: Db, id: string) => db.select().from(routines).where(eq(routines.id, id)).get()!;
+
+/** Every row the seed writes, in id order, for comparing two runs. */
+const seedRows = (db: Db) => ({
+  exercises: db.select().from(exercises).orderBy(asc(exercises.id)).all(),
+  routines: db.select().from(routines).orderBy(asc(routines.id)).all(),
+  routineDays: db.select().from(routineDays).orderBy(asc(routineDays.id)).all(),
+  routineExercises: db.select().from(routineExercises).orderBy(asc(routineExercises.id)).all(),
+});
 
 const rowCounts = (db: Db) => ({
   exercises: db.select().from(exercises).all().length,
@@ -54,11 +71,12 @@ describe('seed data', () => {
 });
 
 describe('runSeed', () => {
-  it('inserts the bundled exercises as non-custom rows created at now', () => {
+  it('inserts every library exercise as a non-custom row created at now', () => {
     const { db } = createTestDb();
     runSeed(db, 1234);
     const rows = db.select().from(exercises).all();
-    expect(rows).toHaveLength(55);
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length);
+    expect(rows.map((r) => r.id).sort()).toEqual(LIBRARY_EXERCISES.map((e) => e.id).sort());
     expect(rows.every((r) => r.isCustom === false && r.archived === false && r.createdAt === 1234)).toBe(true);
     expect(exercise(db, 'barbell-romanian-deadlift')).toMatchObject({
       name: 'Romanian deadlift',
@@ -68,6 +86,19 @@ describe('runSeed', () => {
     });
     expect(exercise(db, 'plank')).toMatchObject({ equipment: 'bodyweight', loggingType: 'timed' });
     expect(exercise(db, 'pull-up')).toMatchObject({ loggingType: 'bodyweight_plus' });
+  });
+
+  it('stores each exercise exactly as the library has it, with its steps and source id', () => {
+    const { db } = createTestDb();
+    runSeed(db, 1234);
+    const stored = new Map(db.select().from(exercises).all().map((r) => [r.id, r]));
+    for (const { id, ...content } of LIBRARY_EXERCISES) expect(stored.get(id)).toMatchObject(content);
+    expect(exercise(db, 'barbell-bench-press')).toMatchObject({
+      sourceId: 'Barbell_Bench_Press_-_Medium_Grip',
+      instructions: expect.arrayContaining([expect.stringMatching(/^Lie back on a flat bench/)]),
+    });
+    expect(exercise(db, 'fedb-ez-bar-curl')).toMatchObject({ name: 'EZ-bar curl', equipment: 'ez_bar', sourceId: 'EZ-Bar_Curl' });
+    expect(exercise(db, 'wall-sit')).toMatchObject({ instructions: [], sourceId: null });
   });
 
   it('inserts the six premade routines, each starting at day 0', () => {
@@ -192,14 +223,14 @@ describe('runSeed', () => {
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(1);
+    expect(SEED_VERSION).toBe(2);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
   it('is idempotent', () => {
     const db = seededDb('us');
     const before = rowCounts(db);
-    expect(before).toEqual({ exercises: 55, routines: 6, routineDays: 21, routineExercises: 104 });
+    expect(before).toEqual({ exercises: LIBRARY_EXERCISES.length, routines: 6, routineDays: 21, routineExercises: 104 });
     runSeed(db, 2);
     expect(rowCounts(db)).toEqual(before);
     reseed(db);
@@ -273,7 +304,7 @@ describe('runSeed', () => {
     reseed(db);
     expect(exercise(db, 'custom-1')).toMatchObject({ name: 'My lift', isCustom: true });
     expect(db.select().from(routines).where(eq(routines.id, 'mine')).get()).toMatchObject({ name: 'Mine', isPremade: false });
-    expect(rowCounts(db)).toMatchObject({ exercises: 56, routines: 7 });
+    expect(rowCounts(db)).toMatchObject({ exercises: LIBRARY_EXERCISES.length + 1, routines: 7 });
   });
 
   it('runs in one transaction: a failure part-way leaves nothing behind', () => {
@@ -284,5 +315,187 @@ describe('runSeed', () => {
     expect(() => runSeed(db, 1)).toThrow('seed failed');
     expect(rowCounts(db)).toEqual({ exercises: 0, routines: 0, routineDays: 0, routineExercises: 0 });
     expect(getSettings(db).seedVersion).toBe(0);
+  });
+
+  it('loads the library only when the stored seed version is behind', () => {
+    const db = seededDb('us');
+    const loads = jest.fn();
+    jest.isolateModules(() => {
+      jest.doMock('./library.generated', () => {
+        loads();
+        return jest.requireActual('./library.generated');
+      });
+      const isolated = require('./seed') as typeof import('./seed');
+      isolated.runSeed(db, 2);
+      expect(loads).not.toHaveBeenCalled();
+      setSetting(db, 'seedVersion', 1);
+      isolated.runSeed(db, 3);
+      expect(loads).toHaveBeenCalledTimes(1);
+    });
+    jest.dontMock('./library.generated');
+  });
+});
+
+describe('seed version 2 over a version 1 database', () => {
+  const NOW = Date.UTC(2026, 9, 11, 9);
+  const HOUR = 3_600_000;
+  const BENCH = 'barbell-bench-press';
+  const BENCH_ROW = 'premade-ppl-6:push-a:barbell-bench-press';
+  const rule = { setCount: 3, repMin: 8, repMax: 12, increment: 5, incrementUnit: 'lb' } as const;
+
+  it('starts from the 55 exercises and six premades version 1 wrote', () => {
+    const db = seededV1Db();
+    expect(getSettings(db).seedVersion).toBe(1);
+    expect(rowCounts(db)).toEqual({ exercises: 55, routines: 6, routineDays: 21, routineExercises: 104 });
+  });
+
+  it('keeps the 55 ids with their names, aliases, muscles and creation time, and adds their steps and source', () => {
+    const db = seededV1Db();
+    runSeed(db, NOW);
+    for (const { id, ...content } of SEED_EXERCISES) {
+      const library = LIBRARY_EXERCISES.find((e) => e.id === id)!;
+      expect(exercise(db, id)).toEqual({
+        id,
+        ...content,
+        instructions: library.instructions,
+        sourceId: library.sourceId,
+        isCustom: false,
+        archived: false,
+        createdAt: V1_SEEDED_AT,
+      });
+    }
+    expect(exercise(db, BENCH).instructions.length).toBeGreaterThan(2);
+  });
+
+  it('adds the rest of the library at now, with no name twice and no legacy source added again', () => {
+    const db = seededV1Db();
+    runSeed(db, NOW);
+    const rows = db.select().from(exercises).all();
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length);
+    const names = rows.map((r) => r.name.toLowerCase());
+    expect(new Set(names).size).toBe(names.length);
+    const sources = rows.flatMap((r) => (r.sourceId === null ? [] : [r.sourceId]));
+    expect(new Set(sources).size).toBe(sources.length);
+    expect(rows.filter((r) => r.sourceId === 'Barbell_Bench_Press_-_Medium_Grip').map((r) => r.id)).toEqual([BENCH]);
+    expect(rows.find((r) => r.id === 'fedb-barbell-bench-press-medium-grip')).toBeUndefined();
+    expect(exercise(db, 'fedb-ez-bar-curl').createdAt).toBe(NOW);
+  });
+
+  it('keeps notes, rest times, finished workouts and next weights readable', () => {
+    const db = seededV1Db();
+    setExerciseNote(db, BENCH, 'Elbows in', V1_SEEDED_AT);
+    setRestSeconds(db, BENCH, 150, V1_SEEDED_AT);
+    const id = startWorkoutFromDay(db, 'premade-ppl-6:push-a', V1_SEEDED_AT);
+    for (const set of getActiveWorkoutView(db)!.exercises[0].sets) {
+      tickSet(db, set.id, { weight: 185, reps: 8, durationS: null, distance: null }, 'lb', V1_SEEDED_AT + 60_000, 'mi');
+    }
+    finishWorkout(db, id, V1_SEEDED_AT + HOUR);
+    expect(routineExercise(db, BENCH_ROW)).toMatchObject({ nextWeight: 190, nextWeightUnit: 'lb' });
+
+    runSeed(db, NOW);
+
+    expect(getExerciseNote(db, BENCH)).toBe('Elbows in');
+    expect(getRestSeconds(db, BENCH)).toBe(150);
+    expect(getPreviousSets(db, BENCH, 'none')).toHaveLength(4);
+    expect(getPreviousSets(db, BENCH, 'none')[0]).toMatchObject({ weight: 185, weightUnit: 'lb', reps: 8 });
+    expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toMatchObject({ status: 'finished', name: 'Push A' });
+    // Finish keeps only the exercises with done sets: bench.
+    expect(db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id)).all()).toEqual([
+      expect.objectContaining({ exerciseId: BENCH, routineExerciseId: BENCH_ROW, workingWeight: 185, note: 'Elbows in' }),
+    ]);
+    expect(routineExercise(db, BENCH_ROW)).toMatchObject({ nextWeight: 190, nextWeightUnit: 'lb' });
+  });
+
+  it('changes nothing when it runs again', () => {
+    const db = seededV1Db();
+    runSeed(db, NOW);
+    const once = seedRows(db);
+    reseed(db, NOW + HOUR);
+    expect(seedRows(db)).toEqual(once);
+  });
+
+  it('removes the days and routine exercises of a continuing premade that the seed no longer has', () => {
+    const db = seededV1Db();
+    // As if an older seed had one more exercise on Push A and one more day.
+    db.insert(routineExercises)
+      .values({ id: 'premade-ppl-6:push-a:dumbbell-curl', routineDayId: 'premade-ppl-6:push-a', exerciseId: 'dumbbell-curl', position: 5, ...rule, nextWeight: 30, nextWeightUnit: 'lb' })
+      .run();
+    db.insert(routineDays).values({ id: 'premade-ppl-6:arms', routineId: 'premade-ppl-6', name: 'Arms', position: 6 }).run();
+    db.insert(routineExercises)
+      .values({ id: 'premade-ppl-6:arms:barbell-curl', routineDayId: 'premade-ppl-6:arms', exerciseId: 'barbell-curl', position: 0, ...rule })
+      .run();
+
+    runSeed(db, NOW);
+
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, 'premade-ppl-6:push-a:dumbbell-curl')).get()).toBeUndefined();
+    expect(db.select().from(routineDays).where(eq(routineDays.id, 'premade-ppl-6:arms')).get()).toBeUndefined();
+    expect(db.select().from(routineExercises).where(eq(routineExercises.routineDayId, 'premade-ppl-6:arms')).all()).toEqual([]);
+    expect(days(db, 'premade-ppl-6').map((d) => d.name)).toEqual(['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B']);
+    // Every remaining row of a premade the seed has is one the seed writes; the exercise itself stays in the library.
+    const seeded = new Set(SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises.map((e) => `${r.id}:${d.slug}:${e.exercise}`))));
+    const dayIds = db.select({ id: routineDays.id }).from(routineDays).where(inArray(routineDays.routineId, PREMADE_ORDER));
+    const left = db.select().from(routineExercises).where(inArray(routineExercises.routineDayId, dayIds)).all();
+    expect(left.map((r) => r.id).sort()).toEqual([...seeded].sort());
+    expect(exercise(db, 'dumbbell-curl')).toBeDefined();
+  });
+
+  it('retires a premade the seed no longer has, keeping its days, exercises, progress and active state', () => {
+    const db = seededV1Db();
+    db.insert(routines).values({ id: 'premade-old-2', name: 'Old', isPremade: true, nextDayIndex: 1, createdAt: V1_SEEDED_AT }).run();
+    db.insert(routineDays)
+      .values([
+        { id: 'premade-old-2:a', routineId: 'premade-old-2', name: 'A', position: 0 },
+        { id: 'premade-old-2:b', routineId: 'premade-old-2', name: 'B', position: 1 },
+      ])
+      .run();
+    db.insert(routineExercises)
+      .values({ id: 'premade-old-2:a:barbell-back-squat', routineDayId: 'premade-old-2:a', exerciseId: 'barbell-back-squat', position: 0, ...rule, nextWeight: 225, nextWeightUnit: 'lb' })
+      .run();
+    setActiveRoutine(db, 'premade-old-2');
+
+    runSeed(db, NOW);
+
+    expect(routine(db, 'premade-old-2')).toMatchObject({ name: 'Old', isPremade: true, retired: true, nextDayIndex: 1 });
+    expect(days(db, 'premade-old-2').map((d) => d.id)).toEqual(['premade-old-2:a', 'premade-old-2:b']);
+    expect(routineExercise(db, 'premade-old-2:a:barbell-back-squat')).toMatchObject({ setCount: 3, nextWeight: 225, nextWeightUnit: 'lb' });
+    expect(getSettings(db).activeRoutineId).toBe('premade-old-2');
+    expect(PREMADE_ORDER.map((id) => routine(db, id).retired)).toEqual(PREMADE_ORDER.map(() => false));
+  });
+
+  it('brings back a retired premade that is in the seed again', () => {
+    const db = seededV1Db();
+    db.update(routines).set({ retired: true }).where(eq(routines.id, 'premade-ppl-6')).run();
+    runSeed(db, NOW);
+    expect(routine(db, 'premade-ppl-6').retired).toBe(false);
+  });
+
+  it('never retires or prunes a routine of your own, a copy of a premade included', () => {
+    const db = seededV1Db();
+    const id = duplicateRoutine(db, 'premade-ppl-6', V1_SEEDED_AT);
+    const before = getRoutineDetail(db, id);
+    runSeed(db, NOW);
+    expect(getRoutineDetail(db, id)).toEqual(before);
+    expect(routine(db, id)).toMatchObject({ isPremade: false, retired: false });
+  });
+
+  it('never deletes an exercise, even a bundled one the library no longer has', () => {
+    const db = seededV1Db();
+    db.insert(exercises)
+      .values({
+        id: 'old-bundled-lift',
+        name: 'Old bundled lift',
+        aliases: [],
+        primaryMuscles: ['chest'],
+        secondaryMuscles: [],
+        equipment: 'barbell',
+        pattern: 'horizontal_push',
+        loggingType: 'weighted',
+        isCustom: false,
+        createdAt: V1_SEEDED_AT,
+      })
+      .run();
+    runSeed(db, NOW);
+    expect(exercise(db, 'old-bundled-lift')).toMatchObject({ name: 'Old bundled lift' });
+    expect(rowCounts(db).exercises).toBe(LIBRARY_EXERCISES.length + 1);
   });
 });

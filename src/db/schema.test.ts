@@ -107,6 +107,42 @@ it('migrates a database at 0003 forward, and its workout exercises get no mark',
   close();
 });
 
+it('migration 0005 adds exercise steps and source id, and routines.retired (§18.8)', () => {
+  const { db } = createTestDb();
+  type Column = { name: string; type: string; notnull: number; dflt_value: string | null };
+  const column = (table: string, name: string) =>
+    db.all<Column>(sql.raw(`pragma table_info(${table})`)).find((c) => c.name === name);
+  expect(column('exercises', 'instructions')).toEqual(expect.objectContaining({ type: 'TEXT', notnull: 1, dflt_value: "'[]'" }));
+  expect(column('exercises', 'source_id')).toEqual(expect.objectContaining({ type: 'TEXT', notnull: 0, dflt_value: null }));
+  expect(column('routines', 'retired')).toEqual(expect.objectContaining({ type: 'INTEGER', notnull: 1 }));
+  db.run(sql`INSERT INTO routines (id, name, is_premade, next_day_index, created_at) VALUES ('r', 'R', 0, 0, 1)`);
+  expect(db.get<{ retired: number }>(sql`SELECT retired FROM routines WHERE id = 'r'`)).toEqual({ retired: 0 });
+});
+
+it('migrates a database at 0004 forward: its exercises have no steps or source, its routines are not retired', () => {
+  const { db, close } = openFileDb(':memory:');
+  migrateUpTo(db, 4);
+  expect(db.all<{ name: string }>(sql`pragma table_info(exercises)`).map((c) => c.name)).not.toContain('instructions');
+  db.run(sql`
+    INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+    VALUES ('barbell-bench-press', 'Barbell bench press', '[]', '["chest"]', '[]', 'barbell', 'horizontal_push', 'weighted', 0, 0, 1)`);
+  db.run(sql`
+    INSERT INTO routines (id, name, is_premade, next_day_index, created_at) VALUES ('premade-5x5-3', '5×5', 1, 1, 1)`);
+
+  migrateTestDb(db);
+
+  expect(db.select().from(exercises).where(eq(exercises.id, 'barbell-bench-press')).get()).toMatchObject({
+    name: 'Barbell bench press',
+    instructions: [],
+    sourceId: null,
+  });
+  expect(db.select().from(schema.routines).where(eq(schema.routines.id, 'premade-5x5-3')).get()).toMatchObject({
+    nextDayIndex: 1,
+    retired: false,
+  });
+  close();
+});
+
 it('allows only one active workout', () => {
   // Review Focus 3
   const { db } = createTestDb();

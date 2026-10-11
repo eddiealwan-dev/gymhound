@@ -2,7 +2,8 @@
 import { eq } from 'drizzle-orm';
 import { exerciseNotes, exercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
-import { getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
+import { LIBRARY_EXERCISES } from '../../seed/library.generated';
+import { getExercise, getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
 import { startWorkoutFromDay } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 
@@ -11,12 +12,12 @@ const PUSH_A = 'premade-ppl-6:push-a';
 const BENCH = 'barbell-bench-press';
 
 describe('listExercises', () => {
-  it('returns the 55 bundled exercises, alphabetical, starting with Barbell back squat', () => {
+  it('returns every library exercise, alphabetical without regard to case, starting with 3/4 sit-up', () => {
     const rows = listExercises(seededDb());
-    expect(rows).toHaveLength(55);
-    expect(rows[0].name).toBe('Barbell back squat');
-    const names = rows.map((r) => r.name);
-    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length);
+    expect(rows[0].name).toBe('3/4 sit-up');
+    const names = rows.map((r) => r.name.toLowerCase());
+    expect(names).toEqual([...names].sort());
   });
 
   it('returns the fields a picker needs and nothing else', () => {
@@ -38,7 +39,7 @@ describe('listExercises', () => {
     const db = seededDb();
     db.update(exercises).set({ archived: true }).where(eq(exercises.id, 'plank')).run();
     const rows = listExercises(db);
-    expect(rows).toHaveLength(54);
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length - 1);
     expect(rows.some((r) => r.id === 'plank')).toBe(false);
   });
 
@@ -59,9 +60,53 @@ describe('listExercises', () => {
       })
       .run();
     const rows = listExercises(db);
-    expect(rows).toHaveLength(56);
-    expect(rows[0]).toMatchObject({ id: 'custom-1', isCustom: true });
-    expect(rows[1].name).toBe('Barbell back squat');
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length + 1);
+    const at = rows.findIndex((r) => r.id === 'custom-1');
+    expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true });
+    expect([rows[at - 1].name, rows[at + 1].name]).toEqual(['90/90 hamstring', 'Ab crunch machine']);
+  });
+});
+
+describe('getExercise', () => {
+  it('returns an existing exercise with its steps and its free-exercise-db source', () => {
+    const bench = getExercise(seededDb(), BENCH)!;
+    expect(bench).toMatchObject({
+      id: BENCH,
+      name: 'Barbell bench press',
+      aliases: ['bench', 'bench press', 'flat bench'],
+      primaryMuscles: ['chest'],
+      secondaryMuscles: ['front_delts', 'triceps'],
+      equipment: 'barbell',
+      pattern: 'horizontal_push',
+      loggingType: 'weighted',
+      isCustom: false,
+      sourceId: 'Barbell_Bench_Press_-_Medium_Grip',
+    });
+    expect(bench.instructions).toEqual(LIBRARY_EXERCISES.find((e) => e.id === BENCH)!.instructions);
+    expect(bench.instructions.length).toBeGreaterThan(2);
+    expect(bench.instructions[0]).toMatch(/^Lie back on a flat bench/);
+  });
+
+  it('returns a library exercise with the equipment it brings', () => {
+    expect(getExercise(seededDb(), 'fedb-ez-bar-curl')).toMatchObject({
+      name: 'EZ-bar curl',
+      equipment: 'ez_bar',
+      sourceId: 'EZ-Bar_Curl',
+    });
+  });
+
+  it('gives an exercise without a source no steps and a null source', () => {
+    expect(getExercise(seededDb(), 'wall-sit')).toMatchObject({ name: 'Wall sit', instructions: [], sourceId: null });
+  });
+
+  it('still returns an archived exercise, which history may show', () => {
+    const db = seededDb();
+    db.update(exercises).set({ archived: true }).where(eq(exercises.id, 'plank')).run();
+    expect(getExercise(db, 'plank')).toMatchObject({ id: 'plank', name: 'Plank' });
+  });
+
+  it('is null for an id that does not exist', () => {
+    expect(getExercise(seededDb(), 'no-such-exercise')).toBeNull();
   });
 });
 

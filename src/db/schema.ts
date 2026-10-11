@@ -30,6 +30,10 @@ export const exercises = sqliteTable('exercises', {
   isCustom: integer('is_custom', { mode: 'boolean' }).notNull(),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at').notNull(),
+  // The steps of the form demo (§18.8), from free-exercise-db. Empty for an exercise without a source. Added in 0005.
+  instructions: text('instructions', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+  // The free-exercise-db id the steps and photos come from; null for custom exercises and those without a match.
+  sourceId: text('source_id'),
 });
 
 export const exerciseNotes = sqliteTable('exercise_notes', {
@@ -56,6 +60,8 @@ export const routines = sqliteTable('routines', {
   isPremade: integer('is_premade', { mode: 'boolean' }).notNull(),
   nextDayIndex: integer('next_day_index').notNull(),
   createdAt: integer('created_at').notNull(),
+  // A premade the seed no longer has (§18.8): kept for whoever has it active or in history, hidden otherwise. Added in 0005.
+  retired: integer('retired', { mode: 'boolean' }).notNull().default(false),
 });
 
 export const routineDays = sqliteTable('routine_days', {

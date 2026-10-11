@@ -35,6 +35,36 @@ export function listExercises(db: Db): ExerciseRow[] {
     .all();
 }
 
+export type ExerciseDetail = ExerciseRow & {
+  /** The form demo's steps (§18.8); empty when the exercise has none. */
+  instructions: string[];
+  /** The free-exercise-db entry the steps and photos come from; null for custom exercises and those without one. */
+  sourceId: string | null;
+};
+
+/** One exercise, archived ones included (history still names them), with its steps and source; null if it does not exist. */
+export function getExercise(db: Db, id: string): ExerciseDetail | null {
+  return (
+    db
+      .select({
+        id: exercises.id,
+        name: exercises.name,
+        aliases: exercises.aliases,
+        primaryMuscles: exercises.primaryMuscles,
+        secondaryMuscles: exercises.secondaryMuscles,
+        equipment: exercises.equipment,
+        pattern: exercises.pattern,
+        loggingType: exercises.loggingType,
+        isCustom: exercises.isCustom,
+        instructions: exercises.instructions,
+        sourceId: exercises.sourceId,
+      })
+      .from(exercises)
+      .where(eq(exercises.id, id))
+      .get() ?? null
+  );
+}
+
 /** The exercise's sticky note, or null if it has none. */
 export function getExerciseNote(db: Db, exerciseId: string): string | null {
   return (

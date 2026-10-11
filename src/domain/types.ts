@@ -8,7 +8,20 @@ export type LoggingType =
   | 'timed'
   | 'weighted_time'
   | 'distance_time';
-export type Equipment = 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'kettlebell' | 'bodyweight';
+/** The first six since phase 1; the library brings the rest (§18.8, R85). Only `barbell` uses plates and barbell rounding. */
+export type Equipment =
+  | 'barbell'
+  | 'dumbbell'
+  | 'cable'
+  | 'machine'
+  | 'kettlebell'
+  | 'bodyweight'
+  | 'ez_bar'
+  | 'band'
+  | 'medicine_ball'
+  | 'exercise_ball'
+  | 'foam_roller'
+  | 'other';
 export type Pattern =
   | 'squat'
   | 'hinge'

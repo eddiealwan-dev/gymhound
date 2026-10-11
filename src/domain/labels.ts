@@ -18,7 +18,22 @@ export function formatRepScheme(setCount: number, repMin: number, repMax: number
   return `${setCount}×${reps}${COUNTED_IN_SECONDS.includes(loggingType) ? 's' : ''}`;
 }
 
-/** How an exercise's equipment reads in the picker: "Barbell", "Bodyweight". */
+const EQUIPMENT_LABELS: Record<Equipment, string> = {
+  barbell: 'Barbell',
+  dumbbell: 'Dumbbell',
+  cable: 'Cable',
+  machine: 'Machine',
+  kettlebell: 'Kettlebell',
+  bodyweight: 'Bodyweight',
+  ez_bar: 'EZ bar',
+  band: 'Band',
+  medicine_ball: 'Medicine ball',
+  exercise_ball: 'Exercise ball',
+  foam_roller: 'Foam roller',
+  other: 'Other',
+};
+
+/** How an exercise's equipment reads in the picker: "Barbell", "EZ bar", "Bodyweight". */
 export function equipmentLabel(equipment: Equipment): string {
-  return equipment.charAt(0).toUpperCase() + equipment.slice(1);
+  return EQUIPMENT_LABELS[equipment];
 }

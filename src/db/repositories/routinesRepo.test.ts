@@ -414,6 +414,7 @@ describe('duplicateRoutine', () => {
       name: 'Push/pull/legs copy',
       isPremade: false,
       nextDayIndex: 0,
+      retired: false,
       createdAt: NOW,
     });
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, id]);
@@ -653,6 +654,7 @@ describe('saveRoutine (R89)', () => {
       name: 'My split',
       isPremade: false,
       nextDayIndex: 0,
+      retired: false,
       createdAt: NOW,
     });
     expect(shapeOf(db, id)).toEqual([

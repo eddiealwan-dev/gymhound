@@ -43,4 +43,13 @@ describe('equipmentLabel', () => {
     expect(equipmentLabel('kettlebell')).toBe('Kettlebell');
     expect(equipmentLabel('bodyweight')).toBe('Bodyweight');
   });
+
+  it('names the equipment the library brings (§18.8)', () => {
+    expect(equipmentLabel('ez_bar')).toBe('EZ bar');
+    expect(equipmentLabel('band')).toBe('Band');
+    expect(equipmentLabel('medicine_ball')).toBe('Medicine ball');
+    expect(equipmentLabel('exercise_ball')).toBe('Exercise ball');
+    expect(equipmentLabel('foam_roller')).toBe('Foam roller');
+    expect(equipmentLabel('other')).toBe('Other');
+  });
 });
