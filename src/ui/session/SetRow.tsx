@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
@@ -68,16 +68,15 @@ function lightHaptic(): void {
 }
 
 /**
- * A heavy tap when a tick that is not ready is tapped, distinct from the tick's light one. It settles once the phone has
- * played it (or failed to), so the keyboard can wait for it: with the keyboard coming up in the same moment, the phone
- * gave no buzz (Rounds 4 and 5, R82). As with `lightHaptic`, a missing haptic changes nothing.
+ * The warning buzz when a tick that is not ready is tapped, distinct from the tick's light tap. Nothing focuses a field
+ * after it any more: the keyboard coming up in the same moment swallowed the buzz on the phone (Rounds 4 to 6, R99).
+ * As with `lightHaptic`, a missing haptic changes nothing.
  */
-function warningHaptic(): Promise<void> {
+function warningHaptic(): void {
   try {
-    return Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
   } catch {
     // no haptics here
-    return Promise.resolve();
   }
 }
 
@@ -112,7 +111,7 @@ export const SUGGESTED_HINT = 'Suggested. Tick the set to log it.';
  * empty field) is solid, bold and filled. Only an entered field can be invalid, so the heavier underline only ever
  * sits on a solid edge: iOS cannot draw a dashed edge with a thicker bottom.
  */
-export function inputLook(look: FieldLook, invalid: boolean, colors: Colors): TextStyle {
+export function inputLook(look: FieldLook, invalid: boolean, colors: Colors, needed = false): TextStyle {
   if (look === 'suggested') {
     return {
       backgroundColor: 'transparent',
@@ -130,8 +129,9 @@ export function inputLook(look: FieldLook, invalid: boolean, colors: Colors): Te
     borderColor: colors.borderStrong,
     color: colors.text,
     fontFamily: fonts.display800,
-    // Red is reserved, so a number that needs another look gets a heavier muted underline.
-    ...(invalid && look === 'entered' ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
+    // Red is reserved, so a number that needs another look, or the field a not-ready tick asks for (R99), gets a heavier
+    // muted underline.
+    ...((invalid && look === 'entered') || needed ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
   };
 }
 
@@ -150,8 +150,8 @@ type Props = {
 /**
  * One set. Each input keeps what is typed locally and saves on blur; blank is "no value", and only non-blank text
  * that does not parse is marked (an underline and "Check this number"). A tick that is not ready (a number to check,
- * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, focuses the field
- * and says why (spec 18.6).
+ * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, buzzes, marks the
+ * field and says why, and leaves the person to tap the field (spec 18.6, R99).
  */
 export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onLongPress, isNext }: Props) {
   const db = useDb();
@@ -162,29 +162,17 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   const [left, setLeft] = useState<InputKey[]>([]);
   /** Whether the tick was tapped before it was ready. Typing clears it. */
   const [asked, setAsked] = useState(false);
-  const inputs = useRef<Partial<Record<InputKey, TextInput | null>>>({});
-  /**
-   * The field a not-ready tap asked to focus. It is focused once the row has drawn its line, so nothing that tap
-   * re-renders comes after the focus. A new object per tap, so a second tap on the same field focuses it again.
-   */
-  const [focusAsk, setFocusAsk] = useState<{ key: InputKey } | null>(null);
-  useEffect(() => {
-    if (focusAsk !== null) inputs.current[focusAsk.key]?.focus();
-  }, [focusAsk]);
 
   const reading = readRow(row, drafts, unit, distanceUnit);
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
   /**
-   * Above the row's inputs: a number to check wins over the field a not-ready tick asks for. That is the field missing
-   * now, which a value carried from the row above may have changed since the tap (B10). It sits above them because the
-   * keyboard comes up for the focused field and the session scrolls only that field clear of it (R82).
+   * The field a not-ready tick asks for: the one missing now, which a value carried from the row above may have changed
+   * since the tap (B10). A number to check wins over it.
    */
-  const line = showHint
-    ? 'Check this number'
-    : asked && !set.done && !canTick && reading.missing !== null
-      ? NEED_LINE[reading.missing]
-      : null;
+  const needed = asked && !set.done && !canTick && !showHint ? reading.missing : null;
+  /** The line above the row's inputs, where a keyboard already up for this row's field can't cover it (R82). */
+  const line = showHint ? 'Check this number' : needed !== null ? NEED_LINE[needed] : null;
 
   const type = (key: InputKey, text: string) => {
     setDrafts((d) => ({ ...d, [key]: text }));
@@ -220,9 +208,9 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
   /**
    * Ticks or unticks the set, then closes the keyboard. `reading` was read from the drafts first, so the number in the
    * focused field is the one ticked; other rows are not flushed first (R48). A tick that is not ready ticks nothing: it
-   * buzzes first, then points at the number to check, else at the missing field, says the line to VoiceOver (which
-   * does not read a live region on iOS), and once the buzz has played focuses the field and keeps the keyboard up
-   * (spec 18.6, Round 4, R82).
+   * buzzes first, then points at the number to check, else at the missing field, and says the line to VoiceOver (which
+   * does not read a live region on iOS). It focuses nothing and leaves the keyboard as it was: the keyboard coming up
+   * swallowed the buzz and hid the line (spec 18.6, R99).
    */
   const toggle = () => {
     if (set.done) {
@@ -231,19 +219,14 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       return;
     }
     if (!canTick) {
-      const buzzed = warningHaptic();
+      warningHaptic();
       const { invalid, missing } = reading;
       if (invalid.length > 0) {
-        const key = invalid[0];
         setLeft((l) => [...l, ...invalid.filter((k) => !l.includes(k))]);
         announce('Check this number');
-        buzzed.then(() => setFocusAsk({ key }));
       } else {
         setAsked(true);
-        if (missing !== null) {
-          announce(NEED_LINE[missing]);
-          buzzed.then(() => setFocusAsk({ key: missing }));
-        }
+        if (missing !== null) announce(NEED_LINE[missing]);
       }
       return;
     }
@@ -280,9 +263,6 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
     const look = fieldLook(row, key, drafts[key]);
     return (
       <TextInput
-        ref={(node) => {
-          inputs.current[key] = node;
-        }}
         value={drafts[key] ?? valueText(row, key, unit, distanceUnit)}
         placeholder={hintText(row, key)}
         placeholderTextColor={colors.textFaint}
@@ -299,7 +279,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
           minHeight: 44,
           paddingHorizontal: 2,
           borderRadius: 8,
-          ...inputLook(look, invalid, colors),
+          ...inputLook(look, invalid, colors, needed === key),
           fontSize: 20,
           fontVariant: ['tabular-nums'],
           textAlign: 'center',
@@ -374,7 +354,10 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       }}
     >
       {line !== null ? (
-        <Body muted accessibilityLiveRegion="polite" style={{ fontSize: 12, marginBottom: 2 }}>
+        // Full text colour at body size, led by an alert icon inside the text so it wraps and scales with it; never red (R99).
+        <Body accessibilityLiveRegion="polite" accessibilityLabel={line} style={{ marginBottom: 4 }}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.text} />
+          {' '}
           {line}
         </Body>
       ) : null}

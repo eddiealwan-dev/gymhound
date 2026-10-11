@@ -942,6 +942,9 @@ The owner picked the seven highest-impact items from the UX review and approved 
   - Round 5 (still no line and no buzz on the phone, R82):
     - The line sits above the row's inputs, not under them. It was drawn, but the keyboard comes up for the focused field and the session scrolls only that field clear of it, so a line under the row was under the keyboard.
     - The heavy haptic is still the first thing the tap does. The field is focused only once the haptic has played (its promise settles), so the keyboard no longer comes up in the same moment as the buzz.
+  - Round 6 (still no line and no buzz, R99): a not-ready tick buzzes (notification Warning) and shows the line without focusing the field; the keyboard coming up was swallowing the buzz and hiding the line.
+    - The tap leaves the keyboard as it was. The line is in the full text colour at body size (it follows the phone's text size), led by an `alert-circle-outline` icon inside the text, still never red. "Check this number" looks the same.
+    - The field the line asks for gets the heavier muted underline a number to check has, so the person taps it themselves. Typing in the row clears both.
   - A number that needs another look shows "Check this number" instead.
   - The line names the field that is missing now, which a value carried from the set above can change after the tap. Typing in the row clears the line until the next tap.
   - The tick's VoiceOver hint is "Enter a weight first" (or "Enter reps first", "Enter a time first", "Enter a distance first").

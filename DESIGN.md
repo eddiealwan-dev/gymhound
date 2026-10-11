@@ -261,6 +261,7 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 - **Suggested set field:** no fill, 1px dashed Strong Seam edge, Ghost text in Barlow 600 at 20px. A suggestion never looks like a value.
 - **Entered set field:** surface fill, 1px solid Strong Seam edge, text in Barlow 800 at 20px.
 - **Invalid:** a 2px muted bottom edge and the line "Check this number" above the row. Never red.
+- **Needed (a tick tapped before it was ready):** the field it asks for takes the same 2px muted bottom edge, and the line ("Add a weight to tick") sits above the row in the text colour at body size, led by an alert-circle-outline icon inside the text. The tap buzzes a warning and focuses nothing, so the keyboard stays down and the person taps the field (R99). "Check this number" draws the same way. Never red.
 - **Focus:** the platform caret and keyboard; fields keep returnKeyType "done".
 
 ### Navigation
