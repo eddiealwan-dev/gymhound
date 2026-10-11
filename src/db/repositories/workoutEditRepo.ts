@@ -255,9 +255,11 @@ export function setExerciseMark(db: Db, workoutExerciseId: string, mark: Exercis
 
 /**
  * Sets today's weight for the exercise in the unit it was entered in, or clears it with nulls. It changes today's
- * target only and is never written back to the rule (spec 18.7). Only in the active workout.
+ * target only and is never written back to the rule (spec 18.7). Only in the active workout. A weight without its unit,
+ * or a unit without a weight, is refused.
  */
 export function setOverride(db: Db, workoutExerciseId: string, weight: number | null, unit: WeightUnit | null): void {
+  if ((weight === null) !== (unit === null)) throw new Error('An override needs both a weight and a unit, or neither.');
   db.transaction((tx) => {
     requireActiveWorkoutExercise(tx, workoutExerciseId);
     tx.update(workoutExercises)
