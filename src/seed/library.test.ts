@@ -30,3 +30,18 @@ describe('the generated library', () => {
     expect(EXERCISE_PHOTOS['wall-sit']).toBeUndefined();
   });
 });
+
+describe('the library id list', () => {
+  // src/seed/libraryIds.json holds every id the library has ever had; history, notes and rest times are keyed by them.
+  const LISTED: string[] = require('./libraryIds.json');
+
+  it('never loses an id, so updating the vendored free-exercise-db cannot orphan a logged exercise', () => {
+    const ids = new Set(LIBRARY_EXERCISES.map((e) => e.id));
+    expect(LISTED.filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  it('lists every id the library has, each once', () => {
+    expect(new Set(LISTED).size).toBe(LISTED.length);
+    expect(LIBRARY_EXERCISES.map((e) => e.id).filter((id) => !LISTED.includes(id))).toEqual([]);
+  });
+});

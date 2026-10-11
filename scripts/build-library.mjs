@@ -6,19 +6,23 @@
 //   src/seed/library.generated.ts        every exercise with its steps and source id
 //   src/seed/exercisePhotos.generated.ts the start and end photo of each exercise, as static require() calls
 //   assets/exercises/{id}-0.webp, -1.webp the photos: longest side LONGEST_SIDE px, WebP at QUALITY
+//   src/seed/libraryIds.json             every id the library has ever had; new ids are appended
 // Each source photo is downloaded once into scripts/.cache/ (gitignored) and reused on later runs. Photos in
-// assets/exercises/ that no exercise uses any more are deleted. Never edit the generated files by hand.
+// assets/exercises/ that no exercise uses any more are deleted. The TypeScript and the id list are written only once
+// every photo is done, so a failed download leaves them as they were. If a listed id has gone from the library (say,
+// after a newer free-exercise-db), the build stops before writing anything: logged history may point at that id.
+// Never edit the generated files by hand.
 //
 // QUALITY: the 1,746 photos at 360 px came to 9.3 MB at WebP quality 40, 10.6 MB at 50, 11.9 MB at 60 and 17.4 MB at
 // 80. Even enlarged 3x (as a 3x phone shows them), 40 only smears the plain backdrops a little, so 50 keeps a margin
 // for busier photos (cables, machines) for about 1 MB more. The script prints the total.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { SEED_EXERCISES } from '../src/seed/exercises.ts';
-import { buildLibrary } from '../src/seed/libraryMapping.ts';
+import { buildLibrary, nextLibraryIds } from '../src/seed/libraryMapping.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(ROOT, 'scripts', 'vendor', 'free-exercise-db', 'exercises.json');
@@ -26,11 +30,13 @@ const CACHE = join(ROOT, 'scripts', '.cache', 'free-exercise-db');
 const ASSETS = join(ROOT, 'assets', 'exercises');
 const LIBRARY_OUT = join(ROOT, 'src', 'seed', 'library.generated.ts');
 const PHOTOS_OUT = join(ROOT, 'src', 'seed', 'exercisePhotos.generated.ts');
+const IDS_OUT = join(ROOT, 'src', 'seed', 'libraryIds.json');
 const IMAGE_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 
 const LONGEST_SIDE = 360;
 const QUALITY = 50;
 const DOWNLOADS_AT_ONCE = 12;
+const DOWNLOAD_TIMEOUT_MS = 30_000;
 /** A source photo path as free-exercise-db lists it, e.g. `3_4_Sit-Up/0.jpg`. Anything else is refused. */
 const IMAGE_PATH = /^[A-Za-z0-9_-]+\/[0-9]+\.(jpg|jpeg|png)$/;
 
@@ -51,23 +57,29 @@ async function inPool(items, limit, task) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
-/** The source photo at `path`, from the cache, or downloaded (three tries) into it. */
+/**
+ * The source photo at `path`, from the cache, or downloaded into it (three tries, each timed out). The download is
+ * written to a temporary file and renamed into place, so an interrupted run never leaves a partial photo cached.
+ */
 async function sourcePhoto(path) {
   if (!IMAGE_PATH.test(path)) throw new Error(`Unexpected free-exercise-db image path: ${path}`);
   const file = join(CACHE, ...path.split('/'));
   if (existsSync(file) && statSync(file).size > 0) return file;
   mkdirSync(dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(IMAGE_BASE + path);
+      const response = await fetch(IMAGE_BASE + path, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const type = response.headers.get('content-type') ?? '';
       if (!type.startsWith('image/')) throw new Error(`not an image (${type})`);
-      writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+      writeFileSync(temporary, Buffer.from(await response.arrayBuffer()));
+      renameSync(temporary, file);
       return file;
     } catch (error) {
       lastError = error;
+      rmSync(temporary, { force: true });
     }
   }
   throw new Error(`Could not download ${path}: ${lastError}`);
@@ -108,7 +120,8 @@ async function main() {
   const source = JSON.parse(readFileSync(SOURCE, 'utf8'));
   const byId = new Map(source.map((e) => [e.id, e]));
   const library = buildLibrary(source, SEED_EXERCISES);
-  writeLibrary(library);
+  // Throws, before anything is written, if a listed id has gone from the library.
+  const ids = nextLibraryIds(existsSync(IDS_OUT) ? JSON.parse(readFileSync(IDS_OUT, 'utf8')) : [], library);
 
   // Two photos (start and end) for each exercise whose source has them.
   const jobs = [];
@@ -136,8 +149,11 @@ async function main() {
     if (!wanted.has(file)) rmSync(join(ASSETS, file));
   }
 
+  // Every photo is done: now the TypeScript and the id list.
   const photoIds = [...new Set(jobs.map((j) => j.id))].sort();
+  writeLibrary(library);
   writePhotoMap(photoIds);
+  writeFileSync(IDS_OUT, `${JSON.stringify(ids, null, 2)}\n`);
 
   const bytes = [...wanted].reduce((sum, file) => sum + statSync(join(ASSETS, file)).size, 0);
   const without = library.filter((e) => !photoIds.includes(e.id)).map((e) => e.id);

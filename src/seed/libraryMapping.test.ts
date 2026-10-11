@@ -1,12 +1,16 @@
 import { SEED_EXERCISES } from './exercises';
 import {
   LEGACY_SOURCE,
+  NAME_ACRONYMS,
+  NAME_PROPER_NOUNS,
   buildLibrary,
   libraryId,
   mapEquipment,
   mapLoggingType,
   mapMuscles,
   mapPattern,
+  nextLibraryIds,
+  sentenceCase,
 } from './libraryMapping';
 import type { FedbExercise, LibraryExercise } from './libraryMapping';
 
@@ -120,7 +124,18 @@ describe('mapLoggingType', () => {
     ['Yoke Walk', 'weighted_time'],
     ['Sled Push', 'weighted_time'],
     ['Rickshaw Carry', 'weighted_time'],
-    ['Band Assisted Pull-Up', 'assisted'],
+    ["Conan's Wheel", 'weighted_time'],
+    ['Prowler Sprint', 'weighted_time'],
+    ['Sled Overhead Backward Walk', 'weighted_time'],
+    ['Sled Row', 'weighted_time'],
+    ['Sledgehammer Swings', 'bodyweight_plus'],
+    ['Drag Curl', 'weighted'],
+    ['Bodyweight Walking Lunge', 'bodyweight_plus'],
+    ['Band Assisted Pull-Up', 'bodyweight_plus'],
+    ['London Bridges', 'bodyweight_plus'],
+    ['Single-Leg High Box Squat', 'bodyweight_plus'],
+    ['Platform Hamstring Slides', 'bodyweight_plus'],
+    ['Plyo Kettlebell Pushups', 'bodyweight_plus'],
     ['Pullups', 'bodyweight_plus'],
     ['Pushups', 'bodyweight_plus'],
     ['Inverted Row', 'bodyweight_plus'],
@@ -138,7 +153,7 @@ describe('mapLoggingType', () => {
     expect(mapLoggingType(fedb(name))).toBe(loggingType);
   });
 
-  it('logs a machine-assisted move as assisted', () => {
+  it('logs a machine-assisted move as assisted (a band’s assistance can’t be weighed, so band-assisted is bodyweight plus)', () => {
     const machineAssisted: FedbExercise = {
       ...fedb('Pullups'),
       id: 'Machine-Assisted_Pull-Up',
@@ -171,6 +186,8 @@ describe('mapPattern', () => {
     ['Barbell Step Ups', 'lunge'],
     ['Back Flyes - With Bands', 'horizontal_pull'],
     ['Bent Over Barbell Row', 'horizontal_pull'],
+    ['Alternating Kettlebell Row', 'horizontal_pull'],
+    ['Lying Cambered Barbell Row', 'horizontal_pull'],
     ['Seated Cable Rows', 'horizontal_pull'],
     ['Face Pull', 'horizontal_pull'],
     ['Wide-Grip Lat Pulldown', 'vertical_pull'],
@@ -178,6 +195,11 @@ describe('mapPattern', () => {
     ['Chin-Up', 'vertical_pull'],
     ["Farmer's Walk", 'carry'],
     ['Sled Push', 'carry'],
+    ["Conan's Wheel", 'carry'],
+    ['Prowler Sprint', 'carry'],
+    ['Lying Triceps Press', 'isolation'],
+    ['Lying Close-Grip Barbell Triceps Press To Chin', 'isolation'],
+    ['Reverse Flyes', 'isolation'],
     ['Plank', 'core'],
     ['Hanging Leg Raise', 'core'],
     ['Side Lateral Raise', 'isolation'],
@@ -188,6 +210,51 @@ describe('mapPattern', () => {
     ['Running, Treadmill', 'isolation'],
   ])('%s → %s', (name, pattern) => {
     expect(mapPattern(fedb(name))).toBe(pattern);
+  });
+});
+
+describe('sentenceCase (R91)', () => {
+  it.each([
+    [BENCH, 'Barbell bench press - medium grip'],
+    ['One-Arm Dumbbell Row', 'One-arm dumbbell row'],
+    ['Wide-Grip Rear Pull-Up', 'Wide-grip rear pull-up'],
+    ['Rocky Pull-Ups/Pulldowns', 'Rocky pull-ups/pulldowns'],
+    ['3/4 Sit-Up', '3/4 sit-up'],
+    ['Hug A Ball', 'Hug a ball'],
+    ['Box Jump (Multiple Response)', 'Box jump (multiple response)'],
+    ["Farmer's Walk", "Farmer's walk"],
+    ["Conan's Wheel", "Conan's wheel"],
+    ['EZ-Bar Curl', 'EZ-bar curl'],
+    ['Close-Grip EZ-Bar Press', 'Close-grip EZ-bar press'],
+    ['Hammer Grip Incline DB Bench Press', 'Hammer grip incline DB bench press'],
+    ['IT Band and Glute Stretch', 'IT band and glute stretch'],
+    ['JM Press', 'JM press'],
+    ['Iliotibial Tract-SMR', 'Iliotibial tract-SMR'],
+    ['T-Bar Row with Handle', 'T-bar row with handle'],
+    ['Lying T-Bar Row', 'Lying T-bar row'],
+    ['Triceps Pushdown - V-Bar Attachment', 'Triceps pushdown - V-bar attachment'],
+    ['Smith Machine Squat', 'Smith machine squat'],
+    ['Decline Smith Press', 'Decline Smith press'],
+    ['Kettlebell Arnold Press', 'Kettlebell Arnold press'],
+    ['Bradford/Rocky Presses', 'Bradford/Rocky presses'],
+    ['Cable Russian Twists', 'Cable Russian twists'],
+    ['Kettlebell Turkish Get-Up (Lunge style)', 'Kettlebell Turkish get-up (lunge style)'],
+    ['Romanian Deadlift from Deficit', 'Romanian deadlift from deficit'],
+    ['Pallof Press With Rotation', 'Pallof press with rotation'],
+    ['Standing Olympic Plate Hand Squeeze', 'Standing Olympic plate hand squeeze'],
+    ['Standing Soleus And Achilles Stretch', 'Standing soleus and Achilles stretch'],
+    ['Otis-Up', 'Otis-up'],
+    ['Landmine 180\'s', "Landmine 180's"],
+  ])('%s → %s', (name, expected) => {
+    expect(sentenceCase(name)).toBe(expected);
+  });
+
+  it('keeps the capital of every listed acronym and proper noun, each found in a real name', () => {
+    for (const word of [...NAME_ACRONYMS, ...NAME_PROPER_NOUNS]) {
+      const names = FEDB.map((e) => e.name).filter((n) => new RegExp(`(^|[^A-Za-z])${word}([^A-Za-z]|$)`).test(n));
+      expect([word, names.length > 0]).toEqual([word, true]);
+      for (const name of names) expect(sentenceCase(name)).toContain(word);
+    }
   });
 });
 
@@ -217,6 +284,10 @@ describe('LEGACY_SOURCE', () => {
 
   it('links the bench press to the medium-grip barbell bench press', () => {
     expect(LEGACY_SOURCE['barbell-bench-press']).toBe('Barbell_Bench_Press_-_Medium_Grip');
+  });
+
+  it('links the dumbbell walking lunge to a walking lunge, not the stationary dumbbell lunge', () => {
+    expect(LEGACY_SOURCE['dumbbell-walking-lunge']).toBe('Barbell_Walking_Lunge');
   });
 });
 
@@ -270,7 +341,7 @@ describe('buildLibrary', () => {
     expect(byId.get('fedb-ez-bar-curl')).toEqual({
       id: 'fedb-ez-bar-curl',
       sourceId: 'EZ-Bar_Curl',
-      name: 'EZ-Bar Curl',
+      name: 'EZ-bar curl',
       aliases: [],
       equipment: 'ez_bar',
       loggingType: 'weighted',
@@ -296,5 +367,28 @@ describe('buildLibrary', () => {
   it('is sorted by name, ignoring case', () => {
     const names = library.map((e) => e.name.toLowerCase());
     expect(names).toEqual([...names].sort());
+  });
+
+  it('names every imported exercise in sentence case, like the existing ones (R91)', () => {
+    const sources = new Map(FEDB.map((e) => [e.id, e]));
+    for (const e of library.filter((x) => x.id.startsWith('fedb-'))) {
+      expect(e.name).toBe(sentenceCase(sources.get(e.sourceId!)!.name));
+    }
+  });
+});
+
+describe('nextLibraryIds', () => {
+  const lib = (...ids: string[]) => ids.map((id) => ({ id }) as LibraryExercise);
+
+  it('keeps the listed ids in their order and appends the new ones, sorted', () => {
+    expect(nextLibraryIds(['b', 'a'], lib('a', 'd', 'b', 'c'))).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('starts an empty list with every id, sorted', () => {
+    expect(nextLibraryIds([], lib('fedb-z', 'plank', 'fedb-a'))).toEqual(['fedb-a', 'fedb-z', 'plank']);
+  });
+
+  it('refuses a library that has lost a listed id, since history may point at it', () => {
+    expect(() => nextLibraryIds(['a', 'gone', 'b'], lib('a', 'b'))).toThrow('gone');
   });
 });

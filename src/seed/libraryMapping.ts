@@ -58,12 +58,15 @@ export const LEGACY_SOURCE: Readonly<Record<string, string | null>> = {
   'barbell-front-squat': 'Front_Barbell_Squat',
   // Dumbbell
   'dumbbell-lateral-raise': 'Side_Lateral_Raise',
-  'dumbbell-walking-lunge': 'Dumbbell_Lunges',
+  // free-exercise-db has no dumbbell walking lunge. Its dumbbell lunge is stationary; the barbell walking lunge is the
+  // loaded walking one (its steps say barbell), and keeps the bodyweight walking lunge as its own exercise.
+  'dumbbell-walking-lunge': 'Barbell_Walking_Lunge',
   'dumbbell-curl': 'Dumbbell_Bicep_Curl',
   'incline-dumbbell-press': 'Incline_Dumbbell_Press',
   'dumbbell-bulgarian-split-squat': 'Split_Squat_with_Dumbbells',
   'dumbbell-reverse-fly': 'Reverse_Flyes',
   'dumbbell-hammer-curl': 'Hammer_Curls',
+  // The same movement; its steps and photos use a kettlebell.
   'dumbbell-goblet-squat': 'Goblet_Squat',
   'dumbbell-bench-press': 'Dumbbell_Bench_Press',
   'dumbbell-one-arm-row': 'One-Arm_Dumbbell_Row',
@@ -179,28 +182,43 @@ export function mapMuscles(names: readonly string[], e: FedbExercise): Muscle[] 
 
 /** Cardio measured over a distance: runs, walks, rows, rides and the machines for them. */
 const DISTANCE_CARDIO = /\brun|\bjog|\bwalk|\brow|\bbike|cycl|elliptical|treadmill/;
-/** Strongman events done over a distance or a time with a load: carries, walks and sleds. */
-const LOADED_LOCOMOTION = /carry|walk|yoke|sled|drag|push/;
+/**
+ * Moves done over a distance or a time with a load, in any category: sleds, prowlers, drags (not the drag curl),
+ * carries, walks, yokes.
+ */
+const LOADED_LOCOMOTION = /\bsleds?\b|prowler|\b(backward|forward) drag\b|carry|\bwalks?\b|yoke|conan's wheel/;
+/** Chin-ups by name ("Press To Chin" is not one). */
+const CHIN = /\bchin-?ups?\b|\bchins\b|grip chin\b/;
 /** Moves done with your own body whose free-exercise-db equipment is "other" (bars, rings, straps, a rope). */
-const BODYWEIGHT_MOVE =
-  /bodyweight|\bdips?\b|\bchin|pull[- ]?ups?\b|muscle up|push-?ups?\b|suspended|inverted row|rope climb|parallel bars|hyperextension|ab roller/;
+const BODYWEIGHT_MOVE = new RegExp(
+  `bodyweight|\\bdips?\\b|${CHIN.source}|pull[- ]?ups?\\b|muscle up|push-?ups?\\b|suspended|inverted row|rope climb|parallel bars|hyperextension|ab roller`,
+);
+/** Moves done with your own body that no rule catches by equipment or keyword. */
+const BODYWEIGHT_PLUS_NAMES: readonly string[] = [
+  'London Bridges',
+  'Single-Leg High Box Squat',
+  'Platform Hamstring Slides',
+  'Plyo Kettlebell Pushups',
+];
 /** Conditioning done for time whatever the equipment. */
 const TIMED_MOVE = /battling ropes|balance board/;
 
 /**
- * How a set is logged (R85): stretches, static holds, battling ropes and the balance board are timed; distance
- * cardio is distance and time, other cardio timed; strongman carries, walks and sleds are weight and time; assisted
- * moves (machine or band) are assisted; bodyweight strength and plyometrics (including those on an exercise ball,
- * and dips, chins, rings, straps and plyometrics whose equipment is "other") are bodyweight plus; everything else is
- * weighted.
+ * How a set is logged (R85): stretches, static holds, battling ropes and the balance board are timed; sleds,
+ * prowlers, drags, carries, walks, yokes and Conan's wheel are weight and time; distance cardio is distance and time,
+ * other cardio timed; machine-assisted moves are assisted, band-assisted ones bodyweight plus (R92: a band's
+ * assistance can't be weighed); bodyweight strength and plyometrics (including those on an exercise ball, dips,
+ * chins, rings, straps and plyometrics whose equipment is "other", and BODYWEIGHT_PLUS_NAMES) are bodyweight plus;
+ * everything else is weighted.
  */
 export function mapLoggingType(e: FedbExercise): LoggingType {
   const name = lower(e);
   if (e.category === 'stretching' || e.force === 'static' || TIMED_MOVE.test(name)) return 'timed';
+  if (LOADED_LOCOMOTION.test(name)) return 'weighted_time';
   if (e.category === 'cardio') return DISTANCE_CARDIO.test(name) ? 'distance_time' : 'timed';
-  if (e.category === 'strongman' && LOADED_LOCOMOTION.test(name)) return 'weighted_time';
-  if (/assist/.test(name)) return 'assisted';
+  if (BODYWEIGHT_PLUS_NAMES.includes(e.name)) return 'bodyweight_plus';
   const equipment = mapEquipment(e);
+  if (/assist/.test(name)) return equipment === 'band' || /\bband/.test(name) ? 'bodyweight_plus' : 'assisted';
   if (e.category === 'strength' || e.category === 'plyometrics') {
     if (equipment === 'bodyweight' || equipment === 'exercise_ball') return 'bodyweight_plus';
     if (equipment === 'other' && (e.category === 'plyometrics' || BODYWEIGHT_MOVE.test(name))) return 'bodyweight_plus';
@@ -209,32 +227,51 @@ export function mapLoggingType(e: FedbExercise): LoggingType {
 }
 
 const LEG_MUSCLES: readonly string[] = ['quadriceps', 'hamstrings', 'glutes', 'calves', 'adductors', 'abductors'];
+/** Primary muscles whose isolation moves stay `isolation` whatever the name says ("Lying Triceps Press", "Calf Press"). */
+const SMALL_MUSCLES: readonly string[] = ['calves', 'biceps', 'triceps', 'forearms'];
 const VERTICAL_PUSH = /overhead|military|shoulder press|push press|jerk|handstand|arnold|bradford|\bdips?\b|log lift|circus bell/;
-const PUSH = /press|push-?ups?\b|pushups|\bfl(y|ye|yes)\b|crossover|chest push|\bthrow\b/;
 
-/**
- * The movement pattern (R85), from the name's keywords, then the mechanic, force and primary muscle; `isolation`
- * when nothing fits. Stretches and cardio are `isolation` (no strength pattern), carries and sleds `carry`, and
- * anything whose primary muscle is the abs `core`.
- */
-export function mapPattern(e: FedbExercise): Pattern {
-  const name = lower(e);
-  const primary = e.primaryMuscles[0];
-  if (e.category === 'stretching' || e.category === 'cardio') return 'isolation';
-  if (mapLoggingType(e) === 'weighted_time' || /carry|farmer|yoke/.test(name)) return 'carry';
-  if (primary === 'abdominals') return 'core';
-  const hips = primary === 'glutes' || primary === 'hamstrings' || primary === 'lower back';
-  if (hips && /bridge|hip thrust|hip lift|hyperextension|back extension|good morning|superman/.test(name)) return 'hinge';
-  if (e.mechanic === 'isolation') return 'isolation';
+/** The pattern a compound movement's name gives (squat, lunge, hinge, pulls, rows, presses, push-ups, dips), or null. */
+function compoundByName(name: string, primary: string): Pattern | null {
   if (/lunge|split squat|step[- ]?ups?\b|split jump|scissor/.test(name)) return 'lunge';
   if (/squat|leg press|hack|thruster|pistol/.test(name)) return 'squat';
   if (/deadlift|good morning|romanian|stiff.leg|hip thrust|swing|pull.?through|clean|snatch|glute.?ham/.test(name)) return 'hinge';
-  if (/pulldown|pull-down|pull[- ]?ups?\b|pullups|\bchin|muscle.?up|rope climb|upright/.test(name)) return 'vertical_pull';
-  if (/\brows?\b|face pull|pull apart|reverse fl|back fl|rear delt/.test(name)) return 'horizontal_pull';
-  const legs = LEG_MUSCLES.includes(primary ?? '');
+  if (/pulldown|pull-down|pull[- ]?ups?\b|pullups|muscle.?up|rope climb|upright/.test(name) || CHIN.test(name)) {
+    return 'vertical_pull';
+  }
+  if (/\brows?\b/.test(name)) return 'horizontal_pull';
+  if (!LEG_MUSCLES.includes(primary) && /press|push-?ups?\b|pushups|\bdips?\b/.test(name)) {
+    return VERTICAL_PUSH.test(name) || primary === 'shoulders' ? 'vertical_push' : 'horizontal_push';
+  }
+  return null;
+}
+
+/**
+ * The movement pattern (R85): loaded carries, walks and sleds are `carry` (unless they're a row, fly or extension);
+ * stretches and cardio `isolation` (no strength pattern); anything whose primary muscle is the abs `core`; then a
+ * compound movement's name decides, even when free-exercise-db calls it isolation ("Alternating Kettlebell Row");
+ * then the mechanic, force and primary muscle, with `isolation` when nothing fits.
+ */
+export function mapPattern(e: FedbExercise): Pattern {
+  const name = lower(e);
+  const primary = e.primaryMuscles[0] ?? '';
+  if (mapLoggingType(e) === 'weighted_time' && !/\brows?\b|\bfl(y|ye|yes)\b|extension/.test(name)) return 'carry';
+  if (e.category === 'stretching' || e.category === 'cardio') return 'isolation';
+  if (primary === 'abdominals') return 'core';
+  const hips = primary === 'glutes' || primary === 'hamstrings' || primary === 'lower back';
+  if (hips && /bridge|hip thrust|hip lift|hyperextension|back extension|good morning|superman/.test(name)) return 'hinge';
+  if (e.mechanic !== 'isolation' || !SMALL_MUSCLES.includes(primary)) {
+    const named = compoundByName(name, primary);
+    if (named) return named;
+  }
+  if (e.mechanic === 'isolation') return 'isolation';
+  if (/face pull|pull apart|reverse fl|back fl|rear delt/.test(name)) return 'horizontal_pull';
+  const legs = LEG_MUSCLES.includes(primary);
   if (legs && /jump|hop|bound|leap|skip/.test(name)) return 'squat';
   if (!legs && VERTICAL_PUSH.test(name)) return 'vertical_push';
-  if (!legs && PUSH.test(name)) return primary === 'shoulders' ? 'vertical_push' : 'horizontal_push';
+  if (!legs && /\bfl(y|ye|yes)\b|crossover|chest push|\bthrow\b/.test(name)) {
+    return primary === 'shoulders' ? 'vertical_push' : 'horizontal_push';
+  }
   if (primary === 'quadriceps') return 'squat';
   if (hips) return 'hinge';
   if (e.force === 'pull' && primary === 'lats') return 'vertical_pull';
@@ -242,6 +279,63 @@ export function mapPattern(e: FedbExercise): Pattern {
   if (e.force === 'push' && primary === 'shoulders') return 'vertical_push';
   if (e.force === 'push' && (primary === 'chest' || primary === 'triceps')) return 'horizontal_push';
   return 'isolation';
+}
+
+/** Acronyms in free-exercise-db names that stay in capitals (R91). */
+export const NAME_ACRONYMS: readonly string[] = ['DB', 'EZ', 'IT', 'JM', 'SMR'];
+
+/** Proper nouns in free-exercise-db names that keep their capital (R91). */
+export const NAME_PROPER_NOUNS: readonly string[] = [
+  'Achilles',
+  'Arnold',
+  'Atlas',
+  'Bradford',
+  "Conan's",
+  'Cuban',
+  'Frankenstein',
+  'Gironda',
+  'Janda',
+  'Jefferson',
+  'London',
+  'Olympic',
+  'Otis',
+  'Pallof',
+  'Rocky',
+  'Romanian',
+  'Russian',
+  'Smith',
+  'Svend',
+  'Tate',
+  'Turkish',
+  'Zercher',
+];
+
+/**
+ * A free-exercise-db name in sentence case, like GymHound's own (R91): every word after the first is lower case,
+ * hyphenated parts too ("One-arm", "Pull-up"), except the acronyms and proper nouns above and a single capital
+ * before a hyphen ("T-bar").
+ */
+export function sentenceCase(name: string): string {
+  return name.trim().replace(/[A-Za-z][A-Za-z']*/g, (word: string, offset: number, whole: string) => {
+    if (offset === 0) return word;
+    if (NAME_ACRONYMS.includes(word) || NAME_PROPER_NOUNS.includes(word)) return word;
+    if (/^[A-Z]$/.test(word) && whole[offset + 1] === '-') return word;
+    return word.toLowerCase();
+  });
+}
+
+/**
+ * The library id list after a build: the listed ids in their order, then the library's new ids, sorted. Throws if
+ * a listed id is missing, since logged workouts, notes and rest times may point at it.
+ */
+export function nextLibraryIds(listed: readonly string[], library: readonly LibraryExercise[]): string[] {
+  const ids = new Set(library.map((e) => e.id));
+  const lost = listed.filter((id) => !ids.has(id));
+  if (lost.length > 0) {
+    throw new Error(`The library no longer has ${lost.join(', ')}. Ids with history must never disappear.`);
+  }
+  const known = new Set(listed);
+  return [...listed, ...[...ids].filter((id) => !known.has(id)).sort()];
 }
 
 /** A library exercise's id: `fedb-` and the source id in lower case, each run of other characters one hyphen. */
@@ -294,7 +388,7 @@ export function buildLibrary(src: readonly FedbExercise[], legacy: readonly Lega
     out.push({
       id: libraryId(e.id),
       sourceId: e.id,
-      name: e.name.trim(),
+      name: sentenceCase(e.name),
       aliases: [],
       equipment: mapEquipment(e),
       loggingType: mapLoggingType(e),
