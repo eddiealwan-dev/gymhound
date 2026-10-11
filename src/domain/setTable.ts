@@ -224,6 +224,14 @@ function storedValue(set: SetInput, key: InputKey): number | null {
 }
 
 /**
+ * Whether an input shows today's target rather than a value: the load of an open row with a target and no stored
+ * weight. It is a suggestion until it is typed over or ticked (spec 18.6).
+ */
+export function isTargetValue(row: RowModel, key: InputKey): boolean {
+  return key === 'weight' && row.set.weight === null && !row.set.done && row.target !== null;
+}
+
+/**
  * What an input holds when nothing is being typed: the stored value, else empty. A stored weight shows as it was
  * logged, done or not, with its unit when that is not the display unit ("135 lb" while in kg, spec 7.1). An open row's
  * load falls back to today's target; a done row never does, so it cannot show a weight that was not saved.
@@ -232,18 +240,22 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): strin
   const { set } = row;
   if (key === 'weight') {
     if (set.weight !== null) return weightText(set.weight, set.weightUnit ?? unit, unit);
-    return !set.done && row.target !== null ? numberText(row.target) : '';
+    return row.target !== null && isTargetValue(row, key) ? numberText(row.target) : '';
   }
   const value = storedValue(set, key);
   if (value === null) return '';
   return key === 'durationS' ? durationText(value) : numberText(value);
 }
 
-/** The greyed-out hint for an input: "135", "8", "40s" or "1:30". Empty when there is none. RPE has none. */
+/**
+ * The greyed-out hint for an input: "135", "8", "40s" or "1:30". Empty when there is none. RPE has none. An open
+ * row's load hints today's target over last time's weight (R49): a cleared weight shows what its tick logs.
+ */
 export function hintText(row: RowModel, key: InputKey): string {
   const { placeholders } = row;
   switch (key) {
     case 'weight':
+      if (row.target !== null && !row.set.done) return numberText(row.target);
       return placeholders.weight === null ? '' : numberText(placeholders.weight);
     case 'reps':
       return placeholders.reps === null ? '' : String(placeholders.reps);
@@ -258,6 +270,20 @@ export function hintText(row: RowModel, key: InputKey): string {
 
 /** What has been typed into a row's inputs and not yet saved, by input. An input with no entry shows its stored value. */
 export type Drafts = Partial<Record<InputKey, string>>;
+
+/** How an input is drawn: a value typed or saved, a suggestion (a target or a placeholder), or nothing (spec 18.6). */
+export type FieldLook = 'entered' | 'suggested' | 'empty';
+
+/** With a draft: non-blank (after trim) is 'entered', invalid text included; blank is 'suggested' when hintText(row, key) !== '', else 'empty'.
+ *  Without one: a stored value is 'entered'; isTargetValue or a non-empty hintText is 'suggested'; else 'empty'. */
+export function fieldLook(row: RowModel, key: InputKey, draft: string | undefined): FieldLook {
+  if (draft !== undefined) {
+    if (draft.trim() !== '') return 'entered';
+    return hintText(row, key) !== '' ? 'suggested' : 'empty';
+  }
+  if (storedValue(row.set, key) !== null) return 'entered';
+  return isTargetValue(row, key) || hintText(row, key) !== '' ? 'suggested' : 'empty';
+}
 
 export type RowReading = {
   /** What was typed or stored, before the target and placeholders fill in: null for a field with no value. */

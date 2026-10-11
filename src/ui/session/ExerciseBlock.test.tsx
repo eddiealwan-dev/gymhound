@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Keyboard, Text, TextInput } from 'react-native';
+import { Keyboard, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -7,7 +7,7 @@ import { commitSetField, removeSetFrom, tick, untick } from '../../state/session
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
-import { SetRow } from './SetRow';
+import { SetRow, SUGGESTED_HINT } from './SetRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -430,5 +430,76 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     const tree = mount(bench([set('s0', 0)]), NO_REST, 's0');
 
     expect(byLabel(tree, 'Set 1 done').props.style({ pressed: false })).toMatchObject({ borderWidth: 2.5, borderStyle: 'dashed' });
+  });
+});
+
+describe('ExerciseBlock: suggested values look like suggestions (spec 18.6)', () => {
+  const look = (tree: ReactTestRenderer, label: string) => StyleSheet.flatten(byLabel(tree, label).props.style);
+  const suggested = {
+    borderStyle: 'dashed',
+    borderColor: '#736c60',
+    backgroundColor: 'transparent',
+    color: '#6d675c',
+    fontFamily: 'BarlowCondensed_600SemiBold',
+  };
+  const entered = {
+    borderStyle: 'solid',
+    borderColor: '#736c60',
+    backgroundColor: '#1a1814',
+    color: '#f1ece2',
+    fontFamily: 'BarlowCondensed_800ExtraBold',
+  };
+  const planned = (): WorkoutExerciseView => ({
+    ...bench([set('s0', 0)]),
+    plannedWeight: 135,
+    plannedUnit: 'lb',
+    rule: { setCount: 3, repMin: 6, repMax: 8, increment: 5, incrementUnit: 'lb' },
+  });
+
+  it("draws today's target as a suggestion until it is typed over", () => {
+    const tree = mount(planned());
+    expect(look(tree, 'LB, set 1')).toMatchObject(suggested);
+    expect(byLabel(tree, 'LB, set 1').props.value).toBe('135');
+    expect(byLabel(tree, 'LB, set 1').props.accessibilityHint).toBe(SUGGESTED_HINT);
+
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('140'));
+
+    expect(look(tree, 'LB, set 1')).toMatchObject(entered);
+    expect(byLabel(tree, 'LB, set 1').props.accessibilityHint).toBeUndefined();
+  });
+
+  it('a ghost from last time is drawn as a suggestion', () => {
+    const ex: WorkoutExerciseView = {
+      ...bench([set('s0', 0)]),
+      previous: [{ position: 0, setType: 'working', weight: 135, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null }],
+    };
+    const tree = mount(ex);
+    const field = byLabel(tree, 'LB, set 1');
+    expect(field.props.value).toBe('');
+    expect(field.props.placeholder).toBe('135');
+    expect(field.props.placeholderTextColor).toBe('#6d675c');
+    expect(look(tree, 'LB, set 1')).toMatchObject({ borderStyle: 'dashed' });
+    expect(field.props.accessibilityHint).toBe(SUGGESTED_HINT);
+  });
+
+  it("a ticked set's values are solid", () => {
+    const tree = mount(oneDone());
+    for (const label of ['LB, set 1', 'REPS, set 1']) {
+      expect(look(tree, label)).toMatchObject(entered);
+      expect(byLabel(tree, label).props.accessibilityHint).toBeUndefined();
+    }
+  });
+
+  it('clearing a typed value brings the suggestion back', () => {
+    const tree = mount(planned());
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('140'));
+    expect(look(tree, 'LB, set 1')).toMatchObject(entered);
+
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText(''));
+
+    expect(look(tree, 'LB, set 1')).toMatchObject(suggested);
+    // R49: the cleared field's ghost is the target, which is what a tick logs.
+    expect(byLabel(tree, 'LB, set 1').props.placeholder).toBe('135');
+    expect(byLabel(tree, 'LB, set 1').props.accessibilityHint).toBe(SUGGESTED_HINT);
   });
 });

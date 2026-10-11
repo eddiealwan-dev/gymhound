@@ -1,9 +1,11 @@
-import type { PrevSet } from './setEntry';
+import { resolveTick, type PrevSet } from './setEntry';
 import {
   buildRows,
+  fieldLook,
   fieldPatch,
   hintText,
   isComplete,
+  isTargetValue,
   parseField,
   readRow,
   tableColumns,
@@ -588,5 +590,68 @@ describe('isComplete: a ticked set must hold what its type needs', () => {
     expect(isComplete('weighted_time', values({ weight: 20, durationS: 40 }))).toBe(true);
     expect(isComplete('distance_time', values({ distance: 5 }))).toBe(false);
     expect(isComplete('distance_time', values({ distance: 5, durationS: 1500 }))).toBe(true);
+  });
+});
+
+describe('isTargetValue and fieldLook (spec 18.6: suggested values look like suggestions)', () => {
+  const row = (extra: Partial<ExerciseInput> = {}, ...sets: SetInput[]) =>
+    buildRows(exercise({ sets: sets.length ? sets : [set('working')], ...extra }), 'lb', LB_GEAR)[0];
+  const plan = { plannedWeight: 135, plannedUnit: 'lb' as const };
+
+  it('a target is a suggestion until it is typed over or ticked', () => {
+    const r = row(plan);
+    expect(isTargetValue(r, 'weight')).toBe(true);
+    expect(fieldLook(r, 'weight', undefined)).toBe('suggested');
+    expect(fieldLook(r, 'weight', '140')).toBe('entered');
+    expect(fieldLook(r, 'reps', undefined)).toBe('suggested');
+    expect(isTargetValue(r, 'reps')).toBe(false);
+  });
+
+  it('a stored or ticked value is entered', () => {
+    const stored = row(plan, set('working', { weight: 140, weightUnit: 'lb', reps: 6 }));
+    expect(isTargetValue(stored, 'weight')).toBe(false);
+    expect(fieldLook(stored, 'weight', undefined)).toBe('entered');
+    expect(fieldLook(stored, 'reps', undefined)).toBe('entered');
+    const ticked = row({}, set('working', { done: true, weight: 135, weightUnit: 'lb', reps: 8 }));
+    expect(fieldLook(ticked, 'weight', undefined)).toBe('entered');
+    expect(fieldLook(ticked, 'reps', undefined)).toBe('entered');
+  });
+
+  it('a done row never shows the target as a suggestion (R29)', () => {
+    const r = row({ ...plan, rule: null }, set('working', { done: true, reps: 8 }));
+    expect(isTargetValue(r, 'weight')).toBe(false);
+    expect(fieldLook(r, 'weight', undefined)).toBe('empty');
+  });
+
+  it('placeholders from last time are suggestions', () => {
+    const r = row({ previous: [prev(0, 'working', 135, 8)] });
+    expect(fieldLook(r, 'weight', undefined)).toBe('suggested');
+    expect(fieldLook(r, 'reps', undefined)).toBe('suggested');
+    expect(fieldLook(r, 'rpe', undefined)).toBe('empty');
+  });
+
+  it('a blank draft falls back to the suggestion or empty', () => {
+    const r = row({ previous: [prev(0, 'working', 135, 8)] });
+    expect(fieldLook(r, 'weight', '')).toBe('suggested');
+    expect(fieldLook(r, 'weight', '   ')).toBe('suggested');
+    const bare = row({ rule: null });
+    expect(fieldLook(bare, 'weight', '')).toBe('empty');
+    expect(fieldLook(bare, 'reps', undefined)).toBe('empty');
+    expect(fieldLook(bare, 'weight', 'abc')).toBe('entered');
+  });
+
+  it('no target for a warmup', () => {
+    const r = row({ ...plan, rule: null }, set('warmup'));
+    expect(isTargetValue(r, 'weight')).toBe(false);
+    expect(fieldLook(r, 'weight', undefined)).toBe('empty');
+  });
+
+  it('a cleared target field shows the target as its ghost (R49)', () => {
+    const r = row({ ...plan, previous: [prev(0, 'working', 130, 8)] });
+    expect(hintText(r, 'weight')).toBe('135');
+    const reading = readRow(r, { weight: '' }, 'lb');
+    expect(reading.tickable).toBe(true);
+    const logged = resolveTick({ loggingType: r.loggingType, entered: reading.entered, target: r.target, placeholders: r.placeholders });
+    expect(logged?.weight).toBe(135);
   });
 });

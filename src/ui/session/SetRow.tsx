@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRef, useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
-import type { KeyboardTypeOptions, PressableStateCallbackType, ViewStyle } from 'react-native';
+import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import {
+  fieldLook,
   fieldPatch,
   hintText,
   isComplete,
@@ -16,6 +17,7 @@ import {
   type ColumnKey,
   type Drafts,
   type FieldKey,
+  type FieldLook,
   type InputKey,
   type RowModel,
 } from '../../domain/setTable';
@@ -23,7 +25,7 @@ import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { useDraftFlush } from '../../state/draftFlush';
 import { commitSetField, tick, untick } from '../../state/sessionActions';
 import { Body, Num } from '../Text';
-import { fonts } from '../theme';
+import { fonts, type Colors } from '../theme';
 import { useTheme } from '../ThemeProvider';
 
 /** The space between columns. */
@@ -87,6 +89,37 @@ const NEED_HINT: Record<FieldKey, string> = {
   durationS: 'Enter a time first',
   distance: 'Enter a distance first',
 };
+
+/** The VoiceOver hint on a field showing a suggestion (a target or last time's value) rather than a value. */
+export const SUGGESTED_HINT = 'Suggested. Tick the set to log it.';
+
+/**
+ * How a set field looks (spec 18.6): a suggestion is faint, light and dashed on no fill; a typed or saved value (or an
+ * empty field) is solid, bold and filled. Only an entered field can be invalid, so the heavier underline only ever
+ * sits on a solid edge: iOS cannot draw a dashed edge with a thicker bottom.
+ */
+export function inputLook(look: FieldLook, invalid: boolean, colors: Colors): TextStyle {
+  if (look === 'suggested') {
+    return {
+      backgroundColor: 'transparent',
+      borderStyle: 'dashed',
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      color: colors.textFaint,
+      fontFamily: fonts.display600,
+    };
+  }
+  return {
+    backgroundColor: colors.surface,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    color: colors.text,
+    fontFamily: fonts.display800,
+    // Red is reserved, so a number that needs another look gets a heavier muted underline.
+    ...(invalid && look === 'entered' ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
+  };
+}
 
 type Props = {
   ex: WorkoutExerciseView;
@@ -207,6 +240,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
 
   const input = (key: InputKey, header: string) => {
     const invalid = reading.invalid.includes(key) && left.includes(key);
+    const look = fieldLook(row, key, drafts[key]);
     return (
       <TextInput
         ref={(node) => {
@@ -214,7 +248,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         }}
         value={drafts[key] ?? valueText(row, key, unit)}
         placeholder={hintText(row, key)}
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={colors.textFaint}
         onChangeText={(text) => type(key, text)}
         onBlur={() => leave(key)}
         keyboardType={KEYBOARD[key]}
@@ -222,17 +256,12 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         returnKeyType="done"
         selectTextOnFocus
         accessibilityLabel={`${header}, set ${row.label}`}
+        accessibilityHint={look === 'suggested' ? SUGGESTED_HINT : undefined}
         style={{
           minHeight: 44,
           paddingHorizontal: 2,
           borderRadius: 8,
-          borderWidth: 1,
-          borderColor: colors.border,
-          // Red is reserved, so a number that needs another look gets a heavier muted underline.
-          ...(invalid ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
-          backgroundColor: colors.surface,
-          color: colors.text,
-          fontFamily: fonts.display700,
+          ...inputLook(look, invalid, colors),
           fontSize: 20,
           fontVariant: ['tabular-nums'],
           textAlign: 'center',
