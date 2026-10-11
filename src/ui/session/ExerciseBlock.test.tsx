@@ -6,6 +6,7 @@ import type { SetView, WorkoutExerciseView } from '../../db/repositories/workout
 import { flushAll } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote, tick, untick } from '../../state/sessionActions';
 import { Button } from '../Button';
+import { FormDemo } from '../FormDemo';
 import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow, SUGGESTED_HINT } from './SetRow';
@@ -35,6 +36,8 @@ jest.mock('../../state/sessionActions', () => ({
 }));
 // It draws nothing here: where it sits, and its props, are what the tests read.
 jest.mock('./RestInline', () => ({ RestInline: () => null }));
+// Its own tests cover what it shows; here, which exercise it is opened for is what the tests read.
+jest.mock('../FormDemo', () => ({ FormDemo: () => null }));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -1426,5 +1429,57 @@ describe('ExerciseBlock: a distance keeps its unit when ticked', () => {
     act(() => byLabel(tree, 'DIST, set 1').props.onBlur());
 
     expect(commitSetField).toHaveBeenCalledWith('db', 's0', { distance: 3, distanceUnit: 'mi' });
+  });
+});
+
+describe('ExerciseBlock: the form demo (R86)', () => {
+  const demo = (tree: ReactTestRenderer) => tree.root.findByType(FormDemo);
+  const SHOW_FORM = 'Show form for Bench Press';
+
+  it('the name is a button, "Show form for {name}", with a 44pt target, and the demo starts closed', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    const name = byLabel(tree, SHOW_FORM);
+    expect(name.props.accessibilityRole).toBe('button');
+    expect(targetHeight(name)).toBe(44);
+    expect(name.findAll((n) => n.type === Text && n.props.children === 'Bench Press')).toHaveLength(1);
+    expect(demo(tree).props.exerciseId).toBeNull();
+  });
+
+  it('tapping the name saves what is typed, puts the keyboard away, then opens the demo for its exercise (R29)', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    try {
+      act(() => byLabel(tree, ADD_NOTE).props.onPress());
+      act(() => noteFields(tree)[0].props.onChangeText('Elbows in'));
+      /** Which demo was open at each Keyboard.dismiss. */
+      const openAtDismiss: (string | null)[] = [];
+      dismiss.mockImplementation(() => void openAtDismiss.push(demo(tree).props.exerciseId));
+
+      act(() => byLabel(tree, SHOW_FORM).props.onPress());
+
+      expect(saveNote).toHaveBeenCalledWith('db', 'barbell-bench-press', 'Elbows in');
+      expect(jest.mocked(saveNote).mock.invocationCallOrder[0]).toBeLessThan(dismiss.mock.invocationCallOrder[0]);
+      expect(openAtDismiss[0]).toBeNull();
+      expect(demo(tree).props.exerciseId).toBe('barbell-bench-press');
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('closing the demo closes it', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, SHOW_FORM).props.onPress());
+
+    act(() => demo(tree).props.onClose());
+
+    expect(demo(tree).props.exerciseId).toBeNull();
+  });
+
+  it('keeps the name row as it was: the name still shrinks and wraps beside ⋯ (design pass)', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    expect(restingStyle(byLabel(tree, SHOW_FORM))).toEqual(expect.objectContaining({ flexShrink: 1, flexBasis: 'auto', minWidth: 0 }));
+    expect(restingStyle(byLabel(tree, SHOW_FORM)).flexGrow).toBeUndefined();
+    expect(restingStyle(byLabel(tree, SHOW_FORM)).flex).toBeUndefined();
   });
 });
