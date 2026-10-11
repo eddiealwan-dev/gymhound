@@ -10,9 +10,10 @@ import { lastSummary, ruleSentence, todaysRead } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
-import { useDraftFlush } from '../../state/draftFlush';
+import { flushAll, useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
+import { FormDemo } from '../FormDemo';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
@@ -123,7 +124,7 @@ const BLOCK_GAP = 28;
  * the inputs, and the compact + Set and + Warmup buttons. The next set to do has the bolder tick ring.
  * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
- * started it, and holds "Rest's up" there for a moment after it runs out.
+ * started it, and holds "Rest's up" there for a moment after it runs out. Tapping the name opens its form demo (R86).
  */
 export function ExerciseBlock({
   workoutId,
@@ -207,6 +208,15 @@ export function ExerciseBlock({
   // Back, the ⋯ menu and the picker save a note that is typed but not yet left; the screen may unmount before a blur (R29).
   useDraftFlush(saveNoteOnBlur);
 
+  /** Whether the form demo is open (R86). */
+  const [demoOpen, setDemoOpen] = useState(false);
+  /** Saves every draft and puts the keyboard away before the sheet opens over the session (R29). */
+  const openDemo = () => {
+    flushAll();
+    Keyboard.dismiss();
+    setDemoOpen(true);
+  };
+
   return (
     <View style={{ marginBottom: BLOCK_GAP }}>
       {inSuperset ? (
@@ -227,9 +237,28 @@ export function ExerciseBlock({
       */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', columnGap: NAME_ROW_GAP }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: NAME_ROW_GAP, rowGap: 2 }}>
-          <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
-            {ex.name}
-          </Display>
+          {/*
+            The name opens the form demo (R86). Its 26pt line reaches 9pt above and below, as ⋯ does: a 44pt target.
+            The pressable takes the name's place in the wrapping column, so it shrinks and wraps the same way.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Show form for ${ex.name}`}
+            onPress={openDemo}
+            hitSlop={{ top: 9, bottom: 9 }}
+            style={({ pressed }) => ({
+              flexShrink: 1,
+              flexBasis: 'auto',
+              minWidth: 0,
+              minHeight: 26,
+              justifyContent: 'center',
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
+              {ex.name}
+            </Display>
+          </Pressable>
           <View
             style={{
               flexDirection: 'row',
@@ -466,6 +495,8 @@ export function ExerciseBlock({
         }}
         onCancel={() => setConfirmFor(null)}
       />
+
+      <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} />
     </View>
   );
 }

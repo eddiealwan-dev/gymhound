@@ -2,6 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { exerciseNotes, exercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
+import { EXERCISE_PHOTOS } from '../../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../../seed/library.generated';
 import { getExercise, getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
 import { startWorkoutFromDay } from './workoutsRepo';
@@ -32,7 +33,16 @@ describe('listExercises', () => {
       pattern: 'horizontal_push',
       loggingType: 'weighted',
       isCustom: false,
+      hasPhotos: true,
     });
+  });
+
+  it('says whether each exercise has its start and end photos, for the picker thumbnail and the form demo (§18.8)', () => {
+    const rows = listExercises(seededDb());
+    const withPhotos = rows.filter((r) => r.hasPhotos).map((r) => r.id);
+    expect(withPhotos.sort()).toEqual(Object.keys(EXERCISE_PHOTOS).sort());
+    expect(rows.find((r) => r.id === 'wall-sit')?.hasPhotos).toBe(false);
+    expect(rows.find((r) => r.id === 'fedb-kettlebell-halo')?.hasPhotos).toBe(false);
   });
 
   it('leaves out archived exercises', () => {
@@ -62,7 +72,7 @@ describe('listExercises', () => {
     const rows = listExercises(db);
     expect(rows).toHaveLength(LIBRARY_EXERCISES.length + 1);
     const at = rows.findIndex((r) => r.id === 'custom-1');
-    expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true });
+    expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true, hasPhotos: false });
     expect([rows[at - 1].name, rows[at + 1].name]).toEqual(['90/90 hamstring', 'Ab crunch machine']);
   });
 });
