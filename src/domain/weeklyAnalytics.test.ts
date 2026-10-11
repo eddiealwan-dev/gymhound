@@ -2,7 +2,6 @@ import type { SeriesPoint } from './chart';
 import type { Muscle } from './types';
 import {
   bodyweightTrend,
-  countPrKinds,
   GROUP_LABELS,
   groupWeekText,
   type LoggedBlock,
@@ -19,6 +18,7 @@ const MUSCLES: Record<string, { primary: Muscle[]; secondary: Muscle[] }> = {
   rdl: { primary: ['hamstrings', 'glutes'], secondary: [] },
   plank: { primary: ['abs'], secondary: [] },
   rearFly: { primary: ['rear_delts'], secondary: [] },
+  ohp: { primary: ['front_delts'], secondary: ['side_delts', 'triceps', 'traps'] },
 };
 const muscles = (id: string) => MUSCLES[id];
 const block = (workoutId: string, exerciseId: string, hardSets: number, loggingType: LoggedBlock['loggingType'] = 'weighted'): LoggedBlock => ({
@@ -68,14 +68,19 @@ describe('muscleWeek', () => {
     expect(find(muscleWeek([block('w1', 'rdl', 8)], muscles), 'hamstrings').status).toBe('in');
   });
 
-  it('holds shoulders to the R93 floor and cap: front delts are not capped and count half towards the floor', () => {
-    // 30 front raise sets: shoulders show 30, but the cap counts side and rear only (0) and the floor is 15.
-    const front = find(muscleWeek([block('w1', 'frontRaise', 30)], muscles), 'shoulders');
-    expect(front).toEqual({ group: 'shoulders', sets: 30, status: 'in' });
+  it('shows shoulders as the figure the band checked (R93, R189): the floor when under or in range', () => {
+    // 12 overhead press sets: front 12, side 6 (secondary) → floor 6 + 12/2 = 12, cap 6.
+    expect(find(muscleWeek([block('w1', 'ohp', 12)], muscles), 'shoulders')).toEqual({ group: 'shoulders', sets: 12, status: 'in' });
+    // 30 front raises: front delts are not capped and count half towards the floor → 15, in range.
+    expect(find(muscleWeek([block('w1', 'frontRaise', 30)], muscles), 'shoulders')).toEqual({ group: 'shoulders', sets: 15, status: 'in' });
     // 10 front raises: floor 5 → under.
-    expect(find(muscleWeek([block('w1', 'frontRaise', 10)], muscles), 'shoulders').status).toBe('under');
-    // 13 side raises and 12 rear flyes: cap 25 → over.
-    expect(find(muscleWeek([block('w1', 'raise', 13), block('w2', 'rearFly', 12)], muscles), 'shoulders').status).toBe('over');
+    expect(find(muscleWeek([block('w1', 'frontRaise', 10)], muscles), 'shoulders')).toEqual({ group: 'shoulders', sets: 5, status: 'under' });
+  });
+
+  it('shows shoulders as the cap (side and rear sets) when over (R189)', () => {
+    // 13 side raises, 13 rear flyes and 10 front raises: cap 26 → over; the front raises are not in the figure.
+    const weeks = muscleWeek([block('w1', 'raise', 13), block('w2', 'rearFly', 13), block('w2', 'frontRaise', 10)], muscles);
+    expect(find(weeks, 'shoulders')).toEqual({ group: 'shoulders', sets: 26, status: 'over' });
   });
 });
 
@@ -85,6 +90,12 @@ describe('groupWeekText', () => {
     expect(groupWeekText({ group: 'hamstrings', sets: 4.5, status: 'under' })).toBe('Hamstrings · 4.5 sets · under 8');
     expect(groupWeekText({ group: 'back', sets: 26, status: 'over' })).toBe('Back · 26 sets · over 24');
     expect(groupWeekText({ group: 'biceps', sets: 1, status: 'under' })).toBe('Biceps · 1 set · under 8');
+  });
+
+  it('says what the shoulders figure counts (R189)', () => {
+    expect(groupWeekText({ group: 'shoulders', sets: 6, status: 'under' })).toBe('Shoulders · 6 sets, front delts count half · under 8');
+    expect(groupWeekText({ group: 'shoulders', sets: 12, status: 'in' })).toBe('Shoulders · 12 sets, front delts count half · in range');
+    expect(groupWeekText({ group: 'shoulders', sets: 26, status: 'over' })).toBe('Shoulders · 26 side and rear sets · over 24');
   });
 
   it('has a label for every group', () => {
@@ -169,20 +180,17 @@ describe('trendText', () => {
     expect(trendText({ change: -1.2, perWeek: -0.3 }, 'kg')).toBe('Down 1.2 kg in 4 weeks, about 0.3 kg a week.');
     expect(trendText({ change: 0.5, perWeek: 0.125 }, 'lb')).toBe('Up 0.5 lb in 4 weeks, about 0.1 lb a week.');
     expect(trendText({ change: 0.04, perWeek: 0.01 }, 'kg')).toBe('Steady over 4 weeks.');
-    expect(trendText({ change: -0.09999, perWeek: -0.025 }, 'kg')).toBe('Steady over 4 weeks.');
+    expect(trendText({ change: -0.049, perWeek: -0.012 }, 'kg')).toBe('Steady over 4 weeks.');
     expect(trendText(null, 'kg')).toBe('Log your weight a few times a week to see a trend.');
+  });
+
+  it('decides Steady on the rounded figure shown', () => {
+    // 0.05 shows as 0.1, so it is not steady; 0.09999 shows as 0.1 too.
+    expect(trendText({ change: 0.05, perWeek: 0.0125 }, 'lb')).toBe('Up 0.1 lb in 4 weeks, about 0.01 lb a week.');
+    expect(trendText({ change: -0.09999, perWeek: -0.025 }, 'kg')).toBe('Down 0.1 kg in 4 weeks, about 0.03 kg a week.');
   });
 
   it('never says about 0 a week', () => {
     expect(trendText({ change: -0.15, perWeek: -0.0375 }, 'kg')).toBe('Down 0.2 kg in 4 weeks, about 0.04 kg a week.');
-  });
-});
-
-describe('countPrKinds', () => {
-  it('counts the PR kinds set in a flag value', () => {
-    expect(countPrKinds(0)).toBe(0);
-    expect(countPrKinds(1)).toBe(1);
-    expect(countPrKinds(1 | 4)).toBe(2);
-    expect(countPrKinds(15)).toBe(4);
   });
 });

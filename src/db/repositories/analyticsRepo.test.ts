@@ -18,7 +18,7 @@ const MINUTE = 60_000;
 const TODAY = '2026-10-14';
 const at = (y: number, m: number, d: number, h = 9, min = 0) => new Date(y, m - 1, d, h, min).getTime();
 
-type LoggedSet = { weight?: number; reps?: number; durationS?: number; warmup?: boolean; done?: boolean };
+type LoggedSet = { weight?: number; reps?: number; durationS?: number; warmup?: boolean; type?: 'drop' | 'failure'; done?: boolean };
 
 /** Logs a workout started at `start` with the given exercises and sets; finishes it 50 minutes later unless `active`. */
 function logWorkout(db: Db, start: number, exercises: [string, LoggedSet[]][], opts: { active?: boolean } = {}): string {
@@ -30,6 +30,7 @@ function logWorkout(db: Db, start: number, exercises: [string, LoggedSet[]][], o
       // addExerciseToWorkout adds the first set; the rest are added here.
       const setId = i === 0 ? firstSetId(db, weId) : addSet(db, weId);
       if (s.warmup) updateSet(db, setId, { setType: 'warmup' });
+      if (s.type) updateSet(db, setId, { setType: s.type });
       if (s.done === false) return;
       t += MINUTE;
       tickSet(db, setId, { weight: s.weight ?? null, reps: s.reps ?? null, durationS: s.durationS ?? null, distance: null }, 'lb', t, 'mi');
@@ -80,6 +81,15 @@ describe('analyticsRepo', () => {
     expect(loggedBlocksBetween(db, '2026-10-12', TODAY).map((b) => b.workoutId)).toEqual([tuesday13]);
   });
 
+  it('counts drop and failure sets as hard sets', () => {
+    const fresh = seededDb('us');
+    const id = logWorkout(fresh, at(2026, 10, 13), [
+      [BENCH, [{ weight: 45, reps: 10, warmup: true }, { weight: 100, reps: 5 }, { weight: 80, reps: 8, type: 'drop' }, { weight: 80, reps: 9, type: 'failure' }]],
+    ]);
+    expect(loggedBlocksBetween(fresh, '2026-10-12', TODAY)).toEqual([{ workoutId: id, exerciseId: BENCH, loggingType: 'weighted', hardSets: 3 }]);
+    expect(weekReport(fresh, TODAY, 'lb').muscles.find((g) => g.group === 'chest')!.sets).toBe(3);
+  });
+
   it('lists one date per finished workout since a day', () => {
     expect(workoutDatesSince(db, '2026-10-01')).toEqual(['2026-10-05', '2026-10-11', '2026-10-13']);
   });
@@ -109,6 +119,20 @@ describe('analyticsRepo', () => {
     expect(weekReport(db, TODAY, 'kg').bodyweight!.change).toBeCloseTo(-2 * 0.45359237);
   });
 
+  it('converts mixed kg and lb entries in one trend window to the display unit', () => {
+    const fresh = seededDb('us');
+    // Earlier window: 80 kg and 180 lb → 176.37 and 180 lb. Last 7 days: 175 lb and 79 kg (174.17 lb).
+    addBodyEntry(fresh, 'bodyweight', 80, 'kg', at(2026, 9, 11));
+    addBodyEntry(fresh, 'bodyweight', 180, 'lb', at(2026, 9, 13));
+    addBodyEntry(fresh, 'bodyweight', 175, 'lb', at(2026, 10, 9));
+    addBodyEntry(fresh, 'bodyweight', 79, 'kg', at(2026, 10, 14));
+    const kgToLb = 1 / 0.45359237;
+    const earlier = (80 * kgToLb + 180) / 2;
+    const recent = (175 + 79 * kgToLb) / 2;
+    expect(weekReport(fresh, TODAY, 'lb').bodyweight!.change).toBeCloseTo(recent - earlier);
+    expect(weekReport(fresh, TODAY, 'kg').bodyweight!.change).toBeCloseTo((recent - earlier) * 0.45359237);
+  });
+
   it('caps the average at 8 weeks for a history older than the window', () => {
     const old = seededDb('us');
     logWorkout(old, at(2026, 1, 5), [[BENCH, bench(95, 5, 1)]]);
@@ -121,7 +145,8 @@ describe('analyticsRepo', () => {
     addBodyEntry(db, 'bodyweight', 182, 'lb', at(2026, 10, 6));
     addBodyEntry(db, 'bodyweight', 180, 'lb', at(2026, 10, 9));
     addBodyEntry(db, 'bodyweight', 179, 'lb', at(2026, 10, 9, 20));
-    const { checkIn } = checkInReport(db, TODAY, 'lb', false);
+    const { checkIn, hasHistory } = checkInReport(db, TODAY, 'lb', false);
+    expect(hasHistory).toBe(true);
     expect(checkIn).toEqual({
       weekStart: '2026-10-05',
       sessions: 2,
@@ -144,10 +169,18 @@ describe('analyticsRepo', () => {
   it('has no check-in when last week had no workout and no bodyweight', () => {
     const empty = seededDb('us');
     logWorkout(empty, at(2026, 10, 13), [[BENCH, bench(95, 5, 1)]]);
-    expect(checkInReport(empty, TODAY, 'lb', false).checkIn).toBeNull();
+    // Only this week's workout: a first-timer.
+    expect(checkInReport(empty, TODAY, 'lb', false)).toMatchObject({ checkIn: null, hasHistory: false });
     // Bodyweight alone makes one.
     addBodyEntry(empty, 'bodyweight', 180, 'lb', at(2026, 10, 7));
     expect(checkInReport(empty, TODAY, 'lb', false).checkIn).toMatchObject({ sessions: 0, bodyweightAverage: 180, bodyweightChange: null, volume: 0 });
+  });
+
+  it('says a lifter who skipped last week has history, so the card need not read as their first week', () => {
+    const returning = seededDb('us');
+    logWorkout(returning, at(2026, 9, 21), [[BENCH, bench(95, 5, 1)]]);
+    logWorkout(returning, at(2026, 10, 13), [[BENCH, bench(95, 5, 1)]]);
+    expect(checkInReport(returning, TODAY, 'lb', false)).toMatchObject({ checkIn: null, hasHistory: true });
   });
 
   it('ticks this week’s items from entries dated Monday to today, and the photo flag passed in', () => {

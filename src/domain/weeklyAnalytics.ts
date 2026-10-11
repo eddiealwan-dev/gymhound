@@ -2,8 +2,7 @@
 // sessions, the bodyweight trend and last week's review. Pure: the repository (`analyticsRepo.ts`) reads the rows.
 import type { SeriesPoint } from './chart';
 import { daysBetween, mondayOf, shiftDay } from './dates';
-import { MAJOR_GROUPS, type MajorGroup, WEEKLY_SETS_BAND, weeklySetsByGroup, weeklySetsForBand } from './programVolume';
-import { PR_BIT } from './prs';
+import { MAJOR_GROUPS, type MajorGroup, WEEKLY_SETS_BAND, weeklySetsForBand } from './programVolume';
 import type { LoggingType, Muscle, WeightUnit } from './types';
 
 export const GROUP_LABELS: Record<MajorGroup, string> = {
@@ -20,6 +19,11 @@ export const GROUP_LABELS: Record<MajorGroup, string> = {
 /** One exercise of a finished workout: its hard sets are the done sets that are not warm-ups (R176). */
 export type LoggedBlock = { workoutId: string; exerciseId: string; loggingType: LoggingType; hardSets: number };
 
+/**
+ * A group's week: `sets` is the figure the band checked (R189). For every group but shoulders that is its sets
+ * (`weeklySetsByGroup`); for shoulders it is R93's floor (side + rear + ½ front) when under or in range, and its cap
+ * (side + rear) when over.
+ */
 export type GroupWeek = { group: MajorGroup; sets: number; status: 'under' | 'in' | 'over' };
 
 /** The logging types whose sets count as volume for a muscle (R176): timed holds and cardio don't (as R87). */
@@ -36,8 +40,9 @@ function oneDecimal(n: number): number {
 
 /**
  * Sets per major group for a week of blocks (R176), in `MAJOR_GROUPS` order: each workout is one "day" of
- * `weeklySetsForBand` (primary 1, secondary ½), so the band reads as R93 (with the shoulder floor and cap). `sets` is
- * the group's count, to one decimal; `under` when the floor is below 8, `over` when the cap is above 24, else `in`.
+ * `weeklySetsForBand` (primary 1, secondary ½), so the band reads as R93 (with the shoulder floor and cap). `under`
+ * when the floor is below 8, `over` when the cap is above 24, else `in`; `sets` is the figure checked (R189), to one
+ * decimal.
  */
 export function muscleWeek(
   blocks: readonly LoggedBlock[],
@@ -52,14 +57,13 @@ export function muscleWeek(
     else days.set(b.workoutId, [entry]);
   }
   const week = [...days.values()].map((exercises) => ({ exercises }));
-  const sets = weeklySetsByGroup(week, muscles);
   const band = weeklySetsForBand(week, muscles);
-  return (Object.keys(MAJOR_GROUPS) as MajorGroup[]).map((group) => ({
-    group,
-    sets: oneDecimal(sets[group]),
-    status:
-      band[group].floor < WEEKLY_SETS_BAND.min ? 'under' : band[group].cap > WEEKLY_SETS_BAND.max ? 'over' : 'in',
-  }));
+  return (Object.keys(MAJOR_GROUPS) as MajorGroup[]).map((group) => {
+    const { floor, cap } = band[group];
+    const status: GroupWeek['status'] =
+      floor < WEEKLY_SETS_BAND.min ? 'under' : cap > WEEKLY_SETS_BAND.max ? 'over' : 'in';
+    return { group, sets: oneDecimal(status === 'over' ? cap : floor), status };
+  });
 }
 
 const STATUS_TEXT: Record<GroupWeek['status'], string> = {
@@ -68,9 +72,16 @@ const STATUS_TEXT: Record<GroupWeek['status'], string> = {
   over: `over ${WEEKLY_SETS_BAND.max}`,
 };
 
-/** "Chest · 12 sets · in range", "Hamstrings · 4.5 sets · under 8", "Back · 26 sets · over 24". */
+/**
+ * "Chest · 12 sets · in range", "Hamstrings · 4.5 sets · under 8", "Back · 26 sets · over 24". Shoulders say what
+ * their figure counts (R189): "Shoulders · 6 sets, front delts count half · under 8", "Shoulders · 26 side and rear
+ * sets · over 24".
+ */
 export function groupWeekText(g: GroupWeek): string {
-  return `${GROUP_LABELS[g.group]} · ${g.sets} ${g.sets === 1 ? 'set' : 'sets'} · ${STATUS_TEXT[g.status]}`;
+  const noun = g.sets === 1 ? 'set' : 'sets';
+  let count = `${g.sets} ${noun}`;
+  if (g.group === 'shoulders') count = g.status === 'over' ? `${g.sets} side and rear ${noun}` : `${count}, front delts count half`;
+  return `${GROUP_LABELS[g.group]} · ${count} · ${STATUS_TEXT[g.status]}`;
 }
 
 export type SessionsSummary = { thisWeek: number; lastWeek: number; average: number | null; averageWeeks: number };
@@ -136,23 +147,13 @@ function amount(n: number): number {
 
 /**
  * "Down 1.2 kg in 4 weeks, about 0.3 kg a week.", "Up 0.5 lb in 4 weeks, about 0.1 lb a week.", "Steady over 4
- * weeks." (under 0.1 of the unit), or, with no trend, "Log your weight a few times a week to see a trend."
+ * weeks." (when the change shown rounds to 0), or, with no trend, "Log your weight a few times a week to see a trend."
  */
 export function trendText(t: BodyweightTrend | null, unit: WeightUnit): string {
   if (t === null) return 'Log your weight a few times a week to see a trend.';
-  if (Math.abs(t.change) < 0.1) return 'Steady over 4 weeks.';
+  if (oneDecimal(Math.abs(t.change)) === 0) return 'Steady over 4 weeks.';
   const direction = t.change < 0 ? 'Down' : 'Up';
   return `${direction} ${amount(t.change)} ${unit} in 4 weeks, about ${amount(t.perWeek)} ${unit} a week.`;
-}
-
-/**
- * How many PR kinds a flag value holds: an exercise's `pr_flags` OR-ed over its sets in one workout gives the number
- * of personal bests the finish summary lists for it (one per kind, R105), the count R178 sums.
- */
-export function countPrKinds(flags: number): number {
-  let n = 0;
-  for (const bit of Object.values(PR_BIT)) if ((flags & bit) !== 0) n += 1;
-  return n;
 }
 
 export type CheckIn = {

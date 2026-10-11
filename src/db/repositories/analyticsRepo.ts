@@ -1,6 +1,7 @@
-import { and, asc, between, eq, gte, inArray, min, ne } from 'drizzle-orm';
+import { and, asc, between, eq, gte, inArray, lt, min, ne } from 'drizzle-orm';
 import { dailySeries } from '../../domain/body';
 import { mondayOf, shiftDay } from '../../domain/dates';
+import { countPrKinds } from '../../domain/prs';
 import type { Muscle, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import {
@@ -9,7 +10,6 @@ import {
   type BodyweightTrend,
   type CheckIn,
   type CheckInTodo,
-  countPrKinds,
   countsAsHardSets,
   type GroupWeek,
   type LoggedBlock,
@@ -100,13 +100,14 @@ export function prCountBetween(db: Db, from: string, to: string): number {
     .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
     .where(and(eq(workouts.status, 'finished'), between(workouts.localDate, from, to), ne(sets.prFlags, 0)))
     .all();
-  const flags = new Map<string, number>();
+  const byWorkout = new Map<string, { exerciseId: string; prFlags: number }[]>();
   for (const r of rows) {
-    const key = `${r.workoutId}\u0000${r.exerciseId}`;
-    flags.set(key, (flags.get(key) ?? 0) | r.prFlags);
+    const list = byWorkout.get(r.workoutId);
+    if (list) list.push(r);
+    else byWorkout.set(r.workoutId, [r]);
   }
   let count = 0;
-  for (const f of flags.values()) count += countPrKinds(f);
+  for (const list of byWorkout.values()) count += countPrKinds(list);
   return count;
 }
 
@@ -174,18 +175,38 @@ function hasWaistBetween(db: Db, from: string, to: string): boolean {
   );
 }
 
+/** True when a finished workout is dated before `localDate`. */
+function hasWorkoutBefore(db: Db, localDate: string): boolean {
+  return (
+    db
+      .select({ id: workouts.id })
+      .from(workouts)
+      .where(and(eq(workouts.status, 'finished'), lt(workouts.localDate, localDate)))
+      .limit(1)
+      .get() !== undefined
+  );
+}
+
+export type CheckInReport = {
+  checkIn: CheckIn | null;
+  todo: CheckInTodo;
+  /** A finished workout is dated before this week: with no `checkIn`, the lifter skipped last week, not a first-timer. */
+  hasHistory: boolean;
+};
+
 /**
  * The weekly check-in (R180). `checkIn` reviews the Monday–Sunday before this week: sessions, hard sets (as sets per
  * muscle count them), volume (display unit, whole), personal bests, that week's bodyweight average and its change on
  * the week before, and the groups under or over the band; null when that week has no workout and no bodyweight entry.
  * `todo` says which of this week's three items (Monday to `today`) are done; the photo flag is the caller's.
+ * `hasHistory` is true when a finished workout is dated before this week.
  */
 export function checkInReport(
   db: Db,
   today: string,
   displayUnit: WeightUnit,
   photoTakenThisWeek: boolean,
-): { checkIn: CheckIn | null; todo: CheckInTodo } {
+): CheckInReport {
   const thisMonday = mondayOf(today);
   const weekStart = shiftDay(thisMonday, -7);
   const weekEnd = shiftDay(thisMonday, -1);
@@ -196,11 +217,12 @@ export function checkInReport(
     waist: hasWaistBetween(db, thisMonday, today),
     photo: photoTakenThisWeek,
   };
+  const hasHistory = hasWorkoutBefore(db, thisMonday);
 
   const rows = setsBetween(db, weekStart, weekEnd);
   const sessions = workoutDatesSince(db, weekStart).filter((d) => d <= weekEnd).length;
   const bodyweightAverage = averageOfDays(daily, weekStart, weekEnd);
-  if (sessions === 0 && bodyweightAverage === null) return { checkIn: null, todo };
+  if (sessions === 0 && bodyweightAverage === null) return { checkIn: null, todo, hasHistory };
 
   const blocks = blocksOf(rows);
   const weekBefore = averageOfDays(daily, shiftDay(weekStart, -7), shiftDay(weekStart, -1));
@@ -218,5 +240,6 @@ export function checkInReport(
       over: muscles.filter((g) => g.status === 'over').map((g) => g.group),
     },
     todo,
+    hasHistory,
   };
 }
