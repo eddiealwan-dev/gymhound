@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { Image, Platform, TextInput } from 'react-native';
+import { Image, Platform, Text, TextInput } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -624,10 +624,13 @@ describe('Save as a workout: review round 1', () => {
     expect(announce).toHaveBeenCalledWith('Saved as Push A.');
   });
 
-  it('tells the screen reader the saved workout remembers today\'s sets', () => {
+  it("does not announce that the saved workout remembers today's sets as the screen opens: it is a line read in order", () => {
     jest.mocked(savedWorkoutOf).mockReturnValue({ id: 's1', name: 'Push day' });
-    mount();
-    expect(announce).toHaveBeenCalledWith("Push day remembers today's sets.");
+    const tree = mount();
+    expect(announce).not.toHaveBeenCalledWith("Push day remembers today's sets.");
+    const line = tree.root.findAll((n) => n.type === Text && n.props.children === "Push day remembers today's sets.");
+    expect(line).toHaveLength(1);
+    expect(line[0].props.accessibilityLiveRegion).toBeUndefined();
   });
 
   it('a second tap on Save saves nothing more', () => {
