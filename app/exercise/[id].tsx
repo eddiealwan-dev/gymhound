@@ -2,16 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AccessibilityInfo, BackHandler, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { AccessibilityInfo, BackHandler, Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
 import { getExercise, listExercises } from '../../src/db/repositories/exercisesRepo';
 import { normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
 import { EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
 import type { LoggingType, Muscle } from '../../src/domain/types';
+import { deleteExercisePhotoFile } from '../../src/platform/exercisePhotoFiles';
 import { useCreatedExercise } from '../../src/state/createdExercise';
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
+import { OwnPhotos } from '../../src/ui/OwnPhotos';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display } from '../../src/ui/Text';
@@ -95,8 +97,9 @@ type EditorProps = {
 
 /**
  * The custom exercise editor (§8.7, R108): a name, primary and secondary muscles (the three delts apart), one
- * equipment (none chosen for a new one, R128) and one logging type. Once the exercise is used anywhere its logging type
- * is shown, not offered. What stops Save is listed over it once Save is tapped, and said to the screen reader.
+ * equipment (none chosen for a new one, R128) and one logging type, then (once saved, on a phone) your own start and
+ * end photos (R111), kept as soon as they are taken, apart from Save. Once the exercise is used anywhere its logging
+ * type is shown, not offered. What stops Save is listed over it once Save is tapped, and said to the screen reader.
  * **Delete exercise** archives a used exercise and deletes an unused one (R109); an archived one does not offer it. Closing with changes not saved asks "Discard changes?" first, by the close button, the Android back button or
  * (held while there are changes) the swipe down.
  */
@@ -215,8 +218,8 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
 
   const remove = () => {
     if (exerciseId === null) return;
-    // Task 7 (R111): pass the function that deletes each own photo file (`deleteExercisePhotoFile`) as the third argument.
-    deleteCustomExercise(db, exerciseId);
+    // An unused exercise goes with its own photos: their files are deleted once the rows are (R109, R111).
+    deleteCustomExercise(db, exerciseId, (names) => names.forEach(deleteExercisePhotoFile));
     done.current = true;
     bumpData();
     setAskDelete(false);
@@ -297,6 +300,12 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
             </View>
           )}
         </Field>
+        {exerciseId !== null && Platform.OS !== 'web' ? (
+          // Saved at once, apart from Save: a photo is a file, not part of the draft. A new exercise has none until saved.
+          <Field label="Photos">
+            <OwnPhotos exerciseId={exerciseId} />
+          </Field>
+        ) : null}
       </View>
       <View style={{ marginTop: 32, gap: 16 }}>
         {problems.length > 0 ? (

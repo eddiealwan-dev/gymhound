@@ -1,13 +1,15 @@
 import { router, Stack } from 'expo-router';
-import { AccessibilityInfo, BackHandler, Text, TextInput } from 'react-native';
+import { AccessibilityInfo, BackHandler, Platform, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import ExerciseEditorScreen from '../../app/exercise/[id]';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../db/repositories/customExercisesRepo';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
+import { deleteExercisePhotoFile } from '../platform/exercisePhotoFiles';
 import { bumpData } from '../state/dataVersion';
 import { useCreatedExercise } from '../state/createdExercise';
 import { Button } from './Button';
+import { OwnPhotos } from './OwnPhotos';
 import { ConfirmSheet } from './Sheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,6 +36,9 @@ jest.mock('../db/repositories/customExercisesRepo', () => ({
   isExerciseUsed: jest.fn(() => false),
   isExerciseArchived: jest.fn(() => false),
 }));
+jest.mock('../platform/exercisePhotoFiles', () => ({ deleteExercisePhotoFile: jest.fn() }));
+// Its own tests cover the photo slots; here, which exercise they are shown for is what the tests read.
+jest.mock('./OwnPhotos', () => ({ OwnPhotos: jest.fn(() => null) }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -54,6 +59,8 @@ const MINE: ExerciseDetail = {
 };
 const BENCH: ExerciseDetail = { ...MINE, id: 'barbell-bench-press', name: 'Barbell bench press', primaryMuscles: ['chest'], isCustom: false };
 const mockExercises: ExerciseDetail[] = [BENCH, MINE];
+
+const originalOS = Platform.OS;
 
 const mounted: ReactTestRenderer[] = [];
 function mount(): ReactTestRenderer {
@@ -99,6 +106,7 @@ beforeEach(() => {
   jest.mocked(Stack.Screen).mockClear();
 });
 afterEach(() => {
+  Platform.OS = originalOS;
   for (const tree of mounted.splice(0)) act(() => tree.unmount());
   jest.useRealTimers();
 });
@@ -240,7 +248,7 @@ describe('Delete exercise (R109)', () => {
       cancelLabel: 'Keep',
     });
     act(() => ask.props.onConfirm());
-    expect(deleteCustomExercise).toHaveBeenCalledWith('db', 'mine');
+    expect(deleteCustomExercise).toHaveBeenCalledWith('db', 'mine', expect.any(Function));
     expect(bumpData).toHaveBeenCalled();
     act(() => void jest.runAllTimers());
     expect(router.back).toHaveBeenCalledTimes(1);
@@ -264,6 +272,50 @@ describe('Delete exercise (R109)', () => {
     act(() => ask.props.onCancel());
     expect(sheet(tree, 'Delete Landmine press?').props.visible).toBe(false);
     expect(deleteCustomExercise).not.toHaveBeenCalled();
+  });
+});
+
+describe('Delete exercise: your own photos (R109, R111)', () => {
+  it('hands the repository the function that deletes each photo file', () => {
+    mockParams = { id: 'mine' };
+    jest.mocked(deleteExercisePhotoFile).mockClear();
+    const tree = mount();
+    tap(tree, 'Delete exercise');
+    act(() => sheet(tree, 'Delete Landmine press?').props.onConfirm());
+
+    const removeFiles = jest.mocked(deleteCustomExercise).mock.calls[0][2]!;
+    expect(deleteExercisePhotoFile).not.toHaveBeenCalled();
+    removeFiles(['mine-start-1.jpg', 'mine-end-1.jpg']);
+    expect(jest.mocked(deleteExercisePhotoFile).mock.calls.map((c) => c[0])).toEqual(['mine-start-1.jpg', 'mine-end-1.jpg']);
+  });
+});
+
+describe('Photos (R111)', () => {
+  const photosShownFor = () => jest.mocked(OwnPhotos).mock.calls.map((c) => c[0].exerciseId);
+  const photosHeading = (tree: ReactTestRenderer) => shows(tree, 'Photos');
+
+  beforeEach(() => jest.mocked(OwnPhotos).mockClear());
+
+  it('shows your own photos for an exercise of yours', () => {
+    mockParams = { id: 'mine' };
+    const tree = mount();
+    expect(photosHeading(tree)).toBe(true);
+    expect(new Set(photosShownFor())).toEqual(new Set(['mine']));
+  });
+
+  it('has none while the exercise is new: there is nothing to keep them with yet', () => {
+    mockParams = { id: 'new' };
+    const tree = mount();
+    expect(photosHeading(tree)).toBe(false);
+    expect(OwnPhotos).not.toHaveBeenCalled();
+  });
+
+  it('has none on web: photos are a phone feature', () => {
+    Platform.OS = 'web';
+    mockParams = { id: 'mine' };
+    const tree = mount();
+    expect(photosHeading(tree)).toBe(false);
+    expect(OwnPhotos).not.toHaveBeenCalled();
   });
 });
 
