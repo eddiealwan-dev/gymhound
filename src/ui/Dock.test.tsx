@@ -12,7 +12,21 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const ROUTES = ['index', 'history/index', 'stats', 'fuel', 'settings', 'routines/index', 'saved/[id]', 'body/[kind]'].map((name) => ({
+const ROUTES = [
+  'index',
+  'history/index',
+  'stats',
+  'fuel',
+  'settings',
+  'routines/index',
+  'saved/[id]',
+  'body/[kind]',
+  'history/[id]',
+  'history/edit/[id]',
+  'lifts',
+  'lift/[id]',
+  'photos',
+].map((name) => ({
   key: `${name}-key`,
   name,
   params: undefined,
@@ -55,6 +69,21 @@ describe('the dock', () => {
     expect(selected(tree)).toEqual(['Stats']);
     act(() => tab(tree, 'Stats').props.onPress());
     expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  // Phase 6 (R172): a workout and its editor are opened from History; the lifts and the photos from Stats.
+  it.each(['history/[id]', 'history/edit/[id]'])('highlights History on %s', (route) => {
+    expect(selected(mountOn(route))).toEqual(['History']);
+  });
+
+  it.each(['lifts', 'lift/[id]', 'photos'])('highlights Stats on %s', (route) => {
+    expect(selected(mountOn(route))).toEqual(['Stats']);
+  });
+
+  it('History on a workout goes back to History', () => {
+    const tree = mountOn('history/[id]');
+    act(() => tab(tree, 'History').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledWith('history/index', undefined);
   });
 
   it.each(['settings', 'routines/index', 'saved/[id]'])('highlights nothing on %s', (route) => {

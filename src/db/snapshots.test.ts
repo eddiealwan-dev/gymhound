@@ -164,6 +164,28 @@ function liveAt0006(): { db: Db; close(): void } {
   return handle;
 }
 
+/**
+ * A live database as phase 5 left it: migrations 0000 to 0007 (no `progress_photos`), seeded, with one finished Push A
+ * and a water entry. Returns the open handle.
+ */
+function liveAt0007(): { db: Db; close(): void } {
+  const source = path.resolve(__dirname, 'migrations');
+  const folder = path.join(dir, 'migrations-to-0007');
+  fs.mkdirSync(path.join(folder, 'meta'), { recursive: true });
+  const journal = JSON.parse(fs.readFileSync(path.join(source, 'meta', '_journal.json'), 'utf8')) as { entries: { idx: number; tag: string }[] };
+  journal.entries = journal.entries.filter((entry) => entry.idx <= 7);
+  for (const { tag } of journal.entries) fs.copyFileSync(path.join(source, `${tag}.sql`), path.join(folder, `${tag}.sql`));
+  fs.writeFileSync(path.join(folder, 'meta', '_journal.json'), JSON.stringify(journal));
+
+  const handle = track(openFileDb(liveFile));
+  migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
+  ensureSettings(handle.db, 'us');
+  runSeed(handle.db, NOW);
+  finishOne(handle.db, NOW);
+  handle.db.run(sql`INSERT INTO water_log (id, local_date, logged_at, amount_ml) VALUES ('wl1', '2026-10-09', ${NOW}, 500)`);
+  return handle;
+}
+
 /** Startup dependencies over the temp folder. `closed` counts closes so tests can check no handle leaks. */
 function makeDeps(overrides: Partial<StartupDeps> = {}) {
   const files = nodeSnapshotFiles(dir, liveFile);
@@ -502,7 +524,7 @@ describe('startDatabase', () => {
     expect(finishedIds(result.db)).toEqual(ids);
   });
 
-  it('restores a snapshot taken before migrations 0002 to 0007, and migrates it forward with the finished workout intact (F11)', async () => {
+  it('restores a snapshot taken before migrations 0002 to 0008, and migrates it forward with the finished workout intact (F11)', async () => {
     const { deps, files } = makeDeps();
     const old = livePre0002();
     expect(appliedMigrations(old.db)).toBe(2);
@@ -516,10 +538,10 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(8);
+    expect(appliedMigrations(result.db)).toBe(9);
     expect(tableNames(result.db)).toContain('exercise_prefs');
     expect(tableNames(result.db)).toEqual(
-      expect.arrayContaining(['measurements', 'exercise_photos', 'saved_workouts', 'saved_workout_exercises', 'water_log']),
+      expect.arrayContaining(['measurements', 'exercise_photos', 'saved_workouts', 'saved_workout_exercises', 'water_log', 'progress_photos']),
     );
     expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
     expect(columnNames(result.db, 'workout_exercises')).toContain('mark');
@@ -544,7 +566,7 @@ describe('startDatabase', () => {
     ]);
   });
 
-  it('restores a phase 4 snapshot (at 0006), migrates it to 0007, and ensureSettings adds no water goal (R132, R150)', async () => {
+  it('restores a phase 4 snapshot (at 0006), migrates it to 0008, and ensureSettings adds no water goal (R132, R150)', async () => {
     const { deps, files } = makeDeps();
     const old = liveAt0006();
     expect(appliedMigrations(old.db)).toBe(7);
@@ -557,12 +579,32 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(8);
+    expect(appliedMigrations(result.db)).toBe(9);
     expect(tableNames(result.db)).toContain('water_log');
     expect(result.db.select().from(schema.waterLog).all()).toEqual([]);
     expect(finishedIds(result.db)).toEqual(ids);
     ensureSettings(result.db, 'us');
     expect(getSettings(result.db)).toMatchObject({ waterGoalMl: null, restSeconds: 90 });
+  });
+
+  it('restores a phase 5 snapshot (at 0007) and migrates it to 0008: its data is kept and progress_photos starts empty (R162)', async () => {
+    const { deps, files } = makeDeps();
+    const old = liveAt0007();
+    expect(appliedMigrations(old.db)).toBe(8);
+    expect(tableNames(old.db)).not.toContain('progress_photos');
+    const ids = finishedIds(old.db);
+    const name = writeSnapshot(old.db, files, NOW + 2 * HOUR);
+    old.close();
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(name);
+    expect(appliedMigrations(result.db)).toBe(9);
+    expect(tableNames(result.db)).toContain('progress_photos');
+    expect(result.db.select().from(schema.progressPhotos).all()).toEqual([]);
+    expect(result.db.select().from(schema.waterLog).all()).toEqual([expect.objectContaining({ id: 'wl1', amountMl: 500 })]);
+    expect(finishedIds(result.db)).toEqual(ids);
   });
 
   it('restores a version 1 snapshot from before 0002; migrated and seeded to version 2, it keeps its history and legacy ids', async () => {

@@ -15,8 +15,8 @@ type Item = { route: string; label: string; icon: keyof typeof Ionicons.glyphMap
  */
 const ITEMS: Item[] = [
   { route: 'index', label: 'Train', icon: 'barbell-outline' },
-  { route: 'history/index', label: 'History', icon: 'time-outline' },
-  { route: 'stats', label: 'Stats', icon: 'stats-chart-outline', within: ['body/[kind]'] },
+  { route: 'history/index', label: 'History', icon: 'time-outline', within: ['history/[id]', 'history/edit/[id]'] },
+  { route: 'stats', label: 'Stats', icon: 'stats-chart-outline', within: ['body/[kind]', 'lifts', 'lift/[id]', 'photos'] },
   { route: 'fuel', label: 'Fuel', icon: 'nutrition-outline' },
 ];
 

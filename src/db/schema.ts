@@ -321,3 +321,17 @@ export const waterLog = sqliteTable(
   },
   (t) => [index('water_log_local_date_idx').on(t.localDate)],
 );
+
+// Progress photos (R181): the file name only, in the documents folder's `progress-photos/`, resolved each time. Free and
+// phone only; not in snapshots. Added in 0008 (R162).
+export const progressPhotos = sqliteTable(
+  'progress_photos',
+  {
+    id: text('id').primaryKey(),
+    // The day it was taken.
+    localDate: text('local_date').notNull(),
+    takenAt: integer('taken_at').notNull(),
+    fileName: text('file_name').notNull(),
+  },
+  (t) => [index('progress_photos_local_date_idx').on(t.localDate)],
+);
