@@ -1,3 +1,4 @@
+import { StyleSheet, Switch, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
@@ -129,5 +130,37 @@ describe('Settings: the rest timer length (spec 8.11, F7)', () => {
     expect(bumpData).toHaveBeenCalledTimes(1);
     act(() => tree.update(<Settings />));
     expect(selected(tree)).toEqual(['1:30']);
+  });
+});
+
+describe('Settings: the page (design pass)', () => {
+  it('each group has an upper-case muted heading the screen reader hears as a heading', () => {
+    const tree = mount();
+
+    for (const title of ['Appearance', 'Units', 'Bar', 'Rest timer', 'Backups', 'Export']) {
+      const heading = tree.root.findAll((n) => n.type === Text && n.props.children === title);
+      expect(heading).toHaveLength(1);
+      expect(heading[0].props.accessibilityRole).toBe('header');
+      expect(StyleSheet.flatten(heading[0].props.style)).toMatchObject({ textTransform: 'uppercase', fontSize: 14, color: '#a39d90' });
+    }
+    // A field's own name stays a plain line in the text colour.
+    const weight = tree.root.findAll((n) => n.type === Text && n.props.children === 'Weight')[0];
+    expect(weight.props.accessibilityRole).toBeUndefined();
+    expect(StyleSheet.flatten(weight.props.style)).toMatchObject({ color: '#f1ece2' });
+  });
+
+  it("the bar's purpose is a muted helper line", () => {
+    const tree = mount();
+
+    const helper = tree.root.findAll((n) => n.type === Text && n.props.children === 'Used by the plate calculator.')[0];
+    expect(StyleSheet.flatten(helper.props.style)).toMatchObject({ color: '#a39d90' });
+  });
+
+  it('the bell switch keeps a visible track when off: borderStrong, not border', () => {
+    const tree = mount();
+
+    const toggle = tree.root.findByType(Switch);
+    expect(toggle.props.trackColor).toEqual({ false: '#736c60', true: '#f1ece2' });
+    expect(toggle.props.ios_backgroundColor).toBe('#736c60');
   });
 });

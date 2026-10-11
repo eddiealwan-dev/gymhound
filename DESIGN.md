@@ -87,7 +87,7 @@ spacing:
   sm: "8px"
   md: "12px"
   gutter: "16px"
-  section: "24px"
+  section: "32px"
   block: "28px"
 components:
   button-primary:
@@ -176,7 +176,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row, entered set fields and the selected bar choice.
 - **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars.
 - **Seam** (border-dark / border-light): card, sheet and dock edges, the set-number chip, regular secondary buttons.
-- **Strong Seam** (border-strong-dark / border-strong-light): set-field edges and compact pill outlines only. It holds 3:1 on bg, surface and surfaceRaised.
+- **Strong Seam** (border-strong-dark / border-strong-light): set-field edges, compact pill outlines and the off track of a switch only: the edges a control needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
 - **Chalk / Ink** (text-dark / text-light): text, primary-button fill, tick fill, the progress line, the superset bar, the selected segment.
 - **Worn Chalk / Worn Ink** (text-muted-dark / text-muted-light): secondary lines, labels, the rule line, previous results, open tick rings.
 - **Ghost Chalk / Ghost Ink** (text-faint-dark / text-faint-light): suggested values in empty set fields only. It holds 3:1 on bg and surface.
@@ -203,7 +203,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, upper case, muted; `Label` in src/ui/Text.tsx, read as a heading): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Routines (PREMADE).
+- **Label** (Inter 600, 14px, 0.5 tracking, upper case, muted; `Label` in src/ui/Text.tsx, read as a heading): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings (APPEARANCE, UNITS, BAR, REST TIMER, BACKUPS, EXPORT) and Routines (PREMADE).
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
 
 ### Named Rules
@@ -215,7 +215,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 
 A single centred column, 16px gutters, capped at 512px, on every screen including sheets, the header, the dock and the docked bars. Pages scroll; the header and dock stay. On Train, History, Stats, Fuel and Settings a flexible spacer of at least 32px pins the GruntHound footer to the bottom of a short page and lets it follow a long one.
 
-Spacing runs on 4px steps: 4 inside tight pairs (a title and its subtitle, a label and its value), 8 between items of a group, 12 between the two stat cards and between a row's text and its action, 16 between cards and inside cards, 24 between Settings sections, 28 between exercise blocks in a session. Interactive rows are at least 44pt tall; a compact pill is 36pt tall with a 4pt hit slop so its target is still 44pt.
+Spacing runs on 4px steps: 4 inside tight pairs (a title and its subtitle, a label and its value), 8 between items of a group, 12 between the two stat cards and between a row's text and its action, 16 between cards, inside cards and between the fields of a Settings group, 24 under a screen title, 32 between Settings groups, 28 between exercise blocks in a session. A field's name sits 8 over its control, so it is closer to its own control than to the one above it. Interactive rows are at least 44pt tall; a compact pill is 36pt tall with a 4pt hit slop so its target is still 44pt.
 
 Wrapping is structural: when the phone's text grows, a row's trailing group drops to its own line as a unit and then wraps among itself, rather than squeezing the leading text.
 
@@ -251,6 +251,12 @@ Plain, confident and quiet about it.
 ### Segmented control
 A well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments; the chosen segment is filled with the text colour and labelled in the background colour. Used for Appearance, units, bell sound, bell volume and (wrapping in rows of three) rest length.
 
+### Switch
+The platform switch, themed: on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too), so the off state is as visible as the on state in both themes. Its row is 44pt tall with the setting's name on the left.
+
+### Settings groups
+Each group is an upper-case Label heading 8pt over its items; items sit 16pt apart; a field is its name 8pt over its control; groups are 32pt apart, the first 24pt under the title. Helper lines ("Used by the plate calculator.") are muted.
+
 ### Inputs / Fields
 - **Suggested set field:** no fill, 1px dashed Strong Seam edge, Ghost text in Barlow 600 at 20px. A suggestion never looks like a value.
 - **Entered set field:** surface fill, 1px solid Strong Seam edge, text in Barlow 800 at 20px.
@@ -281,7 +287,7 @@ Under the set that started it: a surface panel with a Strong Seam edge, a REST l
 ### Don't:
 - **Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.
 - **Don't** add shadows, gradients or glass; move a tonal step instead.
-- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges and compact pill outlines.
+- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines and a switch's off track.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
 - **Don't** add motivational quotes, flames or skulls.
 - **Don't** truncate a row's text at large text sizes when it can wrap.
