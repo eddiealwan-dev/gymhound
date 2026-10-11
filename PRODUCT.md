@@ -23,7 +23,7 @@ Per-exercise "Something off" (Rough sleep, Sick, Short on food, Pain, Cutting) m
 - Used on the gym floor, between sets, often one-handed and with sweaty hands; rests are timed, and the bell and lock-screen notification matter when the phone is put away.
 - Music is usually playing; the bell ducks it and never stops it.
 - Runs in Expo Go today; a native build (Live Activity, Health, a music player, cloud copy of backups) is phase 7. The web build is for development only and is not shipped.
-- Data is SQLite on the phone, with a snapshot after every finish and restore on a failed migration; a workouts CSV can be shared.
+- Data is SQLite on the phone, with a snapshot after every finish and restore on a failed migration; a workouts CSV and a food CSV can be shared.
 
 ## Capabilities and Constraints
 
@@ -31,7 +31,8 @@ Per-exercise "Something off" (Rough sleep, Sick, Short on food, Pain, Cutting) m
 - The rule (spec §7.3) with per-exercise Something off, today's weight override, a finish summary of next time's weights, and Up next showing last time's outcome.
 - Units: lb or kg (and mi or km); a logged entry keeps the unit it was logged in; bar and plates per unit for the plate calculator and barbell rounding.
 - Rest timer per exercise with −15s, +15s and Skip; the bell and its volume are settings.
-- Pro (later): more than one user routine, and Fuel (food, macros). Everything else is free.
+- GymHound Pro (built in phase 5; live store purchases come with the native build in phase 7): more than one routine of your own, and Fuel — about 300 bundled foods from USDA FoodData Central, quick add, your own foods, training-day and rest-day targets, a two-number summary (Calories left, Protein left), macro bars, trends over 1M / 3M / 1Y, and the Short on food offer in the session. Everything else is free, including water with your own daily goal (on the Fuel tab) and the food CSV. A lapse deletes nothing: Fuel locks with its data kept. In Expo Go and every build until phase 7 there is no store; a developer switch turns Pro on for testing.
+- Data sources: exercises from free-exercise-db (the Unlicense); foods from USDA FoodData Central SR Legacy (CC0 1.0).
 - Planned phases: routines editor and eight premade programs (3), library with photos, custom exercises, plates, bodyweight and measurements, PRs (4), Pro and Fuel (5), History, Stats and progress tools (6), native build (7), watch apps (8).
 - Undecided: App Store launch timing and pricing details.
 
