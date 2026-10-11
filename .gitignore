@@ -37,3 +37,6 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# exercise library build: downloaded free-exercise-db photos (scripts/build-library.mjs)
+scripts/.cache/
