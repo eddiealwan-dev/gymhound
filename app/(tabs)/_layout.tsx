@@ -3,8 +3,8 @@ import { Dock } from '../../src/ui/Dock';
 import { Header } from '../../src/ui/Header';
 
 /**
- * The shell: header above, dock below, a tab per screen. Settings, Routines and a routine's detail open inside it, so
- * both stay. Back follows the tabs visited, so Close on Settings returns to the tab it was opened from.
+ * The shell: header above, dock below, a tab per screen. Settings, Routines, a routine's detail and the routine
+ * editor open inside it, so both stay. Back follows the tabs visited, so Close on Settings returns to the tab it was opened from.
  */
 export default function TabsLayout() {
   return (
@@ -12,6 +12,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="routines/index" options={{ href: null }} />
       <Tabs.Screen name="routines/[id]" options={{ href: null }} />
+      <Tabs.Screen name="routines/edit/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
