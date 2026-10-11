@@ -1000,3 +1000,20 @@ The owner picked the seven highest-impact items from the UX review and approved 
     - On iOS every announcement is said half a second later, so VoiceOver reading the tapped tick again does not cut it off.
     - The countdown reads as a duration: "Rest, 1 minute 45 seconds left". The bottom bar's countdown does too.
   - The fallback bottom bar (R41) gets +15s and the same pills.
+
+### 18.7 Phase 2: Something off and the rule (2026-10-11)
+The owner asked for phase 2 to start overnight without a review stop, so the choices below are Claude's rulings (R60–R66), for the owner to check in the morning. The plan is `docs/superpowers/plans/2026-10-11-gymhound-phase-2.md`. Where this section and an earlier one disagree, this section wins.
+
+- **Something off, per exercise (R60):**
+  - Each exercise in a session can be flagged from its ⋯ menu: **Something off** opens a sheet with Rough sleep, Sick, Short on food, Pain and Cutting, plus **Nothing off** to clear it. It is stored as `workout_exercises.mark` (null = nothing off).
+  - A flagged exercise shows a muted line under its name, "Something off: {reason}".
+  - `workouts.day_mark` stays in the database but the app no longer reads or writes it. The CSV keeps its `day_mark` column and fills it from the exercise's mark ("normal" when nothing is off).
+  - The Short on food and Rough sleep one-tap offers wait for Fuel (phase 5) and Health (phase 7).
+- **The rule (§7.3) runs at finish, per exercise.** "Marked day" means the exercise is flagged.
+  - The working weight keeps the unit of the set it came from; the next weight uses that unit, with the increment converted by the gym convention (R62). `planned_weight` keeps its own unit.
+  - `routine_exercises.next_weight` is written from the workout exercise that just finished.
+- **The rule line and today's read (§7.4)** show under each exercise's name, muted. On a flagged exercise, "Today is marked, so {planned} holds." reads "{Reason} today, so {planned} holds." (R61), for example "Rough sleep today, so 185 lb holds."
+- **Override today's weight** (⋯ menu): a sheet with one number field in the display unit, **Save**, **Clear** and **Cancel**. It changes today's target only and is never written back to the rule.
+- **Finish summary (§8.5):** one line per exercise with a rule, each starting with the exercise's name: "Bench press — next time 185 lb ↑", "Bench press — holds at 180 lb · Rough sleep", "Bench press — holds at 180 lb" (R64).
+- **Up next (§8.3, §18.6):** each row's right side becomes "{scheme} · {load}" plus last time's outcome: " · ↑ 5 lb", " · held · Rough sleep" or " · held". Loads show in the display unit through `planInUnit` (R63; closes the §18.6 deferral).
+- Not in phase 2: History, Stats and charts (phase 6), stall labels (phase 6), PR flags (phase 4), recompute after history edits (phase 6).
