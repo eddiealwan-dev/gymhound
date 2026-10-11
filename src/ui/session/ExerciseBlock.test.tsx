@@ -281,80 +281,41 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(tickButton.props.style({ pressed: false })).toMatchObject({ opacity: 1, borderStyle: 'dashed' });
   });
 
-  it('tapping it focuses the weight field, says "Add a weight to tick", gives a warning haptic, and ticks nothing', async () => {
+  it('tapping it says "Add a weight to tick", gives a warning buzz, marks the weight field, and ticks nothing (R99)', async () => {
     const tree = mount(bench([set('s0', 0)]));
-    const focus = focusOf(tree, 'LB, set 1');
 
     await tapTick(tree, 'Set 1 done');
 
-    expect(focus).toHaveBeenCalledTimes(1);
     expect(tick).not.toHaveBeenCalled();
-    // A not-ready tap keeps the keyboard up, so the focused field can be typed in.
-    expect(dismiss).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain('Add a weight to tick');
-    // A heavy tap, distinct from the tick's light one (Round 4, A3).
-    expect(Haptics.impactAsync).toHaveBeenCalledTimes(1);
-    expect(Haptics.impactAsync).toHaveBeenCalledWith('heavy');
-    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+    // The warning notification, distinct from the tick's light tap.
+    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+    // The weight field gets the needed look; the reps field does not.
+    expect(StyleSheet.flatten(byLabel(tree, 'LB, set 1').props.style)).toMatchObject({ borderWidth: 2, borderColor: '#f1ece2' });
+    expect(StyleSheet.flatten(byLabel(tree, 'REPS, set 1').props.style)).toMatchObject({ borderWidth: 1 });
   });
 
-  describe('on the phone (Round 4, A3)', () => {
+  describe('on the phone (Rounds 4 to 6, R99)', () => {
     /** Each field's own focus mock, by its label. */
     const focusSpies = (tree: ReactTestRenderer, labels: string[]) => Object.fromEntries(labels.map((label) => [label, focusOf(tree, label)]));
 
-    it('buzzes before it focuses: the keyboard coming up can swallow a haptic', async () => {
+    it('focuses no field and leaves the keyboard alone: the keyboard coming up swallowed the buzz', async () => {
       const tree = mount(bench([set('s0', 0)]));
-      const { 'LB, set 1': focus } = focusSpies(tree, ['LB, set 1']);
-
-      await tapTick(tree, 'Set 1 done');
-
-      expect(focus).toHaveBeenCalledTimes(1);
-      expect(jest.mocked(Haptics.impactAsync).mock.invocationCallOrder[0]).toBeLessThan(focus.mock.invocationCallOrder[0]);
-    });
-
-    it('focuses the weight and never the reps when the reps have a suggestion (a routine set with no weight)', async () => {
-      const ex = { ...bench([set('s0', 0)]), rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' } } as WorkoutExerciseView;
-      const tree = mount(ex);
-      expect(byLabel(tree, 'REPS, set 1').props.placeholder).toBe('8');
       const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
 
       await tapTick(tree, 'Set 1 done');
 
-      expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
+      expect(focus['LB, set 1']).not.toHaveBeenCalled();
       expect(focus['REPS, set 1']).not.toHaveBeenCalled();
-      expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(dismiss).not.toHaveBeenCalled();
     });
 
-    it('focuses once the line has drawn, so nothing the tap re-renders can move the focus on', async () => {
+    it('buzzes before the tap changes anything on screen', async () => {
       const tree = mount(bench([set('s0', 0)]));
-      const lineShownAtFocus: boolean[] = [];
-      focusOf(tree, 'LB, set 1').mockImplementation(() => void lineShownAtFocus.push(shownText(tree).includes('Add a weight to tick')));
-
-      await tapTick(tree, 'Set 1 done');
-
-      expect(lineShownAtFocus).toEqual([true]);
-    });
-
-    it('with the reps typed and still focused, the tap still lands on the weight, after the reps are saved', async () => {
-      const tree = mount(bench([set('s0', 0)]));
-      act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('5'));
-      const focus = focusSpies(tree, ['LB, set 1', 'REPS, set 1']);
-      // What the phone does when another field takes focus: the reps field blurs, and its blur saves.
-      focus['LB, set 1'].mockImplementation(() => byLabel(tree, 'REPS, set 1').props.onBlur());
-
-      await tapTick(tree, 'Set 1 done');
-
-      expect(focus['LB, set 1']).toHaveBeenCalledTimes(1);
-      expect(focus['REPS, set 1']).not.toHaveBeenCalled();
-      expect(commitSetField).toHaveBeenCalledWith('db', 's0', { reps: 5 });
-      expect(shownText(tree)).toContain('Add a weight to tick');
-    });
-
-    it('the buzz comes first, before the tap changes anything on screen (Round 5, R82)', async () => {
-      const tree = mount(bench([set('s0', 0)]));
-      const focus = focusOf(tree, 'LB, set 1');
       const shownAtBuzz: string[][] = [];
-      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => {
+      jest.mocked(Haptics.notificationAsync).mockImplementationOnce(() => {
         shownAtBuzz.push(shownText(tree));
         return Promise.resolve();
       });
@@ -363,55 +324,47 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
       expect(shownAtBuzz).toHaveLength(1);
       expect(shownAtBuzz[0]).not.toContain('Add a weight to tick');
-      expect(focus).toHaveBeenCalledTimes(1);
-    });
-
-    it('the keyboard waits for the buzz: the field is focused only once the haptic has played (Round 5, R82)', async () => {
-      const tree = mount(bench([set('s0', 0)]));
-      const focus = focusOf(tree, 'LB, set 1');
-      let played!: () => void;
-      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => new Promise<void>((resolve) => (played = resolve)));
-
-      await tapTick(tree, 'Set 1 done');
-
-      // The line and the announcement don't wait; the keyboard does.
       expect(shownText(tree)).toContain('Add a weight to tick');
-      expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
-      expect(focus).not.toHaveBeenCalled();
-
-      await act(async () => played());
-
-      expect(focus).toHaveBeenCalledTimes(1);
     });
 
-    it('a phone with no haptics still focuses the field', async () => {
+    it('a phone with no haptics still shows the line', async () => {
       const tree = mount(bench([set('s0', 0)]));
-      const focus = focusOf(tree, 'LB, set 1');
-      jest.mocked(Haptics.impactAsync).mockImplementationOnce(() => Promise.reject(new Error('no haptics')));
+      jest.mocked(Haptics.notificationAsync).mockImplementationOnce(() => Promise.reject(new Error('no haptics')));
 
       await tapTick(tree, 'Set 1 done');
 
-      expect(focus).toHaveBeenCalledTimes(1);
+      expect(shownText(tree)).toContain('Add a weight to tick');
     });
 
-    it('the line stays through what the phone does next: the field takes focus and the row draws again (Round 5)', async () => {
+    it('the line stays when the person then taps the field: a focus, a change event with the same text, and a fresh render', async () => {
       const ex = bench([set('s0', 0)]);
       const tree = mount(ex);
-      // The field's own focus handler, if it has one, then a fresh render of the block, as the keyboard coming up does.
-      focusOf(tree, 'LB, set 1').mockImplementation(() => {
+      await tapTick(tree, 'Set 1 done');
+
+      act(() => {
         byLabel(tree, 'LB, set 1').props.onFocus?.({ nativeEvent: {} });
+        byLabel(tree, 'LB, set 1').props.onChangeText('');
         tree.update(block(ex));
       });
 
+      expect(shownText(tree)).toContain('Add a weight to tick');
+    });
+
+    it('with the reps typed and still focused, the tap marks the weight and keeps the typed reps', async () => {
+      const tree = mount(bench([set('s0', 0)]));
+      act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('5'));
+
       await tapTick(tree, 'Set 1 done');
 
+      expect(byLabel(tree, 'REPS, set 1').props.value).toBe('5');
       expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(StyleSheet.flatten(byLabel(tree, 'LB, set 1').props.style)).toMatchObject({ borderWidth: 2 });
     });
 
     it.each([
       { what: 'the missing field', type: null, line: 'Add a weight to tick' },
       { what: 'a number to check', type: 'abc', line: 'Check this number' },
-    ])("draws the line for $what above the row's inputs, where the keyboard can't cover it (Round 5, R82)", async ({ type, line }) => {
+    ])("draws the line for $what above the row's inputs, in the text colour at body size (R82, R99)", async ({ type, line }) => {
       const tree = mount(bench([set('s0', 0)]));
       if (type !== null) act(() => byLabel(tree, 'LB, set 1').props.onChangeText(type));
 
@@ -423,7 +376,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       expect(drawn.indexOf(text)).toBeGreaterThan(-1);
       expect(drawn.indexOf(text)).toBeLessThan(drawn.indexOf(byLabel(tree, 'LB, set 1')));
       expect(drawn.indexOf(text)).toBeLessThan(drawn.indexOf(byLabel(tree, 'Set 1')));
-      expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 12 });
+      expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#f1ece2', fontSize: 16 });
     });
 
     it('says the line to VoiceOver, which does not read a live region on iOS', async () => {
@@ -490,7 +443,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       line: 'Add a distance to tick',
       hint: 'Enter a distance first',
     },
-  ])('with $what missing, it says "$line", focuses that field and announces the line', async ({ ex, field, line, hint }) => {
+  ])('with $what missing, it says "$line", marks that field and announces the line', async ({ ex, field, line, hint }) => {
     const tree = mount(ex());
     expect(byLabel(tree, 'Set 1 done').props.accessibilityHint).toBe(hint);
     const focus = focusOf(tree, field);
@@ -498,12 +451,13 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain(line);
-    expect(focus).toHaveBeenCalledTimes(1);
+    expect(StyleSheet.flatten(byLabel(tree, field).props.style)).toMatchObject({ borderWidth: 2 });
+    expect(focus).not.toHaveBeenCalled();
     expect(mockAnnounce).toHaveBeenCalledWith(line);
     expect(tick).not.toHaveBeenCalled();
   });
 
-  it('"Check this number" focuses the field to check, even with another field missing', async () => {
+  it('"Check this number" wins even with another field missing, and focuses nothing', async () => {
     const tree = mount(bench([set('s0', 0)]));
     act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('x'));
     const weight = focusOf(tree, 'LB, set 1');
@@ -512,7 +466,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain('Check this number');
-    expect(reps).toHaveBeenCalledTimes(1);
+    expect(reps).not.toHaveBeenCalled();
     expect(weight).not.toHaveBeenCalled();
   });
 
