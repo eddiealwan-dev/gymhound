@@ -2,28 +2,15 @@ import { useRef, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { logFood } from '../../db/repositories/foodLogRepo';
-import { entryTotals, type FoodPerServing, fuelNumber, parseServings, servingsText } from '../../domain/fuel';
+import { entryTotals, type FoodPerServing, kcalProteinText, parseServings, SERVING_CHIPS, servingsText } from '../../domain/fuel';
 import { announce } from '../../platform/announce';
-import { bumpData } from '../../state/dataVersion';
 import { deviceLocale } from '../../platform/locale';
+import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
 import { FuelField } from './MacroFields';
-
-/** The servings chips (R141), with what VoiceOver says for each. */
-const CHIPS = [
-  { value: 0.5, label: '½', spoken: 'Half a serving' },
-  { value: 1, label: '1', spoken: '1 serving' },
-  { value: 1.5, label: '1½', spoken: '1 and a half servings' },
-  { value: 2, label: '2', spoken: '2 servings' },
-] as const;
-
-/** "{kcal} kcal · {protein} g protein", each rounded once (R156). */
-export function kcalProteinText(t: { kcal: number; proteinG: number }, locale?: string): string {
-  return `${fuelNumber(t.kcal, locale)} kcal · ${fuelNumber(t.proteinG, locale)} g protein`;
-}
 
 type ContentProps = {
   food: FoodPerServing;
@@ -69,7 +56,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
         <FuelField label="Servings" value={draft} onChangeText={change} onSubmit={add} numeric error={invalid ? 'Check this number' : undefined} />
         {/* 4pt inset keeps each pill's 4pt hit slop inside the row. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, margin: -4 }}>
-          {CHIPS.map((chip) => {
+          {SERVING_CHIPS.map((chip) => {
             const chosen = servings === chip.value;
             return (
               <Button

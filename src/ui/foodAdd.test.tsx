@@ -184,13 +184,13 @@ describe('/food/add (R140, R141)', () => {
     const tree = mount();
     const text = allText(tree);
     expect(text).toContain('Add food');
-    expect(text).toContain('Logging for Today');
+    expect(text).toContain('Logging for today');
     expect(tree.root.findAllByType(Footer)).toHaveLength(0);
   });
 
   it('the date param wins over today', () => {
     mockParams = { date: YESTERDAY };
-    expect(allText(mount())).toContain('Logging for Yesterday');
+    expect(allText(mount())).toContain('Logging for yesterday');
     mockParams = { date: '2026-10-03' };
     expect(allText(mount())).toContain('Logging for Sat, Oct 3');
   });
@@ -237,7 +237,7 @@ describe('/food/add (R140, R141)', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     expect(dismiss).toHaveBeenCalled();
     expect(mockFlushAll).toHaveBeenCalled();
     const sheet = openSheet(tree)!;
@@ -264,7 +264,7 @@ describe('/food/add (R140, R141)', () => {
   it('the chips set the servings', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, '1 and a half servings');
     expect(field(tree, 'Servings').props.value).toBe('1.5');
     press(tree, 'Half a serving');
@@ -275,7 +275,7 @@ describe('/food/add (R140, R141)', () => {
   it('bad servings show "Check this number", say it, and log nothing', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     type(tree, 'Servings', '0');
     press(tree, 'Add');
     expect(allText(tree)).toContain('Check this number');
@@ -287,7 +287,7 @@ describe('/food/add (R140, R141)', () => {
   it('Cancel closes the servings without logging', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Cancel');
     expect(openSheet(tree)).toBeUndefined();
     expect(listEntries(mockDb, TODAY)).toHaveLength(0);
@@ -297,12 +297,12 @@ describe('/food/add (R140, R141)', () => {
     const id = createCustomFood(mockDb, { name: 'Gran shake', servingLabel: '1 bottle', servingGrams: null, kcal: 250, proteinG: 40, carbsG: 10, fatG: 5 });
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     expect(pressables(tree, 'Edit food')).toHaveLength(0);
     press(tree, 'Cancel');
 
     type(tree, 'Search foods', 'gran');
-    press(tree, 'Gran shake, 1 bottle, 250 kcal, 40 g protein, Yours');
+    press(tree, 'Gran shake, 1 bottle, 250 calories, 40 grams protein, Yours');
     expect(allText(tree)).not.toContain('1 bottle (');
     press(tree, 'Edit food');
     expect(openSheet(tree)).toBeUndefined();
@@ -467,7 +467,7 @@ describe('the food itself is untouched by logging', () => {
     const before = getFood(mockDb, EGG);
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     expect(getFood(mockDb, EGG)).toEqual(before);
   });
@@ -507,7 +507,7 @@ describe('review fixes', () => {
   it('a double tap on Add logs one serving', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     const [add] = pressables(tree, 'Add').slice(-1);
     act(() => {
       add.props.onPress();
@@ -519,10 +519,10 @@ describe('review fixes', () => {
   it('the same food opened again can be added again', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     expect(listEntries(mockDb, TODAY)).toHaveLength(2);
   });
@@ -542,7 +542,7 @@ describe('review fixes', () => {
   it('keeps the food drawn in the servings sheet while it closes', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Cancel');
     // The closing sheet is still handed the egg, not an empty panel.
     const sheets = tree.root.findAllByType(Sheet).filter((s) => (s.props.children as { props?: { food?: { name: string } } } | null)?.props?.food?.name === 'Egg, large');

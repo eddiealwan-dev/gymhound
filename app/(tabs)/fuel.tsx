@@ -106,7 +106,7 @@ export default function Fuel() {
           </View>
         ) : (
           <>
-            <FuelSummary target={target} totals={totals} trainingDay={trainingDay} locale={locale} />
+            <FuelSummary target={target} totals={totals} locale={locale} />
             <MacroBars target={target} totals={totals} locale={locale} />
             <FoodEntries entries={entries} totals={totals} locale={locale} />
             <View style={{ gap: 8 }}>

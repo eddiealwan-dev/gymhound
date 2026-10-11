@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteWater, logWater, setWaterGoal, type WaterEntry } from '../../db/repositories/waterRepo';
-import { calendarDayTitle } from '../../domain/dates';
+import { calendarDayInSentence } from '../../domain/dates';
 import type { WaterUnit } from '../../domain/types';
 import { formatWater, formatWaterSpoken, parseWaterAmount, parseWaterGoal, waterAmountText, waterUnitLabel, waterUnitSpoken } from '../../domain/water';
 import { announce } from '../../platform/announce';
@@ -18,9 +18,8 @@ export type WaterSheetMode = 'other' | 'goal' | 'entries';
 
 /** The day as Fuel's header says it, in a sentence: "today", "yesterday", or "on Fri, Oct 9". */
 export function waterDayPhrase(localDate: string, today: string, locale: string): string {
-  const title = calendarDayTitle(localDate, today, locale);
-  if (title === 'Today' || title === 'Yesterday') return title.toLowerCase();
-  return `on ${title}`;
+  const day = calendarDayInSentence(localDate, today, locale);
+  return day === 'today' || day === 'yesterday' ? day : `on ${day}`;
 }
 
 /** What VoiceOver hears after water is added: "Added 250 ml. 1,250 ml today." (fl oz said in full). */

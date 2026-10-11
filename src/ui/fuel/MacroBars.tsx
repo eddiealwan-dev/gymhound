@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { View } from 'react-native';
-import { type EntryTotals, fuelNumber } from '../../domain/fuel';
+import { type EntryTotals, fuelNumber, gramsSpoken } from '../../domain/fuel';
 import type { Macros } from '../../domain/types';
 import { Body } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -19,7 +19,7 @@ function Bar({ macro, target, locale }: { macro: Macro; target: number; locale: 
   const eaten = fuelNumber(macro.eaten, locale);
   const goal = fuelNumber(target, locale);
   return (
-    <View accessible accessibilityLabel={`${macro.name} ${eaten} of ${goal} grams`} style={{ gap: 6 }}>
+    <View accessible accessibilityLabel={`${macro.name} ${eaten} of ${gramsSpoken(target, locale)}`} style={{ gap: 6 }}>
       <Body>{`${macro.name} ${eaten} / ${goal} g`}</Body>
       <View style={{ height: 3, backgroundColor: colors.surfaceRaised, overflow: 'hidden' }}>
         <View testID={`macro-fill-${macro.key}`} style={{ height: 3, backgroundColor: colors.text, width: `${share(macro.eaten, target) * 100}%` }} />
@@ -43,7 +43,7 @@ export function MacroBars({ target, totals, locale }: { target: Macros; totals: 
     <View style={{ gap: 12 }}>
       {macros.map((m) => (m.target === null ? null : <Bar key={m.key} macro={m} target={m.target} locale={locale} />))}
       {untargeted.length > 0 ? (
-        <Body muted accessibilityLabel={untargeted.map((m) => `${m.name} ${fuelNumber(m.eaten, locale)} grams`).join(', ')}>
+        <Body muted accessibilityLabel={untargeted.map((m) => `${m.name} ${gramsSpoken(m.eaten, locale)}`).join(', ')}>
           {untargeted.map((m) => `${m.name} ${fuelNumber(m.eaten, locale)} g`).join(' · ')}
         </Body>
       ) : null}

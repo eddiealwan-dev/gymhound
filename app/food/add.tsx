@@ -4,18 +4,18 @@ import { BackHandler, FlatList, Keyboard, Pressable, TextInput, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../src/db/DbProvider';
 import { getFood, listFoods, recentFoods } from '../../src/db/repositories/foodsRepo';
-import { daysBetween, fromLocalDate, toLocalDate } from '../../src/domain/dates';
+import { calendarDayInSentence, toLocalDate } from '../../src/domain/dates';
 import { indexFoods } from '../../src/domain/foodSearch';
-import type { FoodPerServing } from '../../src/domain/fuel';
+import { type FoodPerServing, kcalProteinSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
+import { deviceLocale } from '../../src/platform/locale';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
-import { deviceLocale } from '../../src/platform/locale';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
-import { kcalProteinText, ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
+import { ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
 import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
@@ -36,15 +36,6 @@ const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function close() {
   if (router.canGoBack()) router.back();
   else router.replace('/fuel');
-}
-
-/** "Today", "Yesterday", or the day as "Sat, Oct 3" (and its year when it isn't this year's). */
-function dayText(localDate: string, today: string, locale: string): string {
-  const ago = daysBetween(localDate, today);
-  if (ago === 0) return 'Today';
-  if (ago === 1) return 'Yesterday';
-  const year = localDate.slice(0, 4) === today.slice(0, 4) ? undefined : 'numeric';
-  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year }).format(fromLocalDate(localDate));
 }
 
 /** Search / Quick add: a well with the chosen segment filled with ink, as on Settings. */
@@ -89,7 +80,7 @@ const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${food.name}, ${food.servingLabel}, ${amounts.replace(' · ', ', ')}${yours ? ', Yours' : ''}`}
+      accessibilityLabel={`${food.name}, ${food.servingLabel}, ${kcalProteinSpoken(food, locale)}${yours ? ', Yours' : ''}`}
       onPress={() => onChoose(food)}
       style={({ pressed }) => ({
         minHeight: 60,
@@ -216,7 +207,7 @@ function AddFood() {
         </Display>
         <Button label="Done" variant="quiet" onPress={done} />
       </View>
-      <Body muted style={{ marginTop: -12 }}>{`Logging for ${dayText(localDate, today, locale)}`}</Body>
+      <Body muted style={{ marginTop: -12 }}>{`Logging for ${calendarDayInSentence(localDate, today, locale)}`}</Body>
       <ModeControl value={mode} onChange={(m) => { Keyboard.dismiss(); setMode(m); }} />
       {/* Not a live region: `announce()` says it, and a live region would say it again on Android. */}
       {added !== null ? <Body weight={600}>{added}</Body> : null}

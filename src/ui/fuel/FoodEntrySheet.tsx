@@ -2,30 +2,17 @@ import { useRef, useState, type ReactElement } from 'react';
 import { TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteEntry, type FoodEntry, updateEntryServings, updateQuickAdd } from '../../db/repositories/foodLogRepo';
-import { type EntryTotals, fuelNumber, type MacroInput, parseQuickAdd, parseServings, rescaleEntry, servingsText } from '../../domain/fuel';
+import { kcalProteinText, type MacroInput, parseQuickAdd, parseServings, rescaleEntry, SERVING_CHIPS, servingsText } from '../../domain/fuel';
 import { parseDecimal } from '../../domain/input';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
-import { BodyField, CheckLine } from '../fields';
 import { Button } from '../Button';
+import { BodyField, CheckLine } from '../fields';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
-
-/** "300 kcal · 60 g protein". */
-function kcalProtein(t: EntryTotals, locale: string): string {
-  return `${fuelNumber(t.kcal, locale)} kcal · ${fuelNumber(t.proteinG, locale)} g protein`;
-}
-
-/** The servings chips (R141): what each shows, what VoiceOver says, and its value. */
-const CHIPS = [
-  { label: '½', spoken: 'Half a serving', value: 0.5 },
-  { label: '1', spoken: '1 serving', value: 1 },
-  { label: '1½', spoken: '1.5 servings', value: 1.5 },
-  { label: '2', spoken: '2 servings', value: 2 },
-] as const;
 
 type Panel = 'edit' | 'delete' | 'discard';
 
@@ -72,7 +59,7 @@ function ServingsEditor({ entry, locale, handle }: { entry: FoodEntry; locale: s
         </Body>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {CHIPS.map((chip) => (
+        {SERVING_CHIPS.map((chip) => (
           <Button
             key={chip.label}
             label={chip.label}
@@ -85,7 +72,7 @@ function ServingsEditor({ entry, locale, handle }: { entry: FoodEntry; locale: s
         ))}
       </View>
       <CheckLine shown={invalid} />
-      {parsed !== null ? <Body muted>{kcalProtein(rescaleEntry(entry, parsed), locale)}</Body> : null}
+      {parsed !== null ? <Body muted>{kcalProteinText(rescaleEntry(entry, parsed), locale)}</Body> : null}
     </View>
   );
 }

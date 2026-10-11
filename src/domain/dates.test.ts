@@ -1,4 +1,5 @@
 import {
+  calendarDayInSentence,
   calendarDayTitle,
   daysBetween,
   formatDateTime,
@@ -122,5 +123,13 @@ describe('formatEntryDate', () => {
     expect(formatEntryDate('2026-08-03', '2026-10-11', 'en-GB')).toBe('3 Aug');
     expect(formatEntryDate('2026-08-03', '2026-10-11', 'en-US')).toBe('Aug 3');
     expect(formatEntryDate('2025-08-03', '2026-10-11', 'en-GB')).toBe('3 Aug 2025');
+  });
+});
+
+describe('calendarDayInSentence', () => {
+  it('lowers Today and Yesterday mid-sentence and leaves a date as it is', () => {
+    expect(calendarDayInSentence('2026-10-11', '2026-10-11', 'en-US')).toBe('today');
+    expect(calendarDayInSentence('2026-10-10', '2026-10-11', 'en-US')).toBe('yesterday');
+    expect(calendarDayInSentence('2026-10-03', '2026-10-11', 'en-US')).toBe('Sat, Oct 3');
   });
 });

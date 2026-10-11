@@ -40,6 +40,12 @@ export function calendarDayTitle(localDate: string, today: string, locale: strin
   );
 }
 
+/** `calendarDayTitle` mid-sentence: "today", "yesterday", or the date as it is ("Fri, Oct 9"). */
+export function calendarDayInSentence(localDate: string, today: string, locale: string): string {
+  const title = calendarDayTitle(localDate, today, locale);
+  return title === 'Today' || title === 'Yesterday' ? title.toLowerCase() : title;
+}
+
 /** An entry's day, laid out for the locale: "3 Aug" (or "Aug 3") this year, "3 Aug 2025" in another. */
 export function formatEntryDate(localDate: string, today: string, locale: string): string {
   const sameYear = localDate.slice(0, 4) === today.slice(0, 4);

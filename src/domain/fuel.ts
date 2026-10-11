@@ -93,6 +93,36 @@ export function fuelNumber(value: number, locale?: string): string {
   return n.toLocaleString(locale, { maximumFractionDigits: 0 });
 }
 
+/** Grams in words for VoiceOver, rounded as shown and singular for exactly 1: "1 gram", "86 grams". */
+export function gramsSpoken(value: number, locale?: string): string {
+  const n = fuelNumber(value, locale);
+  return `${n} ${n === '1' ? 'gram' : 'grams'}`;
+}
+
+/** Calories in words for VoiceOver, rounded as shown and singular for exactly 1: "1 calorie", "1,840 calories". */
+export function caloriesSpoken(value: number, locale?: string): string {
+  const n = fuelNumber(value, locale);
+  return `${n} ${n === '1' ? 'calorie' : 'calories'}`;
+}
+
+/** "{kcal} kcal · {protein} g protein", each rounded once (R156). */
+export function kcalProteinText(t: { kcal: number; proteinG: number }, locale?: string): string {
+  return `${fuelNumber(t.kcal, locale)} kcal · ${fuelNumber(t.proteinG, locale)} g protein`;
+}
+
+/** `kcalProteinText` as VoiceOver says it: "300 calories, 60 grams protein". */
+export function kcalProteinSpoken(t: { kcal: number; proteinG: number }, locale?: string): string {
+  return `${caloriesSpoken(t.kcal, locale)}, ${gramsSpoken(t.proteinG, locale)} protein`;
+}
+
+/** The servings chips (R141): what each shows, its value, and what VoiceOver says. */
+export const SERVING_CHIPS = [
+  { label: '½', value: 0.5, spoken: 'Half a serving' },
+  { label: '1', value: 1, spoken: '1 serving' },
+  { label: '1½', value: 1.5, spoken: '1 and a half servings' },
+  { label: '2', value: 2, spoken: '2 servings' },
+] as const;
+
 /**
  * What is left of a target, rounded once: "1,240" or "86 g", and past the target "120 over" or "12 g over" (§8.10).
  * `over` is true only when the rounded difference is below 0.
@@ -101,6 +131,13 @@ export function leftText(target: number, eaten: number, unit: '' | ' g', locale?
   const left = Math.round(target - eaten) || 0;
   if (left < 0) return { value: `${fuelNumber(-left, locale)}${unit} over`, over: true };
   return { value: `${fuelNumber(left, locale)}${unit}`, over: false };
+}
+
+/** `leftText` as VoiceOver says it, rounded the same way: "1 gram", "1,240 calories", "12 grams over". */
+export function leftSpoken(target: number, eaten: number, unit: 'calories' | 'grams', locale?: string): string {
+  const left = Math.round(target - eaten) || 0;
+  const amount = (unit === 'grams' ? gramsSpoken : caloriesSpoken)(Math.abs(left), locale);
+  return left < 0 ? `${amount} over` : amount;
 }
 
 /** Servings with up to 2 decimals, no trailing zeros, in the locale's decimal mark: "1", "1.5", "0.33" ("1,5" in de-DE). */
