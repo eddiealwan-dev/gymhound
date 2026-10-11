@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-11T13:02:58.838Z",
+  "generatedAt": "2026-10-11T13:17:09.340Z",
   "title": "Design System: GymHound",
   "extensions": {
     "colorMeta": {
@@ -462,7 +462,7 @@
     "donts": [
       "**Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.",
       "**Don't** add shadows, gradients or glass; move a tonal step instead.",
-      "**Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines and a switch's off track.",
+      "**Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines, the rest row's edge and a switch's off track.",
       "**Don't** put the footer on the session or the finish summary, or the hound in the footer.",
       "**Don't** add motivational quotes, flames or skulls.",
       "**Don't** truncate a row's text at large text sizes when it can wrap."

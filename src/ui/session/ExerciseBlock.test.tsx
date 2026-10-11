@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer, ReactTestRendererJSON } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { flushAll } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote, tick, untick } from '../../state/sessionActions';
@@ -931,14 +931,50 @@ const SAVED = 'Pause on the chest, 2s';
 const withNote = (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), note: SAVED });
 
 describe('ExerciseBlock: the note (UX item 6, R29)', () => {
-  it("the saved note line and the note field start below the name row's 10pt reach, so no two targets overlap (design pass)", () => {
-    const saved = mount(withNote());
-    const line = byLabel(saved, `Note for Bench Press: ${SAVED}`);
-    expect(restingStyle(line)).toMatchObject({ minHeight: 44, marginTop: 10 });
+  describe("whatever is drawn under the name row starts below its controls' reach (design pass, fix round 1)", () => {
+    /**
+     * The block's drawn children (host nodes, in order), the one right after the name row, and how far the name row's
+     * controls reach below their line. A sibling drawn later wins the hit test where the two overlap, so the gap
+     * between them must cover that reach for + Note and Something off to keep their whole 44pt.
+     */
+    const underNameRow = (tree: ReactTestRenderer) => {
+      const isNode = (c: unknown): c is ReactTestRendererJSON => typeof c === 'object' && c !== null;
+      const holds = (node: ReactTestRendererJSON, label: string): boolean =>
+        node.props.accessibilityLabel === label || (node.children ?? []).some((c) => isNode(c) && holds(c, label));
+      const block = tree.toJSON() as ReactTestRendererJSON;
+      const drawn = (block.children ?? []).filter(isNode);
+      const row = drawn.findIndex((node) => holds(node, 'Options for Bench Press'));
+      expect(row).toBeGreaterThanOrEqual(0);
+      const next = drawn[row + 1];
+      const reach = (byLabel(tree, 'Something off for Bench Press').props.hitSlop as { bottom: number }).bottom;
+      return { next, gap: Number(StyleSheet.flatten(next.props.style)?.marginTop ?? 0), reach };
+    };
 
-    const empty = mount(bench([set('s0', 0)]));
-    act(() => byLabel(empty, ADD_NOTE).props.onPress());
-    expect(StyleSheet.flatten(noteFields(empty)[0].props.style)).toMatchObject({ marginTop: 10 });
+    it('the rule line, with no note', () => {
+      const { next, gap, reach } = underNameRow(mount(bench([set('s0', 0)])));
+
+      expect(next.type).toBe('Text');
+      expect(reach).toBe(10);
+      expect(gap).toBeGreaterThanOrEqual(reach);
+    });
+
+    it('the saved note line, which keeps its 44pt', () => {
+      const tree = mount(withNote());
+      const { next, gap, reach } = underNameRow(tree);
+
+      expect(next.props.accessibilityLabel).toBe(`Note for Bench Press: ${SAVED}`);
+      expect(gap).toBeGreaterThanOrEqual(reach);
+      expect(restingStyle(byLabel(tree, `Note for Bench Press: ${SAVED}`))).toMatchObject({ minHeight: 44 });
+    });
+
+    it('the note field, while it is open', () => {
+      const tree = mount(bench([set('s0', 0)]));
+      act(() => byLabel(tree, ADD_NOTE).props.onPress());
+      const { next, gap, reach } = underNameRow(tree);
+
+      expect(next.props.accessibilityLabel).toBe('Note for Bench Press');
+      expect(gap).toBeGreaterThanOrEqual(reach);
+    });
   });
 
   it('an empty note shows "+ Note" in the header and no field', () => {
