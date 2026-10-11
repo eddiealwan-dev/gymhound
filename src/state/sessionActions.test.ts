@@ -21,11 +21,13 @@ import { draftReducer, newDraft } from '../domain/routineDraft';
 import { buildRows, fieldPatch, readRow, valueText } from '../domain/setTable';
 import { useDataVersion } from './dataVersion';
 import {
+  acceptFoodOffer,
   addExercise,
   addSetTo,
   addWarmupTo,
   commitSetField,
   discard,
+  dismissFoodOffer,
   finish,
   markExercise,
   moveBlock,
@@ -1186,6 +1188,56 @@ describe('markExercise', () => {
     expect(() => markExercise(db, id, 'pain')).toThrow('is not in the active workout');
 
     expect(version()).toBe(before);
+  });
+});
+
+describe('the Short on food offer (§7.10, R152)', () => {
+  const offerShown = () => db.select({ s: workouts.foodOfferShown }).from(workouts).where(eq(workouts.id, workoutId())).get()!.s;
+
+  it('Mark it flags every exercise with no mark, keeps Pain, records the offer, bumps once and says so', () => {
+    startFromDay(db, PUSH_A);
+    markExercise(db, activeView().exercises[2].id, 'pain');
+    const before = version();
+
+    acceptFoodOffer(db, workoutId());
+
+    expect(activeView().exercises.map((e) => e.mark)).toEqual(['short_on_food', 'short_on_food', 'pain', 'short_on_food', 'short_on_food']);
+    expect(offerShown()).toBe(true);
+    expect(version()).toBe(before + 1);
+    expect(mockAnnounce).toHaveBeenCalledWith('Marked Short on food.');
+  });
+
+  it('Mark it with nothing left to flag records the offer and says nothing', () => {
+    startEmpty(db);
+
+    acceptFoodOffer(db, workoutId());
+
+    expect(offerShown()).toBe(true);
+    expect(mockAnnounce).not.toHaveBeenCalled();
+  });
+
+  it('Mark it outside the active workout throws, leaving the version alone', () => {
+    finishedBenchId();
+    const finished = db.select({ id: workouts.id }).from(workouts).get()!.id;
+    const before = version();
+    mockAnnounce.mockClear();
+
+    expect(() => acceptFoodOffer(db, finished)).toThrow('is not the active workout');
+
+    expect(version()).toBe(before);
+    expect(mockAnnounce).not.toHaveBeenCalled();
+  });
+
+  it('× records the offer, flags nothing and bumps the data version', () => {
+    startFromDay(db, PUSH_A);
+    const before = version();
+
+    dismissFoodOffer(db, workoutId());
+
+    expect(offerShown()).toBe(true);
+    expect(activeView().exercises.every((e) => e.mark === null)).toBe(true);
+    expect(version()).toBe(before + 1);
+    expect(mockAnnounce).not.toHaveBeenCalled();
   });
 });
 

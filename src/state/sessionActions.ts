@@ -1,5 +1,6 @@
 import { setRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { setExerciseNote } from '../db/repositories/exercisesRepo';
+import { flagUnmarkedShortOnFood, setFoodOfferShown } from '../db/repositories/foodOfferRepo';
 import { getSettings } from '../db/repositories/settingsRepo';
 import {
   addExerciseToWorkout,
@@ -255,6 +256,23 @@ export function toggleSuperset(db: Db, workoutExerciseId: string): void {
 /** Flags the exercise Something off with a reason, or clears it with null (Nothing off). Throws outside the active workout. */
 export function markExercise(db: Db, workoutExerciseId: string, mark: ExerciseMark | null): void {
   setExerciseMark(db, workoutExerciseId, mark);
+  bumpData();
+}
+
+/**
+ * The Short on food offer's Mark it (§7.10, R152): flags every exercise in the workout that has no mark Short on food
+ * (others keep theirs), records that the offer was shown, and tells the screen reader when something was flagged.
+ * Throws outside the active workout.
+ */
+export function acceptFoodOffer(db: Db, workoutId: string): void {
+  const flagged = flagUnmarkedShortOnFood(db, workoutId);
+  bumpData();
+  if (flagged > 0) announce('Marked Short on food.');
+}
+
+/** The Short on food offer's ×: records that it was shown, so it never appears again for this workout. */
+export function dismissFoodOffer(db: Db, workoutId: string): void {
+  setFoodOfferShown(db, workoutId);
   bumpData();
 }
 
