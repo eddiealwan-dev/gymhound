@@ -3,7 +3,8 @@ import { Keyboard, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
-import { commitSetField, removeSetFrom, tick, untick } from '../../state/sessionActions';
+import { flushAll } from '../../state/draftFlush';
+import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote, tick, untick } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
@@ -135,6 +136,9 @@ beforeEach(() => {
   jest.mocked(removeSetFrom).mockClear();
   jest.mocked(tick).mockReset();
   jest.mocked(untick).mockClear();
+  jest.mocked(saveNote).mockClear();
+  jest.mocked(addSetTo).mockClear();
+  jest.mocked(addWarmupTo).mockClear();
   dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
 });
 
@@ -501,5 +505,205 @@ describe('ExerciseBlock: suggested values look like suggestions (spec 18.6)', ()
     // R49: the cleared field's ghost is the target, which is what a tick logs.
     expect(byLabel(tree, 'LB, set 1').props.placeholder).toBe('135');
     expect(byLabel(tree, 'LB, set 1').props.accessibilityHint).toBe(SUGGESTED_HINT);
+  });
+});
+
+/** The note field, which shows only while the note is being edited. */
+const noteFields = (tree: ReactTestRenderer) =>
+  tree.root.findAllByType(TextInput).filter((t) => t.props.accessibilityLabel === 'Note for Bench Press');
+
+/** A Pressable's style when not pressed, flattened. */
+const restingStyle = (node: { props: { style?: unknown } }) =>
+  StyleSheet.flatten(typeof node.props.style === 'function' ? node.props.style({ pressed: false }) : node.props.style);
+
+/** The drawn Text whose child is exactly `text`. */
+const textNode = (tree: ReactTestRenderer, text: string) => {
+  const found = tree.root.findAll((n) => n.type === Text && n.props.children === text);
+  expect(found).toHaveLength(1);
+  return found[0];
+};
+
+const ADD_NOTE = 'Add a note for Bench Press';
+const SAVED = 'Pause on the chest, 2s';
+const withNote = (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), note: SAVED });
+
+describe('ExerciseBlock: the note (UX item 6, R29)', () => {
+  it('an empty note shows "+ Note" in the header and no field', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    expect(byLabel(tree, ADD_NOTE).props.accessibilityRole).toBe('button');
+    expect(shownText(tree)).toContain('+ Note');
+    expect(noteFields(tree)).toHaveLength(0);
+  });
+
+  it('+ Note opens the field empty and focused', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    act(() => byLabel(tree, ADD_NOTE).props.onPress());
+
+    const fields = noteFields(tree);
+    expect(fields).toHaveLength(1);
+    expect(fields[0].props.value).toBe('');
+    expect(fields[0].props.autoFocus).toBe(true);
+    expect(fields[0].props.placeholder).toBe('Add a note for next time');
+    expect(shownText(tree)).not.toContain('+ Note');
+    // Opening the field never puts the keyboard away.
+    expect(dismiss).not.toHaveBeenCalled();
+  });
+
+  it('typing then leaving the field saves the trimmed note once', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, ADD_NOTE).props.onPress());
+
+    act(() => noteFields(tree)[0].props.onChangeText('  Pause on the chest '));
+    act(() => noteFields(tree)[0].props.onBlur());
+
+    expect(saveNote).toHaveBeenCalledTimes(1);
+    expect(saveNote).toHaveBeenCalledWith('db', 'barbell-bench-press', 'Pause on the chest');
+    expect(noteFields(tree)).toHaveLength(0);
+  });
+
+  it('leaving an empty field saves nothing and shows + Note again', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, ADD_NOTE).props.onPress());
+
+    act(() => noteFields(tree)[0].props.onBlur());
+
+    expect(saveNote).not.toHaveBeenCalled();
+    expect(noteFields(tree)).toHaveLength(0);
+    expect(shownText(tree)).toContain('+ Note');
+  });
+
+  it('a saved note shows in full under the name, muted, with no + Note', () => {
+    const tree = mount(withNote());
+
+    const line = byLabel(tree, `Note for Bench Press: ${SAVED}`);
+    expect(line.props.accessibilityRole).toBe('button');
+    expect(line.props.accessibilityHint).toBe('Edits the note');
+    expect(restingStyle(line)).toMatchObject({ minHeight: 44 });
+    const text = textNode(tree, SAVED);
+    expect(text.props.numberOfLines).toBeUndefined();
+    expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+    expect(shownText(tree).indexOf(SAVED)).toBeGreaterThan(shownText(tree).indexOf('Bench Press'));
+    expect(shownText(tree)).not.toContain('+ Note');
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === ADD_NOTE)).toHaveLength(0);
+    expect(noteFields(tree)).toHaveLength(0);
+  });
+
+  it('tapping the saved note opens it for editing; clearing it saves blank', () => {
+    const tree = mount(withNote());
+
+    act(() => byLabel(tree, `Note for Bench Press: ${SAVED}`).props.onPress());
+
+    expect(noteFields(tree)).toHaveLength(1);
+    expect(noteFields(tree)[0].props.value).toBe(SAVED);
+    expect(noteFields(tree)[0].props.autoFocus).toBe(true);
+    // The field takes the line's place.
+    expect(shownText(tree)).not.toContain(SAVED);
+
+    act(() => noteFields(tree)[0].props.onChangeText(''));
+    act(() => noteFields(tree)[0].props.onBlur());
+
+    expect(saveNote).toHaveBeenCalledTimes(1);
+    expect(saveNote).toHaveBeenCalledWith('db', 'barbell-bench-press', '');
+  });
+
+  it('an edited note left unchanged saves nothing', () => {
+    const tree = mount(withNote());
+    act(() => byLabel(tree, `Note for Bench Press: ${SAVED}`).props.onPress());
+
+    act(() => noteFields(tree)[0].props.onBlur());
+
+    expect(saveNote).not.toHaveBeenCalled();
+    expect(noteFields(tree)).toHaveLength(0);
+    expect(shownText(tree)).toContain(SAVED);
+  });
+
+  it('a note typed but not left is saved by flushAll (R29)', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    try {
+      act(() => byLabel(tree, ADD_NOTE).props.onPress());
+      act(() => noteFields(tree)[0].props.onChangeText('Slow eccentric'));
+
+      act(() => flushAll());
+
+      expect(saveNote).toHaveBeenCalledTimes(1);
+      expect(saveNote).toHaveBeenCalledWith('db', 'barbell-bench-press', 'Slow eccentric');
+      expect(noteFields(tree)).toHaveLength(0);
+
+      act(() => flushAll());
+      expect(saveNote).toHaveBeenCalledTimes(1);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('the field blurs and submits on Return', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, ADD_NOTE).props.onPress());
+
+    const field = noteFields(tree)[0];
+    expect(field.props.multiline).toBe(true);
+    expect(field.props.submitBehavior).toBe('blurAndSubmit');
+  });
+});
+
+describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
+  /** The add buttons, in the order they are drawn. */
+  const addButtons = (tree: ReactTestRenderer) =>
+    tree.root.findAllByType(Button).filter((b) => (b.props.label as string).startsWith('+ '));
+
+  it('shows + Set then + Warmup as compact quiet buttons, left-aligned in one row', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    const buttons = addButtons(tree);
+    expect(buttons.map((b) => b.props.label)).toEqual(['+ Set', '+ Warmup']);
+    for (const b of buttons) {
+      expect(b.props.variant).toBe('quiet');
+      expect(b.props.size).toBe('compact');
+    }
+    const row = buttons[0].parent;
+    expect(row).not.toBeNull();
+    expect(buttons[1].parent).toBe(row);
+    expect(StyleSheet.flatten(row!.props.style)).toMatchObject({ flexDirection: 'row', justifyContent: 'flex-start' });
+    expect(shownText(tree)).not.toContain('+ Add set');
+    expect(shownText(tree)).not.toContain('+ Add warmup');
+  });
+
+  it('+ Set adds a working set and + Warmup adds a warmup', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    press(tree, '+ Set');
+    expect(addSetTo).toHaveBeenCalledWith('db', 'we1');
+    expect(addWarmupTo).not.toHaveBeenCalled();
+
+    press(tree, '+ Warmup');
+    expect(addWarmupTo).toHaveBeenCalledWith('db', 'we1');
+    expect(addSetTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('the add buttons are named for the exercise', () => {
+    const tree = mount(bench([set('s0', 0)]));
+
+    expect(byLabel(tree, 'Add a set to Bench Press').props.label).toBe('+ Set');
+    expect(byLabel(tree, 'Add a warmup to Bench Press').props.label).toBe('+ Warmup');
+  });
+
+  it('the header keeps ⋯ at 44pt beside the count and + Note', () => {
+    const tree = mount(oneDone());
+
+    expect(restingStyle(byLabel(tree, 'Options for Bench Press'))).toMatchObject({ width: 44, height: 44 });
+    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 0, minHeight: 44 });
+    expect(StyleSheet.flatten(textNode(tree, 'Bench Press').props.style)).toMatchObject({ minWidth: 0 });
+    // [name][count][+ Note][⋯], in the order they are drawn.
+    const labels = [
+      ...new Set(tree.root.findAll((n) => typeof n.props.accessibilityLabel === 'string').map((n) => n.props.accessibilityLabel as string)),
+    ];
+    const order = ['1 of 2 sets done', ADD_NOTE, 'Options for Bench Press'].map((l) => labels.indexOf(l));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    const shown = shownText(tree);
+    expect(shown.indexOf('1/2')).toBeGreaterThan(shown.indexOf('Bench Press'));
+    expect(shown.indexOf('+ Note')).toBeGreaterThan(shown.indexOf('1/2'));
   });
 });

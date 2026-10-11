@@ -52,8 +52,9 @@ type Props = {
 const BLOCK_GAP = 28;
 
 /**
- * One exercise: its name, how many of its sets are ticked, its ⋯ menu, its note, the set table with each set's last
- * result beside the inputs, and the Add warmup and Add set buttons. The next set to do has the bolder tick ring.
+ * One exercise: its name, how many of its sets are ticked, + Note when it has no note, its ⋯ menu, the saved note as a
+ * muted line under the name (tapping it, or + Note, opens the note field), the set table with each set's last result
+ * beside the inputs, and the compact + Set and + Warmup buttons. The next set to do has the bolder tick ring.
  * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
  * started it.
@@ -78,8 +79,11 @@ export function ExerciseBlock({
   const rows = buildRows(ex, unit, gear);
   const progress = exerciseProgress(ex);
 
-  /** The note while it is being typed; null shows the saved one. */
+  /** The note while its field is open; null closes the field and shows the saved note, or + Note when there is none. */
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const editingNote = noteDraft !== null;
+  /** Opens the note field on the saved note; a string draft is what a blur or `flushAll()` then saves. */
+  const openNote = () => setNoteDraft(ex.note ?? '');
   const [typeFor, setTypeFor] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<string | null>(null);
   const typeRow = rows.find((r) => r.set.id === typeFor);
@@ -132,6 +136,27 @@ export function ExerciseBlock({
             {`${progress.done}/${progress.total}`}
           </Num>
         ) : null}
+        {!ex.note && !editingNote ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Add a note for ${ex.name}`}
+            onPress={openNote}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              paddingHorizontal: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              flexShrink: 0,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Ionicons name="pencil" size={14} color={colors.textMuted} />
+            <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
+              + Note
+            </Body>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Options for ${ex.name}`}
@@ -143,29 +168,44 @@ export function ExerciseBlock({
         </Pressable>
       </View>
 
-      <TextInput
-        value={noteDraft ?? ex.note ?? ''}
-        onChangeText={setNoteDraft}
-        onBlur={saveNoteOnBlur}
-        placeholder="Add a note for next time"
-        placeholderTextColor={colors.textMuted}
-        multiline
-        submitBehavior="blurAndSubmit"
-        accessibilityLabel={`Note for ${ex.name}`}
-        style={{
-          minHeight: 40,
-          marginTop: 4,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-          color: colors.text,
-          fontFamily: fonts.body400,
-          fontSize: 14,
-        }}
-      />
+      {editingNote ? (
+        <TextInput
+          value={noteDraft}
+          onChangeText={setNoteDraft}
+          onBlur={saveNoteOnBlur}
+          autoFocus
+          placeholder="Add a note for next time"
+          placeholderTextColor={colors.textMuted}
+          multiline
+          submitBehavior="blurAndSubmit"
+          accessibilityLabel={`Note for ${ex.name}`}
+          style={{
+            minHeight: 40,
+            marginTop: 4,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            color: colors.text,
+            fontFamily: fonts.body400,
+            fontSize: 14,
+          }}
+        />
+      ) : ex.note ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Note for ${ex.name}: ${ex.note}`}
+          accessibilityHint="Edits the note"
+          onPress={openNote}
+          style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+        >
+          <Body muted style={{ fontSize: 14 }}>
+            {ex.note}
+          </Body>
+        </Pressable>
+      ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (
@@ -207,13 +247,21 @@ export function ExerciseBlock({
         ))}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Button label="+ Add warmup" variant="secondary" onPress={() => addWarmupTo(db, ex.id)} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label="+ Add set" variant="secondary" onPress={() => addSetTo(db, ex.id)} />
-        </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+        <Button
+          label="+ Set"
+          variant="quiet"
+          size="compact"
+          accessibilityLabel={`Add a set to ${ex.name}`}
+          onPress={() => addSetTo(db, ex.id)}
+        />
+        <Button
+          label="+ Warmup"
+          variant="quiet"
+          size="compact"
+          accessibilityLabel={`Add a warmup to ${ex.name}`}
+          onPress={() => addWarmupTo(db, ex.id)}
+        />
       </View>
 
       <Sheet visible={typeRow !== undefined} onClose={() => setTypeFor(null)}>
