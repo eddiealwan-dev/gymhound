@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Platform, Pressable, Switch, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
@@ -17,6 +17,7 @@ import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { Toggle } from '../../src/ui/Toggle';
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
@@ -259,7 +260,6 @@ function BellVolumeControl({ value, onChange }: { value: number; onChange: (volu
  * volume plays the bell once, as it will ring.
  */
 function RestTimerSection() {
-  const { colors } = useTheme();
   const db = useDb();
   const { restSeconds, restBell, restBellSound, restBellVolume } = useDbQuery(getSettings);
   return (
@@ -275,21 +275,13 @@ function RestTimerSection() {
       </Field>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body>Bell at the end</Body>
-        <Switch
+        <Toggle
           accessibilityLabel="Bell at the end"
           value={restBell}
           onValueChange={(value) => {
             setSetting(db, 'restBell', value);
             bumpData();
           }}
-          // Off, the track is borderStrong (3:1 on the page in both themes), not border: a bg-coloured thumb on a border
-          // track all but vanished in dark. iOS shows the off track through `ios_backgroundColor`.
-          trackColor={{ false: colors.borderStrong, true: colors.text }}
-          ios_backgroundColor={colors.borderStrong}
-          thumbColor={colors.bg}
-          // react-native-web colours the thumb of a switch that is on from `activeThumbColor` (React Native has only
-          // `thumbColor`) and would leave it teal. The phone ignores the extra prop.
-          {...({ activeThumbColor: colors.bg } as object)}
         />
       </View>
       <Field label="Bell sound">

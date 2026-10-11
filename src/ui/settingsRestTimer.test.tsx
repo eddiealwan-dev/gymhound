@@ -156,11 +156,13 @@ describe('Settings: the page (design pass)', () => {
     expect(StyleSheet.flatten(helper.props.style)).toMatchObject({ color: '#a39d90' });
   });
 
-  it('the bell switch keeps a visible track when off: borderStrong, not border', () => {
+  it('the bell switch reads in dark: a text-coloured thumb on a borderStrong track when on, a border track when off', () => {
     const tree = mount();
 
     const toggle = tree.root.findByType(Switch);
-    expect(toggle.props.trackColor).toEqual({ false: '#736c60', true: '#f1ece2' });
-    expect(toggle.props.ios_backgroundColor).toBe('#736c60');
+    expect(toggle.props.trackColor).toEqual({ false: '#2e2a23', true: '#736c60' });
+    expect(toggle.props.ios_backgroundColor).toBe('#2e2a23');
+    expect(toggle.props.thumbColor).toBe('#f1ece2');
+    expect(toggle.props.activeThumbColor).toBe('#f1ece2');
   });
 });

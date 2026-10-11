@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
-import { BackHandler, Platform, Pressable, Switch, TextInput, View } from 'react-native';
+import { BackHandler, Platform, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
@@ -26,6 +26,7 @@ import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
 import { Body, Display, Label, Num } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
 import { useTheme } from '../../../../src/ui/ThemeProvider';
+import { Toggle } from '../../../../src/ui/Toggle';
 
 /** Types whose rep range counts seconds. */
 const IN_SECONDS: LoggingType[] = ['timed', 'weighted_time'];
@@ -241,15 +242,10 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
       {index < count - 1 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
           <Body>Superset with next</Body>
-          <Switch
+          <Toggle
             accessibilityLabel={`Superset ${name} with next`}
             value={exercise.supersetWithNext}
             onValueChange={() => apply({ type: 'toggleSuperset', exerciseKey })}
-            // As on Settings: off, a borderStrong track that stays visible in both themes; on, the text colour.
-            trackColor={{ false: colors.borderStrong, true: colors.text }}
-            ios_backgroundColor={colors.borderStrong}
-            thumbColor={colors.bg}
-            {...({ activeThumbColor: colors.bg } as object)}
           />
         </View>
       ) : null}

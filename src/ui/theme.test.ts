@@ -1,4 +1,4 @@
-import { darkColors, fonts, lightColors, resolveScheme } from './theme';
+import { darkColors, fonts, lightColors, resolveScheme, switchColors } from './theme';
 
 /** WCAG relative luminance of a `#rrggbb` colour. */
 function luminance(hex: string): number {
@@ -54,6 +54,17 @@ describe('theme', () => {
   it('field edges read at 3:1 or more', () => {
     for (const c of [darkColors, lightColors]) {
       for (const g of [c.bg, c.surface, c.surfaceRaised]) expect(ratio(c.borderStrong, g)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('a switch reads in both themes: the thumb stands out from the page, the card and either track, and is never red', () => {
+    for (const colors of [darkColors, lightColors]) {
+      const { thumb, trackOn, trackOff } = switchColors(colors);
+      // On Android and the web the thumb is wider than the track, so its edge sits on the page or card itself.
+      for (const under of [colors.bg, colors.surface, trackOn, trackOff]) expect(ratio(thumb, under)).toBeGreaterThanOrEqual(3);
+      expect([thumb, trackOn, trackOff]).not.toContain(colors.red);
+      // On carries more ink than off, in either theme.
+      expect(ratio(trackOn, colors.bg)).toBeGreaterThan(ratio(trackOff, colors.bg));
     }
   });
 
