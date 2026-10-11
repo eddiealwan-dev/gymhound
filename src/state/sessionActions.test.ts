@@ -310,7 +310,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     switchDisplayUnit(db, 'kg');
 
     const { ex, row } = benchRow(0);
-    expect(valueText(row, 'weight', 'kg')).toBe('135 lb');
+    expect(valueText(row, 'weight', 'kg', 'mi')).toBe('135 lb');
     const reading = readRow(row, {}, 'kg', 'mi');
     expect(tick(db, ex, row.set, reading.entered, reading.weightUnit)).toBe(true);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 135, weightUnit: 'lb' });
@@ -337,7 +337,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
 
     const { row } = benchRow(0);
     expect(row.set).toMatchObject({ done: true, weight: 100, weightUnit: 'kg' });
-    expect(valueText(row, 'weight', 'lb')).toBe('100 kg');
+    expect(valueText(row, 'weight', 'lb', 'mi')).toBe('100 kg');
   });
 
   it('prefills a 135 lb planned bench as 60 after a switch to kg, not 61.23, and ticks 60 kg', () => {
@@ -348,7 +348,7 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
 
     const { ex, row } = benchRow(0);
     expect(row.target).toBe(60);
-    expect(valueText(row, 'weight', 'kg')).toBe('60');
+    expect(valueText(row, 'weight', 'kg', 'mi')).toBe('60');
     const reading = readRow(row, {}, 'kg', 'mi');
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
@@ -483,7 +483,7 @@ describe('a distance unit switch mid-workout: a typed or saved distance keeps it
     fiveKmThenMiles();
 
     const { ex, settings, row } = runRow();
-    expect(valueText(row, 'distance', settings.unit)).toBe('5');
+    expect(valueText(row, 'distance', settings.unit, settings.distanceUnit)).toBe('5 km');
     const reading = readRow(row, { durationS: '25:00' }, settings.unit, settings.distanceUnit);
     expect(tick(db, ex, row.set, reading.entered, reading.weightUnit, reading.distanceUnit)).toBe(true);
 

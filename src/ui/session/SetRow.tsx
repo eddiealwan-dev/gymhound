@@ -278,7 +278,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
         ref={(node) => {
           inputs.current[key] = node;
         }}
-        value={drafts[key] ?? valueText(row, key, unit)}
+        value={drafts[key] ?? valueText(row, key, unit, distanceUnit)}
         placeholder={hintText(row, key)}
         placeholderTextColor={colors.textFaint}
         onChangeText={(text) => type(key, text)}

@@ -210,7 +210,18 @@ const numberText = (n: number) => String(round2(n));
 /** A time as typed: "40" under a minute, "1:30" from a minute up. Both read back through `parseDuration`. */
 const durationText = (seconds: number) => (seconds < 60 ? String(seconds) : formatRest(seconds));
 
-/** The stored value of a field, as it was logged: a weight is in its own unit (`set.weightUnit`), which may not be the display unit. */
+/**
+ * A distance with its unit only when that differs from the display distance unit, as `weightText` does a weight:
+ * "5" or "5 km".
+ */
+function distanceText(distance: number, unit: DistanceUnit, displayUnit: DistanceUnit): string {
+  return unit === displayUnit ? numberText(distance) : `${numberText(distance)} ${unit}`;
+}
+
+/**
+ * The stored value of a field, as it was logged: a weight is in its own unit (`set.weightUnit`) and a distance in its
+ * own (`set.distanceUnit`), either of which may not be the display unit.
+ */
 function storedValue(set: SetInput, key: InputKey): number | null {
   switch (key) {
     case 'weight':
@@ -236,10 +247,13 @@ export function isTargetValue(row: RowModel, key: InputKey): boolean {
 
 /**
  * What an input holds when nothing is being typed: the stored value, else empty. A stored weight shows as it was
- * logged, done or not, with its unit when that is not the display unit ("135 lb" while in kg, spec 7.1). An open row's
- * load falls back to today's target; a done row never does, so it cannot show a weight that was not saved.
+ * logged, done or not, with its unit when that is not the display unit ("135 lb" while in kg, spec 7.1), and a stored
+ * distance likewise ("5 km" while in mi). Either reads as invalid if edited in part, so the field selects it all on
+ * focus and what is typed replaces it, in the display unit. An open row's load falls back to today's target; a done
+ * row never does, so it cannot show a weight that was not saved. `unit` and `distanceUnit` are the display units in
+ * Settings.
  */
-export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): string {
+export function valueText(row: RowModel, key: InputKey, unit: WeightUnit, distanceUnit: DistanceUnit): string {
   const { set } = row;
   if (key === 'weight') {
     if (set.weight !== null) return weightText(set.weight, set.weightUnit ?? unit, unit);
@@ -247,6 +261,7 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit): strin
   }
   const value = storedValue(set, key);
   if (value === null) return '';
+  if (key === 'distance') return distanceText(value, set.distanceUnit ?? distanceUnit, distanceUnit);
   return key === 'durationS' ? durationText(value) : numberText(value);
 }
 

@@ -1052,4 +1052,23 @@ describe('ExerciseBlock: a distance keeps its unit when ticked', () => {
 
     expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ distance: 3, durationS: 1500 }), 'lb', 'mi');
   });
+
+  it('shows a distance saved in km as "5 km" while the distance unit in Settings is mi, as a weight shows "135 lb"', () => {
+    const tree = mount(run());
+
+    expect(byLabel(tree, 'DIST, set 1').props.value).toBe('5 km');
+  });
+
+  it('replaces "5 km" with what is typed over it, saved in mi', () => {
+    const tree = mount(run());
+    const field = byLabel(tree, 'DIST, set 1');
+    // The field selects its text on focus, as the weight's does, so typing replaces "5 km" whole.
+    expect(field.props.selectTextOnFocus).toBe(true);
+
+    act(() => field.props.onChangeText('3'));
+    expect(byLabel(tree, 'DIST, set 1').props.value).toBe('3');
+    act(() => byLabel(tree, 'DIST, set 1').props.onBlur());
+
+    expect(commitSetField).toHaveBeenCalledWith('db', 's0', { distance: 3, distanceUnit: 'mi' });
+  });
 });
