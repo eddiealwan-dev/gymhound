@@ -150,6 +150,25 @@ describe('Stats: Body (R114)', () => {
     expect(shownText(tree)).not.toContain('Check this number');
   });
 
+  it("says Couldn't log. Try again. in a muted line when the write fails, tells the screen reader, and keeps the number", () => {
+    const tree = mount(<Stats />);
+    type(tree, 'Bodyweight, lb', '182.5');
+    const insert = jest.spyOn(mockDb, 'insert').mockImplementation(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    expect(() => press(tree, 'Log')).not.toThrow();
+    insert.mockRestore();
+
+    expect(listBodyEntries(mockDb, 'bodyweight')).toEqual([]);
+    expect(shownText(tree)).toContain("Couldn't log. Try again.");
+    expect(mockAnnounce).toHaveBeenCalledWith("Couldn't log. Try again.");
+    expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
+    expect(field(tree, 'Bodyweight, lb').props.value).toBe('182.5');
+    // Typing again clears it.
+    type(tree, 'Bodyweight, lb', '182');
+    expect(shownText(tree)).not.toContain("Couldn't log. Try again.");
+  });
+
   it('a kg lifter logs in kg, and an earlier lb entry charts in kg', () => {
     setSetting(mockDb, 'unit', 'kg');
     addBodyEntry(mockDb, 'bodyweight', 220.5, 'lb', NOW - 10 * DAY);
