@@ -57,14 +57,16 @@ describe('theme', () => {
     }
   });
 
-  it('a switch reads in both themes: the thumb stands out from the page, the card and either track, and is never red', () => {
+  it("a switch keeps DESIGN.md's colours (R131): on, a text track under a bg thumb; off, a borderStrong track", () => {
     for (const colors of [darkColors, lightColors]) {
       const { thumb, trackOn, trackOff } = switchColors(colors);
-      // On Android and the web the thumb is wider than the track, so its edge sits on the page or card itself.
-      for (const under of [colors.bg, colors.surface, trackOn, trackOff]) expect(ratio(thumb, under)).toBeGreaterThanOrEqual(3);
+      expect({ thumb, trackOn, trackOff }).toEqual({ thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong });
+      // Each track reads on the page and the card, and the thumb on each track, at 3:1 or more; never red.
+      for (const track of [trackOn, trackOff]) {
+        for (const page of [colors.bg, colors.surface]) expect(ratio(track, page)).toBeGreaterThanOrEqual(3);
+        expect(ratio(thumb, track)).toBeGreaterThanOrEqual(3);
+      }
       expect([thumb, trackOn, trackOff]).not.toContain(colors.red);
-      // On carries more ink than off, in either theme.
-      expect(ratio(trackOn, colors.bg)).toBeGreaterThan(ratio(trackOff, colors.bg));
     }
   });
 

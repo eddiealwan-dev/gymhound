@@ -39,13 +39,12 @@ export const lightColors: Colors = {
 };
 
 /**
- * A switch's colours. The thumb is the text colour, so it stands out from the page and the card: on Android and the
- * web it is wider than the track and its edge sits on them (a bg-coloured thumb all but vanished there in dark). On,
- * the track is borderStrong; off, it is border, a step quieter. The thumb reads at 3:1 or more on either, and its
- * place tells on from off.
+ * A switch's colours, as DESIGN.md has them (R131): on, a text-colour track under a background-colour thumb; off, a
+ * borderStrong track (3:1 on the page in both themes), so the off state is as visible as the on state. Each track reads
+ * on the page and the card, and the thumb on each track, at 3:1 or more.
  */
 export function switchColors(colors: Colors): { thumb: string; trackOn: string; trackOff: string } {
-  return { thumb: colors.text, trackOn: colors.borderStrong, trackOff: colors.border };
+  return { thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong };
 }
 
 export type Scheme = 'light' | 'dark';
