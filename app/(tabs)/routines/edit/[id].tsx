@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
-import { BackHandler, Pressable, Switch, TextInput, View } from 'react-native';
+import { BackHandler, Platform, Pressable, Switch, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
@@ -81,6 +81,14 @@ const KEYBOARD: Record<NumberKind, KeyboardTypeOptions> = {
 };
 
 /**
+ * How wide a number field is on the web, where a text field is as wide as 20 characters whatever it holds (the
+ * browser's own size for an input), which pushed "to" off a phone's screen. Sized there to what it holds: about 11 per
+ * figure at 20pt Barlow Condensed, with the padding and border, and never under 64. On a phone the field takes the
+ * width of its text itself.
+ */
+const webFieldWidth = (shown: string) => (Platform.OS === 'web' ? { width: Math.max(64, 18 + 11 * shown.length) } : null);
+
+/**
  * A number typed as text and kept as a draft until the field is left (R29): typing "12" never passes through 1, which
  * the rule's limits would act on. A blank or unreadable entry goes back to the number. Back, the picker and Save
  * commit a draft not yet left (`flushAll`). The field is at least 64 wide and grows with the phone's text size.
@@ -95,9 +103,10 @@ function NumberField({ value, label, kind, onCommit }: { value: number; label: s
     if (n !== null && n !== value) onCommit(n);
   };
   useDraftFlush(commit);
+  const shown = text ?? String(value);
   return (
     <TextInput
-      value={text ?? String(value)}
+      value={shown}
       onChangeText={setText}
       onBlur={commit}
       onSubmitEditing={commit}
@@ -119,6 +128,7 @@ function NumberField({ value, label, kind, onCommit }: { value: number; label: s
         fontSize: 20,
         fontVariant: ['tabular-nums'],
         textAlign: 'center',
+        ...webFieldWidth(shown),
       }}
     />
   );

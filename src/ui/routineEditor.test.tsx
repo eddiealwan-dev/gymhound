@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { BackHandler, StyleSheet, Switch, TextInput } from 'react-native';
+import { BackHandler, Platform, StyleSheet, Switch, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import EditRoutine from '../../app/(tabs)/routines/edit/[id]';
@@ -199,7 +199,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
 
 describe('the routine editor: a new routine (R89)', () => {
   it('starts empty under "New routine", and Save says what is missing and saves nothing', () => {
@@ -451,6 +454,20 @@ describe('the routine editor: your own routine', () => {
       expect(style.minWidth).toBe(64);
       expect(style.width).toBeUndefined();
     }
+  });
+
+  it('on the web, where a text field is 20 characters wide whatever it holds, a number field is sized to its number', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    const tree = mount('mine');
+
+    const width = (label: string) => StyleSheet.flatten(field(tree, label).props.style).width as number;
+    // Two short numbers, the dash and the gaps fit a card on a 320 phone, beside Sets or on a line of their own.
+    expect(width('Barbell bench press reps from')).toBe(64);
+    expect(width('Barbell bench press reps to')).toBe(64);
+    expect(width('Barbell bench press increment in kg')).toBe(64);
+    type(tree, 'Barbell bench press increment in kg', '12.375');
+    expect(width('Barbell bench press increment in kg')).toBeGreaterThan(64);
+    expect(width('Barbell bench press increment in kg')).toBeLessThan(120);
   });
 
   it('a time takes seconds or minutes and seconds, as the session does', () => {
