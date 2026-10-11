@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
-import WorkoutDetailRoute from '../../app/(tabs)/history/[id]';
 import WorkoutEditRoute from '../../app/(tabs)/history/edit/[id]';
 import LiftRoute from '../../app/(tabs)/lift/[id]';
 import LiftsRoute from '../../app/(tabs)/lifts';
@@ -67,7 +66,6 @@ beforeEach(() => {
 
 /** Each route, the label of its way out, and where that goes when there is no history to go back to. */
 const ROUTES = [
-  ['/history/[id]', WorkoutDetailRoute, 'Back to History', '/history'],
   ['/history/edit/[id]', WorkoutEditRoute, 'Cancel', '/history'],
   ['/lifts', LiftsRoute, 'Back to Stats', '/stats'],
   ['/lift/[id]', LiftRoute, 'Back', '/lifts'],
