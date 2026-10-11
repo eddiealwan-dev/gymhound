@@ -187,6 +187,8 @@ const DISTANCE_CARDIO = /\brun|\bjog|\bwalk|\brow|\bbike|cycl|elliptical|treadmi
  * carries, walks, yokes.
  */
 const LOADED_LOCOMOTION = /\bsleds?\b|prowler|\b(backward|forward) drag\b|carry|\bwalks?\b|yoke|conan's wheel/;
+/** Sled moves done for reps (rows, flyes, extensions), which log as weighted. */
+const REP_MOVE = /\brows?\b|\bfl(y|ye|yes)\b|extension/;
 /** Chin-ups by name ("Press To Chin" is not one). */
 const CHIN = /\bchin-?ups?\b|\bchins\b|grip chin\b/;
 /** Moves done with your own body whose free-exercise-db equipment is "other" (bars, rings, straps, a rope). */
@@ -205,7 +207,8 @@ const TIMED_MOVE = /battling ropes|balance board/;
 
 /**
  * How a set is logged (R85): stretches, static holds, battling ropes and the balance board are timed; sleds,
- * prowlers, drags, carries, walks, yokes and Conan's wheel are weight and time; distance cardio is distance and time,
+ * prowlers, drags, carries, walks, yokes and Conan's wheel are weight and time (but not sled rows, flyes and
+ * extensions, done for reps, or band walks, which are weighted like other band moves); distance cardio is distance and time,
  * other cardio timed; machine-assisted moves are assisted, band-assisted ones bodyweight plus (R92: a band's
  * assistance can't be weighed); bodyweight strength and plyometrics (including those on an exercise ball, dips,
  * chins, rings, straps and plyometrics whose equipment is "other", and BODYWEIGHT_PLUS_NAMES) are bodyweight plus;
@@ -214,10 +217,10 @@ const TIMED_MOVE = /battling ropes|balance board/;
 export function mapLoggingType(e: FedbExercise): LoggingType {
   const name = lower(e);
   if (e.category === 'stretching' || e.force === 'static' || TIMED_MOVE.test(name)) return 'timed';
-  if (LOADED_LOCOMOTION.test(name)) return 'weighted_time';
+  const equipment = mapEquipment(e);
+  if (LOADED_LOCOMOTION.test(name) && !REP_MOVE.test(name) && equipment !== 'band') return 'weighted_time';
   if (e.category === 'cardio') return DISTANCE_CARDIO.test(name) ? 'distance_time' : 'timed';
   if (BODYWEIGHT_PLUS_NAMES.includes(e.name)) return 'bodyweight_plus';
-  const equipment = mapEquipment(e);
   if (/assist/.test(name)) return equipment === 'band' || /\bband/.test(name) ? 'bodyweight_plus' : 'assisted';
   if (e.category === 'strength' || e.category === 'plyometrics') {
     if (equipment === 'bodyweight' || equipment === 'exercise_ball') return 'bodyweight_plus';
@@ -247,7 +250,7 @@ function compoundByName(name: string, primary: string): Pattern | null {
 }
 
 /**
- * The movement pattern (R85): loaded carries, walks and sleds are `carry` (unless they're a row, fly or extension);
+ * The movement pattern (R85): whatever logs as weight and time (carries, walks, sleds) is `carry`;
  * stretches and cardio `isolation` (no strength pattern); anything whose primary muscle is the abs `core`; then a
  * compound movement's name decides, even when free-exercise-db calls it isolation ("Alternating Kettlebell Row");
  * then the mechanic, force and primary muscle, with `isolation` when nothing fits.
@@ -255,7 +258,7 @@ function compoundByName(name: string, primary: string): Pattern | null {
 export function mapPattern(e: FedbExercise): Pattern {
   const name = lower(e);
   const primary = e.primaryMuscles[0] ?? '';
-  if (mapLoggingType(e) === 'weighted_time' && !/\brows?\b|\bfl(y|ye|yes)\b|extension/.test(name)) return 'carry';
+  if (mapLoggingType(e) === 'weighted_time') return 'carry';
   if (e.category === 'stretching' || e.category === 'cardio') return 'isolation';
   if (primary === 'abdominals') return 'core';
   const hips = primary === 'glutes' || primary === 'hamstrings' || primary === 'lower back';
@@ -296,6 +299,7 @@ export const NAME_PROPER_NOUNS: readonly string[] = [
   'Gironda',
   'Janda',
   'Jefferson',
+  'Judo',
   'London',
   'Olympic',
   'Otis',
