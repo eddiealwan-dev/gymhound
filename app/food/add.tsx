@@ -22,6 +22,7 @@ import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { useOnce } from '../../src/ui/useOnce';
 
 type Mode = 'search' | 'quick';
 
@@ -193,11 +194,14 @@ function AddFood() {
     afterSheetCloses(() => router.push({ pathname: '/food/[id]', params: { id } }));
   };
 
-  const newFood = () => {
-    flushAll();
-    Keyboard.dismiss();
-    router.push({ pathname: '/food/[id]', params: { id: 'new', name: query.trim(), from: 'add' } });
-  };
+  // A double tap on New food opens one editor.
+  const once = useOnce();
+  const newFood = () =>
+    once(() => {
+      flushAll();
+      Keyboard.dismiss();
+      router.push({ pathname: '/food/[id]', params: { id: 'new', name: query.trim(), from: 'add' } });
+    });
 
   const header = (
     <View style={{ paddingHorizontal: 16, gap: 16, paddingBottom: 8 }}>

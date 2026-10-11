@@ -421,8 +421,20 @@ describe('the entries', () => {
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/food/add', params: { date: TODAY } });
     expect(mockFlushAll).toHaveBeenCalled();
     press(tree, 'Previous day');
+    nowSpy.mockReturnValue(NOW + 1000);
     press(tree, 'Quick add');
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/food/add', params: { date: YESTERDAY, mode: 'quick' } });
+  });
+
+  it('opens one add screen however fast a second tap lands, on either button', () => {
+    const tree = mount();
+    press(tree, 'Add food');
+    press(tree, 'Add food');
+    press(tree, 'Quick add');
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    nowSpy.mockReturnValue(NOW + 1000);
+    press(tree, 'Quick add');
+    expect(mockPush).toHaveBeenCalledTimes(2);
   });
 
   it('Targets › opens the targets', () => {

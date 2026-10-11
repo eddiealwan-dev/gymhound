@@ -318,6 +318,16 @@ describe('/food/add (R140, R141)', () => {
     expect(router.push).toHaveBeenCalledWith({ pathname: '/food/[id]', params: { id: 'new', name: 'Gran shake', from: 'add' } });
   });
 
+  it('New food opens one editor however fast a second tap lands', () => {
+    const tree = mount();
+    press(tree, 'New food');
+    press(tree, 'New food');
+    expect(router.push).toHaveBeenCalledTimes(1);
+    act(() => jest.advanceTimersByTime(1000));
+    press(tree, 'New food');
+    expect(router.push).toHaveBeenCalledTimes(2);
+  });
+
   it('back in focus after a new food is saved, opens its servings', () => {
     const tree = mount();
     const id = createCustomFood(mockDb, { name: 'Gran shake', servingLabel: '1 bottle', servingGrams: null, kcal: 250, proteinG: 40, carbsG: 10, fatG: 5 });

@@ -22,6 +22,7 @@ import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { useOnce } from '../../src/ui/useOnce';
 
 /**
  * Today's date, read again whenever the tab regains focus or the app comes back to the foreground, so a Fuel left open
@@ -78,11 +79,14 @@ export default function Fuel() {
     announce(calendarDayTitle(clamped, today, locale));
   };
 
-  const push = (go: () => void) => {
-    flushAll();
-    Keyboard.dismiss();
-    go();
-  };
+  // One guard for every screen Fuel opens: a double tap, or a tap on Add food and then Quick add, opens one.
+  const once = useOnce();
+  const push = (go: () => void) =>
+    once(() => {
+      flushAll();
+      Keyboard.dismiss();
+      go();
+    });
 
   const target = pro && targets !== null ? targetsFor(targets, trainingDay) : null;
   const totals = dayTotals(entries);
