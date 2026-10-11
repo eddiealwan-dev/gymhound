@@ -391,3 +391,25 @@ export function refreshDraft(
   });
   return { draft: next, notices };
 }
+
+/**
+ * The draft with each exercise's current name from the library (`lookup`), and nothing else changed: a rename made
+ * elsewhere is not a change of the editor's. The same draft when no name changed; an exercise `lookup` can't find keeps
+ * its name.
+ */
+export function withLibraryNames(draft: RoutineDraft, lookup: (exerciseId: string) => Pick<LibraryExercise, 'name'> | null): RoutineDraft {
+  let changed = false;
+  const days = draft.days.map((day) => {
+    let dayChanged = false;
+    const exercises = day.exercises.map((e) => {
+      const name = lookup(e.exerciseId)?.name;
+      if (name === undefined || name === e.name) return e;
+      dayChanged = true;
+      return { ...e, name };
+    });
+    if (!dayChanged) return day;
+    changed = true;
+    return { ...day, exercises };
+  });
+  return changed ? { ...draft, days } : draft;
+}

@@ -11,6 +11,7 @@ import type { RoutineDraft } from '../domain/routineDraft';
 import { bumpData } from '../state/dataVersion';
 import { leaveGuarded } from '../state/leaveGuard';
 import { usePendingPick } from '../state/pendingPick';
+import { announce } from '../platform/announce';
 import { Button } from './Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,6 +63,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
 }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => mockPro }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -725,5 +727,62 @@ describe('the routine editor: exercises changed while it was away (Task 6)', () 
     const tree = mount('mine');
     leaveAndReturn();
     expect(shownText(tree).some((t) => /deleted|changed how/.test(t))).toBe(false);
+  });
+});
+
+describe('the routine editor: re-reading on focus (review round 1)', () => {
+  /** "My split" as the database now has it, the bench press renamed "Bench" elsewhere. */
+  const renamedMine = (): RoutineDraft => ({
+    ...MINE,
+    days: MINE.days.map((d, i) => (i === 0 ? { ...d, exercises: d.exercises.map((e, j) => (j === 0 ? { ...e, name: 'Bench' } : e)) } : d)),
+  });
+
+  it('a rename made elsewhere, with nothing changed here, is no change: Back leaves without asking', () => {
+    const tree = mount('mine');
+    mockLibrary.bench = { ...mockLibrary.bench, name: 'Bench' };
+    jest.mocked(routineToDraft).mockReturnValue(renamedMine());
+    leaveAndReturn();
+
+    expect(hasField(tree, 'Bench reps from')).toBe(true);
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).not.toContain('Discard changes?');
+    expect(router.back).toHaveBeenCalled();
+  });
+
+  it('with a change made here, a rename elsewhere still is not one: Discard keeps the new name, and asks no more', () => {
+    const tree = mount('mine');
+    enter(tree, 'Barbell bench press reps from', '6');
+    mockLibrary.bench = { ...mockLibrary.bench, name: 'Bench' };
+    jest.mocked(routineToDraft).mockReturnValue(renamedMine());
+    leaveAndReturn();
+
+    expect(field(tree, 'Bench reps from').props.value).toBe('6');
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).toContain('Discard changes?');
+    press(tree, 'Discard');
+    act(() => void jest.advanceTimersByTime(400));
+    expect(field(tree, 'Bench reps from').props.value).toBe('5');
+
+    jest.mocked(router.back).mockClear();
+    press(tree, 'Back to My split');
+    expect(shownText(tree)).not.toContain('Discard changes?');
+    expect(router.back).toHaveBeenCalled();
+  });
+
+  it('re-reads the routine when nothing changed here, so an edit saved elsewhere shows', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'My split v2' });
+    leaveAndReturn();
+    expect(field(tree, 'Routine name').props.value).toBe('My split v2');
+  });
+
+  it('tells the screen reader what changed, and the line goes on the next focus with nothing new', () => {
+    const tree = mount('mine');
+    delete mockLibrary.row;
+    leaveAndReturn();
+    expect(announce).toHaveBeenCalledWith("Barbell row was deleted, so it's gone from Day A.");
+
+    leaveAndReturn();
+    expect(shownText(tree).some((t) => /deleted/.test(t))).toBe(false);
   });
 });

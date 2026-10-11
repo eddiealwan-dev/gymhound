@@ -7,6 +7,7 @@ import {
   linksFromGroups,
   newDraft,
   refreshDraft,
+  withLibraryNames,
   supersetGroups,
   validateDraft,
 } from './routineDraft';
@@ -465,5 +466,18 @@ describe('refreshDraft: exercises changed while the editor was away (Task 6)', (
     expect(links(result.draft)).toEqual([true, false]);
     expect(result.draft.days[0].exercises[0]).toBe(d.days[0].exercises[0]);
     expect(result.notices).toEqual(["Row hold changed how it's logged, so its sets and reps start over."]);
+  });
+});
+
+describe('withLibraryNames', () => {
+  it('takes each exercise\'s current name, and nothing else; the same draft when none changed', () => {
+    const d = oneDay(BENCH, ROW);
+    expect(withLibraryNames(d, (id) => (id === ROW.id ? ROW : BENCH))).toBe(d);
+
+    const renamed = withLibraryNames(d, (id) => (id === ROW.id ? { name: 'Pendlay row', loggingType: 'timed' } : null));
+    expect(renamed.days[0].exercises.map((e) => [e.exerciseId, e.name, e.loggingType, e.setCount])).toEqual([
+      ['barbell-bench-press', 'Barbell bench press', 'weighted', 3],
+      ['barbell-row', 'Pendlay row', 'weighted', 3],
+    ]);
   });
 });

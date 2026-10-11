@@ -3,7 +3,8 @@ import { TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import FinishSummaryScreen from '../../app/finish/[id]';
-import { savedWorkoutOf, saveWorkoutAs } from '../db/repositories/savedWorkoutsRepo';
+import { hasDoneSets, savedWorkoutOf, saveWorkoutAs } from '../db/repositories/savedWorkoutsRepo';
+import { announce } from '../platform/announce';
 import type { FinishSummary } from '../db/repositories/workoutViewsRepo';
 import type { PrHighlight } from '../domain/prs';
 import { bumpData } from '../state/dataVersion';
@@ -21,7 +22,8 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead, bumpData: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ savedWorkoutOf: jest.fn(() => null), saveWorkoutAs: jest.fn() }));
+jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ savedWorkoutOf: jest.fn(() => null), saveWorkoutAs: jest.fn(), hasDoneSets: jest.fn(() => true) }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
 jest.mock('../db/repositories/workoutViewsRepo', () => ({ getFinishSummary: jest.fn() }));
 jest.mock('./ThemeProvider', () => {
@@ -211,6 +213,7 @@ describe('Save as a workout on the finish summary (R118, R120)', () => {
     mockRead = { unit: 'lb', summary: pushA([]) };
     jest.mocked(savedWorkoutOf).mockReturnValue(null);
     jest.mocked(saveWorkoutAs).mockReturnValue('saved-1');
+    jest.mocked(hasDoneSets).mockReturnValue(true);
   });
 
   const buttonsLabelled = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).filter((b) => b.props.label === label);
@@ -295,5 +298,63 @@ describe('Save as a workout on the finish summary (R118, R120)', () => {
     expect(text.slice(text.indexOf("Push day remembers today's sets.") + 1)).toEqual(['Done']);
     expect(buttonsLabelled(tree, 'Save as a workout')).toEqual([]);
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
+  });
+});
+
+describe('Save as a workout: review round 1', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRead = { unit: 'lb', summary: pushA([]) };
+    jest.mocked(savedWorkoutOf).mockReturnValue(null);
+    jest.mocked(saveWorkoutAs).mockReturnValue('saved-1');
+    jest.mocked(hasDoneSets).mockReturnValue(true);
+  });
+
+  const buttonsLabelled = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).filter((b) => b.props.label === label);
+  const pressButton = (tree: ReactTestRenderer, label: string) => act(() => buttonsLabelled(tree, label)[0].props.onPress());
+
+  it('is not offered when nothing was done', () => {
+    jest.mocked(hasDoneSets).mockReturnValue(false);
+    const tree = mount();
+    expect(hasDoneSets).toHaveBeenCalledWith('db', 'w1');
+    expect(buttonsLabelled(tree, 'Save as a workout')).toEqual([]);
+  });
+
+  it('an unexpected error says "Couldn\'t save. Try again." rather than the error itself', () => {
+    jest.mocked(saveWorkoutAs).mockImplementation(() => {
+      throw new Error('SQLITE_BUSY: database is locked');
+    });
+    const tree = mount();
+    pressButton(tree, 'Save as a workout');
+    pressButton(tree, 'Save');
+
+    const text = shownText(tree);
+    expect(text).toContain("Couldn't save. Try again.");
+    expect(text.join(' ')).not.toContain('SQLITE');
+    expect(announce).toHaveBeenCalledWith("Couldn't save. Try again.");
+  });
+
+  it('tells the screen reader "Saved as Push A."', () => {
+    const tree = mount();
+    pressButton(tree, 'Save as a workout');
+    pressButton(tree, 'Save');
+    expect(announce).toHaveBeenCalledWith('Saved as Push A.');
+  });
+
+  it('tells the screen reader the saved workout remembers today\'s sets', () => {
+    jest.mocked(savedWorkoutOf).mockReturnValue({ id: 's1', name: 'Push day' });
+    mount();
+    expect(announce).toHaveBeenCalledWith("Push day remembers today's sets.");
+  });
+
+  it('a second tap on Save saves nothing more', () => {
+    const tree = mount();
+    pressButton(tree, 'Save as a workout');
+    const [save] = buttonsLabelled(tree, 'Save');
+    act(() => {
+      save.props.onPress();
+      save.props.onPress();
+    });
+    expect(saveWorkoutAs).toHaveBeenCalledTimes(1);
   });
 });

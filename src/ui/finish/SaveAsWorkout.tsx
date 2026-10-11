@@ -1,24 +1,32 @@
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
-import { savedWorkoutOf, saveWorkoutAs } from '../../db/repositories/savedWorkoutsRepo';
+import { hasDoneSets, savedWorkoutOf, saveWorkoutAs } from '../../db/repositories/savedWorkoutsRepo';
 import { validateSavedName } from '../../domain/savedWorkout';
+import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
-import { NameSheet } from '../NameSheet';
+import { NameSheet, plainSaveError } from '../NameSheet';
 import { Body } from '../Text';
 
 /**
  * The finish summary's **Save as a workout**, or the line saying the saved workout it came from remembers today's sets
  * (R118, R120). Sits just above Done, 16pt over it. The button opens a sheet with the workout's name to keep or
- * change; once saved it becomes the muted line "Saved as {name}.".
+ * change; once saved it becomes the muted line "Saved as {name}.". With nothing done there is nothing to save, so no
+ * button. The lines are said to the screen reader as they appear.
  */
 export function SaveAsWorkout({ workoutId, workoutName }: { workoutId: string; workoutName: string }): ReactElement | null {
   const db = useDb();
   // Read once: the workout is finished, and saving it here makes a new saved workout, not the one it came from.
   const [from] = useState(() => savedWorkoutOf(db, workoutId));
+  const [canSave] = useState(() => hasDoneSets(db, workoutId));
   const [open, setOpen] = useState(false);
   const [savedAs, setSavedAs] = useState<string | null>(null);
+
+  const remembers = from !== null ? `${from.name} remembers today's sets.` : null;
+  useEffect(() => {
+    if (remembers !== null) announce(remembers);
+  }, [remembers]);
 
   const save = (name: string): string | null => {
     const problem = validateSavedName(name);
@@ -26,22 +34,23 @@ export function SaveAsWorkout({ workoutId, workoutName }: { workoutId: string; w
     try {
       saveWorkoutAs(db, workoutId, name, Date.now());
     } catch (error) {
-      return error instanceof Error ? error.message : String(error);
+      return plainSaveError(error);
     }
     bumpData();
-    setSavedAs(name.trim());
+    const line = `Saved as ${name.trim()}.`;
+    setSavedAs(line);
     setOpen(false);
+    announce(line);
     return null;
   };
 
-  const line = from !== null ? `${from.name} remembers today's sets.` : savedAs !== null ? `Saved as ${savedAs}.` : null;
+  const line = remembers ?? savedAs;
+  if (line === null && !canSave) return null;
 
   return (
     <View testID="save-as-workout" style={{ marginBottom: 16 }}>
       {line !== null ? (
-        <Body muted accessibilityLiveRegion="polite">
-          {line}
-        </Body>
+        <Body muted>{line}</Body>
       ) : (
         <Button label="Save as a workout" variant="secondary" onPress={() => setOpen(true)} />
       )}

@@ -279,6 +279,7 @@ describe('a saved workout (R122)', () => {
     press(tree, 'Delete', 1);
     expect(deleteSavedWorkout).toHaveBeenCalledWith('db', 'push-a');
     expect(bumpData).toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(400));
     expect(router.back).toHaveBeenCalled();
   });
 
@@ -295,5 +296,46 @@ describe('a saved workout (R122)', () => {
     expect(line.props.numberOfLines).toBeUndefined();
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ color: '#a39d90' });
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
+  });
+});
+
+describe('a saved workout: review round 1', () => {
+  it('Delete goes back once the sheet has gone, still showing the workout meanwhile', () => {
+    jest.mocked(deleteSavedWorkout).mockImplementation(() => {
+      jest.mocked(getSavedWorkout).mockReturnValue(null);
+    });
+    const tree = mount(<SavedWorkoutScreen />);
+    press(tree, 'Delete');
+    press(tree, 'Delete', 1);
+
+    expect(deleteSavedWorkout).toHaveBeenCalledWith('db', 'push-a');
+    expect(router.back).not.toHaveBeenCalled();
+    const shown = shownText(tree);
+    expect(shown).not.toContain('Saved workout not found.');
+    expect(shown).toContain('Push A');
+    act(() => void jest.advanceTimersByTime(400));
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('Rename with an unexpected error says "Couldn\'t save. Try again."', () => {
+    jest.mocked(renameSavedWorkout).mockImplementation(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    const tree = mount(<SavedWorkoutScreen />);
+    press(tree, 'Rename');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+  });
+
+  it('Start with an unexpected error says "Couldn\'t start. Try again." and opens nothing', () => {
+    jest.mocked(startSavedWorkout).mockImplementation(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    const tree = mount(<SavedWorkoutScreen />);
+    expect(() => press(tree, 'Start')).not.toThrow();
+    expect(shownText(tree)).toContain("Couldn't start. Try again.");
+    expect(router.push).not.toHaveBeenCalled();
+    press(tree, 'OK');
+    expect(shownText(tree)).not.toContain("Couldn't start. Try again.");
   });
 });

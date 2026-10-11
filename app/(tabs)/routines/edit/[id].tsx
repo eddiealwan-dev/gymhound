@@ -11,11 +11,12 @@ import { getSavedWorkout, listSavedWorkouts } from '../../../../src/db/repositor
 import type { Db } from '../../../../src/db/types';
 import { getSettings } from '../../../../src/db/repositories/settingsRepo';
 import { parseDecimal, parseDuration, parseReps } from '../../../../src/domain/input';
-import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, refreshDraft, validateDraft } from '../../../../src/domain/routineDraft';
+import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, refreshDraft, validateDraft, withLibraryNames } from '../../../../src/domain/routineDraft';
 import type { DraftAction, DraftDay, DraftExercise, RoutineDraft } from '../../../../src/domain/routineDraft';
 import { dayFromSaved } from '../../../../src/domain/savedWorkout';
 import type { LoggingType, WeightUnit } from '../../../../src/domain/types';
 import { convertIncrement } from '../../../../src/domain/units';
+import { announce } from '../../../../src/platform/announce';
 import { bumpData, useDbQuery } from '../../../../src/state/dataVersion';
 import { flushAll, useDraftFlush } from '../../../../src/state/draftFlush';
 import { setLeaveGuard } from '../../../../src/state/leaveGuard';
@@ -297,12 +298,26 @@ function DayEditor({ day, index, count, unit, apply, onAddExercise }: DayProps) 
 }
 
 /**
- * A custom exercise can be deleted, renamed or retyped while the editor is away (Task 6): the draft is brought up to
- * date with the library, and what changed is said in plain words (`refreshDraft`). Null when nothing changed.
+ * What the editor holds, brought up to date when it regains focus. With nothing changed here, the routine is read
+ * again first, so an edit saved elsewhere shows. Then the library: a custom exercise can be deleted, renamed or
+ * retyped while the editor is away (Task 6). The draft follows it (`refreshDraft`), saying what changed in plain
+ * words; the saved copy takes the new names only, so a rename made elsewhere never counts as a change here.
  */
-function draftFromLibrary(db: Db, draft: RoutineDraft): { draft: RoutineDraft; notices: string[] } | null {
-  const result = refreshDraft(draft, (exerciseId) => getExercise(db, exerciseId), defaultIncrement(getSettings(db)));
-  return result.draft === draft ? null : result;
+function readAgain(
+  db: Db,
+  routineId: string | null,
+  saved: RoutineDraft,
+  draft: RoutineDraft,
+): { saved: RoutineDraft; draft: RoutineDraft; notices: string[] } {
+  let base = saved;
+  let current = draft;
+  if (routineId !== null && !hasChanges(saved, draft)) {
+    const fresh = routineToDraft(db, routineId);
+    if (fresh) base = current = fresh;
+  }
+  const lookup = (exerciseId: string) => getExercise(db, exerciseId);
+  const refreshed = refreshDraft(current, lookup, defaultIncrement(getSettings(db)));
+  return { saved: withLibraryNames(base, lookup), draft: refreshed.draft, notices: refreshed.notices };
 }
 
 const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
@@ -408,8 +423,23 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     if (!askBeforeLeaving.current(() => goBack(backTo))) goBack(backTo);
   };
 
+  /** Brings the draft and the saved copy up to date (`readAgain`); notices from the last focus go. */
+  const refresh = useRef(() => {});
+  refresh.current = () => {
+    if (savedRef.current === null || latest.current === null) return;
+    const next = readAgain(db, routineId, savedRef.current, latest.current);
+    if (next.saved !== savedRef.current) {
+      savedRef.current = next.saved;
+      setSaved(next.saved);
+    }
+    if (next.draft !== latest.current) reset(next.draft);
+    setNotices(next.notices);
+    for (const notice of next.notices) announce(notice);
+  };
+
   useFocusEffect(
     useCallback(() => {
+      refresh.current();
       // The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
       const exerciseId = usePendingPick.getState().take();
       const dayKey = pickFor.current;
@@ -423,13 +453,6 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
           increment: defaultIncrement(getSettings(db)),
         });
       }
-      if (latest.current !== null) {
-        const refreshed = draftFromLibrary(db, latest.current);
-        if (refreshed) {
-          reset(refreshed.draft);
-          setNotices(refreshed.notices);
-        }
-      }
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const back = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(() => goBack(backTo)));
       return () => {
@@ -438,7 +461,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
         // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
         if (!unsaved(savedRef.current, latest.current)) setTried(false);
       };
-    }, [db, apply, reset, latest, backTo]),
+    }, [db, apply, backTo]),
   );
 
   useEffect(() => {
@@ -517,7 +540,8 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Days</Label>
       {notices.length > 0 ? (
-        <View accessibilityLiveRegion="polite" style={{ gap: 4, marginBottom: 8 }}>
+        // Said to the screen reader when they appear (`announce`).
+        <View style={{ gap: 4, marginBottom: 8 }}>
           {notices.map((notice, i) => (
             <Body key={i} muted>
               {notice}

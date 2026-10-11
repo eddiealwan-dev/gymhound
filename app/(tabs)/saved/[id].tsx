@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
 import { deleteSavedWorkout, getSavedWorkout, renameSavedWorkout } from '../../../src/db/repositories/savedWorkoutsRepo';
@@ -12,10 +12,10 @@ import type { WeightUnit } from '../../../src/domain/types';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
-import { NameSheet } from '../../../src/ui/NameSheet';
+import { NameSheet, plainSaveError } from '../../../src/ui/NameSheet';
 import { useStartSaved } from '../../../src/ui/StartSaved';
 import { Screen } from '../../../src/ui/Screen';
-import { ConfirmSheet } from '../../../src/ui/Sheet';
+import { afterSheetCloses, ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
@@ -45,14 +45,19 @@ function ExerciseRow({ exercise, unit }: { exercise: SavedExercise; unit: Weight
 /**
  * A saved workout (R122): its exercises with the sets each remembers, a superset marked by the bar, with **Start**
  * (filled), **Rename** and **Delete**. Start waits for a workout in progress (R80) and opens the session as Up next
- * does. Delete asks first; workouts already finished from it keep their history.
+ * does. Delete asks first; workouts already finished from it keep their history. Once deleted, the screen keeps
+ * showing it while the sheet goes, then goes back to Routines.
  */
 export default function SavedWorkoutScreen() {
   const db = useDb();
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const read = useCallback((d: Db) => ({ saved: getSavedWorkout(d, id), unit: getSettings(d).unit }), [id]);
-  const { saved, unit } = useDbQuery(read);
+  const current = useDbQuery(read);
+  /** The workout as last shown, held once Delete has removed it so the screen doesn't flash "not found" on its way out. */
+  const held = useRef<SavedWorkoutDetail | null>(null);
+  const { unit } = current;
+  const saved = current.saved ?? held.current;
   const [renaming, setRenaming] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
   const starter = useStartSaved();
@@ -74,7 +79,7 @@ export default function SavedWorkoutScreen() {
     try {
       renameSavedWorkout(db, saved.id, name, Date.now());
     } catch (error) {
-      return error instanceof Error ? error.message : String(error);
+      return plainSaveError(error);
     }
     bumpData();
     setRenaming(false);
@@ -83,9 +88,10 @@ export default function SavedWorkoutScreen() {
 
   const remove = () => {
     setAskDelete(false);
+    held.current = saved;
     deleteSavedWorkout(db, saved.id);
     bumpData();
-    toRoutines();
+    afterSheetCloses(toRoutines);
   };
 
   const links = linksFromGroups(saved.exercises.map((e) => e.supersetGroup));

@@ -1,10 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
+import { MAX_SAVED_NAME } from '../domain/savedWorkout';
+import { announce } from '../platform/announce';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
 import { Body, Display } from './Text';
 import { fonts } from './theme';
 import { useTheme } from './ThemeProvider';
+
+/** What saving a saved workout's name can be refused for, in words already fit to show. */
+const PLAIN_ERRORS = ['Give the workout a name.', `Keep the name to ${MAX_SAVED_NAME} characters.`, 'Nothing logged to save.'];
+
+/** A refused save in plain words: the repository's own copy when it is one of ours, otherwise "Couldn't save. Try again.". */
+export function plainSaveError(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  return PLAIN_ERRORS.includes(message) ? message : "Couldn't save. Try again.";
+}
 
 type Props = {
   visible: boolean;
@@ -20,21 +31,30 @@ type Props = {
 
 /**
  * A sheet with one name field and **Save** / **Cancel**: Save as a workout and a saved workout's Rename. What stops a
- * save is said in muted words under the field, never in red.
+ * save is said in muted words under the field, never in red, and to the screen reader. Once a save has gone through,
+ * Save does nothing more until the sheet opens again, so a double tap saves once.
  */
 export function NameSheet({ visible, title, fieldLabel, initial, onSave, onCancel }: Props) {
   const { colors } = useTheme();
   const [name, setName] = useState(initial);
   const [problem, setProblem] = useState<string | null>(null);
+  const done = useRef(false);
 
   useEffect(() => {
     if (visible) {
       setName(initial);
       setProblem(null);
+      done.current = false;
     }
   }, [visible, initial]);
 
-  const save = () => setProblem(onSave(name));
+  const save = () => {
+    if (done.current) return;
+    const result = onSave(name);
+    if (result === null) done.current = true;
+    else announce(result);
+    setProblem(result);
+  };
 
   return (
     <Sheet visible={visible} onClose={onCancel}>
@@ -64,7 +84,7 @@ export function NameSheet({ visible, title, fieldLabel, initial, onSave, onCance
         }}
       />
       {problem !== null ? (
-        <Body muted accessibilityLiveRegion="polite" style={{ marginTop: 8 }}>
+        <Body muted style={{ marginTop: 8 }}>
           {problem}
         </Body>
       ) : null}
