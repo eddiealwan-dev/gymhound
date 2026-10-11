@@ -1,4 +1,4 @@
-import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, supersetAction } from './sessionMenu';
+import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, startsSuperset, supersetAction } from './sessionMenu';
 import type { PrevSet } from './setEntry';
 import type { SetType, WeightUnit } from './types';
 
@@ -31,6 +31,17 @@ describe('joinsNextInSuperset: where the left bar runs on into the next exercise
 
   it('is true only while the next exercise is in the same superset', () => {
     expect(list.map((e) => joinsNextInSuperset(list, e.id))).toEqual([true, false, false, false]);
+  });
+});
+
+describe('startsSuperset: the block that carries the "Superset" label (R100)', () => {
+  it('is true for the first exercise of each run sharing a superset', () => {
+    const list = [ex('a', 1), ex('b', 1), ex('c'), ex('d', 2), ex('e', 2), ex('f', 3), ex('g', 3)];
+    expect(list.map((e) => startsSuperset(list, e.id))).toEqual([true, false, false, true, false, true, false]);
+  });
+
+  it('is false for an exercise that is not in the list', () => {
+    expect(startsSuperset([ex('a', 1)], 'zz')).toBe(false);
   });
 });
 

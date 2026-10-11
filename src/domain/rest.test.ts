@@ -1,4 +1,5 @@
 import {
+  latestTickedSetId,
   minus15,
   plus15,
   PLUS_15_MS,
@@ -12,6 +13,9 @@ import {
   restRemainingSeconds,
   restRowPhase,
   restTrackFraction,
+  restWaitsFor,
+  supersetRestLine,
+  supersetRestSource,
   RING_WINDOW_MS,
   shouldStartRestAfterTick,
   spokenRest,
@@ -257,5 +261,68 @@ describe('spokenRest and tickAnnouncement: what VoiceOver says after a tick', ()
     expect(tickAnnouncement('2', 120)).toBe('Set 2 logged. Rest 2 minutes.');
     expect(tickAnnouncement('2', null)).toBe('Set 2 logged.');
     expect(tickAnnouncement('W', 90)).toBe('Warmup logged. Rest 1 minute 30 seconds.');
+  });
+
+  it('says which exercise the rest waits for after a tick mid-superset (R100)', () => {
+    expect(tickAnnouncement('2', null, 'Ab roller')).toBe('Set 2 logged. Rest after Ab roller.');
+    expect(tickAnnouncement('2', 90, 'Ab roller')).toBe('Set 2 logged. Rest 1 minute 30 seconds.');
+  });
+});
+
+describe('restWaitsFor and supersetRestSource: the exercise a superset rest waits for (R100, R101)', () => {
+  const list = [
+    { id: 'a', name: 'Bench press', position: 1, supersetGroup: 1, restSeconds: null },
+    { id: 'b', name: 'Ab roller', position: 2, supersetGroup: 1, restSeconds: null },
+    { id: 'c', name: 'Squat', position: 3, supersetGroup: null, restSeconds: null },
+    { id: 'd', name: 'Row', position: 4, supersetGroup: 2, restSeconds: null },
+    { id: 'e', name: 'Curl', position: 5, supersetGroup: 2, restSeconds: null },
+    { id: 'f', name: 'Plank', position: 6, supersetGroup: 2, restSeconds: 0 },
+  ];
+
+  it('the source is the last member of the superset, for every other member', () => {
+    expect(list.map((e) => supersetRestSource(list, e.id)?.id ?? null)).toEqual(['b', null, null, 'f', 'f', null]);
+  });
+
+  it('names the last member, but only when its rest (its own, else the Settings rest) is not Off (R100 review)', () => {
+    expect(list.map((e) => restWaitsFor(list, e.id, 120))).toEqual(['Ab roller', null, null, null, null, null]);
+    expect(restWaitsFor(list, 'a', 0)).toBeNull();
+    const own = list.map((e) => (e.id === 'b' ? { ...e, restSeconds: 60 } : e));
+    expect(restWaitsFor(own, 'a', 0)).toBe('Ab roller');
+  });
+
+  it('judges the last member by position, as shouldStartRestAfterTick does', () => {
+    const shuffled = [list[1], list[0]];
+    expect(restWaitsFor(shuffled, 'a', 120)).toBe('Ab roller');
+    expect(restWaitsFor(shuffled, 'b', 120)).toBeNull();
+  });
+
+  it('is null for an exercise that is not in the list', () => {
+    expect(supersetRestSource(list, 'zz')).toBeNull();
+    expect(restWaitsFor(list, 'zz', 120)).toBeNull();
+  });
+});
+
+describe('supersetRestLine: the Rest time panel of a member that is not last (R101)', () => {
+  it("says the rest comes after the last member, with that member's rest time", () => {
+    expect(supersetRestLine('Ab roller', 90)).toBe('Rest comes after Ab roller, using its rest time.');
+  });
+
+  it("says there is no rest when that member's rest time is Off", () => {
+    expect(supersetRestLine('Ab roller', 0)).toBe('No rest after Ab roller: its rest time is Off.');
+  });
+});
+
+describe('latestTickedSetId: the set ticked last in the workout (R100)', () => {
+  const sets = (...completed: (number | null)[]) =>
+    completed.map((completedAt, i) => ({ id: `s${i}`, done: completedAt !== null, completedAt }));
+
+  it('is the done set with the latest tick time, across exercises', () => {
+    expect(latestTickedSetId([{ sets: sets(10, 30) }, { sets: sets(20, null) }])).toBe('s1');
+    expect(latestTickedSetId([{ sets: sets(10, null) }, { sets: sets(20) }])).toBe('s0');
+  });
+
+  it('is null with nothing ticked', () => {
+    expect(latestTickedSetId([{ sets: sets(null, null) }])).toBeNull();
+    expect(latestTickedSetId([])).toBeNull();
   });
 });

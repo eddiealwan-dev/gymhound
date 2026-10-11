@@ -5,7 +5,7 @@ import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
 import { MARK_LABELS } from '../../domain/labels';
 import { planInUnit, type Gear } from '../../domain/plates';
-import { restLengthFor } from '../../domain/rest';
+import { restAfterLine, restLengthFor } from '../../domain/rest';
 import { lastSummary, ruleSentence, todaysRead } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
@@ -13,7 +13,7 @@ import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { flushAll, useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
 import { Button } from '../Button';
-import { FormDemo } from '../FormDemo';
+import type { FormDemo as FormDemoType } from '../FormDemo';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
 import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
@@ -41,6 +41,18 @@ type Props = {
   inSuperset: boolean;
   /** Whether the next exercise is in the same superset: the bar then runs on through the gap between them. */
   joinsNext: boolean;
+  /**
+   * On the block that opens a superset, what VoiceOver says for its "Superset" label ("Superset of Bench press and Ab
+   * roller"); null on every other block (R100).
+   */
+  supersetLabel: string | null;
+  /**
+   * Mid-superset, the exercise the rest waits for (`restWaitsFor`): the set ticked last then shows "Rest after {it}"
+   * where the rest row would be. Null when a tick of this exercise starts the rest itself (R100).
+   */
+  restWaitsFor: string | null;
+  /** The set ticked last in the whole workout (`latestTickedSetId`), or null. */
+  latestTickedSetId: string | null;
   /** When the running rest ends (`rest_ends_at`), or null when none is running. */
   restEndsAt: number | null;
   /**
@@ -67,6 +79,9 @@ type Props = {
  * and half the group's 12pt gap to each side, so neighbouring targets meet without overlapping.
  */
 export const NAME_ROW_HIT_SLOP = { top: 10, bottom: 10, left: 6, right: 6 };
+
+/** How far the name's target reaches above and below its 26pt line: a 44pt target, as ⋯ has. */
+const NAME_HIT_SLOP = { top: 9, bottom: 9 };
 
 /** The space between the count, + Note and Something off, and between the name row's two columns. */
 const NAME_ROW_GAP = 12;
@@ -135,6 +150,9 @@ export function ExerciseBlock({
   onOpenMenu,
   inSuperset,
   joinsNext,
+  supersetLabel,
+  restWaitsFor,
+  latestTickedSetId,
   restEndsAt,
   restSetId,
   nextSetId,
@@ -210,10 +228,16 @@ export function ExerciseBlock({
 
   /** Whether the form demo is open (R86). */
   const [demoOpen, setDemoOpen] = useState(false);
+  /**
+   * The form demo, loaded the first time it opens and kept after: it reads the photo index (about 1,746 requires), which
+   * the session screen should not load until a demo is asked for.
+   */
+  const [FormDemo, setFormDemo] = useState<typeof FormDemoType | null>(null);
   /** Saves every draft and puts the keyboard away before the sheet opens over the session (R29). */
   const openDemo = () => {
     flushAll();
     Keyboard.dismiss();
+    if (FormDemo === null) setFormDemo(() => (require('../FormDemo') as typeof import('../FormDemo')).FormDemo);
     setDemoOpen(true);
   };
 
@@ -235,6 +259,13 @@ export function ExerciseBlock({
         not grow (a basis of 'auto', never flex: 1), so the group sits right after it either way. At large text the name
         wraps, and the group wraps among itself; its words wrap rather than end in "…".
       */}
+      {supersetLabel !== null ? (
+        // The bar alone said nothing about what it means (R100): a quiet word beside it, on the superset's first block.
+        // It ends where the name's reach above it (`NAME_HIT_SLOP`) begins, so a tap on it never opens the form demo.
+        <Body muted weight={500} accessibilityLabel={supersetLabel} style={{ fontSize: 13, marginBottom: NAME_HIT_SLOP.top }}>
+          Superset
+        </Body>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', columnGap: NAME_ROW_GAP }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: NAME_ROW_GAP, rowGap: 2 }}>
           {/*
@@ -245,7 +276,7 @@ export function ExerciseBlock({
             accessibilityRole="button"
             accessibilityLabel={`Show form for ${ex.name}`}
             onPress={openDemo}
-            hitSlop={{ top: 9, bottom: 9 }}
+            hitSlop={NAME_HIT_SLOP}
             style={({ pressed }) => ({
               flexShrink: 1,
               flexBasis: 'auto',
@@ -258,8 +289,10 @@ export function ExerciseBlock({
             {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
             <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
               {ex.name}
-              {' '}
-              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} />
+              {/* A no-break space, so the glyph never sits alone on a line (R94). */}
+              {'\u00A0'}
+              {/* Ionicons turns font scaling off by default: the glyph grows with the name. */}
+              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} allowFontScaling />
             </Display>
           </Pressable>
           <View
@@ -417,6 +450,12 @@ export function ExerciseBlock({
                   upText={upText}
                   onOpenRest={onOpenRest}
                 />
+              ) : restWaitsFor !== null && row.set.id === latestTickedSetId && restEndsAt === null ? (
+                // A tick mid-superset starts no rest: where the rest row would be, a quiet line says when it comes (R100).
+                // Not while a rest runs anywhere (the rest watcher clears its end at zero), so two rests never seem to show.
+                <Body muted style={{ fontSize: 14, paddingVertical: 6 }}>
+                  {restAfterLine(restWaitsFor)}
+                </Body>
               ) : null}
             </Fragment>
           );
@@ -499,7 +538,7 @@ export function ExerciseBlock({
         onCancel={() => setConfirmFor(null)}
       />
 
-      <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} />
+      {FormDemo !== null ? <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} /> : null}
     </View>
   );
 }
