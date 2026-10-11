@@ -18,6 +18,54 @@ export function formatRepScheme(setCount: number, repMin: number, repMax: number
   return `${setCount}×${reps}${COUNTED_IN_SECONDS.includes(loggingType) ? 's' : ''}`;
 }
 
+/** How each logging type reads in the custom exercise editor (R108). */
+export const LOGGING_TYPE_LABELS: Record<LoggingType, string> = {
+  weighted: 'Weight and reps',
+  bodyweight_plus: 'Bodyweight plus weight',
+  assisted: 'Assisted',
+  timed: 'Time',
+  weighted_time: 'Weight and time',
+  distance_time: 'Distance and time',
+};
+
+/** Every kind of equipment in the order chips show it: the six since phase 1, then the ones the library brings (R85). */
+export const EQUIPMENT_ORDER: readonly Equipment[] = [
+  'barbell',
+  'dumbbell',
+  'cable',
+  'machine',
+  'kettlebell',
+  'bodyweight',
+  'ez_bar',
+  'band',
+  'medicine_ball',
+  'exercise_ball',
+  'foam_roller',
+  'other',
+];
+
+/** Every muscle, head to toe, in the order chips show them. */
+export const MUSCLE_ORDER: readonly Muscle[] = [
+  'chest',
+  'front_delts',
+  'side_delts',
+  'rear_delts',
+  'lats',
+  'upper_back',
+  'traps',
+  'biceps',
+  'triceps',
+  'forearms',
+  'abs',
+  'obliques',
+  'lower_back',
+  'glutes',
+  'quads',
+  'hamstrings',
+  'adductors',
+  'calves',
+];
+
 const EQUIPMENT_LABELS: Record<Equipment, string> = {
   barbell: 'Barbell',
   dumbbell: 'Dumbbell',
@@ -66,6 +114,20 @@ const MUSCLE_LABELS: Record<Muscle, string> = {
 /** How a muscle reads on screen: "Chest", "Upper back", and "Shoulders" for each delt. */
 export function muscleLabel(muscle: Muscle): string {
   return MUSCLE_LABELS[muscle];
+}
+
+const DELT_CHOICE_LABELS: Partial<Record<Muscle, string>> = {
+  front_delts: 'Front delts',
+  side_delts: 'Side delts',
+  rear_delts: 'Rear delts',
+};
+
+/**
+ * How a muscle reads where you choose it for your own exercise (R108): the three delts apart, since a program's volume
+ * counts them apart (R85); every other muscle as `muscleLabel`.
+ */
+export function muscleChoiceLabel(muscle: Muscle): string {
+  return DELT_CHOICE_LABELS[muscle] ?? MUSCLE_LABELS[muscle];
 }
 
 /** Each muscle's label once, in order: two delts are one "Shoulders". */

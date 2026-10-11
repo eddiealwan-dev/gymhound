@@ -1,7 +1,6 @@
 import { act, create } from 'react-test-renderer';
 import SavedWorkout from '../../app/(tabs)/saved/[id]';
 import BodyDetail from '../../app/(tabs)/body/[kind]';
-import ExerciseEditor from '../../app/exercise/[id]';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,7 +20,6 @@ const shown = (element: React.ReactElement) => {
 };
 
 it.each([
-  ['exercise/[id]', ExerciseEditor],
   ['saved/[id]', SavedWorkout],
   ['body/[kind]', BodyDetail],
 ])('%s is a placeholder', (_route, Placeholder) => {
