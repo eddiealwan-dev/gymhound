@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { leaveGuarded } from '../state/leaveGuard';
 import { Body } from './Text';
 import { useTheme } from './ThemeProvider';
 
@@ -29,10 +30,12 @@ export function Dock({ state, navigation }: BottomTabBarProps) {
           if (!route) return null;
           const focused = focusedName === item.route;
           const color = focused ? colors.red : colors.textMuted;
-          const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
-          };
+          // A screen with unsaved changes (the routine editor) asks before it is left.
+          const onPress = () =>
+            leaveGuarded(() => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!focused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+            });
           return (
             <Pressable
               key={item.route}
