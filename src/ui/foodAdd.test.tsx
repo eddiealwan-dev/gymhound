@@ -6,6 +6,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import AddFoodScreen from '../../app/food/add';
 import { createCustomFood, getFood } from '../db/repositories/foodsRepo';
 import { listEntries, logFood } from '../db/repositories/foodLogRepo';
+import * as foodsRepo from '../db/repositories/foodsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useCreatedFood } from '../state/createdFood';
@@ -18,8 +19,11 @@ import { ConfirmSheet, Sheet } from './Sheet';
 // the data version, which makes it read again, as on the phone.
 let mockDb: Db;
 let mockParams: { date?: string; mode?: string };
-/** Every focus effect registered: a test plays the editor closing over the screen by running them again. */
-const mockFocusEffects = new Set<() => void | (() => void)>();
+/**
+ * Every focus effect registered, with the clean-up its last run returned: a test plays the editor opening over the
+ * screen (blur: the clean-ups run) and closing (focus: the effects run again).
+ */
+const mockFocusEffects = new Map<() => void | (() => void), void | (() => void)>();
 
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
@@ -28,9 +32,9 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => mockParams,
     useFocusEffect: (effect: () => void | (() => void)) => {
       useEffect(() => {
-        mockFocusEffects.add(effect);
-        const cleanup = effect();
+        mockFocusEffects.set(effect, effect());
         return () => {
+          const cleanup = mockFocusEffects.get(effect);
           mockFocusEffects.delete(effect);
           if (typeof cleanup === 'function') cleanup();
         };
@@ -128,7 +132,25 @@ const field = (tree: ReactTestRenderer, label: string) => {
 const type = (tree: ReactTestRenderer, label: string, text: string) => act(() => field(tree, label).props.onChangeText(text));
 
 const openSheet = (tree: ReactTestRenderer) => tree.root.findAllByType(Sheet).find((s) => s.props.visible);
-const focusAgain = () => act(() => [...mockFocusEffects].forEach((effect) => void effect()));
+const blur = () =>
+  act(() =>
+    [...mockFocusEffects].forEach(([effect, cleanup]) => {
+      if (typeof cleanup === 'function') cleanup();
+      mockFocusEffects.set(effect, undefined);
+    }),
+  );
+const focusAgain = () => act(() => [...mockFocusEffects.keys()].forEach((effect) => mockFocusEffects.set(effect, effect())));
+
+/** The Android back button's listeners now registered, as BackHandler keeps them. */
+function spyBackHandler(): Set<() => boolean> {
+  const listeners = new Set<() => boolean>();
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+    const listener = handler as () => boolean;
+    listeners.add(listener);
+    return { remove: () => void listeners.delete(listener) };
+  });
+  return listeners;
+}
 
 describe('/food/add (R140, R141)', () => {
   it('says which day it logs for: today without a date', () => {
@@ -394,23 +416,19 @@ describe('quick add (R143)', () => {
 
   it('holds the swipe down and the Android back button while a quick add is typed', () => {
     mockParams = { mode: 'quick' };
-    const listeners: (() => boolean)[] = [];
-    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
-      listeners.push(handler as () => boolean);
-      return { remove: () => undefined };
-    });
+    const listeners = spyBackHandler();
     const tree = mount();
     const lastOptions = () => {
       const calls = jest.mocked(Stack.Screen).mock.calls;
       return (calls[calls.length - 1][0] as { options: { gestureEnabled: boolean } }).options;
     };
     expect(lastOptions().gestureEnabled).toBe(true);
-    expect(listeners.every((l) => l() === false)).toBe(true);
+    expect([...listeners].every((l) => l() === false)).toBe(true);
     type(tree, 'Calories', '400');
     expect(lastOptions().gestureEnabled).toBe(false);
     let handled = false;
     act(() => {
-      handled = listeners.some((l) => l());
+      handled = [...listeners].some((l) => l());
     });
     expect(handled).toBe(true);
     expect(tree.root.findAllByType(ConfirmSheet).find((s) => s.props.title === 'Discard changes?')!.props.visible).toBe(true);
@@ -425,5 +443,83 @@ describe('the food itself is untouched by logging', () => {
     press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
     press(tree, 'Add');
     expect(getFood(mockDb, EGG)).toEqual(before);
+  });
+});
+
+describe('review fixes', () => {
+  it("lets the food editor's back button be its own while it is on top", () => {
+    mockParams = { mode: 'quick' };
+    const listeners = spyBackHandler();
+    const tree = mount();
+    type(tree, 'Calories', '400');
+    expect(listeners.size).toBeGreaterThan(0);
+    // New food opens the editor over this screen.
+    blur();
+    expect(listeners.size).toBe(0);
+    // Back from the editor: this screen asks again.
+    focusAgain();
+    let handled = false;
+    act(() => {
+      handled = [...listeners].some((l) => l());
+    });
+    expect(handled).toBe(true);
+    expect(tree.root.findAllByType(ConfirmSheet).find((s) => s.props.title === 'Discard changes?')!.props.visible).toBe(true);
+  });
+
+  it('reads the food list once per data version, not on every keystroke', () => {
+    const list = jest.spyOn(foodsRepo, 'listFoods');
+    const tree = mount();
+    const before = list.mock.calls.length;
+    type(tree, 'Search foods', 'e');
+    type(tree, 'Search foods', 'eg');
+    type(tree, 'Search foods', 'egg');
+    expect(list.mock.calls.length).toBe(before);
+    expect(allText(tree)).toContain('Egg, large');
+  });
+
+  it('a double tap on Add logs one serving', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    const [add] = pressables(tree, 'Add').slice(-1);
+    act(() => {
+      add.props.onPress();
+      add.props.onPress();
+    });
+    expect(listEntries(mockDb, TODAY)).toHaveLength(1);
+  });
+
+  it('the same food opened again can be added again', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Add');
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Add');
+    expect(listEntries(mockDb, TODAY)).toHaveLength(2);
+  });
+
+  it('a double tap on quick add Add logs one entry', () => {
+    mockParams = { mode: 'quick' };
+    const tree = mount();
+    type(tree, 'Protein (g)', '30');
+    const [add] = pressables(tree, 'Add').slice(-1);
+    act(() => {
+      add.props.onPress();
+      add.props.onPress();
+    });
+    expect(listEntries(mockDb, TODAY)).toHaveLength(1);
+  });
+
+  it('keeps the food drawn in the servings sheet while it closes', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Cancel');
+    // The closing sheet is still handed the egg, not an empty panel.
+    const sheets = tree.root.findAllByType(Sheet).filter((s) => (s.props.children as { props?: { food?: { name: string } } } | null)?.props?.food?.name === 'Egg, large');
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0].props.visible).toBe(false);
   });
 });

@@ -1,13 +1,12 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../src/db/DbProvider';
-import { getFood, recentFoods } from '../../src/db/repositories/foodsRepo';
-import type { Db } from '../../src/db/types';
+import { getFood, listFoods, recentFoods } from '../../src/db/repositories/foodsRepo';
 import { daysBetween, fromLocalDate, toLocalDate } from '../../src/domain/dates';
+import { indexFoods } from '../../src/domain/foodSearch';
 import type { FoodPerServing } from '../../src/domain/fuel';
-import { createLocalFoodLookup } from '../../src/platform/foodLookup';
 import { announce } from '../../src/platform/announce';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { useDbQuery } from '../../src/state/dataVersion';
@@ -129,8 +128,12 @@ export default function AddFood() {
   const [askDiscard, setAskDiscard] = useState(false);
 
   const searching = query.trim() !== '';
-  const read = useCallback((d: Db) => (searching ? createLocalFoodLookup(d).searchLocal(query) : recentFoods(d)), [query, searching]);
-  const foods = useDbQuery(read);
+  // The food list is read once per data version (and on focus), with its names folded once; a keystroke only searches it
+  // (R140, the same rules as `createLocalFoodLookup`).
+  const allFoods = useDbQuery(listFoods);
+  const search = useMemo(() => indexFoods(allFoods), [allFoods]);
+  const recent = useDbQuery(recentFoods);
+  const foods = useMemo(() => (searching ? search(query) : recent), [searching, search, query, recent]);
 
   const changed = quickAddStarted(quickDraft);
   /** Read by the back button's listener, which is added once. */
@@ -145,14 +148,17 @@ export default function AddFood() {
   const doneRef = useRef(done);
   doneRef.current = done;
 
-  useEffect(() => {
-    const back = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!changedRef.current) return false;
-      doneRef.current();
-      return true;
-    });
-    return () => back.remove();
-  }, []);
+  // Only while this screen is in front: under the food editor, the back button is the editor's.
+  useFocusEffect(
+    useCallback(() => {
+      const back = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (!changedRef.current) return false;
+        doneRef.current();
+        return true;
+      });
+      return () => back.remove();
+    }, []),
+  );
 
   const choose = useCallback((food: FoodPerServing) => {
     flushAll();

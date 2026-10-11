@@ -17,17 +17,29 @@ function words(s: string): string[] {
  * An empty query finds nothing (the add screen shows recent foods instead). Does not modify `items`.
  */
 export function searchFoods<T extends { name: string }>(items: readonly T[], query: string): T[] {
-  const queryWords = words(query);
-  if (queryWords.length === 0) return [];
-  const queryText = queryWords.join(' ');
+  return indexFoods(items)(query);
+}
 
-  const first: T[] = [];
-  const rest: T[] = [];
-  for (const item of items) {
+/**
+ * `searchFoods` over `items` with each name folded once, up front: the returned function searches them as the query
+ * changes without folding every name again at each keystroke.
+ */
+export function indexFoods<T extends { name: string }>(items: readonly T[]): (query: string) => T[] {
+  const folded = items.map((item) => {
     const nameWords = words(item.name);
-    if (queryWords.every((q) => nameWords.some((w) => w.startsWith(q)))) {
-      (nameWords.join(' ').startsWith(queryText) ? first : rest).push(item);
+    return { item, nameWords, nameText: nameWords.join(' ') };
+  });
+  return (query) => {
+    const queryWords = words(query);
+    if (queryWords.length === 0) return [];
+    const queryText = queryWords.join(' ');
+    const first: T[] = [];
+    const rest: T[] = [];
+    for (const { item, nameWords, nameText } of folded) {
+      if (queryWords.every((q) => nameWords.some((w) => w.startsWith(q)))) {
+        (nameText.startsWith(queryText) ? first : rest).push(item);
+      }
     }
-  }
-  return first.concat(rest);
+    return first.concat(rest);
+  };
 }

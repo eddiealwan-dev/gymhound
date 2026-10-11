@@ -4,7 +4,7 @@ import { BackHandler, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import FoodEditorScreen from '../../app/food/[id]';
-import { createCustomFood, getFood, listFoods } from '../db/repositories/foodsRepo';
+import { archiveCustomFood, createCustomFood, getFood, listFoods } from '../db/repositories/foodsRepo';
 import { listEntries, logFood } from '../db/repositories/foodLogRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
@@ -248,6 +248,15 @@ describe('editing your own food', () => {
     expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
     press(tree, 'Back');
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it("an archived food's address says it isn't here", () => {
+    const id = createCustomFood(mockDb, SHAKE);
+    archiveCustomFood(mockDb, id);
+    mockParams = { id };
+    const tree = mount();
+    expect(allText(tree)).toContain("That isn't here.");
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
   });
 
   it('a food that is not there says so', () => {

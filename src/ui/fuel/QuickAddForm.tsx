@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react';
+import { useRef, useState, type ReactElement } from 'react';
 import { Keyboard, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { logQuickAdd } from '../../db/repositories/foodLogRepo';
@@ -39,6 +39,8 @@ export function QuickAddForm({
 }): ReactElement {
   const db = useDb();
   const [errors, setErrors] = useState<Errors>({});
+  /** The draft last logged: a second tap before the form empties logs nothing more. */
+  const loggedRef = useRef<QuickAddDraft | null>(null);
 
   const change = (next: QuickAddDraft) => {
     setErrors({});
@@ -47,6 +49,7 @@ export function QuickAddForm({
 
   const add = () => {
     Keyboard.dismiss();
+    if (loggedRef.current === draft) return;
     const result = parseQuickAdd(draft);
     if (!result.ok) {
       setErrors(result.errors);
@@ -56,6 +59,7 @@ export function QuickAddForm({
       announce(said.join(' '));
       return;
     }
+    loggedRef.current = draft;
     logQuickAdd(db, result.name, result.totals, localDate, Date.now());
     bumpData();
     change(EMPTY_QUICK_ADD);
