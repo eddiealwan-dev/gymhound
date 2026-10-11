@@ -195,6 +195,20 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(greeting[0].props.numberOfLines).toBeUndefined();
   });
 
+  it('the stat numbers shrink to fit on one line with no fixed line height, as the date does (R79, Round 5 review)', () => {
+    const tree = mount();
+    const numbers = tree.root.findAll((n) => n.type === Text && n.props.adjustsFontSizeToFit === true && n.props.children === '0');
+    // Streak and This week.
+    expect(numbers).toHaveLength(2);
+    for (const number of numbers) {
+      const { numberOfLines, minimumFontScale, style } = number.props;
+      expect({ numberOfLines, minimumFontScale }).toEqual({ numberOfLines: 1, minimumFontScale: 0.5 });
+      // A fixed line height grows with the phone's text size and never shrinks with the font on iOS.
+      expect(StyleSheet.flatten(style).lineHeight).toBeUndefined();
+      expect(StyleSheet.flatten(style).fontSize).toBe(44);
+    }
+  });
+
   it('Start Upper A is the filled button under the title', () => {
     const tree = mount();
     const all = lines(tree);

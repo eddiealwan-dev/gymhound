@@ -63,7 +63,8 @@ type Props = {
 
 /**
  * A quiet, compact control in the name row: a 14pt muted icon and muted 14pt words, a 44pt target. + Note and Something
- * off share it (R81).
+ * off share it (R81). It may shrink within the controls group, and its words then wrap rather than end in "…" (a long
+ * reason such as "Short on food" at the largest text on a narrow phone).
  */
 function NameRowControl({
   icon,
@@ -89,12 +90,12 @@ function NameRowControl({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        flexShrink: 0,
+        flexShrink: 1,
         opacity: pressed ? 0.8 : 1,
       })}
     >
       <Ionicons name={icon} size={14} color={colors.textMuted} />
-      <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
+      <Body muted style={{ flexShrink: 1, fontSize: 14 }}>
         {label}
       </Body>
     </Pressable>

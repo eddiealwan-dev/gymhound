@@ -1119,6 +1119,20 @@ describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () =>
       expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Something off for Bench Press')).toHaveLength(0);
     });
 
+    it.each([
+      { what: 'Something off', mark: null, label: 'Something off for Bench Press', words: 'Something off' },
+      { what: 'a long reason', mark: 'short_on_food' as const, label: 'Something off for Bench Press: Short on food', words: 'Short on food' },
+    ])('$what wraps at the largest text instead of cutting off with "…", keeping its 44pt target (Round 5 review)', ({ mark, label, words }) => {
+      const tree = mount(ruled({ mark }));
+      const { node } = control(tree, label);
+      const text = textNode(tree, words);
+
+      expect(text.props.numberOfLines).toBeUndefined();
+      expect(StyleSheet.flatten(text.props.style)).toMatchObject({ flexShrink: 1 });
+      // It may shrink within the controls group, so its words wrap there.
+      expect(restingStyle(node)).toMatchObject({ minHeight: 44, flexShrink: 1 });
+    });
+
     it('tapping it opens the Something off reasons for this exercise', () => {
       const onOpenMark = jest.fn();
       let tree!: ReactTestRenderer;
@@ -1242,7 +1256,9 @@ describe('ExerciseBlock: + Set and + Warmup (UX item 6)', () => {
     const tree = mount(oneDone());
 
     expect(restingStyle(byLabel(tree, 'Options for Bench Press'))).toMatchObject({ width: 44, height: 44 });
-    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 0, minHeight: 44 });
+    // + Note shares Something off's control: it keeps its 44pt target, and shrinks (its words wrap) only when it alone is
+    // wider than the controls group, which wraps first (Round 5 review).
+    expect(restingStyle(byLabel(tree, ADD_NOTE))).toMatchObject({ flexShrink: 1, minHeight: 44 });
     expect(StyleSheet.flatten(textNode(tree, 'Bench Press').props.style)).toMatchObject({ minWidth: 0 });
     // [name][count][+ Note][⋯], in the order they are drawn: every node, in drawing order (a parent before its children).
     const drawn = tree.root.findAll(() => true);

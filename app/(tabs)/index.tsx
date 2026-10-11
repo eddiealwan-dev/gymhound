@@ -116,9 +116,10 @@ function StatCard({ label, value, caption }: { label: string; value: string; cap
       <Body weight={600} muted style={{ fontSize: 14 }}>
         {label}
       </Body>
-      {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's text size is turned up. */}
+      {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's
+          text size is turned up. No fixed line height, as for the date (R79): iOS shrinks only the font to fit. */}
       <View style={{ minHeight: 52, justifyContent: 'center' }}>
-        <Num adjustsFontSizeToFit minimumFontScale={0.5} numberOfLines={1} style={{ fontSize, lineHeight: Math.round(fontSize * 1.18) }}>
+        <Num adjustsFontSizeToFit minimumFontScale={0.5} numberOfLines={1} style={{ fontSize }}>
           {value}
         </Num>
       </View>
