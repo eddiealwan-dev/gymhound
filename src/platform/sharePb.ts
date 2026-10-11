@@ -25,8 +25,8 @@ export function toFileUri(pathOrUri: string): string {
 
 /**
  * Captures a mounted personal best card (`PbCard`, 360 × 450 points) as a 1080 × 1350 PNG and opens the share sheet
- * for it (R106). view-shot writes the file to the app's temporary folder and it is released once the share sheet is
- * done with it; nothing is uploaded and nothing is written anywhere else. Phone builds only.
+ * for it (R106). view-shot writes the file to the app's temporary folder; on iOS it is released once the share sheet
+ * is done with it; nothing is uploaded and nothing is written anywhere else. Phone builds only.
  * - 'unavailable': the phone cannot share; no image is made.
  * - 'shared': the share sheet opened.
  * A failure to capture or to share rejects.
@@ -37,10 +37,14 @@ export async function sharePbImage(view: RefObject<View | null>): Promise<'share
   try {
     await Sharing.shareAsync(toFileUri(captured), { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share a personal best' });
   } finally {
-    try {
-      releaseCapture(captured);
-    } catch {
-      // already gone; the OS clears its temporary folder anyway
+    // iOS only: Android's share sheet can resolve before the receiving app has read the file, and view-shot clears
+    // Android's captures itself when the module next starts.
+    if (Platform.OS === 'ios') {
+      try {
+        releaseCapture(captured);
+      } catch {
+        // already gone; the OS clears its temporary folder anyway
+      }
     }
   }
   return 'shared';

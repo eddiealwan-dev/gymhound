@@ -52,17 +52,16 @@ describe('pbCaptureSize', () => {
 });
 
 describe('sharePbImage (R106)', () => {
-  it('on Android captures a 1080 × 1350 PNG in the cache, shares it, then releases the file', async () => {
+  it('on Android captures a 1080 × 1350 PNG in the cache and shares it, leaving the file for the receiving app', async () => {
     const ref = createRef<View>();
     await expect(sharePbImage(ref)).resolves.toBe('shared');
 
     expect(captureRef).toHaveBeenCalledWith(ref, { format: 'png', result: 'tmpfile', width: 1080, height: 1350 });
     expect(Sharing.shareAsync).toHaveBeenCalledWith(ANDROID_URI, SHARE_OPTIONS);
-    expect(releaseCapture).toHaveBeenCalledWith(ANDROID_URI);
-    expect(jest.mocked(releaseCapture).mock.invocationCallOrder[0]).toBeGreaterThan(jest.mocked(Sharing.shareAsync).mock.invocationCallOrder[0]);
+    expect(releaseCapture).not.toHaveBeenCalled();
   });
 
-  it("on iOS captures in points and hands the share sheet a file:// URL, not view-shot's bare path", async () => {
+  it("on iOS captures in points, hands the share sheet a file:// URL, not view-shot's bare path, then releases the file", async () => {
     Platform.OS = 'ios';
     jest.spyOn(PixelRatio, 'get').mockReturnValue(3);
     jest.mocked(captureRef).mockResolvedValue(IOS_PATH);
@@ -72,6 +71,7 @@ describe('sharePbImage (R106)', () => {
     expect(captureRef).toHaveBeenCalledWith(ref, { format: 'png', result: 'tmpfile', width: 360, height: 450 });
     expect(Sharing.shareAsync).toHaveBeenCalledWith(`file://${IOS_PATH}`, SHARE_OPTIONS);
     expect(releaseCapture).toHaveBeenCalledWith(IOS_PATH);
+    expect(jest.mocked(releaseCapture).mock.invocationCallOrder[0]).toBeGreaterThan(jest.mocked(Sharing.shareAsync).mock.invocationCallOrder[0]);
   });
 
   it('makes no image when the phone cannot share', async () => {
@@ -90,14 +90,25 @@ describe('sharePbImage (R106)', () => {
     expect(releaseCapture).not.toHaveBeenCalled();
   });
 
-  it('rejects when the share sheet fails, still releasing the file', async () => {
+  it('rejects when the share sheet fails, on iOS still releasing the file', async () => {
+    Platform.OS = 'ios';
+    jest.mocked(captureRef).mockResolvedValue(IOS_PATH);
     jest.mocked(Sharing.shareAsync).mockRejectedValue(new Error('busy'));
     await expect(sharePbImage(createRef<View>())).rejects.toThrow('busy');
 
-    expect(releaseCapture).toHaveBeenCalledWith(ANDROID_URI);
+    expect(releaseCapture).toHaveBeenCalledWith(IOS_PATH);
   });
 
-  it('ignores a failure to release the file', async () => {
+  it('on Android releases nothing when the share sheet fails either', async () => {
+    jest.mocked(Sharing.shareAsync).mockRejectedValue(new Error('busy'));
+    await expect(sharePbImage(createRef<View>())).rejects.toThrow('busy');
+
+    expect(releaseCapture).not.toHaveBeenCalled();
+  });
+
+  it('ignores a failure to release the file on iOS', async () => {
+    Platform.OS = 'ios';
+    jest.mocked(captureRef).mockResolvedValue(IOS_PATH);
     jest.mocked(releaseCapture).mockImplementation(() => {
       throw new Error('gone');
     });
