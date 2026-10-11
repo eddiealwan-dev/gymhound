@@ -566,6 +566,10 @@ describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
     expect(labels(tree)).toContain('Something off');
   });
 
+  it.each(['bodyweight_plus', 'assisted', 'weighted_time'])('is offered on a %s exercise', (loggingType) => {
+    expect(labels(mount(today({ loggingType })))).toContain("Override today's weight");
+  });
+
   it('opens after the menu closes on one field in the display unit, holding the planned weight', () => {
     const tree = openOverride(today());
 
@@ -575,13 +579,49 @@ describe("ExerciseMenu: Override today's weight (spec 18.7)", () => {
     expect(labels(tree)).toEqual(['Save', 'Cancel']);
   });
 
-  it("holds today's weight when it is set, converted to the display unit, and offers Clear", () => {
+  it("holds today's weight when it is set, as the set rows show it in the display unit (R71), and offers Clear", () => {
     const lb = openOverride(today({ overrideWeight: 145, overrideUnit: 'lb' }), "Override today's weight · 145 lb");
     expect(field(lb).props.value).toBe('145');
 
+    // 60 kg is 132.28 lb: a barbell rounds to what the lb plates load, anything else to the nearest 0.5.
     const kg = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
-    expect(field(kg).props.value).toBe('132.28');
+    expect(field(kg).props.value).toBe('130');
     expect(labels(kg)).toEqual(['Save', 'Clear', 'Cancel']);
+
+    const dumbbell = openOverride(
+      today({ equipment: 'dumbbell', overrideWeight: 60, overrideUnit: 'kg' }),
+      "Override today's weight · 60 kg",
+    );
+    expect(field(dumbbell).props.value).toBe('132.5');
+  });
+
+  it('keeps an override as it is when Save is pressed unedited (R71)', () => {
+    const tree = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).toEqual([]);
+  });
+
+  it('saves an edited number over an override', () => {
+    const tree = openOverride(today({ overrideWeight: 60, overrideUnit: 'kg' }), "Override today's weight · 60 kg");
+    act(() => field(tree).props.onChangeText('135'));
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 135, 'lb');
+  });
+
+  it('saves the target it shows, in the display unit, when Save is pressed unedited with no override (R71)', () => {
+    const tree = openOverride(today({ plannedWeight: 60, plannedUnit: 'kg' }));
+    expect(field(tree).props.value).toBe('130');
+
+    press(tree, 'Save');
+
+    expect(overrideWeight).toHaveBeenCalledTimes(1);
+    expect(overrideWeight).toHaveBeenCalledWith('db', 'we1', 130, 'lb');
   });
 
   it('starts empty with no plan and no override', () => {

@@ -39,7 +39,7 @@ const FIELDS: Record<LoggingType, FieldKey[]> = {
 };
 
 /** Types whose weight is a load that today's target applies to. */
-const HAS_LOAD: LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'weighted_time'];
+export const HAS_LOAD: LoggingType[] =['weighted', 'bodyweight_plus', 'assisted', 'weighted_time'];
 
 function loadHeader(loggingType: LoggingType, unit: WeightUnit): string {
   const label = unit.toUpperCase();
@@ -159,9 +159,10 @@ const round2 = (n: number) => Number(n.toFixed(2));
 /**
  * Today's target weight, in the entry unit (`TickInput.target` must be). The override wins over the planned weight.
  * One in the other unit (the display unit was switched mid-workout) converts as a workout start does (spec 7.1,
- * `planInUnit`): a barbell to the nearest weight `gear` loads, anything else to the nearest 0.5.
+ * `planInUnit`): a barbell to the nearest weight `gear` loads, anything else to the nearest 0.5. Today's weight sheet
+ * starts from it too (R71), so it shows what the set rows show.
  */
-function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): number | null {
+export function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): number | null {
   if (!HAS_LOAD.includes(ex.loggingType)) return null;
   const overridden = ex.overrideWeight !== null;
   const weight = overridden ? ex.overrideWeight : ex.plannedWeight;

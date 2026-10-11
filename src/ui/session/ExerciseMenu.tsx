@@ -8,10 +8,12 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import { formatRest } from '../../domain/dates';
 import { parseDecimal } from '../../domain/input';
 import { MARK_LABELS } from '../../domain/labels';
+import { gearFor } from '../../domain/plates';
 import { REST_CHOICES } from '../../domain/rest';
 import { canMoveBlock, hasDoneSets, replaceNeedsConfirm, supersetAction } from '../../domain/sessionMenu';
-import type { ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
-import { convertWeight, formatWeight } from '../../domain/units';
+import { HAS_LOAD, targetFor } from '../../domain/setTable';
+import type { ExerciseMark } from '../../domain/types';
+import { formatWeight } from '../../domain/units';
 import { announce } from '../../platform/announce';
 import { flushAll } from '../../state/draftFlush';
 import { useDbQuery } from '../../state/dataVersion';
@@ -50,35 +52,35 @@ type Panel = 'menu' | 'reorder' | 'rest' | 'mark' | 'confirmRemove' | 'confirmRe
 /** The Something off reasons in the sheet's order. */
 const MARKS = Object.keys(MARK_LABELS) as ExerciseMark[];
 
-/** Logging types with no weight to override. */
-const NO_WEIGHT: LoggingType[] = ['timed', 'distance_time'];
-
 /** A rest length as the menu shows it: "Off" for 0, else m:ss. */
 function restLabel(seconds: number): string {
   return seconds === 0 ? 'Off' : formatRest(seconds);
 }
 
-/** A weight in `unit`, rounded to 2 decimals as a field shows it; one with no stored unit is read as `unit`. */
-function fieldWeight(weight: number, from: WeightUnit | null, unit: WeightUnit): string {
-  return String(Number(convertWeight(weight, from ?? unit, unit).toFixed(2)));
-}
-
 /**
- * Today's weight (spec 18.7): one field in the display unit, starting from the override, else the planned weight. Saving
- * stores it in the display unit; it changes today's target only. Mounted while its sheet shows, so it starts afresh.
+ * Today's weight (spec 18.7): one field in the display unit, starting from today's target exactly as the set rows show
+ * it (R71). Saving stores it in the display unit; it changes today's target only. Saved unedited, an override stays as
+ * it was stored, in its own unit. Mounted while its sheet shows, so it starts afresh.
  */
-function TodaysWeight({ ex, unit, onClose }: { ex: WorkoutExerciseView; unit: WeightUnit; onClose: () => void }) {
+function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () => void }) {
   const db = useDb();
   const { colors } = useTheme();
-  const [text, setText] = useState(() => {
-    if (ex.overrideWeight !== null) return fieldWeight(ex.overrideWeight, ex.overrideUnit, unit);
-    if (ex.plannedWeight !== null) return fieldWeight(ex.plannedWeight, ex.plannedUnit, unit);
-    return '';
+  const settings = useDbQuery(getSettings);
+  const { unit } = settings;
+  /** What the field starts with: the override, else the planned weight, in the display unit as the rows show it. */
+  const [shown] = useState(() => {
+    const target = targetFor(ex, unit, gearFor(unit, settings));
+    return target === null ? '' : String(target);
   });
+  const [text, setText] = useState(shown);
   /** Whether Save found a number that needs another look; typing again clears it. */
   const [check, setCheck] = useState(false);
 
   const save = () => {
+    if (text === shown && ex.overrideWeight !== null) {
+      onClose();
+      return;
+    }
     const weight = parseDecimal(text);
     if (weight === null) {
       setCheck(true);
@@ -334,7 +336,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
                 variant="secondary"
                 onPress={() => setPanel('mark')}
               />
-              {ex !== null && !NO_WEIGHT.includes(ex.loggingType) ? (
+              {ex !== null && HAS_LOAD.includes(ex.loggingType) ? (
                 <Button
                   label={
                     ex.overrideWeight === null
@@ -399,7 +401,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
       <PlateSheet ex={panel === 'plates' ? ex : null} onClose={close} />
 
       <Sheet visible={ex !== null && panel === 'override'} onClose={close}>
-        {ex !== null && panel === 'override' ? <TodaysWeight ex={ex} unit={unit} onClose={close} /> : null}
+        {ex !== null && panel === 'override' ? <TodaysWeight ex={ex} onClose={close} /> : null}
       </Sheet>
     </>
   );
