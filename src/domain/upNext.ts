@@ -9,7 +9,8 @@ export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | n
 /** Types that need a load to be logged. Bodyweight-plus, timed and distance exercises do fine without one. */
 const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assisted'];
 
-const hasWeight = (exercise: UpNextLoadInput) => exercise.nextWeight !== null && exercise.nextWeightUnit !== null;
+const hasWeight = (exercise: UpNextLoadInput): exercise is UpNextLoadInput & { nextWeight: number; nextWeightUnit: WeightUnit } =>
+  exercise.nextWeight !== null && exercise.nextWeightUnit !== null;
 
 /** Some exercise of the day has a weight (both the value and its unit). */
 export function upNextDayHasWeight(exercises: readonly UpNextLoadInput[]): boolean {
@@ -23,7 +24,7 @@ export function upNextNeedsWeights(exercises: readonly UpNextLoadInput[]): boole
 
 /** The weight; '—' when the type needs a load, it has none, and another exercise of the day has one; else null. */
 export function upNextLoad(exercise: UpNextLoadInput, dayHasWeight: boolean): string | null {
-  if (exercise.nextWeight !== null && exercise.nextWeightUnit !== null) return formatWeight(exercise.nextWeight, exercise.nextWeightUnit);
+  if (hasWeight(exercise)) return formatWeight(exercise.nextWeight, exercise.nextWeightUnit);
   return dayHasWeight && NEEDS_LOAD.includes(exercise.loggingType) ? '—' : null;
 }
 

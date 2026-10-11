@@ -86,7 +86,13 @@ export function RestBar({ workoutId, endsAt, bottomInset }: Props) {
           accessibilityLabel="Add 15 seconds to the rest"
           onPress={() => restPlus15(db, workoutId, endsAt)}
         />
-        <Button label="Skip" variant="secondary" size="compact" accessibilityLabel="Skip the rest" onPress={() => restSkip(db, workoutId)} />
+        <Button
+          label="Skip"
+          variant="secondary"
+          size="compact"
+          accessibilityLabel="Skip the rest"
+          onPress={() => restSkip(db, workoutId, endsAt)}
+        />
       </View>
     </View>
   );

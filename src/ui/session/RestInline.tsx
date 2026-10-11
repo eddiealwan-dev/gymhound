@@ -13,7 +13,10 @@ type Props = {
   workoutId: string;
   /** When the rest ends (epoch ms): `rest_ends_at`, or the end of the rest `useRestUp` holds. */
   endsAt: number;
-  /** How long this rest is, in seconds: the track drains from full over it. */
+  /**
+   * How long this rest is, in seconds: the track drains from full over it. The row keeps the length it was first drawn
+   * with, so a new length chosen from the countdown (which sets future rests only) does not rescale this rest's track.
+   */
   lengthSeconds: number;
   /** What the row says once the rest is up: "Rest's up · Set 2 next". */
   upText: string;
@@ -27,15 +30,19 @@ const TICK_MS = 250;
 /**
  * The rest under the set that started it (spec 18.6): a big countdown under a REST label, which opens the exercise's rest
  * choices when tapped, then −15s, +15s and Skip, over a thin track that drains with the time left. At zero it holds a
- * check and "Rest's up" for `REST_UP_MS`, with no buttons, then shows nothing. It is the only countdown while that set is
- * in the workout; the bar at the bottom shows only when no set row can (R41). Text doesn't shrink, so when large text
- * leaves no room beside the time, the pills wrap onto a second line, at the end (G1). It sits on `surface`, outlined in
- * `borderStrong`, so it never looks like a done set.
+ * check and "Rest's up" for `REST_UP_MS`, with no buttons and at the height the countdown had, then shows nothing. It is
+ * the only countdown while that set is in the workout; the bar at the bottom shows only when no set row can (R41). Text
+ * doesn't shrink, so when large text leaves no room beside the time, the three pills wrap together onto a second line,
+ * at the end (G1). It sits on `surface`, outlined in `borderStrong`, so it never looks like a done set.
  */
 export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRest }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const [now, setNow] = useState(() => Date.now());
+  // The length this rest started with (the block draws a new row for a new rest).
+  const [trackLength] = useState(lengthSeconds);
+  /** The height of the row while it counts down, which "Rest's up" keeps so the sets below don't jump at zero. */
+  const [runningHeight, setRunningHeight] = useState<number | undefined>(undefined);
 
   const phase = restRowPhase(endsAt, now);
   const gone = phase.kind === 'gone';
@@ -48,16 +55,20 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
   }, [gone]);
 
   if (phase.kind === 'gone') return null;
+  const running = phase.kind === 'running';
 
   return (
     <View
+      onLayout={running ? (e) => setRunningHeight(e.nativeEvent.layout.height) : undefined}
       style={{
         flexDirection: 'row',
         flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'flex-end',
         columnGap: 8,
-        rowGap: 4,
+        // The pills' 4pt hitSlops, stacked on two lines, must not overlap.
+        rowGap: 8,
+        minHeight: running ? undefined : runningHeight,
         marginVertical: 4,
         paddingLeft: 12,
         paddingRight: 8,
@@ -69,7 +80,7 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
         overflow: 'hidden',
       }}
     >
-      {phase.kind === 'running' ? (
+      {running ? (
         <>
           <Pressable
             accessibilityRole="button"
@@ -86,21 +97,30 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               {formatRest(phase.remaining)}
             </Num>
           </Pressable>
-          <Button
-            label="−15s"
-            variant="secondary"
-            size="compact"
-            accessibilityLabel="Take 15 seconds off the rest"
-            onPress={() => restMinus15(db, workoutId, endsAt)}
-          />
-          <Button
-            label="+15s"
-            variant="secondary"
-            size="compact"
-            accessibilityLabel="Add 15 seconds to the rest"
-            onPress={() => restPlus15(db, workoutId, endsAt)}
-          />
-          <Button label="Skip" variant="secondary" size="compact" accessibilityLabel="Skip the rest" onPress={() => restSkip(db, workoutId)} />
+          {/* The pills wrap as one group, so Skip never sits alone on the second line. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8, flexShrink: 0 }}>
+            <Button
+              label="−15s"
+              variant="secondary"
+              size="compact"
+              accessibilityLabel="Take 15 seconds off the rest"
+              onPress={() => restMinus15(db, workoutId, endsAt)}
+            />
+            <Button
+              label="+15s"
+              variant="secondary"
+              size="compact"
+              accessibilityLabel="Add 15 seconds to the rest"
+              onPress={() => restPlus15(db, workoutId, endsAt)}
+            />
+            <Button
+              label="Skip"
+              variant="secondary"
+              size="compact"
+              accessibilityLabel="Skip the rest"
+              onPress={() => restSkip(db, workoutId, endsAt)}
+            />
+          </View>
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
@@ -109,7 +129,7 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               left: 0,
               bottom: 0,
               height: 3,
-              width: `${restTrackFraction(phase.remaining, lengthSeconds) * 100}%`,
+              width: `${restTrackFraction(phase.remaining, trackLength) * 100}%`,
               backgroundColor: colors.text,
             }}
           />

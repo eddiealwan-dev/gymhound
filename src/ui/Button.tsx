@@ -4,7 +4,7 @@ import { useTheme } from './ThemeProvider';
 
 type Variant = 'primary' | 'secondary' | 'quiet';
 
-/** Regular is the full 48pt button. Compact is 36pt with a 4pt hitSlop, which keeps the 44pt target. */
+/** Regular is the full 48pt button. Compact is 36pt tall and at least 44pt wide with a 4pt hitSlop, which keeps the 44pt target. */
 export type ButtonSize = 'regular' | 'compact';
 
 type Props = {
@@ -48,6 +48,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: compact ? 36 : 48,
+        minWidth: compact ? 44 : undefined,
         paddingHorizontal: compact ? 12 : 20,
         borderRadius: compact ? 18 : 12,
         borderWidth: 1,

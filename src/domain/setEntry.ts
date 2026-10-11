@@ -1,6 +1,6 @@
 import { formatRest } from './dates';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
-import { convertWeight, formatWeight, roundToHalf } from './units';
+import { convertDistance, convertWeight, formatWeight, roundToHalf } from './units';
 
 /**
  * A set from the most recent finished workout with this exercise. `matchPrevious` picks the one
@@ -88,15 +88,15 @@ export function matchPrevious(
   });
 }
 
-/** The fields one set carries to the sets below it (spec 18.6). A weight keeps the unit it was logged in. */
-export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'durationS' | 'distance'>;
+/** The fields one set carries to the sets below it (spec 18.6). A weight and a distance keep the unit they were logged in. */
+export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'durationS' | 'distance' | 'distanceUnit'>;
 
 /**
  * Today's own values for the set at `index` (spec 18.6): per field, the nearest set above `index` of the same set type
  * with a stored value (ticked or typed); null if none. Never looks below or at other types.
  */
 export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Carried>, index: number): Carried | null {
-  const carried: Carried = { weight: null, weightUnit: null, reps: null, durationS: null, distance: null };
+  const carried: Carried = { weight: null, weightUnit: null, reps: null, durationS: null, distance: null, distanceUnit: null };
   const setType = current[index]?.setType;
   for (let i = index - 1; i >= 0; i--) {
     const above = current[i];
@@ -105,9 +105,12 @@ export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Car
       carried.weight = above.weight;
       carried.weightUnit = above.weightUnit;
     }
+    if (carried.distance === null && above.distance !== null) {
+      carried.distance = above.distance;
+      carried.distanceUnit = above.distanceUnit;
+    }
     carried.reps ??= above.reps;
     carried.durationS ??= above.durationS;
-    carried.distance ??= above.distance;
   }
   const found = carried.weight !== null || carried.reps !== null || carried.durationS !== null || carried.distance !== null;
   return found ? carried : null;
@@ -117,6 +120,12 @@ export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Car
 function inEntryUnit(weight: number | null, from: WeightUnit | null, unit: WeightUnit | undefined): number | null {
   if (weight === null || !unit || !from || from === unit) return weight;
   return roundToHalf(convertWeight(weight, from, unit));
+}
+
+/** A distance in the entry unit: one logged in another unit converts to 2 decimals (5 km is 3.11 mi). */
+function distanceInEntryUnit(distance: number | null, from: DistanceUnit | null, unit: DistanceUnit | undefined): number | null {
+  if (distance === null || !unit || !from || from === unit) return distance;
+  return Number(convertDistance(distance, from, unit).toFixed(2));
 }
 
 /**
@@ -134,13 +143,15 @@ function inEntryUnit(weight: number | null, from: WeightUnit | null, unit: Weigh
  *
  * Pass `unit` (the unit the user is entering in) so a previous or carried weight logged in the
  * other unit is converted and rounded to the nearest 0.5 (84 kg is 185 lb, not 185.19); otherwise
- * the weight is returned as logged.
+ * the weight is returned as logged. Likewise pass `distanceUnit` so a previous or carried distance
+ * logged in another distance unit is converted, to 2 decimals.
  */
 export function placeholdersFor(a: {
   previous: PrevSet | null;
   ruleRepMax: number | null;
   loggingType?: LoggingType;
   unit?: WeightUnit;
+  distanceUnit?: DistanceUnit;
   carried?: Carried | null;
 }): SetFields {
   const { previous, loggingType, carried } = a;
@@ -153,7 +164,7 @@ export function placeholdersFor(a: {
       weight: loggingType === 'bodyweight_plus' && weight === 0 ? null : weight,
       reps: ruleIsSeconds ? null : (ruleReps ?? carried.reps),
       durationS: ruleIsSeconds ? (a.ruleRepMax ?? carried.durationS) : carried.durationS,
-      distance: carried.distance,
+      distance: distanceInEntryUnit(carried.distance, carried.distanceUnit, a.distanceUnit),
     };
   }
 
@@ -161,7 +172,7 @@ export function placeholdersFor(a: {
     weight: inEntryUnit(previous?.weight ?? null, previous?.weightUnit ?? null, a.unit),
     reps: ruleIsSeconds ? null : (previous?.reps ?? ruleReps),
     durationS: previous?.durationS ?? (ruleIsSeconds ? a.ruleRepMax : null),
-    distance: previous?.distance ?? null,
+    distance: distanceInEntryUnit(previous?.distance ?? null, previous?.distanceUnit ?? null, a.distanceUnit),
   };
 }
 

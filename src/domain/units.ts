@@ -1,4 +1,4 @@
-import type { MeasurementSystem, WeightUnit } from './types';
+import type { DistanceUnit, MeasurementSystem, WeightUnit } from './types';
 
 export const LB_TO_KG = 0.45359237;
 
@@ -13,6 +13,13 @@ export function convertWeight(v: number, from: WeightUnit, to: WeightUnit): numb
   if (from === to) return v;
   const kg = toKg(v, from);
   return to === 'kg' ? kg : kg / LB_TO_KG;
+}
+
+const METRES: Record<DistanceUnit, number> = { m: 1, km: 1000, mi: 1609.344 };
+
+export function convertDistance(v: number, from: DistanceUnit, to: DistanceUnit): number {
+  if (from === to) return v;
+  return (v * METRES[from]) / METRES[to];
 }
 
 export function sameWeight(

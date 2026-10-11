@@ -26,6 +26,16 @@ function mount(at: number, upText = "Rest's up · Set 2 next") {
   });
 }
 
+/** Draws the row again with new props, as the block does when the workout changes. */
+function rerender(props: { endsAt?: number; lengthSeconds?: number }) {
+  endsAt = props.endsAt ?? endsAt;
+  act(() => {
+    tree.update(
+      <RestInline workoutId="w1" endsAt={endsAt} lengthSeconds={props.lengthSeconds ?? 120} upText="Rest's up · Set 2 next" onOpenRest={onOpenRest} />,
+    );
+  });
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   onOpenRest.mockClear();
@@ -41,6 +51,8 @@ afterEach(() => {
 });
 
 const advance = (ms: number) => act(() => void jest.advanceTimersByTime(ms));
+
+const track = () => tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true);
 
 const styleOf = (node: ReactTestInstance) => [node.props.style].flat(Infinity).reduce((all, s) => ({ ...all, ...s }), {});
 
@@ -78,7 +90,7 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
 
     expect(restMinus15).toHaveBeenCalledWith('db', 'w1', endsAt);
     expect(restPlus15).toHaveBeenCalledWith('db', 'w1', endsAt);
-    expect(restSkip).toHaveBeenCalledWith('db', 'w1');
+    expect(restSkip).toHaveBeenCalledWith('db', 'w1', endsAt);
   });
 
   it('drains a text-colour track', () => {
@@ -103,6 +115,30 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
     expect(onOpenRest).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the length the rest started with: a new rest length chosen from the countdown does not rescale its track', () => {
+    expect(styleOf(track()).width).toBe('87.5%');
+
+    rerender({ lengthSeconds: 210 });
+
+    expect(styleOf(track()).width).toBe('87.5%');
+  });
+
+  it('+15s may still fill the track', () => {
+    rerender({ endsAt: endsAt + 15_000 });
+    expect(styleOf(track()).width).toBe('100%');
+  });
+
+  it("keeps the running row's height through Rest's up, so the sets below do not jump at zero", () => {
+    act(() => tree.unmount());
+    mount(Date.now() + 1_000);
+    act(() => row().props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 320, height: 71 } } }));
+
+    advance(2_000);
+
+    expect(shownText()).toContain("Rest's up · Set 2 next");
+    expect(styleOf(row()).minHeight).toBe(71);
+  });
+
   it("holds Rest's up for 10 seconds at zero", () => {
     act(() => tree.unmount());
     mount(Date.now() + 1_000);
@@ -124,7 +160,14 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
 describe('the rest under its set fits large text (G1)', () => {
   it('wraps the pills onto a second line, at the end, when they do not fit beside the time', () => {
     expect(styleOf(row())).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', columnGap: 8 });
-    expect(styleOf(row()).rowGap).toEqual(expect.any(Number));
+    // The pills' 4pt hitSlops, stacked, must not overlap.
+    expect(styleOf(row()).rowGap).toBe(8);
+  });
+
+  it('wraps −15s, +15s and Skip together, never Skip alone', () => {
+    const pills = row().findAll((n) => n.type === View && styleOf(n).flexWrap !== 'wrap' && n.findAllByType(Button).length === 3);
+    expect(pills).toHaveLength(1);
+    expect(styleOf(pills[0])).toMatchObject({ flexDirection: 'row', flexShrink: 0, columnGap: 8 });
   });
 
   it('lets the time box claim the width of its text, so the pills wrap instead of drawing over it', () => {

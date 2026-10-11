@@ -6,6 +6,7 @@ import path from 'node:path';
 import { mondayOf, toLocalDate } from '../../domain/dates';
 import { formatPrevious } from '../../domain/setEntry';
 import { computeStreak } from '../../domain/streak';
+import { dayTitle } from '../../domain/upNext';
 import { totalVolume } from '../../domain/volume';
 import { runSeed } from '../../seed/seed';
 import {
@@ -23,7 +24,7 @@ import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { getExerciseNote, setExerciseNote } from './exercisesRepo';
 import { getUpNext, setActiveRoutine } from './routinesRepo';
-import { ensureSettings, setSetting } from './settingsRepo';
+import { ensureSettings, getSettings, setSetting } from './settingsRepo';
 import { addExerciseToWorkout, replaceExercise } from './workoutEditRepo';
 import {
   ActiveWorkoutExistsError,
@@ -636,20 +637,24 @@ describe('getNextDayTitle', () => {
     const db = seededDb();
     setActiveRoutine(db, PPL);
     const id = startWorkoutFromDay(db, PUSH_A, NOW);
-    db.delete(routines).where(eq(routines.id, PPL)).run();
+    // Only the day goes: its routine is still the active one.
+    db.delete(routineDays).where(eq(routineDays.id, PUSH_A)).run();
+    expect(getSettings(db).activeRoutineId).toBe(PPL);
     expect(getNextDayTitle(db, id)).toBeNull();
   });
 
-  it('names the day finish moves Up next to', () => {
+  it('names the day finish moves Up next to, as the Up next card titles it', () => {
     const db = seededDb();
-    setActiveRoutine(db, PPL);
-    const id = startWorkoutFromDay(db, PUSH_A, NOW);
+    setActiveRoutine(db, 'premade-5x5-3');
+    const id = startWorkoutFromDay(db, FIVE_A, NOW);
     const preview = getNextDayTitle(db, id);
-    tick(db, setIds(db)[0], 135, 8, NOW + 60_000);
+    tick(db, setIds(db)[0], 135, 5, NOW + 60_000);
     finishWorkout(db, id, NOW + HOUR);
 
-    expect(getUpNext(db)!.dayName).toBe(preview);
-    expect(nextDayIndex(db, PPL)).toBe(1);
+    const upNext = getUpNext(db)!;
+    expect(preview).toBe(dayTitle(upNext.routineName, upNext.dayName));
+    expect(preview).toBe('5×5 B');
+    expect(nextDayIndex(db, 'premade-5x5-3')).toBe(1);
   });
 });
 

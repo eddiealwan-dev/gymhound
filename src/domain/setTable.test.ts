@@ -373,12 +373,13 @@ describe("buildRows: carrying today's values (spec 18.6)", () => {
 
   it('a target wins: no carried weight under it', () => {
     const rows = buildRows(
-      exercise({ plannedWeight: 135, plannedUnit: 'lb', sets: [done(140, 8, 'lb'), set('working')] }),
+      exercise({ rule: { repMax: 10 }, plannedWeight: 135, plannedUnit: 'lb', sets: [done(140, 8, 'lb'), set('working')] }),
       'lb',
       LB_GEAR,
     );
     expect(rows[1].placeholders.weight).toBeNull();
-    expect(rows[1].placeholders.reps).toBe(8);
+    // The rule's reps, not the 8 carried from the set above.
+    expect(rows[1].placeholders.reps).toBe(10);
     expect(valueText(rows[1], 'weight', 'lb')).toBe('135');
   });
 
@@ -392,6 +393,12 @@ describe("buildRows: carrying today's values (spec 18.6)", () => {
     expect(rows[3].placeholders).toEqual({ weight: 135, reps: 8, durationS: null, distance: null });
     const after = buildRows(exercise({ rule: null, sets: [done(135, 8, 'lb'), set('warmup')] }), 'lb', LB_GEAR);
     expect(after[1].placeholders).toEqual({ weight: null, reps: null, durationS: null, distance: null });
+  });
+
+  it('a carried distance logged in another distance unit converts to the entry distance unit', () => {
+    const run = set('working', { done: true, distance: 5, distanceUnit: 'km', durationS: 1500 });
+    const rows = buildRows(exercise({ loggingType: 'distance_time', rule: null, sets: [run, set('working')] }), 'lb', LB_GEAR, 'mi');
+    expect(rows[1].placeholders).toEqual({ weight: null, reps: null, durationS: 1500, distance: 3.11 });
   });
 
   it('a carried weight logged in the other unit converts to the entry unit', () => {

@@ -147,8 +147,9 @@ export type RowModel = {
   /** Today's target weight in the entry unit, for a working set of a type with a load. */
   target: number | null;
   /**
-   * The greyed-out values, in the entry unit (a weight in the other unit rounds to the nearest 0.5): last time's set,
-   * else today's own values from the set above (spec 18.6), with the rule filling the reps or time.
+   * The greyed-out values, in the entry units (a weight in the other unit rounds to the nearest 0.5, a distance in
+   * another unit to 2 decimals): last time's set, else today's own values from the set above (spec 18.6), with the rule
+   * filling the reps or time.
    */
   placeholders: ReturnType<typeof placeholdersFor>;
 };
@@ -177,8 +178,9 @@ function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): number | nu
  * placeholders, except a carried weight under a target: the target wins. The Previous column never shows a carry.
  * What a row shows is what its tick records, so a set with a value above it ticks in one tap (R48).
  * `gear` is the bar and plates in Settings for `unit`, which a barbell target in the other unit rounds to.
+ * `distanceUnit` is the distance unit in Settings, which a previous or carried distance in another unit converts to.
  */
-export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear): RowModel[] {
+export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear, distanceUnit?: DistanceUnit): RowModel[] {
   const matched = matchPrevious(ex.sets, ex.previous);
   const labels = setLabels(ex.sets.map((s) => s.setType));
   const target = targetFor(ex, unit, gear);
@@ -196,6 +198,7 @@ export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear): RowM
         ruleRepMax: ex.rule?.repMax ?? null,
         loggingType: ex.loggingType,
         unit,
+        distanceUnit,
         carried: carried !== null && rowTarget !== null ? { ...carried, weight: null } : carried,
       }),
     };
