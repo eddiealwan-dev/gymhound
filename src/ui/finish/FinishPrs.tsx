@@ -23,7 +23,7 @@ const SHARE_FAILED = "Couldn't make the image. Try again.";
  * wraps under the line at large text sizes. Share asks the host to draw, capture and share that highlight's card. A
  * failure, or a share sheet that has gone by the tap, shows a muted line under the row.
  */
-export function FinishPrs({ summary }: { workoutId: string; summary: FinishSummary }): ReactElement | null {
+export function FinishPrs({ summary }: { summary: FinishSummary }): ReactElement | null {
   if (summary.prs.length === 0) return null;
   return <PrList prs={summary.prs} afterNext={summary.next.length > 0} />;
 }

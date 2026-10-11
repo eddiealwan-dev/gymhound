@@ -97,7 +97,7 @@ export default function FinishSummary() {
                     ))}
                   </View>
                 )}
-                <FinishPrs workoutId={id} summary={summary} />
+                <FinishPrs summary={summary} />
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />

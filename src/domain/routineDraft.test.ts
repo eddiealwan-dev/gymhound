@@ -428,7 +428,7 @@ describe('addDayFromSaved (R121)', () => {
   });
 });
 
-describe('refreshDraft: exercises changed while the editor was away (Task 6)', () => {
+describe('refreshDraft: exercises changed while the editor was away (R108, R109)', () => {
   const library = new Map<string, Pick<LibraryExercise, 'name' | 'loggingType'>>([
     [BENCH.id, BENCH],
     [ROW.id, ROW],

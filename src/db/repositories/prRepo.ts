@@ -98,6 +98,19 @@ export function backfillPrFlags(db: Db): number {
   });
 }
 
+/**
+ * The backfill as the launch runs it (R127): a failure is logged and the app starts anyway, rather than showing the
+ * startup error screen on every launch. Its transaction rolls back, so `prFlagsBackfilled` stays off and the next
+ * launch tries again; until then older workouts just show no PR marks.
+ */
+export function tryBackfillPrFlags(db: Db): void {
+  try {
+    backfillPrFlags(db);
+  } catch (error) {
+    console.warn('GymHound could not mark the PRs of older workouts. It will try again next launch.', error);
+  }
+}
+
 /** The ids of the exercises logged in a workout, without repeats. */
 function exerciseIdsOf(db: Db, workoutId: string): string[] {
   return db

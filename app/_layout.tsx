@@ -15,7 +15,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { closeAppDb, liveDbPath, openAppDb, openAppDbAsync } from '../src/db/client';
 import { DbProvider } from '../src/db/DbProvider';
 import migrations from '../src/db/migrations/migrations';
-import { backfillPrFlags } from '../src/db/repositories/prRepo';
+import { tryBackfillPrFlags } from '../src/db/repositories/prRepo';
 import { ensureSettings } from '../src/db/repositories/settingsRepo';
 import { snapshotTime, startDatabase } from '../src/db/snapshots';
 import type { Db } from '../src/db/types';
@@ -207,8 +207,9 @@ function Boot({ db, restoredFrom }: { db: Db; restoredFrom: string | null }) {
     try {
       ensureSettings(db, getLocales()[0]?.measurementSystem ?? null);
       runSeed(db, Date.now());
-      // Once (R127): PR flags for workouts finished before phase 4. Only reads a setting after that.
-      backfillPrFlags(db);
+      // Once (R127): PR flags for workouts finished before phase 4. Only reads a setting after that. A failure is
+      // logged and retried next launch, never the error screen.
+      tryBackfillPrFlags(db);
       if (restoredFrom !== null) recordRestoredSnapshot(db, restoredFrom);
       setSeeded(true);
     } catch (e) {

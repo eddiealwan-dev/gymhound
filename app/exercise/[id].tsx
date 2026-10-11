@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AccessibilityInfo, BackHandler, Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
+import { BackHandler, Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
 import { getExercise, listExercises } from '../../src/db/repositories/exercisesRepo';
 import { normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
 import { EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
 import type { LoggingType, Muscle } from '../../src/domain/types';
+import { announce } from '../../src/platform/announce';
 import { deleteExercisePhotoFile } from '../../src/platform/exercisePhotoFiles';
 import { useCreatedExercise } from '../../src/state/createdExercise';
 import { bumpData } from '../../src/state/dataVersion';
@@ -194,8 +195,8 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
     const refused = validateCustomExercise(clean, otherNames);
     const { equipment } = clean;
     if (refused.length > 0 || equipment === null) {
-      // The live region over Save speaks on Android only; VoiceOver is told here.
-      AccessibilityInfo.announceForAccessibility(refused.join(' '));
+      // Said here on both phones; the lines over Save have no live region, which TalkBack would read a second time.
+      announce(refused.join(' '));
       return;
     }
     try {
@@ -208,7 +209,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       setFailure(message);
-      AccessibilityInfo.announceForAccessibility(message);
+      announce(message);
       return;
     }
     done.current = true;
@@ -218,8 +219,17 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
 
   const remove = () => {
     if (exerciseId === null) return;
-    // An unused exercise goes with its own photos: their files are deleted once the rows are (R109, R111).
-    deleteCustomExercise(db, exerciseId, (names) => names.forEach(deleteExercisePhotoFile));
+    try {
+      // An unused exercise goes with its own photos: their files are deleted once the rows are (R109, R111).
+      deleteCustomExercise(db, exerciseId, (names) => names.forEach(deleteExercisePhotoFile));
+    } catch {
+      // The sheet closes and a muted line over Save says so; nothing was deleted, so the editor stays.
+      const message = "Couldn't delete. Try again.";
+      setAskDelete(false);
+      setFailure(message);
+      announce(message);
+      return;
+    }
     done.current = true;
     bumpData();
     setAskDelete(false);
@@ -310,7 +320,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
       <View style={{ marginTop: 32, gap: 16 }}>
         {problems.length > 0 ? (
           // Never red: what stops the save is said in muted words over the button.
-          <View accessibilityLiveRegion="polite" style={{ gap: 4 }}>
+          <View style={{ gap: 4 }}>
             {problems.map((problem) => (
               <Body key={problem} muted>
                 {problem}
