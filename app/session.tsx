@@ -172,8 +172,11 @@ export default function Session() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useDbQuery(readSession);
-  /** The exercise whose ⋯ menu is open, and what it opens on: its menu, or its rest choices from the countdown. */
-  const [menuFor, setMenuFor] = useState<{ id: string; panel: 'menu' | 'rest' } | null>(null);
+  /**
+   * The exercise whose ⋯ menu is open, and what it opens on: its menu, its rest choices from the countdown, or its
+   * Something off reasons from the name row (R81).
+   */
+  const [menuFor, setMenuFor] = useState<{ id: string; panel: 'menu' | 'rest' | 'mark' } | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
   /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
@@ -341,6 +344,11 @@ export default function Session() {
                 flushAll();
                 Keyboard.dismiss();
                 setMenuFor({ id: ex.id, panel: 'rest' });
+              }}
+              onOpenMark={() => {
+                flushAll();
+                Keyboard.dismiss();
+                setMenuFor({ id: ex.id, panel: 'mark' });
               }}
             />
           ))}

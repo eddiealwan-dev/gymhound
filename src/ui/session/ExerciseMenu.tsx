@@ -38,8 +38,11 @@ type Props = {
   exercises: WorkoutExerciseView[];
   /** The exercise whose ⋯ menu is open, or null when none is. */
   exerciseId: string | null;
-  /** What it opens on: the menu (the default), or the rest choices when the countdown under a set was tapped. */
-  initialPanel?: 'menu' | 'rest';
+  /**
+   * What it opens on: the menu (the default), the rest choices when the countdown under a set was tapped, or the
+   * Something off reasons when the name row's Something off was (R81).
+   */
+  initialPanel?: 'menu' | 'rest' | 'mark';
   onClose: () => void;
 };
 
@@ -155,7 +158,7 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
  * The ⋯ menu of an exercise (spec 8.4) and the sheets it opens: Something off, today's weight, Reorder, the rest time of
  * the exercise, the check before removing or replacing an exercise that has ticked sets, and the plate calculator on a
  * barbell exercise. One instance serves the whole session screen. Tapping the countdown opens it straight on the rest
- * choices (`initialPanel`).
+ * choices, and the name row's Something off straight on the reasons (`initialPanel`).
  */
 export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: Props) {
   const db = useDb();

@@ -172,6 +172,29 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(all.indexOf('UP NEXT')).toBeLessThan(all.indexOf('Streak'));
   });
 
+  it('the date stays whole at any text size: one line that shrinks to fit, with no fixed line height (R79, Round 5)', () => {
+    const tree = mount();
+    const date = tree.root.findAll((n) => n.type === Text && n.props.children === 'SAT 10 OCT');
+    expect(date).toHaveLength(1);
+    const { numberOfLines, adjustsFontSizeToFit, minimumFontScale, maxFontSizeMultiplier, style } = date[0].props;
+
+    expect({ numberOfLines, adjustsFontSizeToFit, minimumFontScale, maxFontSizeMultiplier }).toEqual({
+      numberOfLines: 1,
+      adjustsFontSizeToFit: true,
+      minimumFontScale: 0.3,
+      maxFontSizeMultiplier: undefined,
+    });
+    // iOS shrinks only the font to fit, never a fixed line height, which grows with the phone's text size.
+    const flat = StyleSheet.flatten(style);
+    expect(flat.fontSize).toBe(56);
+    expect(flat.lineHeight).toBeUndefined();
+
+    // The greeting above it wraps instead.
+    const greeting = tree.root.findAll((n) => n.type === Text && n.props.children === 'GOOD MORNING');
+    expect(greeting).toHaveLength(1);
+    expect(greeting[0].props.numberOfLines).toBeUndefined();
+  });
+
   it('Start Upper A is the filled button under the title', () => {
     const tree = mount();
     const all = lines(tree);
@@ -333,7 +356,7 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(router.push).toHaveBeenCalledWith('/session');
   });
 
-  it('in progress: a quiet Change routine at the foot of the Resume card opens Routines (Round 4, A4)', () => {
+  it('in progress: a quiet Change routine at the foot of the Resume card (Round 4, A4)', () => {
     mockRead = { ...mockRead, active: { name: 'Upper A', startedAt: NOW - 27 * 60_000, setsDone: 5 } };
     const tree = mount();
     const all = lines(tree);
@@ -347,10 +370,68 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(all.indexOf('Change routine')).toBeLessThan(all.indexOf('Streak'));
     expect(shownText(tree).indexOf('Change routine')).toBeGreaterThan(shownText(tree).indexOf('Resume'));
     expect(filled(tree)).toEqual(['Resume']);
+  });
 
-    act(() => link[0].props.onPress());
+  describe('in progress: Change routine says to finish or discard first (R80, Round 5)', () => {
+    const changeRoutine = (tree: ReactTestRenderer) =>
+      tree.root.findAll((n) => n.props.accessibilityLabel === 'Change routine' && typeof n.props.onPress === 'function')[0];
 
-    expect(router.push).toHaveBeenCalledWith('/routines');
+    /** Train with a workout running, its Change routine tapped. */
+    function tapped(): ReactTestRenderer {
+      jest.useFakeTimers();
+      mockRead = { ...mockRead, active: { name: 'Upper A', startedAt: NOW - 27 * 60_000, setsDone: 5 } };
+      const tree = mount();
+      act(() => changeRoutine(tree).props.onPress());
+      return tree;
+    }
+
+    afterEach(() => jest.useRealTimers());
+
+    it('opens "Workout in progress" instead of Routines, with Resume filled and Not now', () => {
+      const tree = tapped();
+
+      expect(router.push).not.toHaveBeenCalled();
+      const shown = shownText(tree);
+      expect(shown).toContain('Workout in progress');
+      expect(shown).toContain('Finish or discard the workout in progress before changing routines.');
+      const sheet = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Resume' || b.props.label === 'Not now');
+      expect(sheet.map((b) => [b.props.label, b.props.variant ?? 'primary'])).toEqual([
+        ['Resume', 'primary'],
+        ['Resume', 'primary'],
+        ['Not now', 'secondary'],
+      ]);
+    });
+
+    it("Resume opens the session once the sheet has gone", () => {
+      const tree = tapped();
+      const sheetResume = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Resume')[1];
+
+      act(() => sheetResume.props.onPress());
+
+      expect(shownText(tree)).not.toContain('Workout in progress');
+      expect(router.push).not.toHaveBeenCalled();
+      act(() => void jest.advanceTimersByTime(400));
+      expect(router.push).toHaveBeenCalledWith('/session');
+    });
+
+    it('Not now closes it and goes nowhere', () => {
+      const tree = tapped();
+
+      press(tree, 'Not now');
+      act(() => void jest.advanceTimersByTime(400));
+
+      expect(shownText(tree)).not.toContain('Workout in progress');
+      expect(router.push).not.toHaveBeenCalled();
+    });
+
+    it("Up next's Change routine still opens Routines", () => {
+      const tree = mount();
+
+      act(() => changeRoutine(tree).props.onPress());
+
+      expect(router.push).toHaveBeenCalledWith('/routines');
+      expect(shownText(tree)).not.toContain('Workout in progress');
+    });
   });
 
   it('a one-letter day reads Start 5×5 A', () => {

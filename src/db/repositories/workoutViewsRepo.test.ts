@@ -1,10 +1,18 @@
 /** @jest-environment node */
 import { eq } from 'drizzle-orm';
+import { formatRepScheme } from '../../domain/labels';
+import { gearFor } from '../../domain/plates';
+import { finishLine } from '../../domain/ruleLine';
+import { resolveTick } from '../../domain/setEntry';
+import { buildRows, readRow } from '../../domain/setTable';
+import { upNextDayHasWeight, upNextLoad, upNextOutcome } from '../../domain/upNext';
 import { totalVolume } from '../../domain/volume';
-import { exercises, routineExercises } from '../schema';
+import { exercises, routineExercises, routines, workoutExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setRestSeconds } from './exercisePrefsRepo';
+import { getUpNext, setActiveRoutine } from './routinesRepo';
+import { getSettings } from './settingsRepo';
 import { addExerciseToWorkout, addWarmupSet, setExerciseMark, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
@@ -250,6 +258,76 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
       { name: 'Triceps pushdown', loggingType: 'assisted', outcome: 'raised', nextWeight: 35, nextUnit: 'lb', mark: null },
     ]);
+  });
+});
+
+describe('getFinishSummary: pull-ups and dips with no added weight (R75, R83, Round 5)', () => {
+  const PULL_A = 'premade-ppl-6:pull-a';
+  const PUSH_B = 'premade-ppl-6:push-b';
+
+  /**
+   * Ticks every set of the exercise as the session does with the added weight left empty: the row is read with only
+   * `reps` typed (or nothing, which ticks the rule's top of the range, the suggestion the reps field shows), and the
+   * tick records what `resolveTick` resolves, in the unit in Settings (as `sessionActions.tick` does).
+   */
+  function tickEmptyLoad(db: Db, exerciseId: string, reps: string | null, at: number): void {
+    const settings = getSettings(db);
+    const exercise = getActiveWorkoutView(db)!.exercises.find((e) => e.exerciseId === exerciseId)!;
+    exercise.sets.forEach((_, i) => {
+      const current = getActiveWorkoutView(db)!.exercises.find((e) => e.exerciseId === exerciseId)!;
+      const row = buildRows(current, settings.unit, gearFor(settings.unit, settings), settings.distanceUnit)[i];
+      const reading = readRow(row, reps === null ? {} : { reps }, settings.unit, settings.distanceUnit);
+      const values = resolveTick({ loggingType: current.loggingType, entered: reading.entered, target: row.target, placeholders: row.placeholders });
+      tickSet(db, row.set.id, values!, settings.unit, at + i * MINUTE, settings.distanceUnit);
+    });
+  }
+
+  /** Up next's row for the exercise, as Train draws its right side: the scheme, the load and last time's outcome. */
+  function upNextRow(db: Db, dayIndex: number, exerciseId: string): string {
+    db.update(routines).set({ nextDayIndex: dayIndex }).where(eq(routines.id, 'premade-ppl-6')).run();
+    const settings = getSettings(db);
+    const gear = gearFor(settings.unit, settings);
+    const upNext = getUpNext(db)!;
+    const exercise = upNext.exercises.find((e) => e.exerciseId === exerciseId)!;
+    const load = upNextLoad(exercise, upNextDayHasWeight(upNext.exercises), settings.unit, gear);
+    const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+    return `${load === null ? scheme : `${scheme} · ${load}`}${upNextOutcome(exercise, settings.unit, gear) ?? ''}`;
+  }
+
+  /** Starts the day, ticks only `exerciseId` with no added weight, finishes, and returns the finish lines. */
+  function finishDay(db: Db, dayId: string, exerciseId: string, reps: string | null): string[] {
+    const id = startWorkoutFromDay(db, dayId, OCT_9);
+    tickEmptyLoad(db, exerciseId, reps, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+    return getFinishSummary(db, id, getSettings(db).unit).next.map(finishLine);
+  }
+
+  it('stores an empty added weight as 0 in the unit shown, and a missed set holds at bodyweight; Up next shows no load', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'premade-ppl-6');
+
+    expect(finishDay(db, PULL_A, 'pull-up', '8')).toEqual(['Pull-up — holds at bodyweight']);
+    const working = db.select().from(workoutExercises).where(eq(workoutExercises.exerciseId, 'pull-up')).get()!;
+    expect(working).toMatchObject({ workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb' });
+    expect(upNextRow(db, 1, 'pull-up')).toBe('3×6–10 · held');
+  });
+
+  it('every set at the top of the range (typed, or the suggested reps ticked as they are) goes up from bodyweight', () => {
+    for (const reps of ['10', null]) {
+      const db = seededDb();
+      setActiveRoutine(db, 'premade-ppl-6');
+
+      expect(finishDay(db, PULL_A, 'pull-up', reps)).toEqual(['Pull-up — next time 5 lb ↑']);
+      expect(upNextRow(db, 1, 'pull-up')).toBe('3×6–10 · 5 lb · ↑ 5 lb');
+    }
+  });
+
+  it('in kg: dips that miss hold at bodyweight, and Up next shows no "0 kg"', () => {
+    const db = seededDb('metric');
+    setActiveRoutine(db, 'premade-ppl-6');
+
+    expect(finishDay(db, PUSH_B, 'dip', '9')).toEqual(['Dip — holds at bodyweight']);
+    expect(upNextRow(db, 3, 'dip')).toBe('3×8–12 · held');
   });
 });
 

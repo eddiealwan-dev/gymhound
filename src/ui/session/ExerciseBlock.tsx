@@ -57,16 +57,58 @@ type Props = {
   settingsRestSeconds: number;
   /** Opens this exercise's rest choices: the countdown was tapped. */
   onOpenRest: () => void;
+  /** Opens this exercise's Something off reasons: its Something off control was tapped (R81). */
+  onOpenMark: () => void;
 };
+
+/**
+ * A quiet, compact control in the name row: a 14pt muted icon and muted 14pt words, a 44pt target. + Note and Something
+ * off share it (R81).
+ */
+function NameRowControl({
+  icon,
+  label,
+  readAs,
+  onPress,
+}: {
+  icon: 'pencil' | 'alert-circle-outline';
+  label: string;
+  /** What the screen reader says. */
+  readAs: string;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={readAs}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 44,
+        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        flexShrink: 0,
+        opacity: pressed ? 0.8 : 1,
+      })}
+    >
+      <Ionicons name={icon} size={14} color={colors.textMuted} />
+      <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
+        {label}
+      </Body>
+    </Pressable>
+  );
+}
 
 /** Space below a block. A superset's bar crosses it to join the members. */
 const BLOCK_GAP = 28;
 
 /**
- * One exercise: its name, how many of its sets are ticked, + Note when it has no note, its ⋯ menu, the saved note as a
- * muted line under the name (tapping it, or + Note, opens the note field), "Something off: {Reason}" when it is flagged,
- * the rule and today's read (spec 7.4), the set table with each set's last result beside the inputs, and the compact
- * + Set and + Warmup buttons. The next set to do has the bolder tick ring.
+ * One exercise: its name, how many of its sets are ticked, + Note when it has no note, Something off (its reason when
+ * flagged, R81), its ⋯ menu, the saved note as a muted line under the name led by + Note's pencil (tapping it, or
+ * + Note, opens the note field), the rule and today's read (spec 7.4), the set table with each set's last result beside
+ * the inputs, and the compact + Set and + Warmup buttons. The next set to do has the bolder tick ring.
  * Tapping a set number opens the set-type sheet, which also removes the set; pressing and holding the row opens a sheet
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
  * started it, and holds "Rest's up" there for a moment after it runs out.
@@ -87,6 +129,7 @@ export function ExerciseBlock({
   upText,
   settingsRestSeconds,
   onOpenRest,
+  onOpenMark,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
@@ -161,12 +204,24 @@ export function ExerciseBlock({
           style={{ position: 'absolute', left: -11, width: 3, top: 0, bottom: joinsNext ? -BLOCK_GAP : 0, backgroundColor: colors.text }}
         />
       ) : null}
-      {/* At large text the controls drop to a second line together instead of squeezing the name (R54). */}
+      {/* At large text the controls drop to a second line together instead of squeezing the name (R54); wider than
+          the row, they wrap among themselves, right-aligned. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8 }}>
         <Display weight={700} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
           {ex.name}
         </Display>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: 8,
+            marginLeft: 'auto',
+            flexShrink: 0,
+            maxWidth: '100%',
+          }}
+        >
           {progress.total > 0 ? (
             // No text-size cap: the row wraps instead.
             <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
@@ -174,26 +229,15 @@ export function ExerciseBlock({
             </Num>
           ) : null}
           {!ex.note && !editingNote ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Add a note for ${ex.name}`}
-              onPress={openNote}
-              style={({ pressed }) => ({
-                minHeight: 44,
-                paddingHorizontal: 8,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                flexShrink: 0,
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Ionicons name="pencil" size={14} color={colors.textMuted} />
-              <Body muted numberOfLines={1} style={{ fontSize: 14 }}>
-                + Note
-              </Body>
-            </Pressable>
+            <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
           ) : null}
+          {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
+          <NameRowControl
+            icon="alert-circle-outline"
+            label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
+            readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
+            onPress={onOpenMark}
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Options for ${ex.name}`}
@@ -232,25 +276,23 @@ export function ExerciseBlock({
           }}
         />
       ) : ex.note ? (
+        // With a note saved there is no + Note, so the note line leads with its pencil: muted like the rule under it,
+        // it otherwise read as the rule's first line, and the note looked missing (Round 5).
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Note for ${ex.name}: ${ex.note}`}
           accessibilityHint="Edits the note"
           onPress={openNote}
-          style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+          style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.8 : 1 })}
         >
-          <Body muted style={{ fontSize: 14 }}>
+          <Ionicons name="pencil" size={14} color={colors.textMuted} />
+          <Body muted style={{ flexShrink: 1, fontSize: 14 }}>
             {ex.note}
           </Body>
         </Pressable>
       ) : null}
 
-      {/* No text-size caps: both wrap. */}
-      {ex.mark ? (
-        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
-          {`Something off: ${MARK_LABELS[ex.mark]}`}
-        </Body>
-      ) : null}
+      {/* No text-size cap: it wraps. */}
       <Body muted style={{ fontSize: 14, marginTop: 4 }}>
         {read === null ? sentence : `${sentence} ${read}`}
       </Body>

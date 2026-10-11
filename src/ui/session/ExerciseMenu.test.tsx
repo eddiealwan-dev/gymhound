@@ -447,6 +447,23 @@ describe('ExerciseMenu: opened from the countdown (spec 18.6)', () => {
     for (const frame of closing) expect(frame.text).not.toContain('Reorder');
   });
 
+  it('opens straight on the Something off reasons from the name row (R81, Round 5)', () => {
+    jest.mocked(markExercise).mockClear();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<ExerciseMenu exercises={[{ ...withRest(null), mark: 'pain' }]} exerciseId="we1" initialPanel="mark" onClose={onClose} />);
+    });
+
+    const shown = shownText(tree);
+    expect(shown).toEqual(expect.arrayContaining(['Something off', 'Bench Press', 'Rough sleep', 'Pain', 'Nothing off', 'Cancel']));
+    expect(shown).not.toContain('Reorder');
+
+    press(tree, 'Nothing off');
+
+    expect(markExercise).toHaveBeenCalledWith('db', 'we1', null);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('opens on the rest choices when it mounts open on them', () => {
     let tree!: ReturnType<typeof create>;
     act(() => {

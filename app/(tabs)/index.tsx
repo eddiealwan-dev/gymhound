@@ -26,6 +26,7 @@ import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
 
@@ -71,9 +72,19 @@ function Eyebrow({ children }: { children: string }) {
 
 /**
  * The workout in progress, with an elapsed clock that ticks every second, and the quiet Change routine at its foot, as
- * on Up next: Routines stays one tap away while a workout runs (Round 4).
+ * on Up next (Round 4). The routine can't change while a workout runs, so it says so (`onChangeRoutine`, R80).
  */
-function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: number; setsDone: number }) {
+function ResumeCard({
+  name,
+  startedAt,
+  setsDone,
+  onChangeRoutine,
+}: {
+  name: string;
+  startedAt: number;
+  setsDone: number;
+  onChangeRoutine: () => void;
+}) {
   const now = useNow(1000);
   return (
     <Card>
@@ -85,7 +96,7 @@ function ResumeCard({ name, startedAt, setsDone }: { name: string; startedAt: nu
         {`${formatElapsed(now - startedAt)} · ${setsDone} ${setsDone === 1 ? 'set' : 'sets'} done`}
       </Body>
       <Button label="Resume" onPress={openSession} />
-      <ChangeRoutineLink />
+      <ChangeRoutineLink onPress={onChangeRoutine} />
     </Card>
   );
 }
@@ -124,15 +135,17 @@ function volumeNumber(n: number, unit: WeightUnit, locale: string): string {
   return text.slice(0, text.length - unit.length - 1);
 }
 
-/** A quiet link at the foot of the Up next and Resume cards that opens Routines. */
-function ChangeRoutineLink() {
+const openRoutines = () => router.push('/routines');
+
+/** A quiet link at the foot of the Up next and Resume cards. It opens Routines unless `onPress` says otherwise. */
+function ChangeRoutineLink({ onPress = openRoutines }: { onPress?: () => void }) {
   const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Change routine"
       hitSlop={4}
-      onPress={() => router.push('/routines')}
+      onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -227,6 +240,8 @@ export default function Train() {
   const read = useCallback((d: Db) => readTrain(d, weekStart), [weekStart]);
   const { unit, gear, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
   const [blocked, setBlocked] = useState(false);
+  /** Change routine was tapped while a workout runs (R80). */
+  const [changeBlocked, setChangeBlocked] = useState(false);
 
   const streak = computeStreak(trainingDates, today);
 
@@ -254,13 +269,20 @@ export default function Train() {
       <Display weight={700} style={{ fontSize: 20, letterSpacing: 0.5, color: colors.textMuted }}>
         {greetingFor(new Date(now))}
       </Display>
-      <Display weight={800} adjustsFontSizeToFit numberOfLines={1} style={{ fontSize: 56, lineHeight: 60 }}>
+      {/* One line that shrinks to fit at any text size (R79). No fixed line height: iOS shrinks only the font to fit,
+          never the line height, which grows with the text size, and at the largest size the date was lost. */}
+      <Display weight={800} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3} style={{ fontSize: 56 }}>
         {formatTrainDate(new Date(now), locale)}
       </Display>
 
       <View style={{ marginTop: 16 }}>
         {active !== null ? (
-          <ResumeCard name={active.name} startedAt={active.startedAt} setsDone={active.setsDone} />
+          <ResumeCard
+            name={active.name}
+            startedAt={active.startedAt}
+            setsDone={active.setsDone}
+            onChangeRoutine={() => setChangeBlocked(true)}
+          />
         ) : upNext !== null ? (
           <UpNextCard upNext={upNext} unit={unit} gear={gear} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
         ) : (
@@ -289,6 +311,7 @@ export default function Train() {
           }}
         />
       </Sheet>
+      <WorkoutInProgressSheet visible={changeBlocked} onClose={() => setChangeBlocked(false)} />
     </Screen>
   );
 }
