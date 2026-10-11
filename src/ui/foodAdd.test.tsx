@@ -377,6 +377,22 @@ describe('quick add (R143)', () => {
     expect(field(tree, 'Search foods')).toBeTruthy();
   });
 
+  it('"Added {name}." goes when switching between Search and Quick add', () => {
+    mockParams = { mode: 'quick' };
+    const tree = mount();
+    type(tree, 'Protein (g)', '30');
+    press(tree, 'Add');
+    expect(allText(tree)).toContain('Added Quick add.');
+    press(tree, 'Search');
+    expect(allText(tree)).not.toContain('Added Quick add.');
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
+    press(tree, 'Add');
+    expect(allText(tree)).toContain('Added Egg, large.');
+    press(tree, 'Quick add');
+    expect(allText(tree)).not.toContain('Added Egg, large.');
+  });
+
   it('with only protein, logs "Quick add" for the day, clears and says so', () => {
     mockParams = { mode: 'quick', date: YESTERDAY };
     const tree = mount();

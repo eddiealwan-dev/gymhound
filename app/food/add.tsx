@@ -212,7 +212,15 @@ function AddFood() {
         <Button label="Done" variant="quiet" onPress={done} />
       </View>
       <Body muted style={{ marginTop: -12 }}>{`Logging for ${calendarDayInSentence(localDate, today, locale)}`}</Body>
-      <ModeControl value={mode} onChange={(m) => { Keyboard.dismiss(); setMode(m); }} />
+      <ModeControl
+        value={mode}
+        onChange={(m) => {
+          Keyboard.dismiss();
+          // "Added {name}." belongs to the side it was said on.
+          if (m !== mode) setAdded(null);
+          setMode(m);
+        }}
+      />
       {/* Not a live region: `announce()` says it, and a live region would say it again on Android. */}
       {added !== null ? <Body weight={600}>{added}</Body> : null}
       {mode === 'search' ? (
