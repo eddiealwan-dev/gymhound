@@ -296,6 +296,9 @@ export const foodLog = sqliteTable(
     proteinG: real('protein_g').notNull(),
     carbsG: real('carbs_g').notNull(),
     fatG: real('fat_g').notNull(),
+    // The food's serving label, copied when logged (R158), so a food relabelled later never relabels past days. Null for
+    // quick add and for entries logged before 0007 added it.
+    servingLabel: text('serving_label'),
   },
   (t) => [index('food_log_local_date_idx').on(t.localDate)],
 );

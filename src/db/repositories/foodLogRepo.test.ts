@@ -1,5 +1,7 @@
 /** @jest-environment node */
-import { foodLog, workouts } from '../schema';
+import { eq } from 'drizzle-orm';
+import { MAX_SERVINGS } from '../../domain/fuel';
+import { foodLog, foods, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { createCustomFood, updateCustomFood } from './foodsRepo';
@@ -156,11 +158,65 @@ describe('foodLogRepo (Task 5)', () => {
     expect(listEntries(db, TODAY).map((e) => e.id)).toEqual([early, late]);
   });
 
-  it('shows a null serving label when the food is gone, keeping the copied name', () => {
+  it('keeps the copied name and serving label when the food is gone', () => {
     const db = seededDb();
     logFood(db, EGG, 1, TODAY, NOW);
     db.update(foodLog).set({ foodId: 'deleted' }).run();
-    expect(listEntries(db, TODAY)[0]).toMatchObject({ foodId: 'deleted', name: 'Egg, large', servingLabel: null });
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ foodId: 'deleted', name: 'Egg, large', servingLabel: '1 large' });
+  });
+
+  it("keeps an entry's serving label when its custom food is renamed or re-served (R158)", () => {
+    const db = seededDb();
+    const food = createCustomFood(db, shake);
+    logFood(db, food, 1, TODAY, NOW);
+    updateCustomFood(db, food, { ...shake, name: 'Whey', servingLabel: '2 scoops' });
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ name: 'Protein shake', servingLabel: '1 scoop' });
+    logFood(db, food, 1, TODAY, NOW + MIN);
+    expect(listEntries(db, TODAY)[1]).toMatchObject({ name: 'Whey', servingLabel: '2 scoops' });
+  });
+
+  it("keeps history's serving label when a seed changes a bundled food's label (R158)", () => {
+    const db = seededDb();
+    logFood(db, EGG, 1, TODAY, NOW);
+    db.update(foods).set({ servingLabel: '1 extra large' }).where(eq(foods.id, EGG)).run();
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ foodId: EGG, servingLabel: '1 large' });
+  });
+
+  it('shows no serving label for an entry logged before the column existed, even with its food still there', () => {
+    const db = seededDb();
+    logFood(db, EGG, 1, TODAY, NOW);
+    db.update(foodLog).set({ servingLabel: null }).run();
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ foodId: EGG, servingLabel: null });
+  });
+
+  it('caps servings at MAX_SERVINGS (R141)', () => {
+    const db = seededDb();
+    expect(() => logFood(db, EGG, MAX_SERVINGS + 0.01, TODAY, NOW)).toThrow();
+    expect(listEntries(db, TODAY)).toEqual([]);
+    const id = logFood(db, EGG, MAX_SERVINGS, TODAY, NOW);
+    expect(() => updateEntryServings(db, id, MAX_SERVINGS + 1)).toThrow();
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ servings: MAX_SERVINGS, kcal: 72 * MAX_SERVINGS });
+  });
+
+  it('refuses to change the servings of a quick add', () => {
+    const db = seededDb();
+    const id = logQuickAdd(db, 'Snack', { kcal: 100, proteinG: 5, carbsG: 0, fatG: 0 }, TODAY, NOW);
+    expect(() => updateEntryServings(db, id, 2)).toThrow();
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ servings: 1, kcal: 100 });
+  });
+
+  it.each([Number.NaN, -1, Number.POSITIVE_INFINITY])('refuses quick-add totals of %s', (bad) => {
+    const db = seededDb();
+    const good = { kcal: 100, proteinG: 5, carbsG: 0, fatG: 0 };
+    for (const key of ['kcal', 'proteinG', 'carbsG', 'fatG'] as const) {
+      expect(() => logQuickAdd(db, 'Snack', { ...good, [key]: bad }, TODAY, NOW)).toThrow();
+    }
+    expect(listEntries(db, TODAY)).toEqual([]);
+    const id = logQuickAdd(db, 'Snack', good, TODAY, NOW);
+    for (const key of ['kcal', 'proteinG', 'carbsG', 'fatG'] as const) {
+      expect(() => updateQuickAdd(db, id, 'Changed', { ...good, [key]: bad })).toThrow();
+    }
+    expect(listEntries(db, TODAY)[0]).toMatchObject({ name: 'Snack', kcal: 100, proteinG: 5 });
   });
 
   it('is a training day once a workout of that date is finished, not while it is active (§7.11)', () => {

@@ -1,17 +1,17 @@
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm';
 import type { SeriesPoint } from '../../domain/chart';
-import { type EntryTotals, entryTotals, rescaleEntry } from '../../domain/fuel';
+import { type EntryTotals, entryTotals, MAX_SERVINGS, rescaleEntry } from '../../domain/fuel';
 import type { FuelTargets } from '../../domain/types';
 import { newId } from '../ids';
-import { foodLog, foods, workouts } from '../schema';
+import { foodLog, workouts } from '../schema';
 import type { Db } from '../types';
 import { getFood } from './foodsRepo';
 import { getSettings, setSetting } from './settingsRepo';
 
-// Every entry stores its own name and totals, copied when it is logged (§6): a food edited or archived later never
-// changes a past day, and editing servings rescales the entry's own totals (R142).
+// Every entry stores its own name, serving label and totals, copied when it is logged (§6, R158): a food edited,
+// relabelled or archived later never changes a past day, and editing servings rescales the entry's own totals (R142).
 
-/** One row of the food log. `servingLabel` is the food's current label, or null for a quick add or a missing food. */
+/** One row of the food log. `servingLabel` is the copy made when logged: null for a quick add or an entry from before 0007. */
 export type FoodEntry = EntryTotals & {
   id: string;
   localDate: string;
@@ -23,7 +23,16 @@ export type FoodEntry = EntryTotals & {
 };
 
 function assertServings(servings: number): void {
-  if (!(servings > 0) || !Number.isFinite(servings)) throw new Error(`Servings must be more than 0, not ${servings}`);
+  if (!(servings > 0 && servings <= MAX_SERVINGS)) {
+    throw new Error(`Servings must be more than 0 and at most ${MAX_SERVINGS}, not ${servings}`);
+  }
+}
+
+/** Quick-add totals must be finite and not below 0 (`parseQuickAdd` checks the bounds the screen shows). */
+function assertTotals(t: EntryTotals): void {
+  for (const value of [t.kcal, t.proteinG, t.carbsG, t.fatG]) {
+    if (!(Number.isFinite(value) && value >= 0)) throw new Error(`Totals must be finite and at least 0, not ${value}`);
+  }
 }
 
 /** The entries of one day, in the order they were logged. */
@@ -36,22 +45,21 @@ export function listEntries(db: Db, localDate: string): FoodEntry[] {
       foodId: foodLog.foodId,
       name: foodLog.name,
       servings: foodLog.servings,
-      servingLabel: foods.servingLabel,
+      servingLabel: foodLog.servingLabel,
       kcal: foodLog.kcal,
       proteinG: foodLog.proteinG,
       carbsG: foodLog.carbsG,
       fatG: foodLog.fatG,
     })
     .from(foodLog)
-    .leftJoin(foods, eq(foods.id, foodLog.foodId))
     .where(eq(foodLog.localDate, localDate))
     .orderBy(asc(foodLog.loggedAt), asc(foodLog.id))
     .all();
 }
 
 /**
- * Logs `servings` of a food for `localDate` (the day being viewed, R148), copying its name and totals (§6). Throws
- * for a missing food or servings that aren't more than 0. Returns the new id.
+ * Logs `servings` of a food for `localDate` (the day being viewed, R148), copying its name, serving label (R158) and
+ * totals (§6). Throws for a missing food or servings outside more than 0 to `MAX_SERVINGS`. Returns the new id.
  */
 export function logFood(db: Db, foodId: string, servings: number, localDate: string, now: number): string {
   assertServings(servings);
@@ -59,13 +67,26 @@ export function logFood(db: Db, foodId: string, servings: number, localDate: str
   if (!food) throw new Error(`No food ${foodId}`);
   const id = newId();
   db.insert(foodLog)
-    .values({ id, localDate, loggedAt: now, foodId, name: food.name, servings, ...entryTotals(food, servings) })
+    .values({
+      id,
+      localDate,
+      loggedAt: now,
+      foodId,
+      name: food.name,
+      servingLabel: food.servingLabel,
+      servings,
+      ...entryTotals(food, servings),
+    })
     .run();
   return id;
 }
 
-/** Logs a quick add (R143): no food, one serving, the given totals. Returns the new id. */
+/**
+ * Logs a quick add (R143): no food, no serving label, one serving, the given totals. Throws for a NaN, infinite or
+ * negative total. Returns the new id.
+ */
 export function logQuickAdd(db: Db, name: string, totals: EntryTotals, localDate: string, now: number): string {
+  assertTotals(totals);
   const id = newId();
   db.insert(foodLog)
     .values({
@@ -74,6 +95,7 @@ export function logQuickAdd(db: Db, name: string, totals: EntryTotals, localDate
       loggedAt: now,
       foodId: null,
       name,
+      servingLabel: null,
       servings: 1,
       kcal: totals.kcal,
       proteinG: totals.proteinG,
@@ -84,12 +106,16 @@ export function logQuickAdd(db: Db, name: string, totals: EntryTotals, localDate
   return id;
 }
 
-/** Changes an entry's servings, rescaling its own stored totals, never the food's (R142). Missing entries are ignored. */
+/**
+ * Changes a food entry's servings, rescaling its own stored totals, never the food's (R142). Throws for servings outside
+ * more than 0 to `MAX_SERVINGS` and for a quick add (edit those with `updateQuickAdd`). Missing entries are ignored.
+ */
 export function updateEntryServings(db: Db, id: string, servings: number): void {
   assertServings(servings);
   db.transaction((tx) => {
     const entry = tx.select().from(foodLog).where(eq(foodLog.id, id)).get();
     if (!entry) return;
+    if (entry.foodId === null) throw new Error(`Entry ${id} is a quick add; its servings don't change`);
     tx.update(foodLog)
       .set({ servings, ...rescaleEntry(entry, servings) })
       .where(eq(foodLog.id, id))
@@ -97,8 +123,9 @@ export function updateEntryServings(db: Db, id: string, servings: number): void 
   });
 }
 
-/** Changes a quick add's name and totals. Entries of a food are left alone. */
+/** Changes a quick add's name and totals. Entries of a food are left alone. Throws for a NaN, infinite or negative total. */
 export function updateQuickAdd(db: Db, id: string, name: string, totals: EntryTotals): void {
+  assertTotals(totals);
   db.update(foodLog)
     .set({ name, kcal: totals.kcal, proteinG: totals.proteinG, carbsG: totals.carbsG, fatG: totals.fatG })
     .where(and(eq(foodLog.id, id), isNull(foodLog.foodId)))
