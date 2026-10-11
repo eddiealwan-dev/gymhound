@@ -4,7 +4,9 @@ import {
   LEGACY_STEPS,
   NAME_ACRONYMS,
   NAME_PROPER_NOUNS,
+  STEP_FIXES,
   buildLibrary,
+  fixedSteps,
   libraryId,
   mapEquipment,
   mapLoggingType,
@@ -316,6 +318,52 @@ describe('LEGACY_STEPS (R95)', () => {
   });
 });
 
+describe('STEP_FIXES: glitches in the imported steps', () => {
+  let library: LibraryExercise[];
+  const steps = (sourceId: string) => library.find((e) => e.sourceId === sourceId)!.instructions;
+
+  beforeAll(() => {
+    library = buildLibrary(FEDB, SEED_EXERCISES);
+  });
+
+  it('each fix finds its text exactly once in its source, so a changed source is noticed', () => {
+    const sources = new Map(FEDB.map((e) => [e.id, e]));
+    for (const fix of STEP_FIXES) {
+      const text = sources.get(fix.sourceId)!.instructions.join('\n');
+      expect(text.split(fix.from)).toHaveLength(2);
+    }
+  });
+
+  it('drops the stray step numbers left at the end of a step', () => {
+    expect(steps('Smith_Machine_Pistol_Squat')[1]).toBe(
+      'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs.',
+    );
+    expect(steps('Wind_Sprints')[1]).toBe('Begin by quickly raising one knee as high as you can. Do not swing your body or your legs.');
+    expect(steps('Close-Grip_Front_Lat_Pulldown')[5]).toBe('Repeat this motion for the prescribed amount of repetitions.');
+  });
+
+  it('reads "Your" where the source wrote "You"', () => {
+    expect(steps('Pallof_Press')[3]).toBe('Press the cable away from your chest, fully extending both arms. Your core should be tight and engaged.');
+    for (const e of library) for (const step of e.instructions) expect(step).not.toMatch(/\byou (feet|core|hands?|arms?|hip)\b/i);
+  });
+
+  it('makes no calorie claims (a machine that estimates calories is not a claim)', () => {
+    expect(steps('Skating')[1]).toBe(
+      'You can skate at a comfortable pace for 30 minutes straight. If you want a cardio challenge, do interval skating — speed skate two minutes of every five minutes, using the remaining three minutes to recover.',
+    );
+    for (const e of library) for (const step of e.instructions) expect(step).not.toMatch(/\d+ calories|burn as many calories|rate of calories/);
+  });
+
+  it('has no empty step, and no step left ending in a number', () => {
+    for (const e of library) {
+      for (const step of e.instructions) {
+        expect(step.trim()).not.toBe('');
+        expect(step).not.toMatch(/\s\d+$/);
+      }
+    }
+  });
+});
+
 describe('buildLibrary', () => {
   let library: LibraryExercise[];
   let byId: Map<string, LibraryExercise>;
@@ -345,12 +393,12 @@ describe('buildLibrary', () => {
     expect(byId.has('fedb-barbell-bench-press-medium-grip')).toBe(false);
   });
 
-  it('keeps every existing exercise exactly as it was, plus its steps', () => {
+  it('keeps every existing exercise exactly as it was, plus its steps (with STEP_FIXES applied)', () => {
     for (const legacy of SEED_EXERCISES) {
       const { sourceId, instructions, ...kept } = byId.get(legacy.id)!;
       expect(kept).toEqual(legacy);
       expect(sourceId).toBe(LEGACY_SOURCE[legacy.id]);
-      expect(instructions).toEqual(sourceId === null ? LEGACY_STEPS[legacy.id] : FEDB.find((e) => e.id === sourceId)!.instructions);
+      expect(instructions).toEqual(sourceId === null ? LEGACY_STEPS[legacy.id] : fixedSteps(FEDB.find((e) => e.id === sourceId)!));
     }
   });
 

@@ -51,6 +51,8 @@ function ChipRow<T extends string>({
       horizontal
       showsHorizontalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      // A ScrollView grows and shrinks by default: beside the long list it was squeezed to a sliver, cutting the chips.
+      style={{ flexGrow: 0, flexShrink: 0 }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 4, gap: 8 }}
     >
       {values.map((value) => (
@@ -282,7 +284,8 @@ export default function PickExercise() {
           windowSize={11}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          style={{ marginTop: 4 }}
+          // The list takes the height left under the chips, and is the one thing that gives way.
+          style={{ flex: 1, marginTop: 4 }}
           contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
           ListEmptyComponent={
             <Body muted style={{ textAlign: 'center', padding: 24 }}>

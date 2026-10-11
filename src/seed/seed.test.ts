@@ -248,9 +248,24 @@ describe('runSeed', () => {
     expect(routineExercise(db, 'premade-calisthenics-3:a:push-up').increment).toBe(0);
   });
 
+  it('version 4 brings the fixed imported steps to a phone seeded at version 3', () => {
+    const { db } = createTestDb();
+    runSeed(db, 1234);
+    const old = ['Stand.', 'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs. 3'];
+    db.update(exercises).set({ instructions: old }).where(eq(exercises.id, 'fedb-smith-machine-pistol-squat')).run();
+    setSetting(db, 'seedVersion', 3);
+
+    runSeed(db, 5678);
+
+    expect(exercise(db, 'fedb-smith-machine-pistol-squat').instructions[1]).toBe(
+      'Take the bar with your hands facing forward, unlock it and lift it off the rack by extending your legs.',
+    );
+    expect(getSettings(db).seedVersion).toBe(4);
+  });
+
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(3);
+    expect(SEED_VERSION).toBe(4);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 

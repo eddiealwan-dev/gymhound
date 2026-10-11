@@ -21,9 +21,22 @@ export interface Entitlements {
 }
 
 /**
- * The app's entitlements: free-only until Pro exists. Its `setDebugUnlock` is how the Settings debug switch turns Pro
- * on and off, so subscribers hear about it.
+ * A new entitlements object: free-only until Pro exists. Screens use `entitlementsFor`, so they share one and its
+ * listeners hear the Settings switch.
  */
 export function createEntitlements(db: Db): FreeOnlyEntitlements {
   return createFreeOnlyEntitlements(db);
+}
+
+/** The app's one entitlements object and the database it reads, made on first use. */
+let shared: { db: Db; entitlements: FreeOnlyEntitlements } | null = null;
+
+/**
+ * The app's entitlements, one per app (R126): every screen gets the same object, so when Settings' "Unlock Pro for
+ * testing" calls `setDebugUnlock`, what subscribed on another screen hears it. The app opens one database; another one
+ * (a test's) gets a fresh object.
+ */
+export function entitlementsFor(db: Db): FreeOnlyEntitlements {
+  if (shared === null || shared.db !== db) shared = { db, entitlements: createEntitlements(db) };
+  return shared.entitlements;
 }

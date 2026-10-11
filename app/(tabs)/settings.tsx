@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import { Platform, Pressable, Switch, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
@@ -9,6 +9,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
 import type { BellSound, DistanceUnit, ThemePreference, WeightUnit } from '../../src/domain/types';
+import { debugUnlockAllowed, entitlementsFor } from '../../src/platform/entitlements';
 import { exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
@@ -19,6 +20,7 @@ import { PlatesEditor } from '../../src/ui/PlatesEditor';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { Toggle } from '../../src/ui/Toggle';
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
@@ -340,7 +342,6 @@ function BellVolumeControl({ value, onChange }: { value: number; onChange: (volu
  * volume plays the bell once, as it will ring.
  */
 function RestTimerSection() {
-  const { colors } = useTheme();
   const db = useDb();
   const { restSeconds, restBell, restBellSound, restBellVolume } = useDbQuery(getSettings);
   return (
@@ -356,21 +357,13 @@ function RestTimerSection() {
       </Field>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body>Bell at the end</Body>
-        <Switch
+        <Toggle
           accessibilityLabel="Bell at the end"
           value={restBell}
           onValueChange={(value) => {
             setSetting(db, 'restBell', value);
             bumpData();
           }}
-          // Off, the track is borderStrong (3:1 on the page in both themes), not border: a bg-coloured thumb on a border
-          // track all but vanished in dark. iOS shows the off track through `ios_backgroundColor`.
-          trackColor={{ false: colors.borderStrong, true: colors.text }}
-          ios_backgroundColor={colors.borderStrong}
-          thumbColor={colors.bg}
-          // react-native-web colours the thumb of a switch that is on from `activeThumbColor` (React Native has only
-          // `thumbColor`) and would leave it teal. The phone ignores the extra prop.
-          {...({ activeThumbColor: colors.bg } as object)}
         />
       </View>
       <Field label="Bell sound">
@@ -506,7 +499,33 @@ function ExportSection() {
   );
 }
 
-/** Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups and Export. The rest arrive in later tasks. */
+/**
+ * The Pro debug switch (§9, R126), for testing Pro before it can be bought: it turns Pro on through the app's one
+ * entitlements object, so the routine limit on every screen hears it at once. Shown only where the debug unlock is
+ * allowed: a development build, or one that sets EXPO_PUBLIC_DEBUG_UNLOCK=1.
+ */
+function DeveloperSection() {
+  const db = useDb();
+  const entitlements = entitlementsFor(db);
+  const pro = useSyncExternalStore(entitlements.subscribe, entitlements.isPro);
+  return (
+    <Section title="Developer">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
+        <Body style={{ flexShrink: 1 }}>Unlock Pro for testing</Body>
+        <Toggle
+          accessibilityLabel="Unlock Pro for testing"
+          value={pro}
+          onValueChange={(value) => {
+            entitlements.setDebugUnlock(value);
+            bumpData();
+          }}
+        />
+      </View>
+    </Section>
+  );
+}
+
+/** Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Backups, Export, and Developer where the debug unlock is allowed. */
 export default function Settings() {
   return (
     <Screen footer>
@@ -523,6 +542,7 @@ export default function Settings() {
         <RestTimerSection />
         <BackupsSection />
         <ExportSection />
+        {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
     </Screen>
   );

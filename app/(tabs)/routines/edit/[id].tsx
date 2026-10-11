@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
-import { BackHandler, Pressable, Switch, TextInput, View } from 'react-native';
+import { BackHandler, Platform, Pressable, TextInput, View } from 'react-native';
 import type { KeyboardTypeOptions } from 'react-native';
 import { useDb } from '../../../../src/db/DbProvider';
 import { getExercise } from '../../../../src/db/repositories/exercisesRepo';
@@ -26,6 +26,7 @@ import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
 import { Body, Display, Label, Num } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
 import { useTheme } from '../../../../src/ui/ThemeProvider';
+import { Toggle } from '../../../../src/ui/Toggle';
 
 /** Types whose rep range counts seconds. */
 const IN_SECONDS: LoggingType[] = ['timed', 'weighted_time'];
@@ -81,6 +82,14 @@ const KEYBOARD: Record<NumberKind, KeyboardTypeOptions> = {
 };
 
 /**
+ * How wide a number field is on the web, where a text field is as wide as 20 characters whatever it holds (the
+ * browser's own size for an input), which pushed "to" off a phone's screen. Sized there to what it holds: about 11 per
+ * figure at 20pt Barlow Condensed, with the padding and border, and never under 64. On a phone the field takes the
+ * width of its text itself.
+ */
+const webFieldWidth = (shown: string) => (Platform.OS === 'web' ? { width: Math.max(64, 18 + 11 * shown.length) } : null);
+
+/**
  * A number typed as text and kept as a draft until the field is left (R29): typing "12" never passes through 1, which
  * the rule's limits would act on. A blank or unreadable entry goes back to the number. Back, the picker and Save
  * commit a draft not yet left (`flushAll`). The field is at least 64 wide and grows with the phone's text size.
@@ -95,9 +104,10 @@ function NumberField({ value, label, kind, onCommit }: { value: number; label: s
     if (n !== null && n !== value) onCommit(n);
   };
   useDraftFlush(commit);
+  const shown = text ?? String(value);
   return (
     <TextInput
-      value={text ?? String(value)}
+      value={shown}
       onChangeText={setText}
       onBlur={commit}
       onSubmitEditing={commit}
@@ -119,6 +129,7 @@ function NumberField({ value, label, kind, onCommit }: { value: number; label: s
         fontSize: 20,
         fontVariant: ['tabular-nums'],
         textAlign: 'center',
+        ...webFieldWidth(shown),
       }}
     />
   );
@@ -136,6 +147,8 @@ function NameField({ value, label, onChangeText, fill }: { value: string; label:
       returnKeyType="done"
       style={{
         flex: 1,
+        // A web text field asks for 20 characters' width; without this it pushed a day's buttons off its card.
+        minWidth: 0,
         minHeight: 48,
         paddingHorizontal: 12,
         borderRadius: 10,
@@ -231,15 +244,10 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
       {index < count - 1 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
           <Body>Superset with next</Body>
-          <Switch
+          <Toggle
             accessibilityLabel={`Superset ${name} with next`}
             value={exercise.supersetWithNext}
             onValueChange={() => apply({ type: 'toggleSuperset', exerciseKey })}
-            // As on Settings: off, a borderStrong track that stays visible in both themes; on, the text colour.
-            trackColor={{ false: colors.borderStrong, true: colors.text }}
-            ios_backgroundColor={colors.borderStrong}
-            thumbColor={colors.bg}
-            {...({ activeThumbColor: colors.bg } as object)}
           />
         </View>
       ) : null}
@@ -332,6 +340,8 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const { draft, latest, apply, reset } = useDraft(saved);
   /** Save was tapped: what stops it shows, and keeps up as the draft changes, until the editor is left or saved. */
   const [tried, setTried] = useState(false);
+  /** The last Save failed to write: it says so over the button until the next Save. */
+  const [saveFailed, setSaveFailed] = useState(false);
   /** The move Back, the dock or the header was making when "Discard changes?" opened. */
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   /** The day + Add exercise was tapped on: the picker's choice lands there. */
@@ -344,6 +354,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
     setSaved(next);
     reset(next);
     setTried(false);
+    setSaveFailed(false);
   };
 
   /** Takes `leave` over when there are changes to lose, opening "Discard changes?"; false lets it go now. */
@@ -361,7 +372,20 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
 
   useFocusEffect(
     useCallback(() => {
-      // The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
+      // In this order: (1) read the routine again if nothing is unsaved, (2) add what the picker chose, (3) a library
+      // re-check (another branch adds it here).
+      // 1. A hidden tab stays mounted, so the routine may have changed since it was read (saved or deleted from another
+      // editor). With nothing unsaved here, read it again as the saved version, so nothing looks unsaved, and clear the
+      // last Save's notices; changes not yet saved are kept as they are.
+      if (routineId !== null && !premade && !unsaved(savedRef.current, latest.current)) {
+        const fresh = routineToDraft(db, routineId);
+        savedRef.current = fresh;
+        setSaved(fresh);
+        reset(fresh);
+        setTried(false);
+        setSaveFailed(false);
+      }
+      // 2. The picker hands over what it chose for + Add exercise; anything else waiting is dropped.
       const exerciseId = usePendingPick.getState().take();
       const dayKey = pickFor.current;
       pickFor.current = null;
@@ -374,15 +398,19 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
           increment: defaultIncrement(getSettings(db)),
         });
       }
+      // 3. (Another branch adds the library re-check here.)
       const unguard = setLeaveGuard((go) => askBeforeLeaving.current(go));
       const back = BackHandler.addEventListener('hardwareBackPress', () => askBeforeLeaving.current(() => goBack(backTo)));
       return () => {
         unguard();
         back.remove();
         // Left with nothing to lose: the next New routine or Edit starts without the last Save's problems.
-        if (!unsaved(savedRef.current, latest.current)) setTried(false);
+        if (!unsaved(savedRef.current, latest.current)) {
+          setTried(false);
+          setSaveFailed(false);
+        }
       };
-    }, [db, apply, backTo]),
+    }, [db, apply, reset, backTo, routineId, premade]),
   );
 
   useEffect(() => {
@@ -420,7 +448,15 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const write = () => {
     const current = latest.current;
     if (current === null) return;
-    const id = saveRoutine(db, current, Date.now());
+    let id: string;
+    try {
+      id = saveRoutine(db, current, Date.now());
+    } catch (e) {
+      // Nothing was written (one transaction): the changes stay here to try again.
+      console.warn('GymHound: the routine could not be saved.', e);
+      setSaveFailed(true);
+      return;
+    }
     bumpData();
     startOver(routineId === null ? newDraft() : routineToDraft(db, id));
     goBack(routineId === null ? '/routines' : `/routines/${id}`);
@@ -429,13 +465,15 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   const save = () => {
     flushAll();
     setTried(true);
+    setSaveFailed(false);
     if (latest.current === null || validateDraft(latest.current).length > 0) return;
     // A new routine keeps to the free limit however the editor was reached (R88).
     if (routineId === null) limit.whenRoomFor(write);
     else write();
   };
 
-  const problems = tried ? validateDraft(draft) : [];
+  const problems = [...(tried ? validateDraft(draft) : [])];
+  if (saveFailed) problems.push("Couldn't save. Try again.");
 
   return (
     <Screen>

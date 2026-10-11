@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { BackHandler, StyleSheet, Switch, TextInput } from 'react-native';
+import { BackHandler, Platform, StyleSheet, Switch, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import EditRoutine from '../../app/(tabs)/routines/edit/[id]';
@@ -58,7 +58,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
 }));
-jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => mockPro }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
@@ -199,7 +199,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
 
 describe('the routine editor: a new routine (R89)', () => {
   it('starts empty under "New routine", and Save says what is missing and saves nothing', () => {
@@ -321,6 +324,112 @@ describe('the routine editor: your own routine', () => {
     expect(field(tree, 'Day 1 name').props.value).toBe('Day A');
     expect(field(tree, 'Day 2 name').props.value).toBe('Day B');
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Back to My split').length).toBeGreaterThan(0);
+  });
+
+  it('reads the routine again when shown again with nothing unsaved: a hidden tab stays mounted', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    leaveAndReturn();
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Back to Renamed elsewhere').length).toBeGreaterThan(0);
+    // What it read is now what Discard goes back to: nothing to lose.
+    const toTrain = jest.fn();
+    act(() => leaveGuarded(toTrain));
+    expect(toTrain).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unsaved changes when shown again, and still adds what the picker chose', () => {
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Mine now');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    leaveAndReturn();
+    expect(field(tree, 'Routine name').props.value).toBe('Mine now');
+
+    press(tree, 'Add exercise to Day B');
+    pick('bench');
+    expect(field(tree, 'Routine name').props.value).toBe('Mine now');
+    expect(shownText(tree).filter((t) => t === 'Barbell bench press')).toHaveLength(2);
+  });
+
+  it('a pick lands on the routine as read again, when nothing was unsaved', () => {
+    const tree = mount('mine');
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+
+    press(tree, 'Add exercise to Day B');
+    pick('bench');
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(shownText(tree).filter((t) => t === 'Barbell bench press')).toHaveLength(2);
+  });
+
+  it("says \"Couldn't save. Try again.\" when the save fails, stays open with the changes, and saves on a retry", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Renamed');
+
+    expect(() => press(tree, 'Save')).not.toThrow();
+
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+    expect(router.back).not.toHaveBeenCalled();
+    expect(bumpData).not.toHaveBeenCalled();
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed');
+
+    press(tree, 'Save');
+    expect(saved().name).toBe('Renamed');
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    warn.mockRestore();
+  });
+
+  it('a failed Save, then Back and Discard: opened again, it shows no error', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    type(tree, 'Routine name', 'Renamed');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+
+    press(tree, 'Back to My split');
+    press(tree, 'Discard');
+    act(() => void jest.advanceTimersByTime(400));
+    leaveAndReturn();
+
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    warn.mockRestore();
+  });
+
+  it('a failed Save with nothing changed: shown again, the routine is read again and the error is gone', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(saveRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount('mine');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain("Couldn't save. Try again.");
+
+    act(() => {
+      if (typeof mockFocus.cleanup === 'function') mockFocus.cleanup();
+      mockFocus.cleanup = undefined;
+    });
+    jest.mocked(routineToDraft).mockReturnValue({ ...MINE, name: 'Renamed elsewhere' });
+    act(() => {
+      mockFocus.cleanup = mockFocus.effect?.();
+    });
+
+    expect(field(tree, 'Routine name').props.value).toBe('Renamed elsewhere');
+    expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
+    const toTrain = jest.fn();
+    act(() => leaveGuarded(toTrain));
+    expect(toTrain).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it('says so when the routine is not there', () => {
@@ -451,6 +560,28 @@ describe('the routine editor: your own routine', () => {
       expect(style.minWidth).toBe(64);
       expect(style.width).toBeUndefined();
     }
+  });
+
+  it("name fields may shrink below the width a web text field asks for, so a day's buttons stay on its card", () => {
+    const tree = mount('mine');
+
+    for (const label of ['Routine name', 'Day 1 name']) {
+      expect(StyleSheet.flatten(field(tree, label).props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+    }
+  });
+
+  it('on the web, where a text field is 20 characters wide whatever it holds, a number field is sized to its number', () => {
+    jest.replaceProperty(Platform, 'OS', 'web');
+    const tree = mount('mine');
+
+    const width = (label: string) => StyleSheet.flatten(field(tree, label).props.style).width as number;
+    // Two short numbers, the dash and the gaps fit a card on a 320 phone, beside Sets or on a line of their own.
+    expect(width('Barbell bench press reps from')).toBe(64);
+    expect(width('Barbell bench press reps to')).toBe(64);
+    expect(width('Barbell bench press increment in kg')).toBe(64);
+    type(tree, 'Barbell bench press increment in kg', '12.375');
+    expect(width('Barbell bench press increment in kg')).toBeGreaterThan(64);
+    expect(width('Barbell bench press increment in kg')).toBeLessThan(120);
   });
 
   it('a time takes seconds or minutes and seconds, as the session does', () => {
