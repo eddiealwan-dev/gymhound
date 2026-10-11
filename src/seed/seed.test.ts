@@ -249,7 +249,7 @@ describe('runSeed', () => {
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(2);
+    expect(SEED_VERSION).toBe(3);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
