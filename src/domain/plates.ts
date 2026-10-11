@@ -96,6 +96,20 @@ export function nearestLoadable(value: number, bar: number, platesOwned: Record<
 }
 
 /**
+ * Above the heaviest loadable total, totals go on in steps of twice the smallest owned plate above the bar, so a
+ * heavy weight is never cut down to what the plates can load. In hundredths; null when no plates are owned.
+ */
+function stepsAbovePlates(
+  bar: number,
+  platesOwned: Record<string, number>,
+): { barH: number; heaviestH: number; stepH: number } | null {
+  const plates = platesPerSide(platesOwned);
+  if (plates.length === 0) return null;
+  const barH = toHundredths(bar);
+  return { barH, heaviestH: barH + 2 * plates.reduce((sum, p) => sum + p, 0), stepH: 2 * plates[plates.length - 1] };
+}
+
+/**
  * A routine plan in the display unit, when a workout starts (spec 7.1). The same unit returns `weight` as it is.
  * A converted barbell plan rounds to the nearest loadable total with `to`'s bar and plates; above the heaviest
  * loadable total it rounds instead to a step of twice the smallest owned plate above the bar, so a heavy plan
@@ -112,12 +126,34 @@ export function planInUnit(
   if (from === to) return weight;
   const v = convertWeight(weight, from, to);
   if (!isBarbell) return roundToHalf(v);
-  const plates = platesPerSide(platesOwned);
-  const barH = toHundredths(bar);
-  const heaviestH = barH + 2 * plates.reduce((sum, p) => sum + p, 0);
-  if (plates.length > 0 && v * 100 > heaviestH) {
-    const stepH = 2 * plates[plates.length - 1];
-    return (barH + stepH * Math.round((v * 100 - barH) / stepH)) / 100;
+  const steps = stepsAbovePlates(bar, platesOwned);
+  if (steps && v * 100 > steps.heaviestH) {
+    return (steps.barH + steps.stepH * Math.round((v * 100 - steps.barH) / steps.stepH)) / 100;
   }
   return nearestLoadable(v, bar, platesOwned);
+}
+
+/**
+ * A barbell raise (spec 7.3 step 6): the loadable total nearest to `raised` that is heavier than `working`, the
+ * lower one on a tie. Above the heaviest loadable total it steps as `planInUnit` does, at least one step above
+ * `working`. Null when nothing heavier than `working` can be loaded. All in the gear's unit.
+ */
+export function raiseLoadable(raised: number, working: number, gear: Gear): number | null {
+  const workingH = toHundredths(working);
+  const steps = stepsAbovePlates(gear.bar, gear.plates);
+  if (steps && raised * 100 > steps.heaviestH) {
+    const nearest = Math.round((raised * 100 - steps.barH) / steps.stepH);
+    const firstHeavier = Math.floor((workingH - steps.barH) / steps.stepH) + 1;
+    return (steps.barH + steps.stepH * Math.max(nearest, firstHeavier)) / 100;
+  }
+  const barH = toHundredths(gear.bar);
+  const raisedH = raised * 100;
+  let best: { total: number; distance: number } | null = null;
+  for (const sum of reachableSums(gear.plates).keys()) {
+    const total = barH + 2 * sum;
+    if (total <= workingH) continue;
+    const distance = Math.abs(raisedH - total);
+    if (!best || distance < best.distance || (distance === best.distance && total < best.total)) best = { total, distance };
+  }
+  return best === null ? null : best.total / 100;
 }
