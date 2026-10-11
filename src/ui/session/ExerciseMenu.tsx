@@ -101,10 +101,10 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
 
   return (
     <>
-      <Display weight={700} numberOfLines={1}>
+      <Display weight={700}>
         Today's weight
       </Display>
-      <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+      <Body muted style={{ marginBottom: 12 }}>
         {ex.name}
       </Body>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -250,7 +250,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
                 <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48 }}>
                   {/* The same bar as on the session screen, so a superset reads as one block here too. */}
                   <View style={{ width: 3, alignSelf: 'stretch', backgroundColor: e.supersetGroup === null ? 'transparent' : colors.text }} />
-                  <Body weight={600} numberOfLines={1} style={{ flex: 1, minWidth: 0, marginLeft: 8 }}>
+                  <Body weight={600} style={{ flex: 1, minWidth: 0, marginLeft: 8 }}>
                     {e.name}
                   </Body>
                   {(['up', 'down'] as const).map((dir) => {
@@ -283,10 +283,10 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : panel === 'rest' ? (
           <>
-            <Display weight={700} numberOfLines={1}>
+            <Display weight={700}>
               Rest time
             </Display>
-            <Body muted numberOfLines={1} style={{ marginBottom: supersetLine === null ? 12 : 4 }}>
+            <Body muted style={{ marginBottom: supersetLine === null ? 12 : 4 }}>
               {ex?.name ?? ''}
             </Body>
             {supersetLine !== null ? (
@@ -317,10 +317,10 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : panel === 'mark' ? (
           <>
-            <Display weight={700} numberOfLines={1}>
+            <Display weight={700}>
               Something off
             </Display>
-            <Body muted numberOfLines={1} style={{ marginBottom: 12 }}>
+            <Body muted style={{ marginBottom: 12 }}>
               {ex?.name ?? ''}
             </Body>
             <View style={{ gap: 8 }}>
@@ -341,7 +341,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : (
           <>
-            <Display weight={700} numberOfLines={1} style={{ marginBottom: 12 }}>
+            <Display weight={700} style={{ marginBottom: 12 }}>
               {ex?.name ?? ''}
             </Display>
             <View style={{ gap: 8 }}>
