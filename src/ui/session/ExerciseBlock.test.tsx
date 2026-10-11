@@ -26,7 +26,7 @@ jest.mock('../../state/sessionActions', () => ({
 // It draws nothing here: where it sits, and its props, are what the tests read.
 jest.mock('./RestInline', () => ({ RestInline: () => null }));
 jest.mock('../ThemeProvider', () => {
-  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600' };
+  const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 

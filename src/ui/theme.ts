@@ -7,6 +7,10 @@ export type Colors = {
   border: string;
   text: string;
   textMuted: string;
+  /** Suggested values in empty fields: 3:1 or more on `bg` and `surface`. */
+  textFaint: string;
+  /** Field and compact-button edges: 3:1 or more on `bg`, `surface` and `surfaceRaised`. */
+  borderStrong: string;
   red: string;
 };
 
@@ -17,6 +21,8 @@ export const darkColors: Colors = {
   border: '#2e2a23',
   text: '#f1ece2',
   textMuted: '#a39d90',
+  textFaint: '#6d675c',
+  borderStrong: '#736c60',
   red: '#E10600',
 };
 
@@ -27,6 +33,8 @@ export const lightColors: Colors = {
   border: '#ddd7cb',
   text: '#15130f',
   textMuted: '#6b665c',
+  textFaint: '#8f897d',
+  borderStrong: '#8a8478',
   red: '#E10600',
 };
 
