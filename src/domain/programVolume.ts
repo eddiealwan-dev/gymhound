@@ -1,6 +1,6 @@
-// Weekly working sets and training frequency of a program (§18.3, §18.8 R87): the numbers each built-in program is
-// checked against, about 10–20 hard sets per major muscle a week, each trained at least twice where the split allows.
-// Pure: a program is a week of days, and `muscles` says what each exercise trains.
+// Weekly working sets and training frequency of a program (§18.3, §18.8 R87 and R93): the numbers each built-in
+// program is checked against, about 10–20 hard sets per major muscle a week (read as 8–24) and each trained at least
+// twice where the split allows. Pure: a program is a week of days, and `muscles` says what each exercise trains.
 import type { Muscle } from './types';
 
 type ProgramDays = readonly { exercises: readonly { exerciseId: string; sets: number }[] }[];
@@ -90,4 +90,30 @@ export function weeklySetsByGroup(days: ProgramDays, muscles: MusclesOf): Record
 /** The days a week that train any muscle of each major group as primary. */
 export function weeklyFrequencyByGroup(days: ProgramDays, muscles: MusclesOf): Record<MajorGroup, number> {
   return tally(days, muscles, MAJOR_GROUPS).frequency;
+}
+
+/** "About 10–20 hard sets a week" as the programs are held to it (R93): 8 to 24 per major group. */
+export const WEEKLY_SETS_BAND = { min: 8, max: 24 } as const;
+
+/**
+ * Each major group's weekly sets as the band reads them (R93): `floor` is held to the minimum and `cap` to the
+ * maximum. Both are the group's sets (`weeklySetsByGroup`), except for shoulders: front delts get plenty from pressing
+ * and are not capped, so the cap counts side and rear delt sets only, and the floor counts side + rear + ½ front.
+ */
+export function weeklySetsForBand(days: ProgramDays, muscles: MusclesOf): Record<MajorGroup, { floor: number; cap: number }> {
+  const groups = weeklySetsByGroup(days, muscles);
+  const perMuscle = weeklySetsByMuscle(days, muscles);
+  const band = {} as Record<MajorGroup, { floor: number; cap: number }>;
+  for (const group of Object.keys(MAJOR_GROUPS) as MajorGroup[]) band[group] = { floor: groups[group], cap: groups[group] };
+  const sideAndRear = perMuscle.side_delts + perMuscle.rear_delts;
+  band.shoulders = { floor: sideAndRear + perMuscle.front_delts / 2, cap: sideAndRear };
+  return band;
+}
+
+/** The major groups a program trains with fewer than 8 or more than 24 sets a week (`weeklySetsForBand`). */
+export function groupsOutsideBand(days: ProgramDays, muscles: MusclesOf): MajorGroup[] {
+  const band = weeklySetsForBand(days, muscles);
+  return (Object.keys(MAJOR_GROUPS) as MajorGroup[]).filter(
+    (g) => band[g].floor < WEEKLY_SETS_BAND.min || band[g].cap > WEEKLY_SETS_BAND.max,
+  );
 }

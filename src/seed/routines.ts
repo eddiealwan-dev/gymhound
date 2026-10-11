@@ -34,10 +34,11 @@ const lowerBarbell = (exercise: string, sets: number, repMin: number, repMax: nu
 const reps = (exercise: string, sets: number, repMin: number, repMax: number) => ex(exercise, sets, repMin, repMax, 'none');
 
 /**
- * The eight built-in programs (§18.3, §18.8 R87), in display order. Each is built on current evidence: about 10–20
- * working sets per major muscle a week and each trained at least twice (the bro split once; Mobility is stretches),
- * checked by `routines.test.ts` with `src/domain/programVolume.ts`. Main lifts work 5–8 reps, accessories 8–12 or
- * 10–15, calves and lateral raises 12–20. Programs that continue keep their ids, day slugs and exercise ids, so their
+ * The eight built-in programs (§18.3, §18.8 R87), in display order, written as a coach would: compounds first, a real
+ * press on every pressing day. Each is built on current evidence: about 10–20 working sets per major muscle a week
+ * (held to 8–24, shoulders capped on side and rear delts, R93) and each trained at least twice (the bro split once;
+ * Mobility is stretches), checked by `routines.test.ts` with `src/domain/programVolume.ts`. Main lifts work 5–8
+ * reps, accessories 8–12 or 10–15, calves and lateral raises 12–20. Programs that continue keep their ids, day slugs and exercise ids, so their
  * next weights survive: Push/pull/legs, Upper/lower (now 4-day upper/lower), Full body (now Beginner full body) and
  * Dumbbell only (now Dumbbell full body). 5×5 and No equipment are retired (`runSeed`).
  */
@@ -64,7 +65,7 @@ export const SEED_ROUTINES: SeedRoutine[] = [
           lowerBarbell('barbell-deadlift', 3, 5, 8),
           ex('pull-up', 3, 6, 10),
           ex('barbell-row', 3, 8, 12),
-          ex('face-pull', 3, 10, 15),
+          ex('face-pull', 3, 12, 15),
           ex('barbell-curl', 3, 8, 12),
         ],
       },
@@ -73,8 +74,8 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         name: 'Legs A',
         exercises: [
           lowerBarbell('barbell-back-squat', 4, 5, 8),
-          lowerBarbell('barbell-romanian-deadlift', 3, 6, 10),
-          ex('leg-extension', 3, 10, 15),
+          lowerBarbell('barbell-romanian-deadlift', 3, 8, 12),
+          ex('leg-press', 3, 10, 15),
           ex('lying-leg-curl', 3, 10, 15),
           ex('standing-calf-raise', 4, 12, 20),
         ],
@@ -83,9 +84,9 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         slug: 'push-b',
         name: 'Push B',
         exercises: [
+          ex('barbell-overhead-press', 4, 5, 8),
+          ex('barbell-incline-bench-press', 3, 6, 10),
           ex('dip', 3, 8, 12),
-          ex('fedb-dumbbell-flyes', 3, 10, 15),
-          ex('fedb-butterfly', 3, 10, 15),
           ex('cable-lateral-raise', 3, 12, 20),
           ex('cable-overhead-triceps-extension', 3, 10, 15),
         ],
@@ -94,10 +95,11 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         slug: 'pull-b',
         name: 'Pull B',
         exercises: [
-          ex('fedb-t-bar-row-with-handle', 4, 6, 10),
+          ex('barbell-row', 4, 6, 10),
           ex('lat-pulldown', 3, 8, 12),
+          ex('seated-cable-row', 3, 8, 12),
+          ex('dumbbell-reverse-fly', 3, 12, 15),
           ex('dumbbell-hammer-curl', 3, 10, 15),
-          ex('dumbbell-curl', 2, 10, 15),
         ],
       },
       {
@@ -107,7 +109,7 @@ export const SEED_ROUTINES: SeedRoutine[] = [
           lowerBarbell('barbell-front-squat', 3, 5, 8),
           lowerBarbell('barbell-hip-thrust', 3, 8, 12),
           ex('dumbbell-bulgarian-split-squat', 3, 8, 12),
-          ex('fedb-seated-leg-curl', 3, 10, 15),
+          ex('leg-extension', 3, 10, 15),
           ex('seated-calf-raise', 4, 12, 20),
         ],
       },
@@ -149,7 +151,7 @@ export const SEED_ROUTINES: SeedRoutine[] = [
           ex('pull-up', 3, 6, 10),
           ex('dip', 3, 8, 12),
           ex('seated-cable-row', 3, 8, 12),
-          ex('cable-lateral-raise', 3, 12, 20),
+          ex('face-pull', 3, 12, 15),
           ex('dumbbell-hammer-curl', 3, 10, 15),
           ex('cable-overhead-triceps-extension', 3, 10, 15),
         ],
@@ -234,7 +236,6 @@ export const SEED_ROUTINES: SeedRoutine[] = [
           ex('barbell-overhead-press', 3, 5, 8),
           ex('pull-up', 4, 6, 10),
           ex('dumbbell-walking-lunge', 3, 8, 12),
-          ex('fedb-dumbbell-flyes', 3, 10, 15),
           ex('dumbbell-curl', 3, 10, 15),
           ex('standing-calf-raise', 4, 12, 20),
         ],
@@ -244,10 +245,10 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         name: 'C',
         exercises: [
           lowerBarbell('barbell-front-squat', 3, 5, 8),
-          ex('incline-dumbbell-press', 3, 8, 12),
-          ex('fedb-t-bar-row-with-handle', 3, 8, 12),
+          ex('incline-dumbbell-press', 4, 8, 12),
+          ex('seated-cable-row', 3, 8, 12),
           lowerBarbell('barbell-hip-thrust', 3, 8, 12),
-          ex('face-pull', 3, 10, 15),
+          ex('face-pull', 3, 12, 15),
           ex('dumbbell-hammer-curl', 3, 10, 15),
         ],
       },
@@ -255,8 +256,8 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         slug: 'd',
         name: 'D',
         exercises: [
-          lowerBarbell('barbell-romanian-deadlift', 3, 6, 10),
-          ex('dip', 3, 8, 12),
+          lowerBarbell('barbell-romanian-deadlift', 3, 8, 12),
+          ex('dumbbell-bench-press', 3, 8, 12),
           ex('lat-pulldown', 3, 8, 12),
           ex('leg-extension', 3, 10, 15),
           ex('cable-lateral-raise', 3, 12, 20),
@@ -275,9 +276,9 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         name: 'Chest',
         exercises: [
           ex('barbell-bench-press', 4, 5, 8),
-          ex('dumbbell-bench-press', 3, 8, 12),
-          ex('fedb-incline-dumbbell-flyes', 3, 10, 15),
-          ex('fedb-butterfly', 3, 10, 15),
+          ex('incline-dumbbell-press', 4, 8, 12),
+          ex('fedb-dumbbell-flyes', 3, 10, 15),
+          ex('fedb-cable-crossover', 3, 10, 15),
         ],
       },
       {
@@ -287,7 +288,7 @@ export const SEED_ROUTINES: SeedRoutine[] = [
           ex('pull-up', 4, 6, 10),
           ex('barbell-row', 4, 6, 10),
           ex('lat-pulldown', 3, 8, 12),
-          ex('fedb-t-bar-row-with-handle', 3, 8, 12),
+          ex('seated-cable-row', 3, 8, 12),
         ],
       },
       {
@@ -296,7 +297,8 @@ export const SEED_ROUTINES: SeedRoutine[] = [
         exercises: [
           ex('barbell-overhead-press', 4, 5, 8),
           ex('dumbbell-lateral-raise', 4, 12, 20),
-          ex('dumbbell-reverse-fly', 3, 10, 15),
+          ex('cable-lateral-raise', 3, 12, 20),
+          ex('dumbbell-reverse-fly', 4, 12, 15),
         ],
       },
       {

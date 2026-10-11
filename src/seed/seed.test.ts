@@ -9,7 +9,7 @@ import { getActiveWorkoutView, getPreviousSets } from '../db/repositories/workou
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../db/schema';
 import { createTestDb } from '../db/testing/createTestDb';
 import { seededDb } from '../db/testing/fixtures';
-import { V1_SEEDED_AT, seededV1Db } from '../db/testing/seedV1';
+import { V1_ROUTINES, V1_SEEDED_AT, seededV1Db } from '../db/testing/seedV1';
 import type { Db } from '../db/types';
 import { SEED_EXERCISES } from './exercises';
 import { LIBRARY_EXERCISES } from './library.generated';
@@ -502,10 +502,13 @@ describe('seed version 2 over a version 1 database', () => {
     expect(routine(db, 'premade-ppl-6')).toMatchObject({ retired: false, nextDayIndex: 4, createdAt: V1_SEEDED_AT });
     expect(routine(db, 'premade-advancedfullbody-4')).toMatchObject({ retired: false, nextDayIndex: 0, createdAt: NOW });
     for (const id of kept) expect(routineExercise(db, id)).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb' });
+    // Push/pull/legs keeps every exercise it had, so every slot keeps its progress.
+    const v1Ppl = V1_ROUTINES.find((r) => r.id === 'premade-ppl-6')!.days.flatMap(([slug, , rows]) => rows.map(([e]) => `premade-ppl-6:${slug}:${e}`));
+    expect(exercisesOf(db, ['premade-ppl-6']).map((r) => r.id)).toEqual([...v1Ppl].sort());
     // Exercises a continuing program no longer has are gone; ones it gained are new rows with no progress.
-    expect(db.select().from(routineExercises).where(eq(routineExercises.id, 'premade-ppl-6:push-b:barbell-overhead-press')).get()).toBeUndefined();
-    expect(db.select().from(routineExercises).where(eq(routineExercises.id, 'premade-ppl-6:legs-a:leg-press')).get()).toBeUndefined();
-    expect(routineExercise(db, 'premade-ppl-6:push-b:fedb-dumbbell-flyes')).toMatchObject({ setCount: 3, nextWeight: null });
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, 'premade-upperlower-4:upper-a:barbell-overhead-press')).get()).toBeUndefined();
+    expect(db.select().from(routineExercises).where(eq(routineExercises.id, 'premade-fullbody-3:b:barbell-deadlift')).get()).toBeUndefined();
+    expect(routineExercise(db, 'premade-upperlower-4:upper-a:incline-dumbbell-press')).toMatchObject({ setCount: 3, nextWeight: null });
     // The rule of a row that continues follows the new program: Legs A squats now rise by 10 lb.
     expect(routineExercise(db, 'premade-ppl-6:legs-a:barbell-back-squat')).toMatchObject({ increment: 10, repMin: 5, repMax: 8 });
     // The retired premades keep every row, their progress included.

@@ -1,4 +1,4 @@
-import { MAJOR_GROUPS, weeklyFrequencyByGroup, weeklySetsByGroup } from '../domain/programVolume';
+import { groupsOutsideBand, MAJOR_GROUPS, weeklyFrequencyByGroup } from '../domain/programVolume';
 import type { MajorGroup } from '../domain/programVolume';
 import { LIBRARY_EXERCISES } from './library.generated';
 import { PREMADE_ORDER, SEED_ROUTINES } from './routines';
@@ -16,8 +16,15 @@ const week = (routine: SeedRoutine) =>
 const program = (id: string) => SEED_ROUTINES.find((r) => r.id === id)!;
 const entries = (routine: SeedRoutine) => routine.days.flatMap((d) => d.exercises);
 const GROUPS = Object.keys(MAJOR_GROUPS) as MajorGroup[];
+/** What an exercise trains, leaving out the front delts: pressing trains them on every pushing day (R93). */
+const musclesBesidesFrontDelts = (id: string) => ({
+  primary: muscles(id).primary.filter((m) => m !== 'front_delts'),
+  secondary: muscles(id).secondary.filter((m) => m !== 'front_delts'),
+});
+/** Exercises that are not isolation or core work. */
+const isCompound = (id: string) => !['isolation', 'core'].includes(exercise(id).pattern);
 
-/** Each built-in program: its name, its days, and how often a week it trains each major group (§18.3, §18.8 R87). */
+/** Each built-in program with its name and days (§18.3, §18.8 R87). */
 const PROGRAMS = [
   { id: 'premade-ppl-6', name: 'Push/pull/legs', days: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'] },
   { id: 'premade-upperlower-4', name: '4-day upper/lower', days: ['Upper A', 'Lower A', 'Upper B', 'Lower B'] },
@@ -30,6 +37,7 @@ const PROGRAMS = [
 ] as const;
 
 const VOLUME_CHECKED = PROGRAMS.filter((p) => p.id !== 'premade-mobility-3');
+const GYM_PROGRAMS = VOLUME_CHECKED.filter((p) => p.id !== 'premade-calisthenics-3');
 
 describe('the eight programs', () => {
   it('are the premades, in the spec order, with their names and days', () => {
@@ -80,13 +88,13 @@ describe('the eight programs', () => {
   });
 });
 
-describe('weekly volume and frequency (§18.8 R87)', () => {
-  it.each(VOLUME_CHECKED.map((p) => [p.name, p.id]))('%s gives each major group about 10 to 20 working sets a week', (_name, id) => {
-    const sets = weeklySetsByGroup(week(program(id)), muscles);
-    for (const group of GROUPS) {
-      expect([group, sets[group] >= 10 && sets[group] <= 20]).toEqual([group, true]);
-    }
-  });
+describe('weekly volume and frequency (§18.8 R87, R93)', () => {
+  it.each(VOLUME_CHECKED.map((p) => [p.name, p.id]))(
+    '%s gives each major group about 10 to 20 working sets a week: 8 to 24, shoulders capped on side and rear delts',
+    (_name, id) => {
+      expect(groupsOutsideBand(week(program(id)), muscles)).toEqual([]);
+    },
+  );
 
   it.each(
     VOLUME_CHECKED.filter((p) => p.id !== 'premade-brosplit-5' && p.id !== 'premade-calisthenics-3').map((p) => [p.name, p.id]),
@@ -95,8 +103,9 @@ describe('weekly volume and frequency (§18.8 R87)', () => {
     for (const group of GROUPS) expect([group, frequency[group] >= 2]).toEqual([group, true]);
   });
 
-  it('Bro split trains each major group on one day only', () => {
-    const frequency = weeklyFrequencyByGroup(week(program('premade-brosplit-5')), muscles);
+  it('Bro split trains each major group on one day only, shoulders by their side and rear delts', () => {
+    // Chest day's incline press trains the front delts too; like the volume cap (R93), the count leaves them out.
+    const frequency = weeklyFrequencyByGroup(week(program('premade-brosplit-5')), musclesBesidesFrontDelts);
     expect(frequency).toEqual(Object.fromEntries(GROUPS.map((g) => [g, 1])));
   });
 
@@ -104,8 +113,9 @@ describe('weekly volume and frequency (§18.8 R87)', () => {
     const calisthenics = program('premade-calisthenics-3');
     const frequency = weeklyFrequencyByGroup(week(calisthenics), muscles);
     for (const group of GROUPS.filter((g) => g !== 'biceps')) expect([group, frequency[group] >= 2]).toEqual([group, true]);
-    // No bodyweight exercise in the library has biceps as a primary muscle (the timed ones are stretches), so the
-    // exception: chin-ups, pull-ups and rows train them as secondary, on every day, for their 10 sets.
+    // The exception: the library has no bodyweight exercise with biceps as a primary muscle (no curls on rings or a
+    // bar; the timed ones are stretches). Chin-ups, pull-ups and inverted rows train them as secondary, on every day,
+    // which the band above holds to at least 8 sets a week.
     expect(LIBRARY_EXERCISES.filter((e) => e.primaryMuscles.includes('biceps') && e.loggingType === 'bodyweight_plus')).toEqual([]);
     for (const day of calisthenics.days) {
       expect(day.exercises.some((e) => exercise(e.exercise).secondaryMuscles.includes('biceps'))).toBe(true);
@@ -114,6 +124,25 @@ describe('weekly volume and frequency (§18.8 R87)', () => {
 });
 
 describe('what each program is built from', () => {
+  it.each(GYM_PROGRAMS.map((p) => [p.name, p.id]))('%s presses with a barbell or dumbbells on every day that trains chest or front delts', (_name, id) => {
+    for (const day of program(id).days) {
+      const pressing = day.exercises.some((e) => muscles(e.exercise).primary.some((m) => m === 'chest' || m === 'front_delts'));
+      const press = day.exercises.some((e) => {
+        const { equipment, loggingType, pattern } = exercise(e.exercise);
+        return (equipment === 'barbell' || equipment === 'dumbbell') && loggingType === 'weighted' && pattern.endsWith('_push');
+      });
+      expect([day.name, !pressing || press]).toEqual([day.name, true]);
+    }
+  });
+
+  it.each(VOLUME_CHECKED.map((p) => [p.name, p.id]))('%s puts compound lifts before isolation and core work', (_name, id) => {
+    for (const day of program(id).days) {
+      const firstSmall = day.exercises.findIndex((e) => !isCompound(e.exercise));
+      const late = firstSmall === -1 ? [] : day.exercises.slice(firstSmall).filter((e) => isCompound(e.exercise));
+      expect([day.name, late.map((e) => e.exercise)]).toEqual([day.name, []]);
+    }
+  });
+
   it('Beginner full body is three days of barbell and dumbbell basics, with a few cable and machine moves', () => {
     const kinds = entries(program('premade-fullbody-3')).map((e) => exercise(e.exercise).equipment);
     expect(kinds.filter((k) => k === 'barbell' || k === 'dumbbell').length).toBeGreaterThan(kinds.length / 2);
@@ -147,7 +176,11 @@ describe('what each program is built from', () => {
     const bro = program('premade-brosplit-5');
     expect(bro.days).toHaveLength(5);
     const trainedFirst = (day: number) =>
-      new Set(bro.days[day].exercises.flatMap((e) => GROUPS.filter((g) => exercise(e.exercise).primaryMuscles.some((m) => MAJOR_GROUPS[g].includes(m)))));
+      new Set(
+        bro.days[day].exercises.flatMap((e) =>
+          GROUPS.filter((g) => musclesBesidesFrontDelts(e.exercise).primary.some((m) => MAJOR_GROUPS[g].includes(m))),
+        ),
+      );
     expect([0, 1, 2, 3, 4].map((d) => [...trainedFirst(d)].sort())).toEqual([
       ['chest'],
       ['back'],

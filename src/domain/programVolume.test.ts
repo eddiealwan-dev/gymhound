@@ -1,9 +1,12 @@
 import {
+  groupsOutsideBand,
   MAJOR_GROUPS,
+  WEEKLY_SETS_BAND,
   weeklyFrequency,
   weeklyFrequencyByGroup,
   weeklySetsByGroup,
   weeklySetsByMuscle,
+  weeklySetsForBand,
 } from './programVolume';
 import type { Muscle } from './types';
 
@@ -15,6 +18,10 @@ const MUSCLES: Record<string, { primary: Muscle[]; secondary: Muscle[] }> = {
   row: { primary: ['lats', 'upper_back'], secondary: ['biceps', 'rear_delts'] },
   squat: { primary: ['quads', 'glutes'], secondary: ['adductors'] },
   curl: { primary: ['biceps'], secondary: [] },
+  frontRaise: { primary: ['front_delts'], secondary: [] },
+  rdl: { primary: ['hamstrings', 'glutes'], secondary: [] },
+  pushdown: { primary: ['triceps'], secondary: [] },
+  incline: { primary: ['chest', 'front_delts'], secondary: ['triceps'] },
 };
 const muscles = (id: string) => MUSCLES[id];
 const day = (...exercises: [string, number][]) => ({ exercises: exercises.map(([exerciseId, sets]) => ({ exerciseId, sets })) });
@@ -88,5 +95,42 @@ describe('major muscle groups', () => {
     expect(frequency.quads).toBe(1);
     expect(frequency.glutes).toBe(1);
     expect(frequency.biceps).toBe(0);
+  });
+});
+
+describe('the band the programs are held to (R93)', () => {
+  it('reads "about 10 to 20 hard sets a week" as 8 to 24 per major group', () => {
+    expect(WEEKLY_SETS_BAND).toEqual({ min: 8, max: 24 });
+  });
+
+  it('checks every group but shoulders by its sets, against both ends', () => {
+    const days = [day(['bench', 4], ['row', 4], ['squat', 4]), day(['bench', 4], ['curl', 3])];
+    const band = weeklySetsForBand(days, muscles);
+    const sets = weeklySetsByGroup(days, muscles);
+    for (const group of ['chest', 'back', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes'] as const) {
+      expect(band[group]).toEqual({ floor: sets[group], cap: sets[group] });
+    }
+  });
+
+  it('caps shoulders on side and rear delts only, and floors them on side + rear + half the front', () => {
+    const band = weeklySetsForBand([day(['ohp', 4], ['raise', 3], ['facePull', 3]), day(['bench', 4])], muscles);
+    // Side: 3 raises + ½ × 4 presses = 5. Rear: 3 face pulls. Front: 4 presses + ½ × 4 bench = 6.
+    expect(band.shoulders).toEqual({ floor: 5 + 3 + 6 / 2, cap: 5 + 3 });
+  });
+
+  it('never caps front delts: any amount of pressing stays inside the band', () => {
+    const band = weeklySetsForBand([day(['frontRaise', 20], ['incline', 20]), day(['frontRaise', 20])], muscles);
+    expect(band.shoulders).toEqual({ floor: 30, cap: 0 });
+    expect(groupsOutsideBand([day(['frontRaise', 20], ['incline', 20]), day(['frontRaise', 20])], muscles)).not.toContain('shoulders');
+  });
+
+  it('names the groups under 8 or over 24 sets', () => {
+    const days = [day(['bench', 5], ['squat', 5], ['rdl', 5], ['raise', 5]), day(['bench', 5], ['squat', 5], ['rdl', 5], ['raise', 4], ['pushdown', 4])];
+    // Chest, quads and hamstrings 10, triceps 4 + ½ × 10 = 9 and glutes 20 pass; shoulders cap 9, floor 9 + ½ × 5 = 11.5.
+    // Back and biceps get nothing.
+    expect(groupsOutsideBand(days, muscles)).toEqual(['back', 'biceps']);
+    const tooMuch = [day(['squat', 5], ['rdl', 5]), day(['squat', 5], ['rdl', 5]), day(['squat', 5])];
+    expect(groupsOutsideBand(tooMuch, muscles)).toContain('glutes');
+    expect(weeklySetsByGroup(tooMuch, muscles).glutes).toBe(25);
   });
 });
