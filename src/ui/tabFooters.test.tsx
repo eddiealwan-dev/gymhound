@@ -29,6 +29,8 @@ jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, 
 // Fuel: locked (the footer shows in every Fuel state); its water card has its own tests.
 jest.mock('../platform/entitlements', () => ({ ...jest.requireActual('../platform/entitlements'), useIsPro: () => false }));
 jest.mock('./fuel/WaterCard', () => ({ WaterCard: () => null }));
+// The pitch reads the store; its own tests cover it (paywall.test).
+jest.mock('./pro/ProPitch', () => ({ ProPitch: () => null }));
 
 beforeEach(() => {
   mockQueryResult = ROUTINES;

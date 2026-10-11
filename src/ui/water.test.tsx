@@ -172,7 +172,7 @@ describe('the water card (R150)', () => {
     press(tree, 'Add 500 ml of water');
     expect(listWater(mockDb, TODAY)).toEqual([]);
     expect(listWater(mockDb, '2026-10-10').map((e) => e.amountMl)).toEqual([500]);
-    expect(mockAnnounce).toHaveBeenCalledWith('Added 500 ml. 500 ml on Oct 10.');
+    expect(mockAnnounce).toHaveBeenCalledWith('Added 500 ml. 500 ml yesterday.');
   });
 
   it('draws nothing in red', () => {
@@ -192,7 +192,7 @@ describe('Other', () => {
     type(tree, 'Amount, ml', '330');
     press(tree, 'Add');
     expect(listWater(mockDb, '2026-10-10').map((e) => e.amountMl)).toEqual([330]);
-    expect(mockAnnounce).toHaveBeenCalledWith('Added 330 ml. 330 ml on Oct 10.');
+    expect(mockAnnounce).toHaveBeenCalledWith('Added 330 ml. 330 ml yesterday.');
     expect(shownText(tree)).not.toContain('Add water');
   });
 
@@ -317,13 +317,23 @@ describe('Entries', () => {
     logWater(mockDb, 250, '2026-10-10', NOW);
     const tree = mount(<WaterCard localDate="2026-10-10" />);
     press(tree, 'Water entries');
-    expect(shownText(tree)).toContain('Water on Oct 10');
+    expect(shownText(tree)).toContain('Water yesterday');
     // An earlier day's entries were logged later, so their time says nothing: just the amount.
     expect(allText(tree)).not.toMatch(/\d:\d\d/);
     const del = tree.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Delete 250 ml');
     act(() => del[0].props.onPress());
     expect(listWater(mockDb, '2026-10-10')).toEqual([]);
-    expect(shownText(tree)).not.toContain('Water on Oct 10');
+    expect(shownText(tree)).not.toContain('Water yesterday');
     expect(allText(tree)).not.toContain('Entries');
+  });
+});
+
+describe('the day in words, as Fuel says it', () => {
+  it('says an older day by its weekday and date', () => {
+    const tree = mount(<WaterCard localDate="2026-10-09" />);
+    press(tree, 'Add 250 ml of water');
+    expect(mockAnnounce).toHaveBeenCalledWith('Added 250 ml. 250 ml on Fri, Oct 9.');
+    press(tree, 'Water entries');
+    expect(shownText(tree)).toContain('Water on Fri, Oct 9');
   });
 });

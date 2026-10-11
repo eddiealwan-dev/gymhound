@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { Text, TextInput } from 'react-native';
+import { StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import Fuel from '../../app/(tabs)/fuel';
@@ -11,6 +11,8 @@ import { createTestDb } from '../db/testing/createTestDb';
 import type { Db } from '../db/types';
 import { bumpData } from '../state/dataVersion';
 import { Footer } from './Footer';
+import { FoodEntrySheet } from './fuel/FoodEntrySheet';
+import { Sheet } from './Sheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -256,7 +258,7 @@ describe('the summary (§8.10, R147)', () => {
     expect(text).toContain('Calories left');
     expect(text).toContain('Protein left');
     expect(text).toContain('Rest day target: 2,400 kcal · 180 g protein');
-    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 1,699').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 1,699 calories').length).toBeGreaterThan(0);
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 129 grams').length).toBeGreaterThan(0);
   });
 
@@ -284,6 +286,25 @@ describe('the summary (§8.10, R147)', () => {
     expect(text).toContain('120 over');
     expect(text).toContain('12 g over');
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 12 grams over').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 120 calories over').length).toBeGreaterThan(0);
+  });
+});
+
+describe('the summary at 320pt', () => {
+  it('fits Calories left and Protein left side by side in a 320pt screen at default text (288pt inside the gutters)', () => {
+    mockPro = true;
+    setFuelTargets(mockDb, TARGETS);
+    const tree = mount();
+    const [calories] = tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 2,400 calories' && typeof n.type !== 'string');
+    const [protein] = tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 180 grams' && typeof n.type !== 'string');
+    const own = StyleSheet.flatten(calories.props.style);
+    // The View's parent is LeftNumber; LeftNumber's is the row.
+    const rowOf = (n: ReactTestInstance) => n.parent!.parent!;
+    const row = StyleSheet.flatten(rowOf(calories).props.style);
+    expect(rowOf(protein) === rowOf(calories)).toBe(true);
+    expect(row.flexWrap).toBe('wrap');
+    expect(2 * (own.flexBasis as number) + (row.columnGap as number)).toBeLessThanOrEqual(288);
+    expect(own.flexGrow).toBe(1);
   });
 });
 
@@ -448,6 +469,12 @@ describe('the day header (R148)', () => {
     expect(allText(tree)).toContain('Late snack');
   });
 
+  it('centres the day between the arrows', () => {
+    const tree = mount();
+    const title = tree.root.findAll((n) => typeof n.type === 'string' && n.children.includes('Today'))[0];
+    expect(StyleSheet.flatten(title.props.style)).toMatchObject({ flex: 1, textAlign: 'center' });
+  });
+
   it('after midnight, a screen left on an earlier day keeps that day', () => {
     const tree = mount();
     press(tree, 'Previous day');
@@ -511,7 +538,35 @@ describe('editing an entry (R142)', () => {
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Check this number');
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    // announce() speaks it; a live region too would make TalkBack read it twice.
+    expect(tree.root.findAll((n) => n.props.accessibilityLiveRegion !== undefined && n.props.accessibilityLiveRegion !== 'none')).toHaveLength(0);
     expect(listEntries(mockDb, TODAY)[0].servings).toBe(1);
+  });
+
+  it('reads "1.50" as the 1.5 servings stored: not a change', () => {
+    const id = createCustomFood(mockDb, shake);
+    logFood(mockDb, id, 1.5, TODAY, NOW);
+    const tree = mount();
+    openEntry(tree, 'Protein shake');
+    type(tree, 'Servings', '1.50');
+    press(tree, 'Cancel');
+    expect(shownText(tree)).not.toContain('Discard changes?');
+    expect(field(tree, 'Servings')).toBeUndefined();
+  });
+
+  it('keeps the entry drawn in the sheet while it closes, so no blank panel fades', () => {
+    const id = createCustomFood(mockDb, shake);
+    logFood(mockDb, id, 1, TODAY, NOW);
+    const tree = mount();
+    openEntry(tree, 'Protein shake');
+    type(tree, 'Servings', '2');
+    press(tree, 'Save');
+    const sheet = tree.root.findByType(FoodEntrySheet).findByType(Sheet);
+    expect(sheet!.props.visible).toBe(false);
+    expect(sheet!.props.children).not.toBeNull();
+    // Opening again starts from the entry as saved, not the old draft.
+    openEntry(tree, 'Protein shake');
+    expect(field(tree, 'Servings')!.props.value).toBe('2');
   });
 
   it('edits a quick add by its name and macros', () => {
@@ -520,7 +575,7 @@ describe('editing an entry (R142)', () => {
     openEntry(tree, 'Lunch');
     expect(field(tree, 'Servings')).toBeUndefined();
     expect(field(tree, 'Name')!.props.value).toBe('Lunch');
-    expect(field(tree, 'Calories, kcal')!.props.value).toBe('600');
+    expect(field(tree, 'Calories')!.props.value).toBe('600');
     type(tree, 'Name', 'Big lunch');
     type(tree, 'Protein, grams', '55,5');
     press(tree, 'Save');
@@ -532,7 +587,7 @@ describe('editing an entry (R142)', () => {
     logQuickAdd(mockDb, 'Lunch', { kcal: 600, proteinG: 40, carbsG: 50, fatG: 20 }, TODAY, NOW);
     const tree = mount();
     openEntry(tree, 'Lunch');
-    type(tree, 'Calories, kcal', '');
+    type(tree, 'Calories', '');
     type(tree, 'Protein, grams', '0');
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Enter calories or protein.');
