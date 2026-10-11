@@ -39,20 +39,26 @@ export function foodOfferDue(db: Db, workoutId: string, isPro: boolean): boolean
   });
 }
 
-/** Throws unless `workoutId` is the active workout, as every other session edit does. */
-function requireActiveWorkout(db: Db, workoutId: string): void {
-  const workout = db.select({ status: workouts.status }).from(workouts).where(eq(workouts.id, workoutId)).get();
+/** Throws unless `workoutId` is the active workout, as every other session edit does. Says whether the offer was shown. */
+function requireActiveWorkout(db: Db, workoutId: string): { shown: boolean } {
+  const workout = db
+    .select({ status: workouts.status, shown: workouts.foodOfferShown })
+    .from(workouts)
+    .where(eq(workouts.id, workoutId))
+    .get();
   if (workout?.status !== 'active') throw new Error(`Workout ${workoutId} is not the active workout.`);
+  return { shown: workout.shown };
 }
 
 /**
  * Mark it (R152): in one transaction, flags every exercise of the active workout that has no mark Short on food (an
  * exercise flagged Pain or any other reason keeps it) and records that the offer was shown. Exercises added later are
- * not flagged. Returns how many exercises it flagged. Throws, changing nothing, outside the active workout.
+ * not flagged. Once the offer was shown (× or Mark it already tapped, as in a quick double tap) it flags nothing and
+ * returns 0. Returns how many exercises it flagged. Throws, changing nothing, outside the active workout.
  */
 export function flagUnmarkedShortOnFood(db: Db, workoutId: string): number {
   return db.transaction((tx) => {
-    requireActiveWorkout(tx, workoutId);
+    if (requireActiveWorkout(tx, workoutId).shown) return 0;
     const unmarked = tx
       .select({ id: workoutExercises.id })
       .from(workoutExercises)

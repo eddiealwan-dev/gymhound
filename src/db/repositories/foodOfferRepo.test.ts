@@ -182,6 +182,26 @@ describe('flagUnmarkedShortOnFood (Mark it)', () => {
     expect(foodOfferDue(db, id, true)).toBe(false);
   });
 
+  it('flags nothing once the offer was dismissed (× then Mark it in one quick double tap)', () => {
+    const { db, id } = dueSetup();
+    setFoodOfferShown(db, id);
+
+    expect(flagUnmarkedShortOnFood(db, id)).toBe(0);
+
+    expect(marks(db, id).every((m) => m === null)).toBe(true);
+    expect(shown(db, id)).toBe(true);
+  });
+
+  it('flags nothing the second time: a double tap on Mark it marks once', () => {
+    const { db, id } = dueSetup();
+    expect(flagUnmarkedShortOnFood(db, id)).toBeGreaterThan(0);
+    addExerciseToWorkout(db, id, 'pull-up');
+
+    expect(flagUnmarkedShortOnFood(db, id)).toBe(0);
+
+    expect(marks(db, id).at(-1)).toBeNull();
+  });
+
   it('leaves exercises added afterwards unflagged', () => {
     const { db, id } = dueSetup();
     flagUnmarkedShortOnFood(db, id);

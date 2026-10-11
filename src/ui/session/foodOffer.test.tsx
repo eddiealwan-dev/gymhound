@@ -1,4 +1,4 @@
-import { Keyboard, Text } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { foodOfferDue } from '../../db/repositories/foodOfferRepo';
@@ -9,6 +9,11 @@ import { FoodOfferBanner } from './FoodOfferBanner';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let mockPro = true;
+let mockFontScale = 1;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 375, height: 812, scale: 3, fontScale: mockFontScale }),
+}));
 jest.mock('../../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../../platform/entitlements', () => ({ useIsPro: () => mockPro }));
 jest.mock('../../db/repositories/foodOfferRepo', () => ({ foodOfferDue: jest.fn() }));
@@ -37,6 +42,7 @@ const pressable = (tree: ReactTestRenderer, label: string) =>
 
 beforeEach(() => {
   mockPro = true;
+  mockFontScale = 1;
   jest.mocked(foodOfferDue).mockReset().mockReturnValue(true);
   jest.mocked(acceptFoodOffer).mockClear();
   jest.mocked(dismissFoodOffer).mockClear();
@@ -93,6 +99,40 @@ describe('FoodOfferBanner (§7.10)', () => {
     const tree = mount();
     const root = tree.toJSON() as unknown as { props: { style: Record<string, unknown> } };
     expect(root.props.style.paddingTop ?? 0).toBe(0);
+  });
+
+  describe('at large text the buttons drop under the line', () => {
+    /** The line's own style, and the view holding Mark it and ×. */
+    const parts = (tree: ReactTestRenderer) => {
+      const line = tree.root.findAllByType(Text).find((t) => t.props.children === COPY)!;
+      const flat = (s: unknown) => Object.assign({}, ...([] as unknown[]).concat(s).flat(Infinity).filter(Boolean)) as Record<string, unknown>;
+      // The innermost view holding both buttons, and the innermost view holding it and the line.
+      const views = tree.root.findAllByType(View);
+      const holds = (v: (typeof views)[number], pred: (n: (typeof views)[number]) => boolean) => v.findAll(pred).length > 0;
+      const hasMark = (n: (typeof views)[number]) => n.props.label === 'Mark it';
+      const hasX = (n: (typeof views)[number]) => n.props.accessibilityLabel === 'Dismiss' && typeof n.props.onPress === 'function';
+      const hasLine = (n: (typeof views)[number]) => n === line;
+      const group = views.filter((v) => holds(v, hasMark) && holds(v, hasX)).at(-1)!;
+      const row = views.filter((v) => holds(v, hasMark) && holds(v, hasLine)).at(-1)!;
+      return { line: flat(line.props.style), group: flat(group.props.style), row: flat(row.props.style) };
+    };
+
+    it('lets the row wrap, with the buttons kept together at the end', () => {
+      const { row, group } = parts(mount());
+      expect(row).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+      expect(group).toMatchObject({ flexDirection: 'row', marginLeft: 'auto' });
+    });
+
+    it('gives the line a width that grows with the text size, so large text pushes the buttons under it', () => {
+      mockFontScale = 1;
+      const normal = parts(mount()).line;
+      mockFontScale = 2;
+      const large = parts(mount()).line;
+      expect(normal).toMatchObject({ flexGrow: 1, flexShrink: 1 });
+      expect(large.flexBasis as number).toBe((normal.flexBasis as number) * 2);
+      // A phone row is at most 343pt wide past the gutters: at 2× the line alone takes more than the room left by the buttons.
+      expect(large.flexBasis as number).toBeGreaterThan(343 - 44 - 80);
+    });
   });
 
   it('never uses the red', () => {
