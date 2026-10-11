@@ -1,4 +1,5 @@
 import {
+  clampRule,
   dayLabel,
   defaultIncrement,
   draftReducer,
@@ -71,6 +72,14 @@ describe('days', () => {
   it('names a day added without a name "Day {n}"', () => {
     const d = run(newDraft(), { type: 'addDay' }, { type: 'addDay', name: '  ' });
     expect(d.days.map((day) => day.name)).toEqual(['Day 1', 'Day 2']);
+  });
+
+  it('a day added without a name takes the lowest "Day {n}" not in use, never a duplicate', () => {
+    const three = run(newDraft(), { type: 'addDay' }, { type: 'addDay' }, { type: 'addDay' });
+    const gap = run(three, (s) => ({ type: 'deleteDay', dayKey: s.days[1].key }), { type: 'addDay' });
+    expect(gap.days.map((day) => day.name)).toEqual(['Day 1', 'Day 3', 'Day 2']);
+    const named = run(newDraft(), { type: 'addDay', name: 'Push' }, { type: 'addDay', name: ' Day 1 ' }, { type: 'addDay' });
+    expect(named.days.map((day) => day.name)).toEqual(['Push', ' Day 1 ', 'Day 2']);
   });
 
   it('renames one day, as typed', () => {
@@ -299,6 +308,50 @@ describe('hasChanges', () => {
     expect(hasChanges(d, draftReducer(d, { type: 'rename', name: 'X' }))).toBe(true);
     expect(hasChanges(d, run(d, toggle(0)))).toBe(true);
     expect(hasChanges(d, run(d, move(1, 'up')))).toBe(true);
+  });
+
+  it('ignores what saving trims: spaces around names, and a blank day that saves as its "Day {n}"', () => {
+    const d = run(oneDay(BENCH), { type: 'rename', name: 'Mine' });
+    const renameDay = (name: string) => (s: RoutineDraft): DraftAction => ({ type: 'renameDay', dayKey: s.days[0].key, name });
+    expect(hasChanges(d, run(d, { type: 'rename', name: ' Mine  ' }))).toBe(false);
+    expect(hasChanges(d, run(d, renameDay('')))).toBe(false);
+    expect(hasChanges(d, run(d, renameDay(' Day 1 ')))).toBe(false);
+    expect(hasChanges(d, run(d, renameDay('Day 2')))).toBe(true);
+  });
+});
+
+describe('clampRule', () => {
+  const rule = { setCount: 3, repMin: 8, repMax: 12, increment: 5 };
+
+  it('keeps sets a whole number from 1 to 10', () => {
+    expect(clampRule({ ...rule, setCount: 0 }).setCount).toBe(1);
+    expect(clampRule({ ...rule, setCount: 25 }).setCount).toBe(10);
+    expect(clampRule({ ...rule, setCount: 4.6 }).setCount).toBe(5);
+  });
+
+  it('keeps reps whole and at least 1, with min ≤ max', () => {
+    expect(clampRule({ ...rule, repMin: 12, repMax: 8 })).toMatchObject({ repMin: 12, repMax: 12 });
+    expect(clampRule({ ...rule, repMin: 12, repMax: 8 }, 'max')).toMatchObject({ repMin: 8, repMax: 8 });
+    expect(clampRule({ ...rule, repMin: 0, repMax: -3 })).toMatchObject({ repMin: 1, repMax: 1 });
+    expect(clampRule({ ...rule, repMin: 6.4, repMax: 9.6 })).toMatchObject({ repMin: 6, repMax: 10 });
+  });
+
+  it('keeps the increment at 0 or more', () => {
+    expect(clampRule({ ...rule, increment: -2.5 }).increment).toBe(0);
+    expect(clampRule({ ...rule, increment: 1.25 }).increment).toBe(1.25);
+  });
+
+  it('turns a value that is not a number into the lowest allowed', () => {
+    expect(clampRule({ setCount: Number.NaN, repMin: Number.NaN, repMax: Infinity, increment: Number.NaN })).toEqual({
+      setCount: 1,
+      repMin: 1,
+      repMax: 1,
+      increment: 0,
+    });
+  });
+
+  it('keeps the other fields', () => {
+    expect(clampRule({ ...rule, name: 'Bench' })).toEqual({ ...rule, name: 'Bench' });
   });
 });
 

@@ -52,7 +52,7 @@ type Dir = 'up' | 'down';
 
 export type DraftAction =
   | { type: 'rename'; name: string }
-  /** A blank or missing name becomes "Day {n}". */
+  /** A blank or missing name becomes the lowest "Day {n}" not in use. */
   | { type: 'addDay'; name?: string }
   | { type: 'renameDay'; dayKey: string; name: string }
   | { type: 'moveDay'; dayKey: string; dir: Dir }
@@ -112,14 +112,14 @@ export function validateDraft(draft: RoutineDraft): string[] {
   return errors;
 }
 
-/** What a draft saves, without the list keys. */
+/** What a draft saves: names as saved (trimmed, a blank day as its "Day {n}"), and no list keys. */
 function content(draft: RoutineDraft) {
   return {
     id: draft.id,
-    name: draft.name,
-    days: draft.days.map((day) => ({
+    name: draft.name.trim(),
+    days: draft.days.map((day, i) => ({
       id: day.id,
-      name: day.name,
+      name: dayLabel(day, i),
       exercises: day.exercises.map(({ key: _key, ...exercise }) => exercise),
     })),
   };
@@ -174,26 +174,47 @@ function blocks(exercises: DraftExercise[]): DraftExercise[][] {
   return result;
 }
 
-const wholeAtLeast = (v: number, min: number) => Math.max(min, Math.round(v));
+type RuleFields = Pick<DraftExercise, 'setCount' | 'repMin' | 'repMax' | 'increment'>;
 
-/** Applies a patch, keeping set count 1–10, reps whole and at least 1 with min ≤ max, and the increment at 0 or more. */
+/** A whole number of at least `min`; `fallback` when `v` is not a finite number. */
+const wholeAtLeast = (v: number, min: number, fallback: number) =>
+  Number.isFinite(v) ? Math.max(min, Math.round(v)) : fallback;
+
+/**
+ * A rule as it may be saved: sets a whole number from 1 to 10, reps whole and at least 1 with min ≤ max, and the
+ * increment 0 or more; anything not a number becomes the lowest allowed. When min > max, `keep` names the end that
+ * stays and the other moves to meet it. The reducer and `saveRoutine` both apply it.
+ */
+export function clampRule<T extends RuleFields>(rule: T, keep: 'min' | 'max' = 'min'): T {
+  const setCount = Math.min(MAX_SETS, wholeAtLeast(rule.setCount, MIN_SETS, MIN_SETS));
+  let repMin = wholeAtLeast(rule.repMin, 1, 1);
+  let repMax = wholeAtLeast(rule.repMax, 1, repMin);
+  if (repMin > repMax) {
+    if (keep === 'max') repMin = repMax;
+    else repMax = repMin;
+  }
+  const increment = Number.isFinite(rule.increment) ? Math.max(0, rule.increment) : 0;
+  return { ...rule, setCount, repMin, repMax, increment };
+}
+
+/** Applies a patch within `clampRule`'s limits. A value that is not a number is ignored; the rep end just set wins. */
 function patched(e: DraftExercise, patch: ExercisePatch): DraftExercise {
+  const given = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v);
   const next = { ...e };
-  if (patch.setCount !== undefined && Number.isFinite(patch.setCount)) {
-    next.setCount = Math.min(MAX_SETS, wholeAtLeast(patch.setCount, MIN_SETS));
-  }
-  const minGiven = patch.repMin !== undefined && Number.isFinite(patch.repMin);
-  const maxGiven = patch.repMax !== undefined && Number.isFinite(patch.repMax);
-  if (minGiven) next.repMin = wholeAtLeast(patch.repMin!, 1);
-  if (maxGiven) next.repMax = wholeAtLeast(patch.repMax!, 1);
-  if (next.repMin > next.repMax) {
-    // The end that was just set wins; the other one moves to meet it.
-    if (maxGiven && !minGiven) next.repMin = next.repMax;
-    else next.repMax = next.repMin;
-  }
-  if (patch.increment !== undefined && Number.isFinite(patch.increment)) next.increment = Math.max(0, patch.increment);
+  if (given(patch.setCount)) next.setCount = patch.setCount;
+  if (given(patch.repMin)) next.repMin = patch.repMin;
+  if (given(patch.repMax)) next.repMax = patch.repMax;
+  if (given(patch.increment)) next.increment = patch.increment;
   if (patch.incrementUnit !== undefined) next.incrementUnit = patch.incrementUnit;
-  return next;
+  return clampRule(next, given(patch.repMax) && !given(patch.repMin) ? 'max' : 'min');
+}
+
+/** The lowest "Day {n}" that no day of the draft is called, as saved. */
+function unusedDayName(days: DraftDay[]): string {
+  const taken = new Set(days.map(dayLabel));
+  let n = 1;
+  while (taken.has(`Day ${n}`)) n++;
+  return `Day ${n}`;
 }
 
 /** The new exercise list of a day for an exercise action, or null when nothing changes. */
@@ -251,7 +272,7 @@ export function draftReducer(draft: RoutineDraft, action: DraftAction): RoutineD
     case 'rename':
       return { ...draft, name: action.name };
     case 'addDay': {
-      const name = action.name?.trim() ? action.name : `Day ${draft.days.length + 1}`;
+      const name = action.name?.trim() ? action.name : unusedDayName(draft.days);
       const day: DraftDay = { key: `new:${draft.nextKey}`, id: null, name, exercises: [] };
       return { ...draft, days: [...draft.days, day], nextKey: draft.nextKey + 1 };
     }

@@ -527,6 +527,37 @@ describe('deleteRoutine (R90)', () => {
     expect(getUpNext(db)).toBeNull();
   });
 
+  it('a workout in progress from it still finishes: its history is kept and there is no rotation to move', () => {
+    const db = seededDb();
+    const id = duplicateRoutine(db, PPL, NOW);
+    setActiveRoutine(db, id);
+    const firstDay = rowsOf(db, id)[0].day.id;
+    const workoutId = startWorkoutFromDay(db, firstDay, NOW);
+    const bench = benchIn(db, workoutId);
+    const benchSets = db.select({ id: sets.id }).from(sets).where(eq(sets.workoutExerciseId, bench.id)).all();
+    const rotations = () => db.select({ id: routines.id, next: routines.nextDayIndex }).from(routines).all();
+    const before = rotations().filter((r) => r.id !== id);
+
+    deleteRoutine(db, id);
+    benchSets.forEach((s, i) =>
+      tickSet(db, s.id, { weight: 135, reps: 8, durationS: null, distance: null }, 'lb', NOW + (i + 1) * 60_000, 'mi'),
+    );
+    expect(() => finishWorkout(db, workoutId, NOW + HOUR)).not.toThrow();
+
+    expect(db.select().from(workouts).where(eq(workouts.id, workoutId)).get()).toMatchObject({
+      status: 'finished',
+      routineId: id,
+      routineDayId: firstDay,
+    });
+    expect(benchIn(db, workoutId)).toMatchObject({ outcome: 'raised', nextWeight: 140, nextUnit: 'lb' });
+    expect(db.select().from(sets).where(eq(sets.workoutExerciseId, bench.id)).all()).toHaveLength(benchSets.length);
+    // Nothing was written back: the routine stays gone, and no other routine's rotation moved.
+    expect(getRoutineDetail(db, id)).toBeNull();
+    expect(db.select().from(routineExercises).where(eq(routineExercises.routineDayId, firstDay)).all()).toEqual([]);
+    expect(rotations()).toEqual(before);
+    expect(getSettings(db).activeRoutineId).toBeNull();
+  });
+
   it('leaves another active routine active', () => {
     const db = seededDb();
     const id = duplicateRoutine(db, PPL, NOW);
@@ -861,19 +892,54 @@ describe('saveRoutine (R89)', () => {
     expect(userRoutineCount(db)).toBe(0);
   });
 
-  it('is one transaction: a failure part way leaves the routine as it was', () => {
+  it('is one transaction: a failure part way undoes the writes made before it', () => {
     const db = seededDb();
     const id = saveRoutine(db, mySplit(), NOW);
     const before = rowsOf(db, id);
+    // Lower moves up and Upper is renamed and moved down: both are written before the bad exercise on the
+    // second day fails its foreign key.
     const draft = edit(
       routineToDraft(db, id)!,
       { type: 'rename', name: 'Half saved' },
-      onDay(1, { type: 'deleteDay' }),
-      add(0, { id: 'no-such-exercise', name: 'Nothing', loggingType: 'weighted' }),
+      onDay(0, { type: 'renameDay', name: 'Upper body' }),
+      onDay(1, { type: 'moveDay', dir: 'up' }),
+      add(1, { id: 'no-such-exercise', name: 'Nothing', loggingType: 'weighted' }),
     );
+    expect(draft.days.map((d) => d.name)).toEqual(['Lower', 'Upper body']);
     expect(() => saveRoutine(db, draft, NOW + HOUR)).toThrow();
     expect(getRoutineDetail(db, id)!.name).toBe('My split');
+    expect(rowsOf(db, id).map((d) => [d.day.name, d.day.position])).toEqual([
+      ['Upper', 0],
+      ['Lower', 1],
+    ]);
     expect(rowsOf(db, id)).toEqual(before);
+  });
+
+  it("saves a hand-built draft within the editor's limits", () => {
+    const db = seededDb();
+    const draft = mySplit();
+    const upper = draft.days[0];
+    const [bench, row, curl] = upper.exercises;
+    const wild: RoutineDraft = {
+      ...draft,
+      days: [
+        {
+          ...upper,
+          exercises: [
+            { ...bench, setCount: 0, repMin: 12, repMax: 8, increment: -5 },
+            { ...row, setCount: 25, repMin: 0, repMax: 0, increment: 2.5 },
+            { ...curl, setCount: 4.6, repMin: 6.4, repMax: 9.6, increment: Number.NaN },
+          ],
+        },
+        draft.days[1],
+      ],
+    };
+    const id = saveRoutine(db, wild, NOW);
+    expect(rowsOf(db, id)[0].exercises.map((e) => [e.setCount, e.repMin, e.repMax, e.increment])).toEqual([
+      [1, 12, 12, 0],
+      [10, 1, 1, 2.5],
+      [5, 6, 10, 0],
+    ]);
   });
 
   it("a row id from another routine is saved as a new row, leaving the other routine's row alone", () => {

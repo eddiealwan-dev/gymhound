@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { Outcome } from '../../domain/progression';
-import { dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
+import { clampRule, dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
 import type { RoutineDraft } from '../../domain/routineDraft';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { PREMADE_ORDER } from '../../seed/routines';
@@ -295,7 +295,7 @@ function nextDayIndexAfter(oldDayIds: string[], nextDayIndex: number, newIndexBy
  * your own, created at `now`. Otherwise days and exercises that still exist in the routine are updated in place by id,
  * so an exercise that stays keeps its next weight (unless its slot now holds another exercise, R74); new rows get
  * uuids and removed ones are deleted. Positions and superset groups are renumbered from the draft's order, names are
- * trimmed, and the day up next stays up next. Workouts are never touched, a workout in progress included. Throws
+ * trimmed, rules are kept within the editor's limits (`clampRule`), and the day up next stays up next. Workouts are never touched, a workout in progress included. Throws
  * `InvalidDraftError` for a draft that does not validate and `PremadeRoutineError` for a premade, changing nothing.
  * The free limit is the caller's to check before a new routine (`canAddRoutine`).
  */
@@ -363,10 +363,8 @@ export function saveRoutine(db: Db, draft: RoutineDraft, now: number): string {
           exerciseId: e.exerciseId,
           position: index,
           supersetGroup: groups[index],
-          setCount: e.setCount,
-          repMin: e.repMin,
-          repMax: e.repMax,
-          increment: e.increment,
+          // The editor's limits hold for any draft, a hand-built one included.
+          ...clampRule({ setCount: e.setCount, repMin: e.repMin, repMax: e.repMax, increment: e.increment }),
           incrementUnit: e.incrementUnit,
         };
         const rowId = keep(e.id, (id) => oldExercises.has(id));
