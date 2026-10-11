@@ -1,4 +1,5 @@
-import { equipmentLabel, formatRepScheme, MARK_LABELS } from './labels';
+import { equipmentLabel, formatRepScheme, MARK_LABELS, muscleLabel, primaryMusclesLabel } from './labels';
+import type { Muscle } from './types';
 
 describe('MARK_LABELS', () => {
   it('names every Something off reason (spec 18.7)', () => {
@@ -51,5 +52,61 @@ describe('equipmentLabel', () => {
     expect(equipmentLabel('exercise_ball')).toBe('Exercise ball');
     expect(equipmentLabel('foam_roller')).toBe('Foam roller');
     expect(equipmentLabel('other')).toBe('Other');
+  });
+});
+
+describe('muscleLabel', () => {
+  it('names each muscle as a lifter says it; the three delts all read Shoulders (§18.8)', () => {
+    const muscles: Muscle[] = [
+      'chest',
+      'front_delts',
+      'side_delts',
+      'rear_delts',
+      'lats',
+      'upper_back',
+      'traps',
+      'biceps',
+      'triceps',
+      'forearms',
+      'abs',
+      'obliques',
+      'lower_back',
+      'glutes',
+      'quads',
+      'hamstrings',
+      'adductors',
+      'calves',
+    ];
+    expect(muscles.map(muscleLabel)).toEqual([
+      'Chest',
+      'Shoulders',
+      'Shoulders',
+      'Shoulders',
+      'Lats',
+      'Upper back',
+      'Traps',
+      'Biceps',
+      'Triceps',
+      'Forearms',
+      'Abs',
+      'Obliques',
+      'Lower back',
+      'Glutes',
+      'Quads',
+      'Hamstrings',
+      'Adductors',
+      'Calves',
+    ]);
+  });
+});
+
+describe('primaryMusclesLabel', () => {
+  it('names the primary muscle, as a picker row shows it after the equipment', () => {
+    expect(primaryMusclesLabel(['chest'])).toBe('Chest');
+  });
+
+  it('names each of several primary muscles once, in order', () => {
+    expect(primaryMusclesLabel(['lats', 'upper_back'])).toBe('Lats, Upper back');
+    expect(primaryMusclesLabel(['front_delts', 'side_delts'])).toBe('Shoulders');
   });
 });
