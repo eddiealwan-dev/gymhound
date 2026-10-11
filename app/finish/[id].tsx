@@ -7,6 +7,7 @@ import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { getFinishSummary } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
 import { formatElapsed } from '../../src/domain/dates';
+import { finishLine } from '../../src/domain/ruleLine';
 import { formatVolume } from '../../src/domain/volume';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
@@ -43,9 +44,9 @@ function Figure({ caption, value, label }: { caption: string; value: string; lab
 }
 
 /**
- * Shown the moment a workout is finished: how long it took, how much was lifted, how many sets counted (spec 8.5).
- * A full screen with no header, dock or footer. Done goes back to Train, where Up next already has the next day.
- * Phase 2 adds the next-time lines and phase 4 the PRs.
+ * Shown the moment a workout is finished: how long it took, how much was lifted, how many sets counted, then next
+ * time's weight for each exercise with a rule (spec 8.5, R64). A full screen with no header, dock or footer. Done goes
+ * back to Train, where Up next already has the next day. Phase 4 adds the PRs.
  */
 export default function FinishSummary() {
   const { colors } = useTheme();
@@ -79,6 +80,13 @@ export default function FinishSummary() {
                 label="Sets logged"
                 value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
               />
+              {summary.next.length > 0 && (
+                <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  {summary.next.map((n, i) => (
+                    <Body key={i}>{finishLine(n)}</Body>
+                  ))}
+                </View>
+              )}
             </>
           )}
           <View style={{ flex: 1, minHeight: 24 }} />

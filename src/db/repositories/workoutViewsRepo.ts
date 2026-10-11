@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
+import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
 import type { DayMark, Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
@@ -58,6 +59,8 @@ export type FinishSummary = {
   volume: number;
   /** How many sets were done, warm-ups included. */
   setCount: number;
+  /** Next time's weight for each exercise with a rule and a next weight, in workout order (spec 8.5, R64). */
+  next: NextTime[];
 };
 
 const PREV_SET_COLUMNS = {
@@ -221,7 +224,36 @@ export function getVolumeSetsSince(db: Db, fromLocalDate: string): VolumeSet[] {
   return selectVolumeSets(db, gte(workouts.localDate, fromLocalDate));
 }
 
-/** The duration, volume and done-set count of a finished workout. Throws if it does not exist or is not finished. */
+/**
+ * What the rule left at finish for each exercise of the workout that has a rule and a next weight, in workout order.
+ * No rule (an exercise added on the day, a timed one) and no next weight (no working set ticked and nothing planned)
+ * leave the exercise out.
+ */
+function selectNextTimes(db: Db, workoutId: string): NextTime[] {
+  const rows = db
+    .select({
+      name: exercises.name,
+      outcome: workoutExercises.outcome,
+      nextWeight: workoutExercises.nextWeight,
+      nextUnit: workoutExercises.nextUnit,
+      mark: workoutExercises.mark,
+    })
+    .from(workoutExercises)
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .orderBy(asc(workoutExercises.position))
+    .all();
+  return rows.flatMap(({ name, outcome, nextWeight, nextUnit, mark }) =>
+    outcome === null || outcome === 'no_rule' || nextWeight === null || nextUnit === null
+      ? []
+      : [{ name, outcome, nextWeight, nextUnit, mark }],
+  );
+}
+
+/**
+ * The duration, volume, done-set count and next-time weights of a finished workout. Throws if it does not exist or is
+ * not finished.
+ */
 export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightUnit): FinishSummary {
   const workout = db.select().from(workouts).where(eq(workouts.id, workoutId)).get();
   if (!workout || workout.status !== 'finished' || workout.finishedAt === null) {
@@ -235,5 +267,6 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     durationMs: workout.finishedAt - workout.startedAt,
     volume: totalVolume(workoutSets, displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
+    next: selectNextTimes(db, workoutId),
   };
 }

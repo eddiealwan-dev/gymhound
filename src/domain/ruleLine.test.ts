@@ -1,5 +1,5 @@
 import type { Gear } from './plates';
-import { lastSummary, ruleSentence, todaysRead, type LastSummary, type Rule } from './ruleLine';
+import { finishLine, lastSummary, ruleSentence, todaysRead, type LastSummary, type NextTime, type Rule } from './ruleLine';
 import type { PrevSet } from './setEntry';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
 
@@ -310,5 +310,37 @@ describe("lastSummary: last time's sets for the rule line", () => {
   it('with only warmups or drops last time, uses them', () => {
     const sets = [prev(0, { setType: 'warmup', weight: 45, weightUnit: 'lb', reps: 10 }), prev(1, { setType: 'drop', weight: 35, weightUnit: 'lb', reps: 12 })];
     expect(lastSummary(sets)).toMatchObject({ sets: 2, reps: 10, weight: 45 });
+  });
+});
+
+describe('finishLine (spec 8.5, R64)', () => {
+  const bench = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null, nextUnit: WeightUnit = 'lb'): NextTime => ({
+    name: 'Bench press',
+    outcome,
+    nextWeight,
+    nextUnit,
+    mark,
+  });
+
+  it('raised: next time, with the up arrow', () => {
+    expect(finishLine(bench('raised', 185))).toBe('Bench press — next time 185 lb ↑');
+  });
+
+  it('held: holds at the weight', () => {
+    expect(finishLine(bench('held', 180))).toBe('Bench press — holds at 180 lb');
+  });
+
+  it('held_marked: holds at the weight and names the reason', () => {
+    expect(finishLine(bench('held_marked', 180, 'rough_sleep'))).toBe('Bench press — holds at 180 lb · Rough sleep');
+    expect(finishLine(bench('held_marked', 180, 'short_on_food'))).toBe('Bench press — holds at 180 lb · Short on food');
+  });
+
+  it('no_sets: holds at the plan', () => {
+    expect(finishLine(bench('no_sets', 185))).toBe('Bench press — holds at 185 lb');
+  });
+
+  it('keeps the unit the weight was logged in, without trailing zeros', () => {
+    expect(finishLine(bench('raised', 82.5, null, 'kg'))).toBe('Bench press — next time 82.5 kg ↑');
+    expect(finishLine(bench('held', 80, null, 'kg'))).toBe('Bench press — holds at 80 kg');
   });
 });

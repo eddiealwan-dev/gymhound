@@ -1,12 +1,13 @@
 /**
  * The line above an exercise's sets (spec 7.4, with 18.7): the rule as a sentence, then today's read. A flagged
- * exercise (Something off) is a marked day, and its read names the reason (R61).
+ * exercise (Something off) is a marked day, and its read names the reason (R61). Also the finish summary's line for
+ * each exercise (spec 8.5, R64).
  */
 
 import { formatRest } from './dates';
 import { MARK_LABELS } from './labels';
 import type { Gear } from './plates';
-import { raiseLoadable, type OutcomeInput } from './progression';
+import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
 import { convertIncrement, formatWeight } from './units';
@@ -129,4 +130,18 @@ export function todaysRead(a: {
   const verb = loggingType === 'weighted_time' ? 'Reach' : 'Hit';
   const normal = `${verb} ${rule.repMax}s on a normal day and next time is ${formatWeight(raised.weight, raised.unit)}.`;
   return holds ? `${normal} ${holds}` : normal;
+}
+
+/** What the rule left for one exercise at finish: next time's weight, in the unit it was set in, and why. */
+export type NextTime = { name: string; outcome: Outcome; nextWeight: number; nextUnit: WeightUnit; mark: ExerciseMark | null };
+
+/**
+ * The finish summary's line for one exercise (spec 8.5, R64): "Bench press — next time 185 lb ↑" when the rule
+ * raised it, else "Bench press — holds at 180 lb", with " · {Reason}" when a Something off flag held it.
+ */
+export function finishLine(n: NextTime): string {
+  const weight = formatWeight(n.nextWeight, n.nextUnit);
+  if (n.outcome === 'raised') return `${n.name} — next time ${weight} ↑`;
+  const reason = n.outcome === 'held_marked' && n.mark ? ` · ${MARK_LABELS[n.mark]}` : '';
+  return `${n.name} — holds at ${weight}${reason}`;
 }

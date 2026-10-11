@@ -1,9 +1,11 @@
 /** @jest-environment node */
+import { eq } from 'drizzle-orm';
 import { totalVolume } from '../../domain/volume';
+import { routineExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { setRestSeconds } from './exercisePrefsRepo';
-import { addExerciseToWorkout, updateSet } from './workoutEditRepo';
+import { addExerciseToWorkout, addWarmupSet, setExerciseMark, updateSet } from './workoutEditRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
 import { getActiveWorkoutView, getFinishSummary, getTrainingDates, getVolumeSetsSince } from './workoutViewsRepo';
 
@@ -140,6 +142,8 @@ describe('getFinishSummary', () => {
       durationMs: 72 * MINUTE,
       volume: 675,
       setCount: 2,
+      // One working set of the four missed: the bench holds at what was lifted.
+      next: [{ name: 'Barbell bench press', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
     });
   });
 
@@ -160,6 +164,78 @@ describe('getFinishSummary', () => {
     const db = seededDb();
     const { active } = buildHistory(db);
     expect(() => getFinishSummary(db, active, 'lb')).toThrow(`No finished workout with id ${active}.`);
+  });
+});
+
+describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
+  /** Stores `weight` lb as the Push A exercise's next weight, so the next start plans it. */
+  function plan(db: Db, exerciseId: string, weight: number): void {
+    db.update(routineExercises)
+      .set({ nextWeight: weight, nextWeightUnit: 'lb' })
+      .where(eq(routineExercises.id, `${PUSH_A}:${exerciseId}`))
+      .run();
+  }
+
+  it('lists each exercise with a rule and a next weight, in workout order, after a real finish', () => {
+    const db = seededDb();
+    plan(db, 'barbell-overhead-press', 95);
+    plan(db, 'cable-triceps-pushdown', 40);
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    const [bench, ohp, incline, , pushdown] = getActiveWorkoutView(db)!.exercises;
+    // Bench: every set hits 8, so it is raised.
+    setIds(db, 0).forEach((setId, i) => tick(db, setId, 135, 8, OCT_9 + (i + 1) * MINUTE));
+    // Overhead press: every set hits 12, but it is flagged Pain, so the plan holds.
+    setIds(db, 1).forEach((setId, i) => tick(db, setId, 100, 12, OCT_9 + (i + 10) * MINUTE));
+    setExerciseMark(db, ohp.id, 'pain');
+    // Incline press: one set of three, so it holds at what was lifted.
+    tick(db, setIds(db, 2)[0], 50, 8, OCT_9 + 20 * MINUTE);
+    // Lateral raise: nothing ticked, so the finish drops it.
+    // Pushdown: only a warm-up ticked, so the plan holds.
+    tick(db, addWarmupSet(db, pushdown.id), 20, 10, OCT_9 + 30 * MINUTE);
+    // An exercise added on the day has no rule, and neither has a timed one.
+    addExerciseToWorkout(db, id, 'barbell-curl');
+    tick(db, setIds(db, 5)[0], 65, 10, OCT_9 + 40 * MINUTE);
+    addExerciseToWorkout(db, id, 'plank');
+    tickSet(db, setIds(db, 6)[0], { weight: null, reps: null, durationS: 45, distance: null }, 'lb', OCT_9 + 41 * MINUTE, 'mi');
+    expect([bench.name, incline.name]).toEqual(['Barbell bench press', 'Incline dumbbell press']);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Barbell bench press', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+      { name: 'Overhead press', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+      { name: 'Incline dumbbell press', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+      { name: 'Triceps pushdown', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+    ]);
+  });
+
+  it('leaves out an exercise with no next weight: only a warm-up ticked and nothing planned', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    tick(db, addWarmupSet(db, getActiveWorkoutView(db)!.exercises[0].id), 45, 10, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([]);
+  });
+
+  it('is empty for an empty workout: nothing in it has a rule', () => {
+    const db = seededDb();
+    const id = startEmptyWorkout(db, OCT_9);
+    addExerciseToWorkout(db, id, 'barbell-bench-press');
+    tick(db, setIds(db)[0], 135, 8, OCT_9 + MINUTE);
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([]);
+  });
+
+  it('keeps the unit each next weight is in, whatever the display unit', () => {
+    const db = seededDb();
+    const id = startWorkoutFromDay(db, PUSH_A, OCT_9);
+    setIds(db).forEach((setId) => tickSet(db, setId, { weight: 60, reps: 8, durationS: null, distance: null }, 'kg', OCT_9 + MINUTE, 'mi'));
+    finishWorkout(db, id, OCT_9 + 60 * MINUTE);
+
+    expect(getFinishSummary(db, id, 'lb').next).toEqual([
+      { name: 'Barbell bench press', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
+    ]);
   });
 });
 
