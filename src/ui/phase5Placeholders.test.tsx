@@ -3,8 +3,6 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import FuelTargetsRoute from '../../app/(tabs)/fuel-targets';
 import TabsLayout from '../../app/(tabs)/_layout';
-import FoodRoute from '../../app/food/[id]';
-import AddFoodRoute from '../../app/food/add';
 import PaywallRoute from '../../app/paywall';
 import { FuelTrends } from './fuel/FuelTrends';
 import { TargetsForm } from './fuel/TargetsForm';
@@ -59,8 +57,6 @@ beforeEach(() => {
 describe('the placeholder routes', () => {
   it.each([
     ['/paywall', PaywallRoute],
-    ['/food/add', AddFoodRoute],
-    ['/food/[id]', FoodRoute],
     ['/fuel-targets', FuelTargetsRoute],
   ])('%s says "Not built yet." and has no footer', (_route, Route) => {
     const tree = render(<Route />);
@@ -70,8 +66,6 @@ describe('the placeholder routes', () => {
 
   it.each([
     ['/paywall', PaywallRoute, 'Close'],
-    ['/food/add', AddFoodRoute, 'Close'],
-    ['/food/[id]', FoodRoute, 'Close'],
     ['/fuel-targets', FuelTargetsRoute, 'Back to Fuel'],
   ])('%s goes back', (_route, Route, label) => {
     const tree = render(<Route />);
