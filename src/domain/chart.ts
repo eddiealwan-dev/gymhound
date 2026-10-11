@@ -129,3 +129,91 @@ export function chartSummary(points: readonly SeriesPoint[], formatValue: (v: nu
     `Lowest ${formatValue(Math.min(...values))}, highest ${formatValue(Math.max(...values))}.`
   );
 }
+
+/**
+ * A point that can be marked (R173): `hollow` draws it as a ring (a session with something off), `label` is the word
+ * over it ("Rough sleep", "Stall"). Body charts pass plain points.
+ */
+export type ChartPoint = SeriesPoint & { hollow?: boolean; label?: string | null };
+
+/** Two placed labels' dots are at least this far apart across the chart (R173). */
+export const LABEL_GAP_PT = 56;
+/** Once widths are known, two placed labels' spans are at least this far apart (R191). */
+export const LABEL_CLEARANCE_PT = 8;
+
+/** The measured labels' widths and the plot's width, for placing labels by their spans (R191). */
+export type LabelFit = { widthOf: (label: string) => number; plotWidth: number; clearance?: number };
+
+/** A label's left edge: centred on `x`, then kept inside the plot (the left edge wins when it is wider than the plot). */
+export function labelLeft(x: number, width: number, plotWidth: number): number {
+  return Math.max(Math.min(x - width / 2, plotWidth - width), 0);
+}
+
+/**
+ * Which labels fit (R173, R191): newest (last) first, a label is skipped when its dot is within `minGap` across of a
+ * placed one's, or, given `fit`, when its span (centred over its dot and kept inside the plot) comes within the
+ * clearance (8pt) of a placed one's. Returned in the order placed, with each one's left edge when `fit` is given.
+ * Skipped labels still show in the screen's list and the VoiceOver label.
+ */
+export function placeLabels(
+  dots: readonly { x: number; y: number; label: string | null }[],
+  minGap: number = LABEL_GAP_PT,
+  fit?: LabelFit,
+): { index: number; label: string; left?: number }[] {
+  const clearance = fit?.clearance ?? LABEL_CLEARANCE_PT;
+  const placed: { index: number; label: string; x: number; left?: number; right?: number }[] = [];
+  for (let i = dots.length - 1; i >= 0; i--) {
+    const { x, label } = dots[i];
+    if (label === null || label === '') continue;
+    if (placed.some((other) => Math.abs(other.x - x) < minGap)) continue;
+    if (!fit) {
+      placed.push({ index: i, label, x });
+      continue;
+    }
+    const width = fit.widthOf(label);
+    const left = labelLeft(x, width, fit.plotWidth);
+    const right = left + width;
+    const clears = placed.every((other) => left >= other.right! + clearance || right <= other.left! - clearance);
+    if (clears) placed.push({ index: i, label, x, left, right });
+  }
+  return placed.map(({ index, label, left }) => (left === undefined ? { index, label } : { index, label, left }));
+}
+
+/**
+ * The change across a range in words (R175): "Up 1.5 kg since 12 Jul.", "Down 2 cm since 3 Aug.", or "No change since
+ * 3 Aug." when the change reads as nothing once formatted. `formatDelta` gets the size of the change. Null with fewer
+ * than two finite points.
+ */
+export function rangeChange(points: readonly SeriesPoint[], formatDelta: (absDelta: number) => string, locale: string): string | null {
+  const sorted = finitePoints(points).sort(byDate);
+  if (sorted.length < 2) return null;
+  const first = sorted[0];
+  const delta = sorted[sorted.length - 1].value - first.value;
+  const since = `since ${formatChartDate(first.localDate, locale)}.`;
+  const shown = formatDelta(Math.abs(delta));
+  if (delta === 0 || shown === formatDelta(0)) return `No change ${since}`;
+  return `${delta > 0 ? 'Up' : 'Down'} ${shown} ${since}`;
+}
+
+/** The label `liftPoints` gives a stalled session (§7.5). */
+const STALL_LABEL = 'Stall';
+
+/**
+ * What the marks add to a chart's VoiceOver label (R173): " 2 sessions marked. Stall from 3 Oct." — the hollow points
+ * counted, then each stall run by the date it began (a marked session inside a run doesn't end it; any other session
+ * does). "" when nothing is marked.
+ */
+export function markedSummary(points: readonly ChartPoint[], locale: string): string {
+  const sorted = [...points].sort(byDate);
+  const marked = sorted.filter((pt) => pt.hollow).length;
+  const parts: string[] = [];
+  if (marked > 0) parts.push(`${marked} ${marked === 1 ? 'session' : 'sessions'} marked.`);
+  let inRun = false;
+  for (const pt of sorted) {
+    if (pt.hollow) continue;
+    const stall = pt.label === STALL_LABEL;
+    if (stall && !inRun) parts.push(`Stall from ${formatChartDate(pt.localDate, locale)}.`);
+    inRun = stall;
+  }
+  return parts.length === 0 ? '' : ` ${parts.join(' ')}`;
+}

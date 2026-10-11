@@ -1,5 +1,5 @@
-import { chartSummary, formatChartDate, niceTicks, plotSeries, pointsInDays, pointsInRange } from './chart';
-import type { SeriesPoint } from './chart';
+import { chartSummary, formatChartDate, LABEL_CLEARANCE_PT, LABEL_GAP_PT, markedSummary, niceTicks, placeLabels, plotSeries, pointsInDays, pointsInRange, rangeChange } from './chart';
+import type { ChartPoint, SeriesPoint } from './chart';
 
 const p = (localDate: string, value: number): SeriesPoint => ({ localDate, value });
 
@@ -205,5 +205,129 @@ describe('chartSummary', () => {
   it('reads the first and last values with the lowest and highest', () => {
     const points = [p('2026-08-03', 180), p('2026-09-01', 175), p('2026-10-09', 182), p('2026-10-10', 176.5)];
     expect(chartSummary(points, fmt, 'en-GB')).toBe('3 Aug to 10 Oct: 180 lb to 176.5 lb. Lowest 175 lb, highest 182 lb.');
+  });
+});
+
+describe('placeLabels (R173)', () => {
+  const dot = (x: number, label: string | null) => ({ x, y: 50, label });
+
+  it('gaps labels 56pt by default', () => {
+    expect(LABEL_GAP_PT).toBe(56);
+  });
+
+  it('keeps the newest of two labels 30pt apart', () => {
+    expect(placeLabels([dot(100, 'Pain'), dot(130, 'Stall')])).toEqual([{ index: 1, label: 'Stall' }]);
+  });
+
+  it('keeps both of two labels 80pt apart, newest first', () => {
+    expect(placeLabels([dot(100, 'Pain'), dot(180, 'Stall')])).toEqual([
+      { index: 1, label: 'Stall' },
+      { index: 0, label: 'Pain' },
+    ]);
+  });
+
+  it('skips points with no label, and measures a gap from placed labels only', () => {
+    // 200 is placed; 160 is too close and skipped; 120 is 80 from 200, so it is placed although 40 from the skipped one.
+    const dots = [dot(120, 'Sick'), dot(140, null), dot(160, 'Pain'), dot(200, 'Stall'), dot(210, null)];
+    expect(placeLabels(dots)).toEqual([
+      { index: 3, label: 'Stall' },
+      { index: 0, label: 'Sick' },
+    ]);
+  });
+
+  it('takes another gap', () => {
+    expect(placeLabels([dot(100, 'Pain'), dot(130, 'Stall')], 20)).toHaveLength(2);
+  });
+
+  describe('with measured widths (R191)', () => {
+    const fit = (widths: Record<string, number>, plotWidth = 300) => ({ widthOf: (label: string) => widths[label], plotWidth });
+
+    it('clears labels by 8pt between their spans', () => {
+      expect(LABEL_CLEARANCE_PT).toBe(8);
+    });
+
+    it('places one of two 78pt labels 60pt apart, though the dots are more than 56pt apart', () => {
+      expect(placeLabels([dot(100, 'Rough sleep'), dot(160, 'Short on food')], LABEL_GAP_PT, fit({ 'Rough sleep': 78, 'Short on food': 78 }))).toEqual([
+        { index: 1, label: 'Short on food', left: 121 },
+      ]);
+    });
+
+    it('places both when their spans clear by 8pt, each centred on its dot', () => {
+      expect(placeLabels([dot(100, 'Pain'), dot(170, 'Stall')], LABEL_GAP_PT, fit({ Pain: 30, Stall: 32 }))).toEqual([
+        { index: 1, label: 'Stall', left: 154 },
+        { index: 0, label: 'Pain', left: 85 },
+      ]);
+    });
+
+    it('at a large text size, wide labels need more room: 120pt labels 100pt apart place one, 130pt apart place both', () => {
+      const widths = { Sick: 120, Pain: 120 };
+      expect(placeLabels([dot(80, 'Sick'), dot(180, 'Pain')], LABEL_GAP_PT, fit(widths, 400))).toHaveLength(1);
+      expect(placeLabels([dot(80, 'Sick'), dot(210, 'Pain')], LABEL_GAP_PT, fit(widths, 400))).toHaveLength(2);
+    });
+
+    it('measures a span after clamping it inside the plot', () => {
+      // The newest, at the right edge, is pushed left to 200–300, so a label at 150–210 no longer clears it.
+      const placed = placeLabels([dot(180, 'Pain'), dot(295, 'Rough sleep')], LABEL_GAP_PT, fit({ Pain: 60, 'Rough sleep': 100 }));
+      expect(placed).toEqual([{ index: 1, label: 'Rough sleep', left: 200 }]);
+      // Clamped at the left edge too.
+      expect(placeLabels([dot(5, 'Pain')], LABEL_GAP_PT, fit({ Pain: 60 }))).toEqual([{ index: 0, label: 'Pain', left: 0 }]);
+    });
+
+    it('keeps 56pt between dots as the least, even for narrow labels', () => {
+      expect(placeLabels([dot(100, 'A'), dot(140, 'B')], LABEL_GAP_PT, fit({ A: 10, B: 10 }))).toHaveLength(1);
+    });
+  });
+
+  it('places nothing with no labels', () => {
+    expect(placeLabels([dot(0, null), dot(100, null)])).toEqual([]);
+    expect(placeLabels([])).toEqual([]);
+  });
+});
+
+describe('rangeChange (R175)', () => {
+  const kg = (d: number) => `${Number(d.toFixed(1))} kg`;
+
+  it('says up, down or no change since the first point in the range', () => {
+    expect(rangeChange([p('2026-07-12', 80), p('2026-08-01', 79), p('2026-10-10', 81.5)], kg, 'en-GB')).toBe('Up 1.5 kg since 12 Jul.');
+    expect(rangeChange([p('2026-08-03', 88), p('2026-10-10', 86)], (d) => `${d} cm`, 'en-GB')).toBe('Down 2 cm since 3 Aug.');
+    expect(rangeChange([p('2026-08-03', 80), p('2026-10-10', 80)], kg, 'en-GB')).toBe('No change since 3 Aug.');
+  });
+
+  it('reads the points oldest first, whatever order they came in', () => {
+    expect(rangeChange([p('2026-10-10', 86), p('2026-08-03', 88)], (d) => `${d} cm`, 'en-US')).toBe('Down 2 cm since Aug 3.');
+  });
+
+  it('says no change when the change rounds away to nothing as shown', () => {
+    expect(rangeChange([p('2026-08-03', 80), p('2026-10-10', 80.02)], kg, 'en-GB')).toBe('No change since 3 Aug.');
+  });
+
+  it('is null with fewer than two points', () => {
+    expect(rangeChange([], kg, 'en-GB')).toBeNull();
+    expect(rangeChange([p('2026-08-03', 80)], kg, 'en-GB')).toBeNull();
+    expect(rangeChange([p('2026-08-03', 80), p('2026-10-10', NaN)], kg, 'en-GB')).toBeNull();
+  });
+});
+
+describe('markedSummary (R173)', () => {
+  const c = (localDate: string, hollow: boolean, label: string | null): ChartPoint => ({ localDate, value: 100, hollow, label });
+
+  it('counts the marked sessions and says when a stall began', () => {
+    const points = [c('2026-09-01', true, 'Rough sleep'), c('2026-09-20', false, null), c('2026-10-03', false, 'Stall'), c('2026-10-06', true, 'Pain'), c('2026-10-09', false, 'Stall')];
+    expect(markedSummary(points, 'en-GB')).toBe(' 2 sessions marked. Stall from 3 Oct.');
+  });
+
+  it('says one session', () => {
+    expect(markedSummary([c('2026-09-01', true, 'Sick'), c('2026-09-02', false, null)], 'en-GB')).toBe(' 1 session marked.');
+  });
+
+  it('names each stall run, a session that is not a stall ending one', () => {
+    const points = [c('2026-08-01', false, 'Stall'), c('2026-08-04', false, 'Stall'), c('2026-08-08', false, null), c('2026-10-03', false, 'Stall')];
+    expect(markedSummary(points, 'en-GB')).toBe(' Stall from 1 Aug. Stall from 3 Oct.');
+  });
+
+  it('is empty with nothing marked', () => {
+    expect(markedSummary([c('2026-08-01', false, null)], 'en-GB')).toBe('');
+    expect(markedSummary([p('2026-08-01', 1)], 'en-GB')).toBe('');
+    expect(markedSummary([], 'en-GB')).toBe('');
   });
 });

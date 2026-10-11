@@ -100,6 +100,24 @@ let reduceMotion: boolean;
 /** What the phone told the sheet about Reduce Motion changing, so a test can change it. */
 let reduceMotionChanged: ((on: boolean) => void) | null;
 
+/**
+ * Renders the demo once under real timers before any test, so the first test doesn't absorb the cold start (loading
+ * the sheet, the photos and the animation modules), which can pass its 5 s timeout when the whole suite runs at once.
+ */
+beforeAll(async () => {
+  jest.mocked(getExercise).mockImplementation(() => BENCH);
+  jest.mocked(getOwnPhotos).mockReturnValue({ start: null, end: null });
+  const reduceMotionSpy = jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  let tree!: ReactTestRenderer;
+  await act(async () => {
+    tree = create(<FormDemo exerciseId={BENCH.id} onClose={() => {}} />);
+  });
+  act(() => tree.unmount());
+  reduceMotionSpy.mockRestore();
+  jest.mocked(getExercise).mockReset();
+  jest.mocked(getOwnPhotos).mockReset();
+}, 60_000);
+
 beforeEach(() => {
   jest.useFakeTimers();
   reduceMotion = false;

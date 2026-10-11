@@ -13,6 +13,18 @@ export const PR_BIT: Record<PrKind, number> = {
   longest_hold: 8,
 };
 
+/**
+ * How many personal bests a workout set (R178): the distinct (exercise, kind) pairs among its flagged sets, the same
+ * count as the finish summary's Personal bests list (R105). The one shared count for History and the weekly analytics.
+ */
+export function countPrKinds(rows: readonly { exerciseId: string; prFlags: number }[]): number {
+  const pairs = new Set<string>();
+  for (const { exerciseId, prFlags } of rows) {
+    for (const bit of Object.values(PR_BIT)) if ((prFlags & bit) !== 0) pairs.add(`${exerciseId}:${bit}`);
+  }
+  return pairs.size;
+}
+
 export type PrCandidate = {
   id: string;
   workoutId: string;
@@ -49,6 +61,11 @@ function sameLoad(a: Load, b: Load): boolean {
     roundTenth(convertWeight(a.value, a.unit, b.unit)) === roundTenth(b.value) ||
     roundTenth(convertWeight(b.value, b.unit, a.unit)) === roundTenth(a.value)
   );
+}
+
+/** R125's same load for two logged weights, for stall (7.5) and lift records (R174). */
+export function sameLoggedWeight(a: { value: number; unit: WeightUnit }, b: { value: number; unit: WeightUnit }): boolean {
+  return sameLoad({ ...a, kg: toKg(a.value, a.unit) }, { ...b, kg: toKg(b.value, b.unit) });
 }
 
 /** `a` is heavier than `b`: not the same load, and more in kg. */
