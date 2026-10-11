@@ -2,14 +2,15 @@ import { LIBRARY_EXERCISES } from '../seed/library.generated';
 import { filterExercises, searchExercises } from './search';
 import type { SearchItem } from './search';
 
+/** In name order, as `listExercises` reads them. */
 const items: SearchItem[] = [
-  { id: 'rdl', name: 'Romanian deadlift', aliases: ['RDL'], primaryMuscles: ['hamstrings'], equipment: 'barbell' },
-  { id: 'ohp', name: 'Overhead press', aliases: ['OHP', 'military press'], primaryMuscles: ['front_delts'], equipment: 'barbell' },
-  { id: 'lat', name: 'Lat pulldown', aliases: ['pulldown'], primaryMuscles: ['lats'], equipment: 'cable' },
-  { id: 'ht', name: 'Hip thrust', aliases: [], primaryMuscles: ['glutes'], equipment: 'barbell' },
   { id: 'sq', name: 'Barbell back squat', aliases: ['squat'], primaryMuscles: ['quads'], equipment: 'barbell' },
   { id: 'bd', name: 'Bench dip', aliases: [], primaryMuscles: ['triceps'], equipment: 'bodyweight' },
+  { id: 'ht', name: 'Hip thrust', aliases: [], primaryMuscles: ['glutes'], equipment: 'barbell' },
   { id: 'ib', name: 'Incline bench press', aliases: [], primaryMuscles: ['chest'], equipment: 'barbell' },
+  { id: 'lat', name: 'Lat pulldown', aliases: ['pulldown'], primaryMuscles: ['lats'], equipment: 'cable' },
+  { id: 'ohp', name: 'Overhead press', aliases: ['OHP', 'military press'], primaryMuscles: ['front_delts'], equipment: 'barbell' },
+  { id: 'rdl', name: 'Romanian deadlift', aliases: ['RDL'], primaryMuscles: ['hamstrings'], equipment: 'barbell' },
 ];
 const ids = (q: string) => searchExercises(items, q).map((i) => i.id);
 
@@ -34,16 +35,24 @@ describe('searchExercises', () => {
     expect(ids('squat')).toEqual(['sq']);
   });
 
-  it('puts names that start with the query first, then sorts alphabetically', () => {
+  it('puts names that start with the query first, then the rest, each in name order', () => {
     expect(ids('bench')).toEqual(['bd', 'ib']);
     expect(ids('press')).toEqual(['ib', 'ohp']);
+    expect(ids('pull')).toEqual(['lat']);
+    expect(ids('b')).toEqual(['sq', 'bd', 'ht', 'ib', 'ohp', 'rdl']);
+  });
+
+  it('keeps the order it is given within each group, without sorting again (the list comes sorted)', () => {
+    const shuffled = [items[3], items[6], items[1], items[0], items[5]];
+    expect(searchExercises(shuffled, 'b').map((i) => i.id)).toEqual(['bd', 'sq', 'ib', 'rdl', 'ohp']);
+    expect(searchExercises(shuffled, '').map((i) => i.id)).toEqual(['ib', 'rdl', 'bd', 'sq', 'ohp']);
   });
 
   it('returns nothing when no word matches', () => {
     expect(ids('xyz')).toEqual([]);
   });
 
-  it('returns everything alphabetically for an empty query', () => {
+  it('returns everything, in the order given, for an empty query', () => {
     expect(ids('')).toEqual(['sq', 'bd', 'ht', 'ib', 'lat', 'ohp', 'rdl']);
   });
 
@@ -70,6 +79,55 @@ describe('searchExercises', () => {
       expect(ids('shoulders')).toEqual(['ohp']);
     });
 
+    describe('delts by name', () => {
+      const delts: SearchItem[] = [
+        { id: 'arnold', name: 'Arnold press', aliases: [], primaryMuscles: ['front_delts'], equipment: 'dumbbell' },
+        { id: 'bench', name: 'Bench press', aliases: [], primaryMuscles: ['chest'], equipment: 'barbell' },
+        { id: 'face', name: 'Face pull', aliases: [], primaryMuscles: ['rear_delts', 'upper_back'], equipment: 'cable' },
+        { id: 'fdr', name: 'Front dumbbell raise', aliases: [], primaryMuscles: ['front_delts'], equipment: 'dumbbell' },
+        { id: 'fsq', name: 'Front squat', aliases: [], primaryMuscles: ['quads'], equipment: 'barbell' },
+        { id: 'lat', name: 'Lateral raise', aliases: [], primaryMuscles: ['side_delts'], equipment: 'dumbbell' },
+        { id: 'rdf', name: 'Rear delt fly', aliases: [], primaryMuscles: ['upper_back'], equipment: 'dumbbell' },
+        { id: 'side', name: 'Side plank', aliases: [], primaryMuscles: ['obliques'], equipment: 'bodyweight' },
+        { id: 'upr', name: 'Upright row', aliases: [], primaryMuscles: ['traps'], equipment: 'barbell' },
+      ];
+      const deltIds = (q: string) => searchExercises(delts, q).map((i) => i.id);
+
+      it('"delts" and "delt" find every exercise whose primary muscle is a delt, and a name that says "delt"', () => {
+        expect(deltIds('delts')).toEqual(['arnold', 'face', 'fdr', 'lat']);
+        expect(deltIds('delt')).toEqual(['arnold', 'face', 'fdr', 'lat', 'rdf']);
+        expect(deltIds('DELTS')).toEqual(['arnold', 'face', 'fdr', 'lat']);
+      });
+
+      it('"front delt", "side delt" and "rear delt" find only that delt', () => {
+        expect(deltIds('front delt')).toEqual(['arnold', 'fdr']);
+        expect(deltIds('front delts')).toEqual(['arnold', 'fdr']);
+        expect(deltIds('side delt')).toEqual(['lat']);
+        expect(deltIds('side delts')).toEqual(['lat']);
+        expect(deltIds('rear delt')).toEqual(['rdf', 'face']);
+        expect(deltIds('rear delts')).toEqual(['face']);
+      });
+
+      it('combines a delt with other words', () => {
+        expect(deltIds('rear delt cable')).toEqual(['face']);
+        expect(deltIds('front delt dumbbell')).toEqual(['arnold', 'fdr']);
+        expect(deltIds('dumbbell delts')).toEqual(['arnold', 'fdr', 'lat']);
+      });
+
+      it('"front", "side" and "rear" on their own still find only names and aliases', () => {
+        expect(deltIds('front')).toEqual(['fdr', 'fsq']);
+        expect(deltIds('side')).toEqual(['side']);
+        expect(deltIds('rear')).toEqual(['rdf']);
+        expect(deltIds('front d')).toEqual(['fdr']);
+      });
+
+      it('does not match a delt that is only a secondary muscle', () => {
+        const press = [{ id: 'bench', name: 'Bench press', aliases: [], primaryMuscles: ['chest' as const], secondaryMuscles: ['front_delts' as const], equipment: 'barbell' as const }];
+        expect(searchExercises(press, 'delts')).toEqual([]);
+        expect(searchExercises(press, 'front delt')).toEqual([]);
+      });
+    });
+
     it('matches equipment by its label', () => {
       expect(ids('cable')).toEqual(['lat']);
       expect(ids('bodyweight')).toEqual(['bd']);
@@ -82,13 +140,43 @@ describe('searchExercises', () => {
     });
 
     it('does not match a secondary muscle, so a muscle lists what trains it first-hand', () => {
-      const bench = [{ ...items[6], secondaryMuscles: ['triceps'] }];
+      const bench = [{ ...items[3], secondaryMuscles: ['triceps'] }];
       expect(searchExercises(bench, 'triceps')).toEqual([]);
     });
   });
 
   describe('the whole library', () => {
-    const libraryIds = (q: string) => searchExercises(LIBRARY_EXERCISES, q).map((e) => e.id);
+    /** The library in the order `listExercises` reads it: by name without regard to case, then by id. */
+    const library = [...LIBRARY_EXERCISES].sort((a, b) => {
+      const [x, y] = [a.name.toLowerCase(), b.name.toLowerCase()];
+      return x < y ? -1 : x > y ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+    const libraryIds = (q: string) => searchExercises(library, q).map((e) => e.id);
+
+    it('orders results as the old sort did: names that start with the query, then alphabetically (localeCompare)', () => {
+      const oldOrder = (q: string) => {
+        const start = q.toLowerCase();
+        return searchExercises(library, q)
+          .map((e) => ({ id: e.id, name: e.name.toLowerCase(), first: e.name.toLowerCase().startsWith(start) }))
+          .sort((a, b) => Number(b.first) - Number(a.first) || a.name.localeCompare(b.name))
+          .map((r) => r.id);
+      };
+      for (const q of [...'abcdefghijklmnopqrstuvwxyz0123456789', '', 'bench', 'press', 'curl', 'row', 'squat', 'dumbbell', 'cable', 'chest', 'back', 'raise', 'fly', 'shoulders', 'band', 'leg', 'lat', 'hip thrust']) {
+        expect([q, libraryIds(q)]).toEqual([q, oldOrder(q)]);
+      }
+    });
+
+    it('"delts" finds every exercise whose primary muscle is a delt, and "rear delt" the rear-delt ones', () => {
+      const delts = library.filter((e) => e.primaryMuscles.some((m) => m.endsWith('_delts'))).map((e) => e.id);
+      expect(delts.length).toBeGreaterThan(10);
+      expect(libraryIds('delts')).toEqual(expect.arrayContaining(delts));
+      const rear = library.filter((e) => e.primaryMuscles.includes('rear_delts')).map((e) => e.id);
+      expect(rear.length).toBeGreaterThan(0);
+      expect(libraryIds('rear delt')).toEqual(expect.arrayContaining(rear));
+      const sideOnly = library.filter((e) => e.primaryMuscles.includes('side_delts') && !e.primaryMuscles.includes('rear_delts'));
+      expect(sideOnly.length).toBeGreaterThan(0);
+      for (const e of sideOnly) if (!/\brear\b/i.test(e.name) && !e.aliases.some((a) => /\brear\b/i.test(a))) expect(libraryIds('rear delt')).not.toContain(e.id);
+    });
 
     it('"chest" finds the bench press by its muscle', () => {
       expect(libraryIds('chest')).toContain('barbell-bench-press');

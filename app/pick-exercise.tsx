@@ -8,11 +8,11 @@ import { listExercises, type ExerciseRow } from '../src/db/repositories/exercise
 import { equipmentLabel, muscleLabel, primaryMusclesLabel } from '../src/domain/labels';
 import { filterExercises, searchExercises } from '../src/domain/search';
 import type { Equipment, Muscle } from '../src/domain/types';
-import { EXERCISE_PHOTOS } from '../src/seed/exercisePhotos.generated';
 import { useDbQuery } from '../src/state/dataVersion';
 import { usePendingPick } from '../src/state/pendingPick';
 import { addExercise, replaceWith } from '../src/state/sessionActions';
 import { Button } from '../src/ui/Button';
+import { exercisePhotos } from '../src/ui/exercisePhotos';
 import { FormDemo } from '../src/ui/FormDemo';
 import { Body, Display } from '../src/ui/Text';
 import { fonts } from '../src/ui/theme';
@@ -99,9 +99,10 @@ function ChipRow<T extends string>({
 /** The start photo at 44pt, or the same tile without one, so every name lines up. */
 function Thumbnail({ exercise }: { exercise: ExerciseRow }) {
   const { colors } = useTheme();
-  const photos = exercise.hasPhotos ? EXERCISE_PHOTOS[exercise.id] : undefined;
+  const photos = exercisePhotos(exercise.id);
   const tile = { width: 44, height: 44, borderRadius: 8, backgroundColor: colors.surfaceRaised };
-  if (photos) return <Image source={photos[0]} resizeMode="cover" accessibilityIgnoresInvertColors style={tile} />;
+  // resizeMethod="resize": Android decodes the photo at the tile's size, not its own, so a long list stays light on memory.
+  if (photos) return <Image source={photos[0]} resizeMode="cover" resizeMethod="resize" accessibilityIgnoresInvertColors style={tile} />;
   return (
     <View style={[tile, { alignItems: 'center', justifyContent: 'center' }]}>
       <Ionicons name="barbell-outline" size={20} color={colors.textMuted} />

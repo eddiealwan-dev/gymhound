@@ -36,7 +36,6 @@ jest.mock('./ThemeProvider', () => {
 const LIBRARY_ROWS: ExerciseRow[] = LIBRARY_EXERCISES.map(({ instructions: _steps, sourceId: _source, ...e }) => ({
   ...e,
   isCustom: false,
-  hasPhotos: e.id in EXERCISE_PHOTOS,
 }));
 
 /** The pickers mounted by this test, unmounted after it so the list's batched drawing never outlives it. */
@@ -120,6 +119,8 @@ describe('the exercise picker: every exercise (§18.8)', () => {
     expect(photo).toHaveLength(1);
     expect(photo[0].props.source).toBe(EXERCISE_PHOTOS['barbell-bench-press'][0]);
     expect(StyleSheet.flatten(photo[0].props.style)).toMatchObject({ width: 44, height: 44 });
+    // Android decodes the photo at 44pt, not at its full size, so a long list does not run the phone out of memory.
+    expect(photo[0].props.resizeMethod).toBe('resize');
     expect(texts(bench)).toEqual(['Barbell bench press', 'Barbell · Chest']);
   });
 

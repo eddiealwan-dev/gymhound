@@ -4,8 +4,8 @@ import type { ImageSourcePropType } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { getExercise, type ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { musclesLine } from '../domain/labels';
-import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { Button } from './Button';
+import { exercisePhotos } from './exercisePhotos';
 import { Sheet } from './Sheet';
 import { Body, Display, Num } from './Text';
 import { useTheme } from './ThemeProvider';
@@ -120,7 +120,7 @@ function Steps({ steps }: { steps: readonly string[] }) {
 }
 
 function Demo({ exercise }: { exercise: ExerciseDetail }) {
-  const photos = exercise.hasPhotos ? EXERCISE_PHOTOS[exercise.id] : undefined;
+  const photos = exercisePhotos(exercise.id);
   return (
     <>
       <Display weight={700} accessibilityRole="header">
