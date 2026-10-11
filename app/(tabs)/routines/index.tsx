@@ -9,7 +9,7 @@ import { getActiveWorkoutId } from '../../../src/db/repositories/workoutsRepo';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { Button } from '../../../src/ui/Button';
 import { Screen } from '../../../src/ui/Screen';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, Display, Label } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
@@ -46,16 +46,25 @@ function BackToTrain() {
   );
 }
 
-/** The marker on the routine in use. Not a button, and not red: red is for the wordmark, the active tab and PRs. */
+/**
+ * The marker on the routine in use: a tick and "Active", with no edge or fill, so it reads as a state and never as a
+ * button beside the Set active pills. The tick is the one the bar picker uses for its choice. Not red: red is for the
+ * wordmark, the active tab and PRs.
+ */
 function ActiveBadge() {
   const { colors } = useTheme();
   return (
-    <View style={{ borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, paddingHorizontal: 14, paddingVertical: 8 }}>
+    <View accessible accessibilityLabel="Active" style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingRight: 4 }}>
+      <Ionicons name="checkmark" size={20} color={colors.text} />
       <Body weight={600}>Active</Body>
     </View>
   );
 }
 
+/**
+ * A routine: its name and days, and Set active as a compact pill (36pt with a 4pt hit slop, a 44pt target), the size of
+ * a row's own action elsewhere (the rest pills, Finish); the routine in use shows the Active mark instead.
+ */
 function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetActive: () => void }) {
   const { colors } = useTheme();
   return (
@@ -64,7 +73,6 @@ function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetAc
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        minHeight: 80,
         backgroundColor: colors.surface,
         borderColor: colors.border,
         borderWidth: 1,
@@ -78,7 +86,7 @@ function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetAc
           {routine.dayCount === 1 ? '1 day' : `${routine.dayCount} days`}
         </Body>
       </View>
-      {routine.isActive ? <ActiveBadge /> : <Button label="Set active" variant="secondary" onPress={onSetActive} />}
+      {routine.isActive ? <ActiveBadge /> : <Button label="Set active" variant="secondary" size="compact" onPress={onSetActive} />}
     </View>
   );
 }
@@ -96,9 +104,8 @@ export default function Routines() {
     <Screen>
       <BackToTrain />
       <Display>Routines</Display>
-      <Body weight={600} muted style={{ marginTop: 16, marginBottom: 8 }}>
-        Premade
-      </Body>
+      {/* The group heading Settings uses, so "Premade" reads as a heading and not as a routine's name. */}
+      <Label style={{ marginTop: 24, marginBottom: 8 }}>Premade</Label>
       <View style={{ gap: 8 }}>
         {premade.map((routine) => (
           <RoutineRow
