@@ -62,9 +62,19 @@ type Props = {
 };
 
 /**
- * A quiet, compact control in the name row: a 14pt muted icon and muted 14pt words, a 44pt target. + Note and Something
- * off share it (R81). It may shrink within the controls group, and its words then wrap rather than end in "…" (a long
- * reason such as "Short on food" at the largest text on a narrow phone).
+ * How far a name-row control's target reaches past what it draws: 10pt above and below its 24pt line (a 44pt target),
+ * and half the group's 12pt gap to each side, so neighbouring targets meet without overlapping.
+ */
+export const NAME_ROW_HIT_SLOP = { top: 10, bottom: 10, left: 6, right: 6 };
+
+/** The space between the count, + Note and Something off, and between the name row's two columns. */
+const NAME_ROW_GAP = 12;
+
+/**
+ * A quiet, compact control in the name row: a 14pt muted icon and muted 14pt words. + Note and Something off share it
+ * (R81). It draws a 24pt line and reaches 10pt above and below it (`NAME_ROW_HIT_SLOP`), so its target is 44pt while the
+ * line it adds under the name costs 24pt. It may shrink within the controls group, and its words then wrap rather than
+ * end in "…" (a long reason such as "Short on food" at the largest text on a narrow phone).
  */
 function NameRowControl({
   icon,
@@ -84,9 +94,10 @@ function NameRowControl({
       accessibilityRole="button"
       accessibilityLabel={readAs}
       onPress={onPress}
+      hitSlop={NAME_ROW_HIT_SLOP}
       style={({ pressed }) => ({
-        minHeight: 44,
-        paddingHorizontal: 8,
+        minHeight: 24,
+        minWidth: 44,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
@@ -205,50 +216,68 @@ export function ExerciseBlock({
           style={{ position: 'absolute', left: -11, width: 3, top: 0, bottom: joinsNext ? -BLOCK_GAP : 0, backgroundColor: colors.text }}
         />
       ) : null}
-      {/* At large text the controls drop to a second line together instead of squeezing the name (R54); wider than
-          the row, they wrap among themselves, right-aligned. */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8 }}>
-        <Display weight={700} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
-          {ex.name}
-        </Display>
-        <View
-          style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 8,
-            marginLeft: 'auto',
-            flexShrink: 0,
-            maxWidth: '100%',
-          }}
-        >
-          {progress.total > 0 ? (
-            // No text-size cap: the row wraps instead.
-            <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
-              {`${progress.done}/${progress.total}`}
-            </Num>
-          ) : null}
-          {!ex.note && !editingNote ? (
-            <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
-          ) : null}
-          {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
-          <NameRowControl
-            icon="alert-circle-outline"
-            label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
-            readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
-            onPress={onOpenMark}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Options for ${ex.name}`}
-            onPress={onOpenMenu}
-            hitSlop={4}
-            style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+      {/*
+        The name row, in the order [name][count][+ Note][Something off][⋯] (R81). ⋯ keeps the right edge, over the tick
+        column, centred on the name's first line. The group of count, + Note and Something off follows the name: on its
+        line when both fit (a short name, a flagged day, a tablet), and otherwise under it as one quiet line, left-aligned
+        with it. That line is 24pt and its targets reach 10pt above and below it, so it adds 26pt to the block rather
+        than a 44pt row, and the name always keeps the full width beside ⋯ instead of squeezing (R54). The name does
+        not grow (a basis of 'auto', never flex: 1), so the group sits right after it either way. At large text the name
+        wraps, and the group wraps among itself; its words wrap rather than end in "…".
+      */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', columnGap: NAME_ROW_GAP }}>
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: NAME_ROW_GAP, rowGap: 2 }}>
+          <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
+            {ex.name}
+          </Display>
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              columnGap: NAME_ROW_GAP,
+              // Two lines of controls at large text: their 10pt reaches meet, never overlap.
+              rowGap: NAME_ROW_HIT_SLOP.top + NAME_ROW_HIT_SLOP.bottom,
+              flexShrink: 0,
+              maxWidth: '100%',
+            }}
           >
-            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
-          </Pressable>
+            {progress.total > 0 ? (
+              // No text-size cap: the row wraps instead.
+              <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
+                {`${progress.done}/${progress.total}`}
+              </Num>
+            ) : null}
+            {!ex.note && !editingNote ? (
+              <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
+            ) : null}
+            {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
+            <NameRowControl
+              icon="alert-circle-outline"
+              label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
+              readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
+              onPress={onOpenMark}
+            />
+          </View>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Options for ${ex.name}`}
+          onPress={onOpenMenu}
+          hitSlop={4}
+          // Centred on the name's first 26pt line: the 44pt box reaches 9pt above and below it without making the row taller.
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            marginVertical: -9,
+            flexShrink: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
+        </Pressable>
       </View>
 
       {editingNote ? (
@@ -264,7 +293,8 @@ export function ExerciseBlock({
           accessibilityLabel={`Note for ${ex.name}`}
           style={{
             minHeight: 40,
-            marginTop: 4,
+            // Clear of the name row's 10pt reach below Something off, so the two targets never overlap.
+            marginTop: NAME_ROW_HIT_SLOP.bottom,
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderRadius: 10,
@@ -284,7 +314,15 @@ export function ExerciseBlock({
           accessibilityLabel={`Note for ${ex.name}: ${ex.note}`}
           accessibilityHint="Edits the note"
           onPress={openNote}
-          style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.8 : 1 })}
+          // Clear of the name row's 10pt reach below Something off, so the two targets never overlap.
+          style={({ pressed }) => ({
+            minHeight: 44,
+            marginTop: NAME_ROW_HIT_SLOP.bottom,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            opacity: pressed ? 0.8 : 1,
+          })}
         >
           <Ionicons name="pencil" size={14} color={colors.textMuted} />
           <Body muted style={{ flexShrink: 1, fontSize: 14 }}>
@@ -293,8 +331,8 @@ export function ExerciseBlock({
         </Pressable>
       ) : null}
 
-      {/* No text-size cap: it wraps. */}
-      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+      {/* No text-size cap: it wraps. 8pt under the name row's quiet line, so it reads as the next thing, not more of it. */}
+      <Body muted style={{ fontSize: 14, marginTop: 8 }}>
         {read === null ? sentence : `${sentence} ${read}`}
       </Body>
 
@@ -352,7 +390,8 @@ export function ExerciseBlock({
         })}
       </View>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+      {/* Quiet buttons have no edge, so the row steps back by their 12pt padding: "+ Set" lines up with the set column. */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4, marginLeft: -12 }}>
         <Button
           label="+ Set"
           variant="quiet"
