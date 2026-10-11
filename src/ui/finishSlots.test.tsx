@@ -42,6 +42,7 @@ const summary: FinishSummary = {
   volume: 4320,
   setCount: 3,
   next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null }],
+  prs: [],
 };
 
 function mount(): ReactTestRenderer {
@@ -83,7 +84,7 @@ it('shows neither slot when the workout is not there', () => {
   expect(SaveAsWorkout).not.toHaveBeenCalled();
 });
 
-it('the stubs draw nothing until their tasks fill them', () => {
+it('the slots draw nothing with no personal bests and until Save as a workout is built', () => {
   const { FinishPrs: RealPrs } = jest.requireActual('./finish/FinishPrs');
   const { SaveAsWorkout: RealSave } = jest.requireActual('./finish/SaveAsWorkout');
   expect(RealPrs({ workoutId: 'w1', summary })).toBeNull();

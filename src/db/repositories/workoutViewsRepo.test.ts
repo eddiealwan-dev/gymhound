@@ -152,7 +152,28 @@ describe('getFinishSummary', () => {
       setCount: 2,
       // One working set of the four missed: the bench holds at what was lifted.
       next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
+      // 135 x 5 beats Oct 1's 100 x 5: the heaviest set and the best estimated 1RM.
+      prs: [
+        { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', kind: 'heaviest', weight: 135, weightUnit: 'lb', reps: 5, durationS: null, localDate: '2026-10-06' },
+        { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', kind: 'e1rm', weight: 135, weightUnit: 'lb', reps: 5, durationS: null, localDate: '2026-10-06' },
+      ],
     });
+  });
+
+  it('has no personal bests on the first workout with each exercise (R103)', () => {
+    const db = seededDb();
+    const { oct1 } = buildHistory(db);
+    expect(getFinishSummary(db, oct1, 'lb').prs).toEqual([]);
+  });
+
+  it('lists a heavier bench on a second Push A as a personal best, whatever the display unit (R105)', () => {
+    const db = seededDb();
+    runPushA(db, OCT_1, [[135, 5]]);
+    const id = runPushA(db, OCT_6, [[140, 5]]);
+
+    const heaviest = getFinishSummary(db, id, 'kg').prs.filter((p) => p.kind === 'heaviest');
+    expect(heaviest).toHaveLength(1);
+    expect(heaviest[0]).toMatchObject({ name: 'Barbell bench press', weight: 140, weightUnit: 'lb', reps: 5 });
   });
 
   it('totals the volume in the display unit', () => {

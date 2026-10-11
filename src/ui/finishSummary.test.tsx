@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import FinishSummaryScreen from '../../app/finish/[id]';
 import type { FinishSummary } from '../db/repositories/workoutViewsRepo';
+import type { PrHighlight } from '../domain/prs';
 import { Button } from './Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -24,13 +25,14 @@ jest.mock('./ThemeProvider', () => {
 });
 
 /** Push A, an hour long, with three sets logged and `next` as the rule left it. */
-const pushA = (next: FinishSummary['next']): FinishSummary => ({
+const pushA = (next: FinishSummary['next'], prs: PrHighlight[] = []): FinishSummary => ({
   id: 'w1',
   name: 'Push A',
   durationMs: 3_600_000,
   volume: 4320,
   setCount: 3,
   next,
+  prs,
 });
 
 function mount(): ReactTestRenderer {
@@ -84,6 +86,87 @@ describe('the finish summary (8.5, R64)', () => {
     const text = shownText(mount());
 
     expect(text.slice(text.indexOf('3 sets') + 1)).toEqual(['Done']);
+  });
+});
+
+/** A bench press personal best of `kind` at 185 lb. */
+const benchPr = (kind: PrHighlight['kind'], reps = 5): PrHighlight => ({
+  exerciseId: 'barbell-bench-press',
+  name: 'Bench press',
+  loggingType: 'weighted',
+  kind,
+  weight: 185,
+  weightUnit: 'lb',
+  reps,
+  durationS: null,
+  localDate: '2026-10-11',
+});
+
+const plankPr: PrHighlight = {
+  exerciseId: 'plank',
+  name: 'Plank',
+  loggingType: 'timed',
+  kind: 'longest_hold',
+  weight: null,
+  weightUnit: null,
+  reps: null,
+  durationS: 90,
+  localDate: '2026-10-11',
+};
+
+describe('personal bests on the finish summary (R104, R105)', () => {
+  const next: FinishSummary['next'] = [
+    { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+  ];
+
+  it('lists each personal best after the next-time lines, under "Personal bests", each with a PR mark', () => {
+    mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest'), benchPr('reps_at_weight', 8), plankPr]) };
+    const text = shownText(mount());
+
+    expect(text.slice(text.indexOf('Barbell bench press — next time 140 lb ↑') + 1)).toEqual([
+      'Personal bests',
+      'PR',
+      'Bench press — heaviest: 185 lb × 5',
+      'PR',
+      'Bench press — most reps at 185 lb: 8',
+      'PR',
+      'Plank — longest hold: 1:30',
+      'Done',
+    ]);
+  });
+
+  it('hides the section when there are none', () => {
+    mockRead = { unit: 'lb', summary: pushA(next) };
+    const text = shownText(mount());
+
+    expect(text).not.toContain('Personal bests');
+    expect(text).not.toContain('PR');
+  });
+
+  it('reads each row to VoiceOver as one sentence, and the heading as a heading', () => {
+    mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest'), plankPr]) };
+    const tree = mount();
+
+    const rows = tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessible === true && /^Personal best\./.test(n.props.accessibilityLabel ?? ''));
+    expect(rows.map((r) => r.props.accessibilityLabel)).toEqual([
+      'Personal best. Bench press — heaviest: 185 lb × 5',
+      'Personal best. Plank — longest hold: 1:30',
+    ]);
+    const heading = tree.root.findAll((n) => typeof n.type === 'string' && n.props.children === 'Personal bests');
+    expect(heading[0].props.accessibilityRole).toBe('header');
+  });
+
+  it('marks PR in red, and lets the line wrap with the text size', () => {
+    mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest')]) };
+    const tree = mount();
+
+    const flat = (style: unknown) => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
+    const mark = tree.root.findAll((n) => typeof n.type === 'string' && n.props.children === 'PR')[0];
+    expect(flat(mark.props.style)).toMatchObject({ color: '#E10600', fontSize: 14 });
+    const line = tree.root.findAll((n) => typeof n.type === 'string' && n.props.children === 'Bench press — heaviest: 185 lb × 5')[0];
+    expect(line.props.numberOfLines).toBeUndefined();
+    expect(line.props.allowFontScaling).not.toBe(false);
+    expect(flat(line.props.style)).toMatchObject({ flex: 1 });
   });
 });
 
