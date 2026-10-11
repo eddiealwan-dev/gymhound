@@ -4,7 +4,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Routines from '../../app/(tabs)/routines/index';
 import type { RoutineSummary } from '../db/repositories/routinesRepo';
-import { setActiveRoutine } from '../db/repositories/routinesRepo';
+import { setActiveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
 import { getActiveWorkoutId } from '../db/repositories/workoutsRepo';
 import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
@@ -12,6 +12,7 @@ import { Button } from './Button';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let mockRoutines: RoutineSummary[];
+let mockPro: boolean;
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), navigate: jest.fn() },
@@ -21,7 +22,8 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRoutines, bumpData: jest.fn() }));
-jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(), setActiveRoutine: jest.fn() }));
+jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
+jest.mock('../platform/entitlements', () => ({ createEntitlements: () => ({ isPro: () => mockPro }) }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -29,7 +31,7 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const routine = (id: string, name: string, isActive: boolean): RoutineSummary => ({ id, name, isPremade: true, dayCount: 3, isActive });
+const routine = (id: string, name: string, isActive: boolean, isPremade = true): RoutineSummary => ({ id, name, isPremade, dayCount: 3, isActive });
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -64,6 +66,8 @@ beforeEach(() => {
   jest.mocked(setActiveRoutine).mockClear();
   jest.mocked(bumpData).mockClear();
   jest.mocked(getActiveWorkoutId).mockReturnValue(null);
+  jest.mocked(userRoutineCount).mockReturnValue(0);
+  mockPro = false;
 });
 
 afterEach(() => jest.useRealTimers());
@@ -140,5 +144,101 @@ describe('Routines: the list (design pass)', () => {
     const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Premade')[0];
     expect(heading.props.accessibilityRole).toBe('header');
     expect(StyleSheet.flatten(heading.props.style)).toMatchObject({ textTransform: 'uppercase', fontSize: 14, color: '#a39d90' });
+  });
+});
+
+const LIMIT = 'Free holds one routine of your own. GymHound Pro holds as many as you like.';
+
+describe('Routines: Premade and Yours (§8.6)', () => {
+  it('lists the premades under PREMADE and your own routines under YOURS, with New routine', () => {
+    mockRoutines = [routine('fb', 'Full body', true), routine('mine', 'My split', false, false)];
+    const tree = mount();
+
+    const shown = shownText(tree);
+    expect(shown.indexOf('Premade')).toBeLessThan(shown.indexOf('Full body'));
+    expect(shown.indexOf('Full body')).toBeLessThan(shown.indexOf('Yours'));
+    expect(shown.indexOf('Yours')).toBeLessThan(shown.indexOf('My split'));
+    const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Yours')[0];
+    expect(heading.props.accessibilityRole).toBe('header');
+    expect(buttons(tree, 'New routine')).toHaveLength(1);
+    // Your own routine can be set active too.
+    expect(buttons(tree, 'Set active')).toHaveLength(1);
+  });
+
+  it('tapping a routine opens its detail', () => {
+    mockRoutines = [routine('fb', 'Full body', true), routine('mine', 'My split', false, false)];
+    const tree = mount();
+
+    const open = (name: string) =>
+      act(() => tree.root.findAll((n) => n.props.accessibilityRole === 'button' && n.props.accessibilityLabel === `${name}, 3 days` && typeof n.props.onPress === 'function')[0].props.onPress());
+    open('Full body');
+    expect(router.push).toHaveBeenCalledWith('/routines/fb');
+    open('My split');
+    expect(router.push).toHaveBeenCalledWith('/routines/mine');
+  });
+});
+
+describe('Routines: the free limit (R88)', () => {
+  it('New routine opens the editor when you have no routine of your own', () => {
+    const tree = mount();
+
+    press(tree, 'New routine');
+
+    expect(router.push).toHaveBeenCalledWith('/routines/edit/new');
+    expect(shownText(tree)).not.toContain(LIMIT);
+  });
+
+  it('with one routine of your own, New routine shows the limit sheet instead: See Pro and Not now', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount();
+
+    press(tree, 'New routine');
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain(LIMIT);
+    expect(buttons(tree, 'See Pro').map((b) => b.props.variant ?? 'primary')).toEqual(['primary']);
+    expect(buttons(tree, 'Not now').map((b) => b.props.variant)).toEqual(['secondary']);
+
+    press(tree, 'Not now');
+    expect(shownText(tree)).not.toContain(LIMIT);
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('reads the count when tapped, so deleting your routine frees the slot', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount();
+    press(tree, 'New routine');
+    press(tree, 'Not now');
+
+    jest.mocked(userRoutineCount).mockReturnValue(0);
+    press(tree, 'New routine');
+    expect(router.push).toHaveBeenCalledWith('/routines/edit/new');
+  });
+
+  it('with Pro on (the debug unlock), New routine opens the editor however many you have', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(3);
+    mockPro = true;
+    const tree = mount();
+
+    press(tree, 'New routine');
+
+    expect(router.push).toHaveBeenCalledWith('/routines/edit/new');
+    expect(shownText(tree)).not.toContain(LIMIT);
+  });
+
+  it('See Pro says "GymHound Pro is coming." once the limit sheet has gone; OK closes it', () => {
+    jest.mocked(userRoutineCount).mockReturnValue(1);
+    const tree = mount();
+
+    press(tree, 'New routine');
+    press(tree, 'See Pro');
+    expect(shownText(tree)).not.toContain(LIMIT);
+    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
+    act(() => void jest.advanceTimersByTime(400));
+    expect(shownText(tree)).toContain('GymHound Pro is coming.');
+
+    press(tree, 'OK');
+    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

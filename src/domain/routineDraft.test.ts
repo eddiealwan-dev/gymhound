@@ -74,12 +74,17 @@ describe('days', () => {
     expect(d.days.map((day) => day.name)).toEqual(['Day 1', 'Day 2']);
   });
 
-  it('a day added without a name takes the lowest "Day {n}" not in use, never a duplicate', () => {
+  it('a day added without a name is "Day {n}" for its place, counted from 1', () => {
+    const d = run(newDraft(), { type: 'addDay', name: 'Push' }, { type: 'addDay', name: 'Pull' }, { type: 'addDay' });
+    expect(d.days.map((day) => day.name)).toEqual(['Push', 'Pull', 'Day 3']);
+  });
+
+  it('when another day already has that name, it takes the lowest "Day {n}" not in use, never a duplicate', () => {
     const three = run(newDraft(), { type: 'addDay' }, { type: 'addDay' }, { type: 'addDay' });
     const gap = run(three, (s) => ({ type: 'deleteDay', dayKey: s.days[1].key }), { type: 'addDay' });
     expect(gap.days.map((day) => day.name)).toEqual(['Day 1', 'Day 3', 'Day 2']);
-    const named = run(newDraft(), { type: 'addDay', name: 'Push' }, { type: 'addDay', name: ' Day 1 ' }, { type: 'addDay' });
-    expect(named.days.map((day) => day.name)).toEqual(['Push', ' Day 1 ', 'Day 2']);
+    const named = run(newDraft(), { type: 'addDay', name: 'Push' }, { type: 'addDay', name: ' Day 3 ' }, { type: 'addDay' });
+    expect(named.days.map((day) => day.name)).toEqual(['Push', ' Day 3 ', 'Day 1']);
   });
 
   it('renames one day, as typed', () => {

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { leaveGuarded } from '../state/leaveGuard';
 import { HoundMark } from './HoundMark';
 import { Display } from './Text';
 import { useTheme } from './ThemeProvider';
@@ -42,7 +43,8 @@ export function Header() {
           accessibilityRole="button"
           accessibilityLabel={onSettings ? 'Close settings' : 'Settings'}
           hitSlop={4}
-          onPress={onSettings ? closeSettings : () => router.push('/settings')}
+          // A screen with unsaved changes (the routine editor) asks before it is left.
+          onPress={onSettings ? closeSettings : () => leaveGuarded(() => router.push('/settings'))}
           style={({ pressed }) => ({
             width: 40,
             height: 40,
