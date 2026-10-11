@@ -1,4 +1,4 @@
-import { searchFoods } from './foodSearch';
+import { indexFoods, searchFoods } from './foodSearch';
 
 const foods = [{ name: 'Peanut butter' }, { name: 'Butter' }, { name: 'Butternut squash' }];
 const names = (items: readonly { name: string }[], q: string) => searchFoods(items, q).map((f) => f.name);
@@ -52,5 +52,14 @@ describe('searchFoods', () => {
     const found = searchFoods(items, 'oat');
     expect(found[0]).toBe(items[0]);
     expect(items).toHaveLength(1);
+  });
+});
+
+describe('indexFoods', () => {
+  it('folds the names once and then searches as searchFoods does', () => {
+    const items = [{ name: 'Peanut butter' }, { name: 'Butter' }, { name: 'Butternut squash' }, { name: 'Crème fraîche' }];
+    const search = indexFoods(items);
+    for (const q of ['butt', 'pb', '', 'creme', 'BUTTER PEA']) expect(search(q)).toEqual(searchFoods(items, q));
+    expect(search('butt').map((f) => f.name)).toEqual(['Butter', 'Butternut squash', 'Peanut butter']);
   });
 });
