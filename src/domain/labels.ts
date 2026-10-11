@@ -77,3 +77,17 @@ function distinctLabels(muscles: readonly Muscle[]): string[] {
 export function primaryMusclesLabel(primary: readonly Muscle[]): string {
   return distinctLabels(primary).join(', ');
 }
+
+/**
+ * The form demo's muscles line (R86): the primary muscles, then the secondary ones after a middle dot, "Chest ·
+ * Shoulders, Triceps". Each label shows once, so a secondary muscle that reads like a primary one is left out, and with
+ * none left the line is the primary muscles alone.
+ */
+export function musclesLine(primary: readonly Muscle[], secondary: readonly Muscle[]): string {
+  const first = distinctLabels(primary);
+  const then = distinctLabels(secondary).filter((label) => !first.includes(label));
+  return [first, then]
+    .filter((labels) => labels.length > 0)
+    .map((labels) => labels.join(', '))
+    .join(' · ');
+}

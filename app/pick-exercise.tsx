@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Image, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { FlatList, Image, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { listExercises, type ExerciseRow } from '../src/db/repositories/exercisesRepo';
@@ -13,6 +13,7 @@ import { useDbQuery } from '../src/state/dataVersion';
 import { usePendingPick } from '../src/state/pendingPick';
 import { addExercise, replaceWith } from '../src/state/sessionActions';
 import { Button } from '../src/ui/Button';
+import { FormDemo } from '../src/ui/FormDemo';
 import { Body, Display } from '../src/ui/Text';
 import { fonts } from '../src/ui/theme';
 import { useTheme } from '../src/ui/ThemeProvider';
@@ -108,8 +109,20 @@ function Thumbnail({ exercise }: { exercise: ExerciseRow }) {
   );
 }
 
-/** A row: the start photo, the name, and "{Equipment} · {Primary muscle}". Tapping it chooses the exercise. */
-const ExerciseOption = memo(function ExerciseOption({ exercise, onChoose }: { exercise: ExerciseRow; onChoose: (id: string) => void }) {
+/**
+ * A row: the start photo, the name, and "{Equipment} · {Primary muscle}", then an info button. Tapping the row chooses
+ * the exercise; the info button opens its form demo instead (R86). They are two targets side by side, so the screen
+ * reader reaches each.
+ */
+const ExerciseOption = memo(function ExerciseOption({
+  exercise,
+  onChoose,
+  onShowForm,
+}: {
+  exercise: ExerciseRow;
+  onChoose: (id: string) => void;
+  onShowForm: (id: string) => void;
+}) {
   const { colors } = useTheme();
   const equipment = equipmentLabel(exercise.equipment);
   const muscles = primaryMusclesLabel(exercise.primaryMuscles);
@@ -126,7 +139,9 @@ const ExerciseOption = memo(function ExerciseOption({ exercise, onChoose }: { ex
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
-          paddingHorizontal: 16,
+          paddingLeft: 16,
+          // 12 between the text and the info button, the row's action.
+          paddingRight: 12,
           paddingVertical: 8,
           opacity: pressed ? 0.8 : 1,
         })}
@@ -139,6 +154,21 @@ const ExerciseOption = memo(function ExerciseOption({ exercise, onChoose }: { ex
           </Body>
         </View>
       </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Show form for ${exercise.name}`}
+        onPress={() => onShowForm(exercise.id)}
+        style={({ pressed }) => ({
+          width: 44,
+          height: 44,
+          marginRight: 4,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Ionicons name="information-circle-outline" size={24} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 });
@@ -147,7 +177,8 @@ const ExerciseOption = memo(function ExerciseOption({ exercise, onChoose }: { ex
  * The exercise picker, a modal over the session or the routine editor. `mode=add` appends the tapped exercise to the
  * workout; `mode=replace` with a `workoutExerciseId` swaps it in for that exercise; `mode=routine` hands it to the routine
  * editor through `usePendingPick` (§18.8). Search matches names, aliases, primary muscles and equipment, and chips filter
- * by a muscle and by equipment (spec 8.7). The whole library is one virtualized list.
+ * by a muscle and by equipment (spec 8.7). The whole library is one virtualized list. Each row's info button opens the
+ * exercise's form demo (R86).
  */
 export default function PickExercise() {
   const db = useDb();
@@ -185,7 +216,18 @@ export default function PickExercise() {
     [db, forRoutine, replacing, workoutExerciseId],
   );
 
-  const renderItem = useCallback(({ item }: { item: ExerciseRow }) => <ExerciseOption exercise={item} onChoose={choose} />, [choose]);
+  /** The exercise whose form demo is open, or null. */
+  const [demoFor, setDemoFor] = useState<string | null>(null);
+  const showForm = useCallback((exerciseId: string) => {
+    // The search field may still have the keyboard up; it would cover the sheet.
+    Keyboard.dismiss();
+    setDemoFor(exerciseId);
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ExerciseRow }) => <ExerciseOption exercise={item} onChoose={choose} onShowForm={showForm} />,
+    [choose, showForm],
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -250,6 +292,7 @@ export default function PickExercise() {
           }
         />
       </View>
+      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} />
     </View>
   );
 }

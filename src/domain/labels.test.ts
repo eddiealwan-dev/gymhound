@@ -1,4 +1,4 @@
-import { equipmentLabel, formatRepScheme, MARK_LABELS, muscleLabel, primaryMusclesLabel } from './labels';
+import { equipmentLabel, formatRepScheme, MARK_LABELS, muscleLabel, musclesLine, primaryMusclesLabel } from './labels';
 import type { Muscle } from './types';
 
 describe('MARK_LABELS', () => {
@@ -108,5 +108,21 @@ describe('primaryMusclesLabel', () => {
   it('names each of several primary muscles once, in order', () => {
     expect(primaryMusclesLabel(['lats', 'upper_back'])).toBe('Lats, Upper back');
     expect(primaryMusclesLabel(['front_delts', 'side_delts'])).toBe('Shoulders');
+  });
+});
+
+describe('musclesLine', () => {
+  it('reads the primary muscles, then the secondary ones after a middle dot (R86)', () => {
+    expect(musclesLine(['chest'], ['front_delts', 'triceps'])).toBe('Chest · Shoulders, Triceps');
+  });
+
+  it('names a muscle once: a secondary one that reads like a primary one is left out', () => {
+    expect(musclesLine(['front_delts'], ['side_delts', 'triceps'])).toBe('Shoulders · Triceps');
+    expect(musclesLine(['lats', 'upper_back'], ['rear_delts', 'biceps', 'side_delts'])).toBe('Lats, Upper back · Shoulders, Biceps');
+  });
+
+  it('is the primary muscles alone when there are no others', () => {
+    expect(musclesLine(['abs'], [])).toBe('Abs');
+    expect(musclesLine(['front_delts'], ['side_delts'])).toBe('Shoulders');
   });
 });

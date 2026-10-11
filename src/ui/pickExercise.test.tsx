@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { FlatList, Image, StyleSheet, Text, TextInput } from 'react-native';
+import { FlatList, Image, Keyboard, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import PickExercise from '../../app/pick-exercise';
@@ -9,6 +9,7 @@ import { LIBRARY_EXERCISES } from '../seed/library.generated';
 import { usePendingPick } from '../state/pendingPick';
 import { addExercise, replaceWith } from '../state/sessionActions';
 import { Button } from './Button';
+import { FormDemo } from './FormDemo';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,6 +25,8 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRows }));
 jest.mock('../state/sessionActions', () => ({ addExercise: jest.fn(), replaceWith: jest.fn() }));
+// Its own tests cover what it shows; here, which exercise it is opened for is what the tests read.
+jest.mock('./FormDemo', () => ({ FormDemo: () => null }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -290,5 +293,45 @@ describe('the exercise picker: what a tap does', () => {
     // The editor takes it once.
     expect(usePendingPick.getState().take()).toBe('barbell-bench-press');
     expect(usePendingPick.getState().take()).toBeNull();
+  });
+});
+
+describe('the exercise picker: the info button (R86)', () => {
+  const SHOW_BENCH = 'Show form for Barbell bench press';
+  const demo = (tree: ReactTestRenderer) => tree.root.findByType(FormDemo);
+
+  it('each row has an info button, a 44pt target after the name', () => {
+    const tree = mount();
+    search(tree, 'barbell bench press');
+
+    const info = row(tree, SHOW_BENCH);
+    expect(info.props.accessibilityRole).toBe('button');
+    const style = StyleSheet.flatten(typeof info.props.style === 'function' ? info.props.style({ pressed: false }) : info.props.style);
+    expect(style).toMatchObject({ width: 44, height: 44 });
+    // Its own target, beside the row's, so the screen reader reaches both.
+    expect(row(tree, 'Barbell bench press, Barbell, Chest').findAll((n) => n === info)).toHaveLength(0);
+    expect(demo(tree).props.exerciseId).toBeNull();
+  });
+
+  it('opens the form demo for that exercise, after putting the keyboard away, and chooses nothing', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    try {
+      const tree = mount();
+      search(tree, 'barbell bench press');
+      const openAtDismiss: (string | null)[] = [];
+      dismiss.mockImplementation(() => void openAtDismiss.push(demo(tree).props.exerciseId));
+
+      act(() => row(tree, SHOW_BENCH).props.onPress());
+
+      expect(openAtDismiss).toEqual([null]);
+      expect(demo(tree).props.exerciseId).toBe('barbell-bench-press');
+      expect(addExercise).not.toHaveBeenCalled();
+      expect(router.back).not.toHaveBeenCalled();
+
+      act(() => demo(tree).props.onClose());
+      expect(demo(tree).props.exerciseId).toBeNull();
+    } finally {
+      dismiss.mockRestore();
+    }
   });
 });
