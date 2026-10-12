@@ -198,6 +198,28 @@ function liveAt0007(): { db: Db; close(): void } {
   return handle;
 }
 
+/**
+ * A live database as phase 6 left it: migrations 0000 to 0008 (no phase 7 workout columns), seeded, with one finished
+ * Push A and a progress photo row. Returns the open handle.
+ */
+function liveAt0008(): { db: Db; close(): void } {
+  const source = path.resolve(__dirname, 'migrations');
+  const folder = path.join(dir, 'migrations-to-0008');
+  fs.mkdirSync(path.join(folder, 'meta'), { recursive: true });
+  const journal = JSON.parse(fs.readFileSync(path.join(source, 'meta', '_journal.json'), 'utf8')) as { entries: { idx: number; tag: string }[] };
+  journal.entries = journal.entries.filter((entry) => entry.idx <= 8);
+  for (const { tag } of journal.entries) fs.copyFileSync(path.join(source, `${tag}.sql`), path.join(folder, `${tag}.sql`));
+  fs.writeFileSync(path.join(folder, 'meta', '_journal.json'), JSON.stringify(journal));
+
+  const handle = track(openFileDb(liveFile));
+  migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
+  ensureSettings(handle.db, 'us');
+  runSeed(handle.db, NOW);
+  finishOneBefore0009(handle.db, NOW);
+  handle.db.run(sql`INSERT INTO progress_photos (id, local_date, taken_at, file_name) VALUES ('pp1', '2026-10-09', ${NOW}, 'progress-1.jpg')`);
+  return handle;
+}
+
 /** Startup dependencies over the temp folder. `closed` counts closes so tests can check no handle leaks. */
 function makeDeps(overrides: Partial<StartupDeps> = {}) {
   const files = nodeSnapshotFiles(dir, liveFile);
@@ -619,6 +641,32 @@ describe('startDatabase', () => {
     expect(result.db.select().from(schema.progressPhotos).all()).toEqual([]);
     expect(result.db.select().from(schema.waterLog).all()).toEqual([expect.objectContaining({ id: 'wl1', amountMl: 500 })]);
     expect(finishedIds(result.db)).toEqual(ids);
+  });
+
+  it('restores a phase 6 snapshot (at 0008) past a newer damaged one, and migrates it to 0009 with nothing to write to Health', async () => {
+    const { deps, files } = makeDeps();
+    const old = liveAt0008();
+    expect(appliedMigrations(old.db)).toBe(9);
+    expect(columnNames(old.db, 'workouts')).not.toContain('health_status');
+    const ids = finishedIds(old.db);
+    const name = writeSnapshot(old.db, files, NOW + 2 * HOUR);
+    const damaged = writeSnapshot(old.db, files, NOW + 3 * HOUR);
+    old.close();
+    const bytes = fs.readFileSync(files.pathFor(damaged));
+    fs.writeFileSync(files.pathFor(damaged), bytes.subarray(0, Math.floor(bytes.length / 3)));
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(name);
+    expect(appliedMigrations(result.db)).toBe(10);
+    expect(finishedIds(result.db)).toEqual(ids);
+    const restored = result.db.select().from(workouts).all();
+    expect(restored.every((w) => w.healthStatus === null && w.healthRecordId === null && w.sleepOfferShown === false)).toBe(true);
+    expect(result.db.select().from(schema.progressPhotos).all()).toEqual([expect.objectContaining({ id: 'pp1', fileName: 'progress-1.jpg' })]);
+    // Health's write-out is off until it is turned on, so a restored history is never written to Health.
+    ensureSettings(result.db, 'us');
+    expect(getSettings(result.db).healthWorkoutsSince).toBeNull();
   });
 
   it('restores a version 1 snapshot from before 0002; migrated and seeded to version 2, it keeps its history and legacy ids', async () => {
