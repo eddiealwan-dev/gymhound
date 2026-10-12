@@ -13,6 +13,7 @@ import { useDbQuery } from '../src/state/dataVersion';
 import { usePendingPick } from '../src/state/pendingPick';
 import { addExercise, replaceWith } from '../src/state/sessionActions';
 import { Button } from '../src/ui/Button';
+import { EmptyState } from '../src/ui/EmptyState';
 import { useExercisePhotos } from '../src/ui/exercisePhotos';
 import { FormDemo } from '../src/ui/FormDemo';
 import { Body, Display } from '../src/ui/Text';
@@ -147,6 +148,13 @@ const ExerciseOption = memo(function ExerciseOption({
     </View>
   );
 });
+
+/** What the picker says when nothing matches the search and the chips (R404). */
+function noMatchText(query: string, filtered: boolean): string {
+  const q = query.trim();
+  if (q === '') return 'No exercises match these filters.';
+  return filtered ? `No exercise called ${q} with these filters.` : `No exercise called ${q}.`;
+}
 
 /**
  * The exercise picker, a modal over the session or the routine editor. `mode=add` appends the tapped exercise to the
@@ -288,9 +296,12 @@ export default function PickExercise() {
           style={{ flex: 1, marginTop: 4 }}
           contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
           ListEmptyComponent={
-            <Body muted style={{ textAlign: 'center', padding: 24 }}>
-              No exercises match.
-            </Body>
+            // Nothing found (R404): say what was looked for, and offer to make it with the typed name.
+            <EmptyState
+              style={{ paddingHorizontal: 16, paddingTop: 16 }}
+              text={noMatchText(query, muscle !== undefined || equipment !== undefined)}
+              action={query.trim() === '' ? undefined : { label: `New exercise called ${query.trim()}`, onPress: newExercise }}
+            />
           }
         />
       </View>

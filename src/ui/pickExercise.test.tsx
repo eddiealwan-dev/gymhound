@@ -224,11 +224,13 @@ describe('the exercise picker: search (§8.7)', () => {
     expect(listed(tree)).toEqual(['dumbbell-romanian-deadlift', 'barbell-romanian-deadlift']);
   });
 
-  it('says so when nothing matches', () => {
+  it('says so when nothing matches, and offers a new exercise with the typed name (R404)', () => {
     const tree = mount();
     search(tree, 'zzzz');
     expect(listed(tree)).toEqual([]);
-    expect(tree.root.findAll((n) => n.type === Text && n.props.children === 'No exercises match.')).toHaveLength(1);
+    expect(tree.root.findAll((n) => n.type === Text && n.props.children === 'No exercise called zzzz.')).toHaveLength(1);
+    const offer = tree.root.findAllByType(Button).filter((b) => b.props.label === 'New exercise called zzzz');
+    expect(offer).toHaveLength(1);
   });
 });
 
@@ -438,6 +440,21 @@ describe('the exercise picker: your own exercises (R110)', () => {
     } finally {
       dismiss.mockRestore();
     }
+  });
+
+  it("the empty list's offer opens the editor with the typed name, like New exercise (R404)", () => {
+    const tree = mount();
+    search(tree, '  zercher hold ');
+    act(() => chip(tree, 'New exercise called zercher hold').props.onPress());
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: 'new', name: 'zercher hold', from: 'picker' } });
+  });
+
+  it('with only the chips narrowing it to nothing, it names the filters and offers no new exercise (R404)', () => {
+    mockRows = [];
+    const tree = mount();
+    tapChip(tree, 'Chest');
+    expect(tree.root.findAll((n) => n.type === Text && n.props.children === 'No exercises match these filters.')).toHaveLength(1);
+    expect(tree.root.findAllByType(Button).filter((b) => String(b.props.label).startsWith('New exercise called'))).toHaveLength(0);
   });
 
   it('add: back in focus after Save, it adds the exercise just made to the workout and closes', () => {
