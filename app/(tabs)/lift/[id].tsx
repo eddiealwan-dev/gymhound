@@ -20,6 +20,7 @@ import { deviceLocale, RangeChips } from '../../../src/ui/body/BodyLog';
 import { Button } from '../../../src/ui/Button';
 import { LineChart } from '../../../src/ui/charts/LineChart';
 import { Screen } from '../../../src/ui/Screen';
+import { spokenLift as spoken } from '../../../src/ui/stats/LiftsSection';
 import { Body, Display, Label } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
@@ -36,11 +37,6 @@ function openWorkout(workoutId: string) {
   flushAll();
   Keyboard.dismiss();
   router.push(`/history/${workoutId}`);
-}
-
-/** What VoiceOver hears for a set or record: "185 lb by 5", "minus 20 lb by 8". */
-function spoken(text: string): string {
-  return text.replace(/ × /g, ' by ').replace(/−/g, 'minus ');
 }
 
 /** What the chart shows, in the words under the title (R173). Assisted charts the assistance. */
@@ -93,7 +89,9 @@ function LiftChart({ points, caption, format, today, locale }: { points: LiftPoi
   const anyHollow = shown.some((pt) => pt.hollow);
   return (
     <View style={{ gap: 12 }}>
-      {shown.length === 0 ? (
+      {points.length === 0 ? (
+        <Body muted>No chart for this lift yet.</Body>
+      ) : shown.length === 0 ? (
         <Body muted>No sessions in this range.</Body>
       ) : (
         <LineChart
@@ -106,7 +104,8 @@ function LiftChart({ points, caption, format, today, locale }: { points: LiftPoi
       )}
       {change !== null ? <Body muted>{change}</Body> : null}
       {anyHollow ? <Body muted>Hollow points are sessions with something off.</Body> : null}
-      <RangeChips value={range} onChange={setRange} />
+      {/* With nothing to chart in any range, the chips would change nothing. */}
+      {points.length > 0 ? <RangeChips value={range} onChange={setRange} /> : null}
     </View>
   );
 }

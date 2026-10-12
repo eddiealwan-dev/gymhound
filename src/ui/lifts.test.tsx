@@ -9,6 +9,7 @@ import LiftsRoute from '../../app/(tabs)/lifts';
 import { exercises } from '../db/schema';
 import { addExerciseToWorkout, addSet, setExerciseMark, updateSet } from '../db/repositories/workoutEditRepo';
 import { getLift } from '../db/repositories/liftsRepo';
+import { setSetting } from '../db/repositories/settingsRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, tickSet } from '../db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
 import { seededDb } from '../db/testing/fixtures';
@@ -83,6 +84,15 @@ function heldBench(start: number): string {
   const bench = getActiveWorkoutView(mockDb)!.exercises.find((e) => e.exerciseId === BENCH)!;
   bench.sets.forEach((s, i) => tickSet(mockDb, s.id, { weight: 135, reps: 3, durationS: null, distance: null }, 'lb', start + (i + 1) * MINUTE, 'mi'));
   finishWorkout(mockDb, id, start + 60 * MINUTE);
+  return id;
+}
+
+/** A custom exercise with an id, a name and a logging type. */
+function addCustom(id: string, name: string, loggingType: 'assisted' | 'bodyweight_plus'): string {
+  mockDb
+    .insert(exercises)
+    .values({ id, name, aliases: [], primaryMuscles: ['chest'], secondaryMuscles: [], equipment: 'bodyweight', pattern: 'core', loggingType, isCustom: true, createdAt: NOW })
+    .run();
   return id;
 }
 
@@ -376,6 +386,56 @@ describe('/lift/[id] (R173–R175)', () => {
     press(tree, 'Show all');
     expect(sessionRows()).toHaveLength(12);
     expect(shownText(tree)).not.toContain('Show all');
+  });
+
+  it('charts the assistance for an assisted lift, and says "minus" for it', () => {
+    mockId = addCustom('custom-assist', 'Assisted dip', 'assisted');
+    workout(OCT_1, [['custom-assist', [lb(40, 8)]]]);
+    workout(OCT_1 + 2 * DAY, [['custom-assist', [lb(30, 8)]]]);
+    const tree = mount(<LiftRoute />);
+    layOut(tree);
+    expect(shownText(tree)).toContain('Assistance per session');
+    expect(chart(tree)!.props.accessibilityLabel).toMatch(/^Assistance per session\. Oct 1 to Oct 3: 40 lb to 30 lb\./);
+    expect(buttonLabels(tree)).toContain('Least assistance, minus 30 lb by 8, Sat, Oct 3');
+  });
+
+  it('charts the most reps for a bodyweight-plus lift never loaded, and says "bodyweight" for BW', () => {
+    mockId = addCustom('custom-dip', 'Dip', 'bodyweight_plus');
+    workout(OCT_1, [['custom-dip', [{ reps: 10 }, { reps: 12 }]]]);
+    const tree = mount(<LiftRoute />);
+    const t = shownText(tree);
+    expect(t).toContain('Most reps in a set, per session');
+    expect(t).toEqual(expect.arrayContaining(['Most reps', '12']));
+    expect(buttonLabels(tree)).toContain('Thu, Oct 1, bodyweight by 10, bodyweight by 12');
+  });
+
+  it('converts the working weight to a kg display unit', () => {
+    setSetting(mockDb, 'unit', 'kg');
+    workout(OCT_1, [[BENCH, [lb(135, 5)]]]);
+    workout(OCT_1 + 2 * DAY, [[BENCH, [lb(140, 5)]]]);
+    const tree = mount(<LiftRoute />);
+    layOut(tree);
+    expect(chart(tree)!.props.accessibilityLabel).toContain('Oct 1 to Oct 3: 61.2 kg to 63.5 kg.');
+  });
+
+  it('says holds in words to VoiceOver', () => {
+    mockId = PLANK;
+    workout(OCT_1, [[PLANK, [{ durationS: 45 }, { durationS: 60 }]]]);
+    workout(OCT_1 + 2 * DAY, [[PLANK, [{ durationS: 90 }]]]);
+    const tree = mount(<LiftRoute />);
+    expect(buttonLabels(tree)).toEqual(
+      expect.arrayContaining(['Thu, Oct 1, 45 seconds, 1 minute', 'Longest hold, 1 minute 30 seconds, Sat, Oct 3']),
+    );
+  });
+
+  it('says there is no chart yet when no session has a value to chart', () => {
+    // A bodyweight-plus set ticked with no reps: a session, but no most reps to chart.
+    mockId = addCustom('custom-dip', 'Dip', 'bodyweight_plus');
+    workout(OCT_1, [['custom-dip', [{}]]]);
+    const tree = mount(<LiftRoute />);
+    expect(shownText(tree)).toContain('No chart for this lift yet.');
+    expect(shownText(tree)).not.toContain('No sessions in this range.');
+    expect(buttonLabels(tree)).not.toContain('3M, last 3 months');
   });
 
   it('uses no red', () => {

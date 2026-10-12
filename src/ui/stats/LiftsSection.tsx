@@ -5,6 +5,7 @@ import { Keyboard, Pressable, View } from 'react-native';
 import { listLifts } from '../../db/repositories/liftsRepo';
 import type { LiftSummary } from '../../db/repositories/liftsRepo';
 import { dayTitle } from '../../domain/dates';
+import { words } from '../../domain/search';
 import { useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { deviceLocale } from '../body/BodyLog';
@@ -20,12 +21,31 @@ export function sessionCount(n: number): string {
   return `${n} ${n === 1 ? 'session' : 'sessions'}`;
 }
 
-/** Lower-case words, split on anything that is not a letter or digit. */
-function words(s: string): string[] {
-  return s
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((w) => w.length > 0);
+const unit = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+/** "1 minute 30 seconds", "25 minutes", "1 hour 5 minutes": a time in words. */
+function spokenTime(hours: number, minutes: number, seconds: number): string {
+  const parts: string[] = [];
+  if (hours > 0) parts.push(unit(hours, 'hour'));
+  if (minutes > 0) parts.push(unit(minutes, 'minute'));
+  if (seconds > 0 || parts.length === 0) parts.push(unit(seconds, 'second'));
+  return parts.join(' ');
+}
+
+/**
+ * A set or record as VoiceOver should say it: "185 lb by 5", "minus 20 lb by 8", "bodyweight by 12", "45 seconds",
+ * "1 minute 30 seconds", "5 km, 25 minutes".
+ */
+export function spokenLift(text: string): string {
+  return text
+    .replace(/ × /g, ' by ')
+    .replace(/−/g, 'minus ')
+    .replace(/ · /g, ', ')
+    .replace(/\bBW\b/g, 'bodyweight')
+    .replace(/\b(\d+):(\d{2})(?::(\d{2}))?\b/g, (_m, a: string, b: string, c: string | undefined) =>
+      c === undefined ? spokenTime(0, Number(a), Number(b)) : spokenTime(Number(a), Number(b), Number(c)),
+    )
+    .replace(/\b(\d+)s\b/g, (_m, n: string) => unit(Number(n), 'second'));
 }
 
 /** Every word of `query` starts some word of `name` ("sq" finds "Back squat"); an empty query matches every name. */

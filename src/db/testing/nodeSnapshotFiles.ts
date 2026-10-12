@@ -5,6 +5,32 @@ import type { SnapshotFiles } from '../snapshots';
 /** SQLite's write-ahead-log files. The app runs in WAL mode, so they can hold committed data. */
 const SIDECARS = ['-wal', '-shm'];
 
+/** Errors Windows gives while another process (an antivirus or sync scan) briefly holds a file. */
+const TRANSIENT = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_TRIES = 10;
+
+/** Blocks this thread for `ms` milliseconds: the snapshot contract is synchronous. */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * `fs.renameSync`, retried on Windows while the error is a transient lock (EPERM, EACCES, EBUSY): up to ten tries,
+ * 10 to 100 ms apart. Any other error, or any error elsewhere, is thrown at once; the last error after ten tries.
+ */
+export function renameWithRetry(from: string, to: string, platform: NodeJS.Platform = process.platform): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (platform !== 'win32' || code === undefined || !TRANSIENT.has(code) || attempt >= RENAME_TRIES) throw error;
+      sleepSync(Math.min(10 * attempt, 100));
+    }
+  }
+}
+
 /**
  * `SnapshotFiles` over Node `fs`, for tests. Snapshots live in `${dir}/snapshots`.
  * `liveFile` is the full path of the live database; a set-aside copy goes next to it.
@@ -19,7 +45,7 @@ export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles 
     list: () => fs.readdirSync(snapshotDir).filter((name) => fs.statSync(path.join(snapshotDir, name)).size > 0),
     pathFor: (name) => path.join(snapshotDir, name),
     remove: (name) => fs.rmSync(path.join(snapshotDir, name), { force: true }),
-    rename: (from, to) => fs.renameSync(path.join(snapshotDir, from), path.join(snapshotDir, to)),
+    rename: (from, to) => renameWithRetry(path.join(snapshotDir, from), path.join(snapshotDir, to)),
     liveIsMissingOrEmpty,
     setAsideLive(tag) {
       const name = `gymhound.${tag}.db`;
@@ -35,13 +61,13 @@ export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles 
       const moved: typeof moves = [];
       try {
         for (const move of moves) {
-          fs.renameSync(move.from, move.to);
+          renameWithRetry(move.from, move.to);
           moved.push(move);
         }
       } catch (error) {
         for (const { from, to } of moved.reverse()) {
           try {
-            fs.renameSync(to, from);
+            renameWithRetry(to, from);
           } catch {
             // Nothing more can be done; the original error is the one to report.
           }
@@ -57,7 +83,7 @@ export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles 
       const temp = `${liveFile}.restoring`;
       try {
         fs.copyFileSync(path.join(snapshotDir, name), temp);
-        fs.renameSync(temp, liveFile);
+        renameWithRetry(temp, liveFile);
       } catch (error) {
         fs.rmSync(temp, { force: true });
         throw error;
