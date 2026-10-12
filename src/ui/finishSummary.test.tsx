@@ -128,7 +128,7 @@ describe('the finish summary (8.5, R64)', () => {
   });
 });
 
-/** A bench press personal best of `kind` at 185 lb. */
+/** A bench press personal record of `kind` at 185 lb. */
 const benchPr = (kind: PrHighlight['kind'], reps = 5): PrHighlight => ({
   exerciseId: 'barbell-bench-press',
   name: 'Bench press',
@@ -153,17 +153,17 @@ const plankPr: PrHighlight = {
   localDate: '2026-10-11',
 };
 
-describe('personal bests on the finish summary (R104, R105)', () => {
+describe('personal records on the finish summary (R104, R105)', () => {
   const next: FinishSummary['next'] = [
     { workoutExerciseId: 'we6', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
   ];
 
-  it('lists each personal best after the next-time lines, under "Personal bests", each with a PR mark', async () => {
+  it('lists each personal record after the next-time lines, under "Personal records", each with a PR mark', async () => {
     mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest'), benchPr('reps_at_weight', 8), plankPr]) };
     const text = shownText(await mountSettled());
 
     expect(text.slice(text.indexOf('Barbell bench press — next time 140 lb ↑') + 1)).toEqual([
-      'Personal bests',
+      'Personal records',
       'PR',
       'Bench press — heaviest: 185 lb × 5',
       'Share',
@@ -182,37 +182,37 @@ describe('personal bests on the finish summary (R104, R105)', () => {
     mockRead = { unit: 'lb', summary: pushA(next) };
     const text = shownText(await mountSettled());
 
-    expect(text).not.toContain('Personal bests');
+    expect(text).not.toContain('Personal records');
     expect(text).not.toContain('PR');
   });
 
-  it('on the first finished workout, says when personal bests start, under the heading and with no red (R405)', async () => {
+  it('on the first finished workout, says when personal records start, under the heading and with no red (R405)', async () => {
     mockRead = { unit: 'lb', summary: pushA(next), firstWorkout: true };
     const tree = await mountSettled();
     const text = shownText(tree);
 
-    const at = text.indexOf('Personal bests');
-    expect(text.slice(at, at + 2)).toEqual(['Personal bests', "Personal bests start with your next workout. Today's sets are the ones to beat."]);
+    const at = text.indexOf('Personal records');
+    expect(text.slice(at, at + 2)).toEqual(['Personal records', "Personal records start with your next workout. Today's sets are the ones to beat."]);
     expect(text).not.toContain('PR');
     const colours = tree.root.findAll((n) => typeof n.type === 'string' && typeof n.props.children === 'string').map((n) => flatStyle(n.props.style).color);
     expect(colours).not.toContain('#E10600');
   });
 
-  it('a later workout with no personal bests still hides the section', async () => {
+  it('a later workout with no personal records still hides the section', async () => {
     mockRead = { unit: 'lb', summary: pushA(next), firstWorkout: false };
-    expect(shownText(await mountSettled())).not.toContain('Personal bests');
+    expect(shownText(await mountSettled())).not.toContain('Personal records');
   });
 
   it('reads each row to VoiceOver as one sentence, and the heading as a heading', async () => {
     mockRead = { unit: 'lb', summary: pushA(next, [benchPr('heaviest'), plankPr]) };
     const tree = await mountSettled();
 
-    const rows = tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessible === true && /^Personal best\./.test(n.props.accessibilityLabel ?? ''));
+    const rows = tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessible === true && /^Personal record\./.test(n.props.accessibilityLabel ?? ''));
     expect(rows.map((r) => r.props.accessibilityLabel)).toEqual([
-      'Personal best. Bench press — heaviest: 185 lb × 5',
-      'Personal best. Plank — longest hold: 1:30',
+      'Personal record. Bench press — heaviest: 185 lb × 5',
+      'Personal record. Plank — longest hold: 1:30',
     ]);
-    const heading = tree.root.findAll((n) => typeof n.type === 'string' && n.props.children === 'Personal bests');
+    const heading = tree.root.findAll((n) => typeof n.type === 'string' && n.props.children === 'Personal records');
     expect(heading[0].props.accessibilityRole).toBe('header');
   });
 
@@ -232,7 +232,7 @@ describe('personal bests on the finish summary (R104, R105)', () => {
 
 const flatStyle = (style: unknown) => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
 
-describe('the personal best card (R106)', () => {
+describe('the personal record card (R106)', () => {
   afterEach(() => {
     mockScheme = 'dark';
   });
@@ -245,16 +245,16 @@ describe('the personal best card (R106)', () => {
     return tree;
   }
 
-  it('shows the lockup, the PR mark and PERSONAL BEST, the exercise, the figure and its unit, the caption, the date and the footer (§18.17)', () => {
+  it('shows the lockup, the PR mark and PERSONAL RECORD, the exercise, the figure and its unit, the caption, the date and the footer (§18.17)', () => {
     const text = shownText(renderCard(benchPr('heaviest')));
-    expect(text).toEqual(['GYMHOUND', 'PR', 'PERSONAL BEST', 'Bench press', '185', 'lb × 5', 'Heaviest set', 'SUN 11 OCT 2026', 'GymHound · gym log']);
+    expect(text).toEqual(['GYMHOUND', 'PR', 'PERSONAL RECORD', 'Bench press', '185', 'lb × 5', 'Heaviest set', 'SUN 11 OCT 2026', 'GymHound · gym log']);
   });
 
   it('lays the date out for the locale, and keeps a value with no unit whole', () => {
-    expect(shownText(renderCard(plankPr, 'en-US'))).toEqual(['GYMHOUND', 'PR', 'PERSONAL BEST', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026', 'GymHound · gym log']);
+    expect(shownText(renderCard(plankPr, 'en-US'))).toEqual(['GYMHOUND', 'PR', 'PERSONAL RECORD', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026', 'GymHound · gym log']);
   });
 
-  it('adds how far it beat the best before, and the session count, when given them (R445, R446)', () => {
+  it('adds how far it beat the best before when given it, and no session count (R445; R446 dropped after Round 8)', () => {
     let tree!: ReactTestRenderer;
     act(() => {
       tree = create(
@@ -267,7 +267,7 @@ describe('the personal best card (R106)', () => {
     });
     const text = shownText(tree);
     expect(text).toContain('Up 5 lb from 180 lb on 2 Oct.');
-    expect(text).toContain('12 SESSIONS');
+    expect(text.join(' ')).not.toMatch(/SESSION/);
   });
 
   it('is 360 × 450, always dark, at a fixed text size, with red only on the wordmark and the PR mark', () => {
@@ -280,18 +280,18 @@ describe('the personal best card (R106)', () => {
     for (const t of texts) expect(t.props.allowFontScaling).toBe(false);
     const styleOf = (label: string) => flatStyle(texts.find((t) => t.props.children === label)!.props.style);
     expect(styleOf('GYMHOUND').color).toBe('#E10600');
-    expect(styleOf('PERSONAL BEST').color).toBe('#E10600');
+    expect(styleOf('PERSONAL RECORD').color).toBe('#E10600');
     expect(styleOf('Bench press').color).toBe('#f1ece2');
     expect(styleOf('8')).toMatchObject({ color: '#f1ece2', fontVariant: ['tabular-nums'] });
     const reds = texts.filter((t) => flatStyle(t.props.style).color === '#E10600').map((t) => t.props.children);
-    expect(reds).toEqual(['GYMHOUND', 'PERSONAL BEST']);
+    expect(reds).toEqual(['GYMHOUND', 'PERSONAL RECORD']);
 
     const mark = tree.root.findByType(Image);
     expect(mark.props.source).toBe(require('../../assets/brand/mark-dark.png'));
   });
 });
 
-describe('sharing a personal best (R106)', () => {
+describe('sharing a personal record (R106)', () => {
   const next: FinishSummary['next'] = [];
   const originalOS = Platform.OS;
   const FAILED = "Couldn't make the image. Try again.";
@@ -336,9 +336,9 @@ describe('sharing a personal best (R106)', () => {
     ]);
   });
 
-  it("draws that personal best's card, captures it as a 1080 × 1350 PNG and opens the share sheet, then removes the card", async () => {
+  it("draws that personal record's card, captures it as a 1080 × 1350 PNG and opens the share sheet, then removes the card", async () => {
     const tree = await mountSettled();
-    expect(shownText(tree)).not.toContain('PERSONAL BEST');
+    expect(shownText(tree)).not.toContain('PERSONAL RECORD');
     let drawnAtCapture: string[] = [];
     jest.mocked(captureRef).mockImplementationOnce(async () => {
       drawnAtCapture = shownText(tree);
@@ -347,7 +347,7 @@ describe('sharing a personal best (R106)', () => {
 
     await pressShare(tree, 1);
 
-    expect(drawnAtCapture).toEqual(expect.arrayContaining(['PERSONAL BEST', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026']));
+    expect(drawnAtCapture).toEqual(expect.arrayContaining(['PERSONAL RECORD', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026']));
     expect(drawnAtCapture.filter((t) => t === 'Bench press')).toEqual([]);
     expect(captureRef).toHaveBeenCalledWith(expect.objectContaining({ current: null }), {
       format: 'png',
@@ -358,9 +358,9 @@ describe('sharing a personal best (R106)', () => {
     expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///cache/ReactNative-snapshot-image1.png', {
       mimeType: 'image/png',
       UTI: 'public.png',
-      dialogTitle: 'Share a personal best',
+      dialogTitle: 'Share a personal record',
     });
-    expect(shownText(tree)).not.toContain('PERSONAL BEST');
+    expect(shownText(tree)).not.toContain('PERSONAL RECORD');
     expect(shownText(tree)).not.toContain(FAILED);
   });
 
@@ -369,7 +369,7 @@ describe('sharing a personal best (R106)', () => {
     await press(tree, 0);
     await settle();
 
-    expect(shownText(tree)).toContain('PERSONAL BEST');
+    expect(shownText(tree)).toContain('PERSONAL RECORD');
     expect(captureRef).not.toHaveBeenCalled();
 
     await markLoads(tree);
@@ -467,7 +467,7 @@ describe('sharing a personal best (R106)', () => {
     expect(captureRef).not.toHaveBeenCalled();
     const text = shownText(tree);
     expect(text.slice(text.indexOf('Plank — longest hold: 1:30'))).toEqual(['Plank — longest hold: 1:30', 'Share', FAILED, 'Save as a workout', 'Done']);
-    expect(text).not.toContain('PERSONAL BEST');
+    expect(text).not.toContain('PERSONAL RECORD');
   });
 
   it('ignores a second tap while an image is being made', async () => {
@@ -499,7 +499,7 @@ describe('sharing a personal best (R106)', () => {
     expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
   });
 
-  it('does not check sharing when there are no personal bests', async () => {
+  it('does not check sharing when there are no personal records', async () => {
     mockRead = { unit: 'lb', summary: pushA(next) };
     await mountSettled();
 

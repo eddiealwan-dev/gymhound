@@ -11,7 +11,7 @@ import { Button } from '../Button';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
-const BAND_NOTE = 'Hard sets so far this week. About 10 to 20 a week is the usual aim; GymHound counts 8 to 24 as in range.';
+const BAND_NOTE = 'Sets so far this week. About 10 to 20 a week is the usual aim; GymHound counts 8 to 24 as in range.';
 
 /** A part of the card: its name in body strong (a VoiceOver heading), then its lines 4pt apart. */
 function Part({ title, children }: { title: string; children: ReactNode }) {
@@ -71,7 +71,7 @@ export function WeekCard({ today, onShare }: { today: string; onShare?: () => vo
       <Part title="Sessions">
         <Body>{sessionsText(sessions)}</Body>
       </Part>
-      <Part title="Personal bests">
+      <Part title="Personal records">
         <Body>{`${report.prsThisWeek} this week · ${report.prsLast4Weeks} in the last 4 weeks`}</Body>
       </Part>
       <Part title="Bodyweight">

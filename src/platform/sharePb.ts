@@ -35,7 +35,7 @@ export async function sharePbImage(view: RefObject<View | null>): Promise<'share
   if (!(await Sharing.isAvailableAsync())) return 'unavailable';
   const captured = await captureRef(view, { format: 'png', result: 'tmpfile', ...pbCaptureSize() });
   try {
-    await Sharing.shareAsync(toFileUri(captured), { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share a personal best' });
+    await Sharing.shareAsync(toFileUri(captured), { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share a personal record' });
   } finally {
     // iOS only: Android's share sheet can resolve before the receiving app has read the file, and view-shot clears
     // Android's captures itself when the module next starts.

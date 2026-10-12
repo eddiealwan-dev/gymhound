@@ -105,7 +105,8 @@ export const LEGACY_SOURCE: Readonly<Record<string, string | null>> = {
   'bodyweight-split-squat': null,
   'close-grip-push-up': 'Push-Ups_-_Close_Triceps_Position',
   'bird-dog': null,
-  // Weighted_Sissy_Squat is linked to its own fedb- entry, and its photos hold a plate, so the bodyweight one has none.
+  // Weighted_Sissy_Squat is linked to its own fedb- entry; the bodyweight one shows its photos, with a note about the
+  // plate (src/ui/exercisePhotos.ts, Round 8).
   'sissy-squat': null,
 };
 

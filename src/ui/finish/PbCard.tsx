@@ -25,14 +25,13 @@ type Props = {
 /**
  * The personal best card shared as an image (R106, §18.17). In the shared dark frame: a red PR mark and PERSONAL BEST,
  * the lift, the big figure with its unit beside it, what kind of best it is, how far it beat the one before ("Up 5 kg
- * from 135 kg on 2 Sep."), then the day and how many sessions of the lift it took ("12 SESSIONS": this one included). Drawn by `PbCardHost` only while it
+ * from 135 kg on 2 Sep."), then the day. No session count: the owner left it off after Round 8. Drawn by `PbCardHost` only while it
  * is captured.
  */
 export const PbCard = forwardRef<View, Props>(function PbCard({ highlight, locale, model, onReady }, ref) {
   const value = model?.value ?? splitValue(prCard(highlight).value);
   const caption = model?.caption ?? prCard(highlight).caption;
   const date = model?.date ?? formatTrainDate(fromLocalDate(highlight.localDate), locale, { year: true });
-  const sessions = model?.sessions ?? null;
   return (
     <ShareFrame ref={ref} onReady={onReady}>
       <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -43,7 +42,7 @@ export const PbCard = forwardRef<View, Props>(function PbCard({ highlight, local
             </Text>
           </View>
           <Text {...fixed} style={display(800, 18, { color: c.red, letterSpacing: 1 })}>
-            PERSONAL BEST
+            PERSONAL RECORD
           </Text>
         </View>
         <Text {...fixed} numberOfLines={2} style={display(700, 30, { color: c.text, lineHeight: 34, marginTop: 14 })}>
@@ -77,11 +76,6 @@ export const PbCard = forwardRef<View, Props>(function PbCard({ highlight, local
         <Text {...fixed} numberOfLines={1} style={display(700, 18, { color: c.textMuted, letterSpacing: 0.5, flexShrink: 1 })}>
           {date}
         </Text>
-        {sessions !== null ? (
-          <Text {...fixed} numberOfLines={1} style={display(700, 18, { color: c.textMuted, letterSpacing: 0.5 })}>
-            {sessions === 1 ? '1 SESSION' : `${sessions} SESSIONS`}
-          </Text>
-        ) : null}
       </View>
     </ShareFrame>
   );

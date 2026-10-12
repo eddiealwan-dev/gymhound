@@ -7,13 +7,20 @@ import type { Equipment, LoggingType, Muscle, WeightUnit } from './types';
 
 /**
  * Routine sharing (§18.18, R460–R474): a routine travels inside a short code, so sharing works with no server, account
- * or network. A code reads `GH1.<payload>.<check>`:
+ * or network. A code reads `GH<version>.<payload>.<check>`:
  *
- * - `GH1` names the format's version. A phone that only knows version 1 says a `GH2` code is from a newer GymHound.
- * - The payload is the routine as JSON in positional arrays (no field names), UTF-8, then base64url (R461).
- * - The check is 4 base64url characters: 24 bits of FNV-1a over `GH1.<payload>`, so a changed character is caught.
+ * - `GH2` (or `GH1`) names the format's version. A code with a higher version is from a newer GymHound, and says so.
+ * - The payload is base64url bytes: version 2's compact bytes (below, R472), or version 1's JSON as UTF-8 (R461).
+ * - The check is 4 base64url characters: 24 bits of FNV-1a over `GH<version>.<payload>`, so a changed character is
+ *   caught.
  *
- * Version 1's payload: `[name, unit, days, customs?]`
+ * Version 2 (R472, written since Round 8, when a version 1 code for Beginner full body ran to 15 lines): a premade
+ * program is two bytes, `0, place`, its place in the frozen `PREMADES_V2`, so its code is 12 characters. A routine of
+ * your own is `1, unit, name, customs, days`, each number a variable-length integer and each name UTF-8 with its
+ * length first; the fields are version 1's, laid out at `encodeRoutine`. A slot asking for the sets, reps and increment
+ * of the slot before it carries only a flag, and a usual increment (5, 10, 2.5 …) travels inside the flags.
+ *
+ * Version 1's payload (still read; `encodeRoutineV1` still writes it, for the tests): `[name, unit, days, customs?]`
  * - `unit`: 0 for lb, 1 for kg: the routine's usual increment unit.
  * - each day: `[name, ...slots]`
  * - each slot: `[exercise, sets, repMin, repMax, increment, link?, rest?]`
@@ -30,7 +37,8 @@ import type { Equipment, LoggingType, Muscle, WeightUnit } from './types';
  * Decoding never trusts its input: every field is checked against the bounds below, and anything off is refused.
  */
 
-export const SHARE_VERSION = 1;
+/** The newest format this GymHound writes and reads (§18.18, R461; version 2 after Round 8, R472). Version 1 still reads. */
+export const SHARE_VERSION = 2;
 /** The longest code (its characters, prefix and check included) that is read at all. */
 export const MAX_CODE_LENGTH = 12_000;
 /** The most text searched for a code, so a huge paste can't stall the field. */
@@ -113,7 +121,14 @@ export type SharedDay = { name: string; slots: SharedSlot[] };
 export type SharedRoutine = { name: string; days: SharedDay[]; customs: SharedCustomExercise[] };
 
 export type ShareCodeError = 'not_routine' | 'newer_version' | 'cut_short';
-export type DecodeResult = { ok: true; code: string; routine: SharedRoutine } | { ok: false; error: ShareCodeError };
+/**
+ * A code that reads: a whole routine, or a premade program by name (`premadeId`), which every phone already holds and
+ * the receiving phone copies from its own (R472).
+ */
+export type DecodeResult =
+  | { ok: true; code: string; routine: SharedRoutine; premadeId: null }
+  | { ok: true; code: string; routine: null; premadeId: string }
+  | { ok: false; error: ShareCodeError };
 
 /** What each refusal says (R470). */
 export const SHARE_CODE_ERRORS: Record<ShareCodeError, string> = {
@@ -220,12 +235,17 @@ function checkOf(text: string): string {
 }
 
 /**
- * Any JSON value packed and signed as a version-1 code, with no checks at all: `encodeRoutine` builds the body, and
- * the tests use it to make codes whose content is wrong but whose check is right.
+ * Any bytes packed and signed as a code, with no checks at all: the encoders build the bytes, and the tests use it to
+ * make codes whose content is wrong but whose check is right.
  */
-export function signBody(body: unknown, version: number = SHARE_VERSION): string {
-  const head = `GH${version}.${base64urlEncode(utf8Encode(JSON.stringify(body)))}`;
+export function signBytes(bytes: number[], version: number = SHARE_VERSION): string {
+  const head = `GH${version}.${base64urlEncode(bytes)}`;
   return `${head}.${checkOf(head)}`;
+}
+
+/** Any JSON value packed and signed as a version 1 code, with no checks at all (as `signBytes`). */
+export function signBody(body: unknown, version = 1): string {
+  return signBytes(utf8Encode(JSON.stringify(body)), version);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -265,7 +285,7 @@ function usualUnit(routine: SharedRoutine): WeightUnit {
  * day with no slots, more days, slots or custom exercises than a code carries, or a value out of bounds throws
  * `RoutineNotShareable`. A slot's library id must be in `libraryIds`: anything else travels as a custom exercise.
  */
-export function encodeRoutine(routine: SharedRoutine, libraryIds: readonly string[] = LIBRARY_LIST): string {
+export function encodeRoutineV1(routine: SharedRoutine, libraryIds: readonly string[] = LIBRARY_LIST): string {
   const name = clip(routine.name, MAX_ROUTINE_NAME);
   if (name === '') throw new RoutineNotShareable('The routine has no name.');
   if (routine.days.length === 0 || routine.days.length > MAX_DAYS) throw new RoutineNotShareable('Too many or no days.');
@@ -317,7 +337,7 @@ export function encodeRoutine(routine: SharedRoutine, libraryIds: readonly strin
 
   const body: unknown[] = [name, tableIndex(UNITS_V1, unit, 'Unit'), days];
   if (customs.length > 0) body.push(customs);
-  const code = signBody(body);
+  const code = signBody(body, 1);
   if (code.length > MAX_CODE_LENGTH) throw new RoutineNotShareable('The routine is too big for a code.');
   return code;
 }
@@ -444,7 +464,7 @@ function findCodes(text: string): Found[] {
 function decodeOne(f: Found, libraryIds: readonly string[]): DecodeResult {
   const version = Number(f.version);
   if (version > SHARE_VERSION) return { ok: false, error: 'newer_version' };
-  if (version !== SHARE_VERSION) return { ok: false, error: 'not_routine' };
+  if (version !== 1 && version !== 2) return { ok: false, error: 'not_routine' };
   // The check comes last, so a code copied short has lost it, or part of it (R469).
   if (f.check === undefined || f.check.length < 4 || f.payload === '') return { ok: false, error: 'cut_short' };
   const head = `GH${f.version}.${f.payload}`;
@@ -452,10 +472,20 @@ function decodeOne(f: Found, libraryIds: readonly string[]): DecodeResult {
   const check = f.check.slice(0, 4);
   if (head.length + 5 > MAX_CODE_LENGTH || checkOf(head) !== check) return { ok: false, error: 'not_routine' };
   const bytes = base64urlDecode(f.payload);
-  const json = bytes === null ? null : utf8Decode(bytes);
+  if (bytes === null) return { ok: false, error: 'not_routine' };
+  const code = `${head}.${check}`;
+  if (version === 2) {
+    try {
+      const read = readCompact(bytes, libraryIds);
+      return 'premadeId' in read ? { ok: true, code, routine: null, premadeId: read.premadeId } : { ok: true, code, routine: read.routine, premadeId: null };
+    } catch (error) {
+      return { ok: false, error: error instanceof FromNewerVersion ? 'newer_version' : 'not_routine' };
+    }
+  }
+  const json = utf8Decode(bytes);
   if (json === null) return { ok: false, error: 'not_routine' };
   try {
-    return { ok: true, code: `${head}.${check}`, routine: parseBody(JSON.parse(json), libraryIds) };
+    return { ok: true, code, routine: parseBody(JSON.parse(json), libraryIds), premadeId: null };
   } catch {
     return { ok: false, error: 'not_routine' };
   }
@@ -493,18 +523,260 @@ export function decodeRoutine(text: string, libraryIds: readonly string[] = LIBR
 // ---------------------------------------------------------------------------------------------------------------
 // The link and the message.
 
-/** The app's own link (R464): `gymhound://routine/<code>`. The scheme is app.json's `scheme`. */
+/** The app's own link (R464), still opened by the app; the message no longer sends it (R473). */
 export function shareLink(code: string): string {
   return `gymhound://routine/${code}`;
 }
 
 /**
- * What the share sheet sends (R465): what it is, how to open it, the link, and the code on its own line for a phone
- * where the link doesn't open the app (Expo Go, or an app that won't follow custom links).
+ * What the share sheet sends (R473, after Round 8): what it is, where to paste it, and the code on its own line. No
+ * link: a custom gymhound:// link isn't tappable in Messages or Notes, and Expo Go can't open it, so it only confused.
  */
 export function shareMessage(routineName: string, code: string): string {
-  return (
-    `My ${routineName.trim()} routine on GymHound. Open this link on your phone, or paste the code in Routines → Add from code: ` +
-    `${shareLink(code)}\n\nCode: ${code}`
-  );
+  return `My ${routineName.trim()} routine for GymHound. In the app, open Routines → Add from code and paste this code:\n\n${code}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Version 2: compact (R472). The payload is bytes, not JSON: numbers as variable-length integers, names as UTF-8 with
+// their length first. A premade program travels as its place in a frozen table, so sharing one is a dozen characters.
+
+/** The premades a version 2 code can name, frozen: new programs are appended, never inserted. */
+const PREMADES_V2: readonly string[] = [
+  'premade-fullbody-3',
+  'premade-5x5-3',
+  'premade-dumbbell-3',
+  'premade-mobility-3',
+  'premade-ppl-6',
+  'premade-upperlower-4',
+  'premade-advancedfullbody-4',
+  'premade-brosplit-5',
+  'premade-calisthenics-3',
+];
+
+/** The usual increments, in hundredths, frozen: a slot's flags name one by its place + 1 (0: the increment follows). */
+const INCREMENTS_V2: readonly number[] = [500, 1000, 250, 0, 125, 100, 200];
+
+const KIND_PREMADE = 0;
+const KIND_ROUTINE = 1;
+
+/** Whether a premade can be shared by name. */
+export function isShareablePremade(id: string): boolean {
+  return PREMADES_V2.includes(id);
+}
+
+function pushVarint(out: number[], n: number): void {
+  if (!Number.isInteger(n) || n < 0) throw new RoutineNotShareable('A number is out of bounds.');
+  let v = n;
+  while (v >= 0x80) {
+    out.push((v & 0x7f) | 0x80);
+    v = Math.floor(v / 128);
+  }
+  out.push(v);
+}
+
+function pushText(out: number[], text: string): void {
+  const bytes = utf8Encode(text);
+  pushVarint(out, bytes.length);
+  out.push(...bytes);
+}
+
+/** A premade program as a version 2 code: GH2 and four characters of payload (R472). */
+export function encodePremade(premadeId: string): string {
+  const at = PREMADES_V2.indexOf(premadeId);
+  if (at === -1) throw new RoutineNotShareable(`${premadeId} can't be shared by name.`);
+  return signBytes([KIND_PREMADE, at], 2);
+}
+
+/** A whole routine as a compact version 2 code (R472), bounded as version 1 was. */
+export function encodeRoutine(routine: SharedRoutine, libraryIds: readonly string[] = LIBRARY_LIST): string {
+  const name = clip(routine.name, MAX_ROUTINE_NAME);
+  if (name === '') throw new RoutineNotShareable('The routine has no name.');
+  if (routine.days.length === 0 || routine.days.length > MAX_DAYS) throw new RoutineNotShareable('Too many or no days.');
+  if (routine.customs.length > MAX_CUSTOMS) throw new RoutineNotShareable('Too many exercises of your own.');
+  const unit = usualUnit(routine);
+  const indexOf = new Map(libraryIds.map((id, i) => [id, i]));
+  const out: number[] = [KIND_ROUTINE, tableIndex(UNITS_V1, unit, 'Unit')];
+  pushText(out, name);
+
+  pushVarint(out, routine.customs.length);
+  for (const c of routine.customs) {
+    const customName = clip(c.name, MAX_NAME_LENGTH);
+    const primary = [...new Set(c.primaryMuscles)];
+    const secondary = [...new Set(c.secondaryMuscles)].filter((m) => !primary.includes(m));
+    if (customName === '' || primary.length === 0) throw new RoutineNotShareable('An exercise of your own is incomplete.');
+    pushText(out, customName);
+    out.push(tableIndex(LOGGING_TYPES_V1, c.loggingType, 'Logging type'), tableIndex(EQUIPMENT_V1, c.equipment, 'Equipment'));
+    // As lists, not sets: the first primary muscle decides the exercise's pattern.
+    for (const list of [primary, secondary]) {
+      pushVarint(out, list.length);
+      for (const m of list) out.push(tableIndex(MUSCLES_V1, m, 'Muscle'));
+    }
+  }
+
+  pushVarint(out, routine.days.length);
+  let previous: string | null = null;
+  for (const day of routine.days) {
+    if (day.slots.length === 0 || day.slots.length > MAX_SLOTS_PER_DAY) throw new RoutineNotShareable('A day has too many or no exercises.');
+    pushText(out, clip(day.name, MAX_DAY_NAME));
+    pushVarint(out, day.slots.length);
+    day.slots.forEach((slot, i) => {
+      const e = slot.exercise;
+      let ref: number;
+      if ('library' in e) {
+        const at = indexOf.get(e.library);
+        if (at === undefined) throw new RoutineNotShareable(`${e.library} isn't in the library.`);
+        ref = at * 2;
+      } else if ('custom' in e) {
+        if (!Number.isInteger(e.custom) || e.custom < 0 || e.custom >= routine.customs.length) throw new RoutineNotShareable('A slot names a missing exercise.');
+        ref = e.custom * 2 + 1;
+      } else {
+        throw new RoutineNotShareable('A slot names a missing exercise.');
+      }
+      const whole = (n: number, lo: number, hi: number) => Number.isInteger(n) && n >= lo && n <= hi;
+      if (!whole(slot.setCount, MIN_SETS, MAX_SETS) || !whole(slot.repMin, 1, MAX_REPS) || !whole(slot.repMax, slot.repMin, MAX_REPS)) {
+        throw new RoutineNotShareable('Sets or reps are out of bounds.');
+      }
+      const hundredths = Math.round(slot.increment * 100);
+      if (!Number.isFinite(slot.increment) || hundredths < 0 || hundredths > MAX_INCREMENT * 100) throw new RoutineNotShareable('The increment is out of bounds.');
+      const restAt = slot.restSeconds === null ? -1 : REST_CHOICES.indexOf(slot.restSeconds);
+      if (slot.restSeconds !== null && restAt === -1) throw new RoutineNotShareable('The rest is out of bounds.');
+      const link = slot.supersetWithNext && i < day.slots.length - 1;
+      // Most slots ask for what the one before did: then only the flag travels.
+      const target = `${slot.setCount} ${slot.repMin} ${slot.repMax} ${hundredths}`;
+      const same = target === previous;
+      previous = target;
+      const usual = same ? -1 : INCREMENTS_V2.indexOf(hundredths);
+      const flags = (link ? 1 : 0) | (restAt >= 0 ? 2 : 0) | (slot.incrementUnit !== unit ? 4 : 0) | (same ? 8 : 0) | ((usual + 1) << 4);
+      pushVarint(out, ref);
+      out.push(flags);
+      if (!same) {
+        out.push(slot.setCount);
+        pushVarint(out, slot.repMin);
+        pushVarint(out, slot.repMax - slot.repMin);
+        if (usual === -1) pushVarint(out, hundredths);
+      }
+      if (restAt >= 0) out.push(restAt);
+    });
+  }
+  const code = signBytes(out, 2);
+  if (code.length > MAX_CODE_LENGTH) throw new RoutineNotShareable('The routine is too big for a code.');
+  return code;
+}
+
+/** Thrown by `readCompact` for a code naming something only a newer GymHound has. */
+class FromNewerVersion extends Error {}
+
+/** Reads bytes in order; anything off throws, and `decodeOne` turns that into "not a routine". */
+class Reader {
+  private at = 0;
+  constructor(private readonly bytes: number[]) {}
+  byte(max = 255): number {
+    if (this.at >= this.bytes.length) refuse();
+    const b = this.bytes[this.at++];
+    if (b > max) refuse();
+    return b;
+  }
+  varint(max: number): number {
+    let n = 0;
+    let scale = 1;
+    for (let i = 0; i < 6; i++) {
+      const b = this.byte();
+      n += (b & 0x7f) * scale;
+      if (n > max) refuse();
+      if (b < 0x80) return n;
+      scale *= 128;
+    }
+    return refuse();
+  }
+  text(max: number, blankOk: boolean): string {
+    const length = this.varint(max * 4);
+    if (this.at + length > this.bytes.length) refuse();
+    const decoded = utf8Decode(this.bytes.slice(this.at, this.at + length));
+    this.at += length;
+    if (decoded === null) refuse();
+    return text(decoded, max, blankOk);
+  }
+  done(): void {
+    if (this.at !== this.bytes.length) refuse();
+  }
+}
+
+function readMuscles(r: Reader, atLeast: number): Muscle[] {
+  const count = r.varint(MUSCLES_V1.length);
+  if (count < atLeast) refuse();
+  const out: Muscle[] = [];
+  for (let i = 0; i < count; i++) out.push(MUSCLES_V1[r.byte(MUSCLES_V1.length - 1)]);
+  if (new Set(out).size !== out.length) refuse();
+  return out;
+}
+
+type SlotTarget = Pick<SharedSlot, 'setCount' | 'repMin' | 'repMax' | 'increment'>;
+
+function readCompact(bytes: number[], libraryIds: readonly string[]): { premadeId: string } | { routine: SharedRoutine } {
+  const r = new Reader(bytes);
+  const kind = r.byte(KIND_ROUTINE);
+  if (kind === KIND_PREMADE) {
+    const at = r.byte();
+    r.done();
+    // A program this GymHound doesn't have yet: the code is from a newer one.
+    if (at >= PREMADES_V2.length) throw new FromNewerVersion();
+    return { premadeId: PREMADES_V2[at] };
+  }
+  const unit = UNITS_V1[r.byte(UNITS_V1.length - 1)];
+  const name = r.text(MAX_ROUTINE_NAME, false);
+  const customCount = r.varint(MAX_CUSTOMS);
+  const customs: SharedCustomExercise[] = [];
+  for (let i = 0; i < customCount; i++) {
+    const customName = r.text(MAX_NAME_LENGTH, false);
+    const loggingType = LOGGING_TYPES_V1[r.byte(LOGGING_TYPES_V1.length - 1)];
+    const equipment = EQUIPMENT_V1[r.byte(EQUIPMENT_V1.length - 1)];
+    const primaryMuscles = readMuscles(r, 1);
+    const secondaryMuscles = readMuscles(r, 0);
+    if (secondaryMuscles.some((m) => primaryMuscles.includes(m))) refuse();
+    customs.push({ name: customName, loggingType, equipment, primaryMuscles, secondaryMuscles });
+  }
+  const dayCount = r.varint(MAX_DAYS);
+  if (dayCount < 1) refuse();
+  const days: SharedDay[] = [];
+  let previous: SlotTarget | null = null;
+  for (let d = 0; d < dayCount; d++) {
+    const dayName = r.text(MAX_DAY_NAME, true);
+    const slotCount = r.varint(MAX_SLOTS_PER_DAY);
+    if (slotCount < 1) refuse();
+    const slots: SharedSlot[] = [];
+    for (let i = 0; i < slotCount; i++) {
+      const ref = r.varint(200_000);
+      const exercise: SharedExerciseRef =
+        ref % 2 === 1
+          ? { custom: (ref - 1) / 2 }
+          : ref / 2 < libraryIds.length
+            ? { library: libraryIds[ref / 2] }
+            : { missing: ref / 2 };
+      if ('custom' in exercise && exercise.custom >= customs.length) refuse();
+      const flags = r.byte(127);
+      const link = (flags & 1) === 1;
+      if (link && i === slotCount - 1) refuse();
+      const usual = flags >> 4;
+      let target: SlotTarget;
+      if ((flags & 8) === 8) {
+        if (previous === null || usual !== 0) refuse();
+        target = previous;
+      } else {
+        const setCount = r.byte(MAX_SETS);
+        if (setCount < MIN_SETS) refuse();
+        const repMin = r.varint(MAX_REPS);
+        if (repMin < 1) refuse();
+        const repMax = repMin + r.varint(MAX_REPS - repMin);
+        const hundredths = usual === 0 ? r.varint(MAX_INCREMENT * 100) : INCREMENTS_V2[usual - 1];
+        target = { setCount, repMin, repMax, increment: hundredths / 100 };
+      }
+      previous = target;
+      const restSeconds = (flags & 2) === 2 ? REST_CHOICES[r.byte(REST_CHOICES.length - 1)] : null;
+      const incrementUnit: WeightUnit = (flags & 4) === 4 ? (unit === 'lb' ? 'kg' : 'lb') : unit;
+      slots.push({ exercise, ...target, incrementUnit, supersetWithNext: link, restSeconds });
+    }
+    days.push({ name: dayName, slots });
+  }
+  r.done();
+  return { routine: { name, days, customs } };
 }

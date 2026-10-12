@@ -30,14 +30,14 @@ export function FinishPrs({ summary, firstWorkout = false }: { summary: FinishSu
 }
 
 /** On the lifter's first finished workout, which never sets a personal best (R103): when they start (R405). */
-export const FIRST_WORKOUT_PRS = "Personal bests start with your next workout. Today's sets are the ones to beat.";
+export const FIRST_WORKOUT_PRS = "Personal records start with your next workout. Today's sets are the ones to beat.";
 
 /** The Personal bests heading over the first workout's line, with the same hairline and spacing as the list. No red: nothing here is a PR. */
 function FirstWorkoutLine({ afterNext }: { afterNext: boolean }): ReactElement {
   const { colors } = useTheme();
   return (
     <View style={{ gap: 8, paddingTop: 16, marginTop: afterNext ? 16 : 0, borderTopWidth: 1, borderTopColor: colors.border }}>
-      <Label>Personal bests</Label>
+      <Label>Personal records</Label>
       <Body muted>{FIRST_WORKOUT_PRS}</Body>
     </View>
   );
@@ -67,7 +67,7 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
     busy.current = true;
     setFailed(null);
     const result = await sharePb(prs[i]).catch((error: unknown) => {
-      console.warn('GymHound could not share the personal best.', error);
+      console.warn('GymHound could not share the personal record.', error);
       return 'failed' as const;
     });
     busy.current = false;
@@ -79,7 +79,7 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
 
   return (
     <View style={{ gap: 8, paddingTop: 16, marginTop: afterNext ? 16 : 0, borderTopWidth: 1, borderTopColor: colors.border }}>
-      <Label>Personal bests</Label>
+      <Label>Personal records</Label>
       {prs.map((h, i) => {
         const line = prLine(h);
         return (
@@ -87,7 +87,7 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 8 }}>
               <View
                 accessible
-                accessibilityLabel={`Personal best. ${line}`}
+                accessibilityLabel={`Personal record. ${line}`}
                 style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, flexGrow: 1, flexShrink: 1, flexBasis: 200 }}
               >
                 <Display weight={800} style={{ fontSize: 14, color: colors.red }}>

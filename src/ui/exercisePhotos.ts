@@ -13,7 +13,22 @@ import { useDataVersion } from '../state/dataVersion';
  * (about 1,746 requires) stays off the app's launch path; the exercises repository does not know about photos.
  */
 export function exercisePhotos(id: string): readonly [ImageSourcePropType, ImageSourcePropType] | undefined {
-  return Object.prototype.hasOwnProperty.call(EXERCISE_PHOTOS, id) ? EXERCISE_PHOTOS[id] : undefined;
+  const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call(table, key);
+  if (has(EXERCISE_PHOTOS, id)) return EXERCISE_PHOTOS[id];
+  return has(SHOWN_AS, id) ? EXERCISE_PHOTOS[SHOWN_AS[id].photosOf] : undefined;
+}
+
+/**
+ * Library exercises with no photos of their own that show another's of the same movement, and what the demo says under
+ * them (Round 8: the bodyweight sissy squat had none; free-exercise-db has only the weighted one's).
+ */
+const SHOWN_AS: Readonly<Record<string, { photosOf: string; note: string }>> = {
+  'sissy-squat': { photosOf: 'fedb-weighted-sissy-squat', note: 'Shown with a plate held to the chest. Leave it out.' },
+};
+
+/** What the form demo says under borrowed photos, or null for an exercise showing its own. */
+export function photoNote(id: string): string | null {
+  return Object.prototype.hasOwnProperty.call(SHOWN_AS, id) ? SHOWN_AS[id].note : null;
 }
 
 /**

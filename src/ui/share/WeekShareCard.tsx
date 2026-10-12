@@ -76,7 +76,7 @@ export const WeekShareCard = forwardRef<View, { model: WeekCardModel; onReady?: 
         {list !== null ? (
           <View style={{ gap: 5 }}>
             <Text {...fixed} style={LABEL}>
-              {list.kind === 'prs' ? (list.count === 1 ? '1 PERSONAL BEST' : `${list.count} PERSONAL BESTS`) : 'TOP LIFTS'}
+              {list.kind === 'prs' ? (list.count === 1 ? '1 PERSONAL RECORD' : `${list.count} PERSONAL RECORDS`) : 'TOP LIFTS'}
             </Text>
             {list.rows.map((row, i) => (
               <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

@@ -28,7 +28,7 @@ const set = (workoutId: string, localDate: string, weight: number, reps: number,
   ...over,
 });
 
-describe('the personal best card (§18.17)', () => {
+describe('the personal record card (§18.17)', () => {
   it('splits the figure from its unit for the big number, and keeps words whole', () => {
     expect(splitValue('185 lb × 5')).toEqual({ main: '185', rest: 'lb × 5' });
     expect(splitValue('1:30')).toEqual({ main: '1:30', rest: '' });
@@ -45,7 +45,7 @@ describe('the personal best card (§18.17)', () => {
     ];
     const model = pbCardModel(bench(), 'w3', history, 'en-GB');
     expect(model.comparison).toBe('Up 5 kg from 135 kg on 20 Sept.');
-    // w1, w2 and the personal best's own workout; a later workout (w4) is left out.
+    // w1, w2 and the personal record's own workout; a later workout (w4) is left out.
     expect(model.sessions).toBe(3);
     expect(model.value).toEqual({ main: '140', rest: 'kg × 5' });
   });
@@ -57,7 +57,7 @@ describe('the personal best card (§18.17)', () => {
   it('names the lift in a sentence for VoiceOver, keeping an abbreviation', () => {
     expect(nameInSentence('Barbell bench press')).toBe('barbell bench press');
     expect(nameInSentence('RDL')).toBe('RDL');
-    expect(pbShareLabel(bench())).toMatch(/^Share your barbell bench press personal best as an image\. /);
+    expect(pbShareLabel(bench())).toMatch(/^Share your barbell bench press personal record as an image\. /);
   });
 });
 
@@ -101,7 +101,7 @@ describe('the weekly summary card (§18.17)', () => {
     expect(model.time).toBe('2 h 30 min');
   });
 
-  it('lists the top lifts by volume when the week set no personal best, and the PRs when it did (R450)', () => {
+  it('lists the top lifts by volume when the week set no personal record, and the PRs when it did (R450)', () => {
     expect(weekCardModel(input).list).toEqual({
       kind: 'top',
       rows: [

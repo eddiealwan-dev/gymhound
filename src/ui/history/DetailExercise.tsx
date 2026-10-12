@@ -63,7 +63,7 @@ export function DetailExercise({ exercise, unit, nextLine }: { exercise: Workout
         {exercise.sets.map((s, i) => {
           const text = historySetText({ ...s, position: i }, exercise.loggingType, unit);
           const pr = s.prFlags !== 0;
-          const said = [setName(labels[i]), spokenSet(s, i, exercise.loggingType, unit), ...(pr ? ['personal best'] : [])].join(', ');
+          const said = [setName(labels[i]), spokenSet(s, i, exercise.loggingType, unit), ...(pr ? ['personal record'] : [])].join(', ');
           return (
             <View key={s.id} accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
               <Body weight={600} muted style={{ minWidth: 24, fontVariant: ['tabular-nums'] }}>

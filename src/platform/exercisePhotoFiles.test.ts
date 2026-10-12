@@ -46,6 +46,7 @@ jest.mock('expo-image-manipulator', () => ({
   },
 }));
 jest.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Automatic: 'automatic', Compatible: 'compatible', Current: 'current' },
   requestCameraPermissionsAsync: jest.fn(),
   launchCameraAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
@@ -189,7 +190,13 @@ describe('pickPhoto', () => {
     jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue(picked(1200, 1200) as never);
 
     await expect(pickPhoto('library')).resolves.toEqual({ status: 'picked', uri: 'file:///cache/ImageManipulator/out.jpg' });
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({ mediaTypes: ['images'], allowsEditing: true, aspect: [3, 2], quality: 1 });
+    // No iOS crop step for the library: it can't fetch a photo kept in iCloud (Round 8); the 3:2 cut is made here.
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 1,
+      preferredAssetRepresentationMode: 'compatible',
+    });
     expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
     expect(mockManipulations).toEqual([
       [

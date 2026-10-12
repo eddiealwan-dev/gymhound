@@ -160,7 +160,7 @@ function colours(tree: ReactTestRenderer): string[] {
 }
 
 describe('WeekCard (R176–R179)', () => {
-  it('shows sets per muscle with the band, sessions, personal bests and the bodyweight trend', () => {
+  it('shows sets per muscle with the band, sessions, personal records and the bodyweight trend', () => {
     // Last week: one workout. This week: 12 bench sets over two workouts (chest primary; triceps and front delts ½).
     logBench(at(10, 6), 3, 95);
     logBench(at(10, 12), 6, 100);
@@ -172,7 +172,7 @@ describe('WeekCard (R176–R179)', () => {
     expect(t.slice(0, 3)).toEqual([
       'This week',
       'Sets per muscle',
-      'Hard sets so far this week. About 10 to 20 a week is the usual aim; GymHound counts 8 to 24 as in range.',
+      'Sets so far this week. About 10 to 20 a week is the usual aim; GymHound counts 8 to 24 as in range.',
     ]);
     expect(t).toContain('Chest · 12 sets · in range');
     expect(t).toContain('Triceps · 6 sets · under 8');
@@ -182,19 +182,19 @@ describe('WeekCard (R176–R179)', () => {
     expect(t.filter((line) => / · (in range|under 8|over 24)$/.test(line))).toHaveLength(8);
     const sessions = t.indexOf('Sessions');
     expect(t[sessions + 1]).toBe('2 this week · 1 last week');
-    const prs = t.indexOf('Personal bests');
+    const prs = t.indexOf('Personal records');
     // The first bench session sets every PR; this week's heavier weights beat it twice (one workout each).
     expect(t[prs + 1]).toMatch(/^\d+ this week · \d+ in the last 4 weeks$/);
     const bodyweight = t.indexOf('Bodyweight');
     expect(t[bodyweight + 1]).toBe('Down 1.2 lb in 4 weeks, about 0.3 lb a week.');
   });
 
-  it('counts personal bests this week and in the last 4 weeks', () => {
+  it('counts personal records this week and in the last 4 weeks', () => {
     logBench(at(9, 1), 1, 100); // too old for the 4 weeks
     logBench(at(10, 6), 1, 110); // last week: heaviest and e1RM
     logBench(at(10, 13), 1, 120); // this week: heaviest and e1RM
     const t = lines(mount(<WeekCard today={TODAY} />));
-    expect(t[t.indexOf('Personal bests') + 1]).toBe('2 this week · 4 in the last 4 weeks');
+    expect(t[t.indexOf('Personal records') + 1]).toBe('2 this week · 4 in the last 4 weeks');
   });
 
   it('asks for bodyweight entries when there is no trend', () => {
@@ -220,7 +220,7 @@ describe('WeekCard (R176–R179)', () => {
     logBench(at(10, 6), 3);
     const t = lines(mount(<WeekCard today={TODAY} />));
     expect(t.slice(0, 3)).toEqual(['This week', 'Sets per muscle', 'No workouts yet this week.']);
-    expect(t.some((line) => line.startsWith('Hard sets so far'))).toBe(false);
+    expect(t.some((line) => line.startsWith('Sets so far'))).toBe(false);
     expect(t.filter((line) => / · (in range|under 8|over 24)$/.test(line))).toHaveLength(0);
     expect(t[t.indexOf('Sessions') + 1]).toBe('0 this week · 1 last week');
   });
@@ -248,7 +248,7 @@ describe('CheckInCard (R180)', () => {
     expect(t).not.toContain('Your first check-in comes after a full week of training.');
   });
 
-  it("reviews last week: sessions, hard sets, volume, personal bests, bodyweight and the groups out of range", () => {
+  it("reviews last week: sessions, hard sets, volume, personal records, bodyweight and the groups out of range", () => {
     logBench(at(10, 6), 3, 100, 5); // 1,500 lb
     logBench(at(10, 8), 2, 110, 5); // 1,100 lb
     addBodyEntry(mockDb, 'bodyweight', 182, 'lb', at(9, 30, 8));
@@ -258,18 +258,18 @@ describe('CheckInCard (R180)', () => {
     const t = lines(mount(<CheckInCard today={TODAY} />));
     expect(t).toContain('Week of Oct 5');
     expect(t).toContain('2 sessions · 5 hard sets · 2,600 lb');
-    expect(t).toContain('2 personal bests'); // the first bench session sets none (R103); the second beats it twice
+    expect(t).toContain('2 personal records'); // the first bench session sets none (R103); the second beats it twice
     expect(t).toContain('Bodyweight 180.8 lb average, −1.2 lb on the week before');
     expect(t).toContain('Under 8 sets: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes');
     expect(t.some((line) => line.startsWith('Over 24 sets'))).toBe(false);
   });
 
-  it('says one session and one hard set, no personal bests line at zero, and no bodyweight', () => {
+  it('says one session and one hard set, no personal records line at zero, and no bodyweight', () => {
     logBench(at(9, 28), 1, 200); // the PRs are set the week before
     logBench(at(10, 6), 1, 100);
     const t = lines(mount(<CheckInCard today={TODAY} />));
     expect(t).toContain('1 session · 1 hard set · 500 lb');
-    expect(t.some((line) => /personal best/.test(line))).toBe(false);
+    expect(t.some((line) => /personal record/.test(line))).toBe(false);
     expect(t).toContain('No bodyweight logged.');
     expect(t).toContain('Under 8 sets: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes');
   });

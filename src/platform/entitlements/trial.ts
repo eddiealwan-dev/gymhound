@@ -14,7 +14,11 @@ export type TrialEntitlements = AppEntitlements & {
   trialStatus(): TrialView;
   /** Reads the stored start again and tells subscribers: call after the trial starts or the developer controls move it. */
   refreshTrial(): void;
-  /** Whether Pro is on now only because of the trial: the paywall still pitches, Settings counts the days. */
+  /**
+   * Whether the trial is what gives Pro now: it runs, and nothing was bought. The debug unlock doesn't count as bought,
+   * so testing the trial with "Unlock Pro for testing" on still shows its lines (Round 8). The paywall still pitches and
+   * Settings counts the days.
+   */
   isTrialOnly(): boolean;
 };
 
@@ -75,7 +79,7 @@ export function withTrial(db: Db, base: AppEntitlements, now: () => number = Dat
       };
     },
     trialStatus: status,
-    isTrialOnly: () => !base.isPro() && status().phase === 'active',
+    isTrialOnly: () => status().phase === 'active' && !(base.isPro() && !base.isDebugPro()),
     refreshTrial() {
       stored = read();
       schedule();

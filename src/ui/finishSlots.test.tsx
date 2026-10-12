@@ -93,7 +93,7 @@ it('shows neither slot when the workout is not there', () => {
   expect(SaveAsWorkout).not.toHaveBeenCalled();
 });
 
-it('the PR slot draws nothing with no personal bests', () => {
+it('the PR slot draws nothing with no personal records', () => {
   const { FinishPrs: RealPrs } = jest.requireActual('./finish/FinishPrs');
   expect(RealPrs({ workoutId: 'w1', summary })).toBeNull();
 });

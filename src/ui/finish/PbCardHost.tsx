@@ -97,7 +97,7 @@ export function PbCardHost({
       return modelFor(highlight);
     } catch (error) {
       // The card still shares with the personal best alone.
-      console.warn('GymHound could not read the personal best card details.', error);
+      console.warn('GymHound could not read the personal record card details.', error);
       return null;
     }
   };

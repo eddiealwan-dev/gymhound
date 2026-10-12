@@ -54,9 +54,9 @@ function useToday(onNewDay: (was: string, now: string) => void): string {
 }
 
 /**
- * Fuel (§8.10): the day header and water for everyone (R150, R151); then the pitch when Pro is off, the setup card when
- * there are no targets yet, or the day — the two numbers, the macro bars, the entries, Add food and Quick add, the
- * trends and Targets ›. The footer shows in every state. Pro turning off locks it at once; the data stays (R151).
+ * Fuel (§8.10): the day header and water for everyone (R150, R151); then the pitch when Pro is off; else the day — the
+ * two numbers, the macro bars, the entries, Add food and Quick add, the trends and Targets › — or, with no targets yet,
+ * the entries, Add food and Quick add, then the setup card. The footer shows in every state. Pro turning off locks it at once; the data stays (R151).
  */
 export default function Fuel() {
   const pro = useIsPro();
@@ -93,6 +93,17 @@ export default function Fuel() {
 
   const target = pro && targets !== null ? targetsFor(targets, trainingDay) : null;
   const totals = dayTotals(entries);
+  // The day's food and the two ways to add to it: there with targets or without (Round 8: with only the targets form
+  // showing, there was no way to log food until targets were saved).
+  const food = (
+    <>
+      <FoodEntries entries={entries} totals={totals} locale={locale} />
+      <View style={{ gap: 8 }}>
+        <Button label="Add food" onPress={() => push(() => router.push({ pathname: '/food/add', params: { date: day } }))} />
+        <Button label="Quick add" variant="secondary" onPress={() => push(() => router.push({ pathname: '/food/add', params: { date: day, mode: 'quick' } }))} />
+      </View>
+    </>
+  );
 
   return (
     <Screen footer>
@@ -106,21 +117,20 @@ export default function Fuel() {
         {!pro ? (
           <ProPitch context="tab" />
         ) : target === null ? (
-          <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 }}>
-            <Label>Set your targets</Label>
-            <Body>Fuel counts down from a target. Set one for training days and one for rest days.</Body>
-            {/* Saving bumps the data version, so this screen reads the targets again and shows the day. */}
-            <TargetsForm initial={null} submitLabel="Save targets" onSaved={() => {}} />
-          </View>
+          <>
+            {food}
+            <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 }}>
+              <Label>Set your targets</Label>
+              <Body>Fuel counts down from a target. Set one for training days and one for rest days.</Body>
+              {/* Saving bumps the data version, so this screen reads the targets again and shows the day. */}
+              <TargetsForm initial={null} submitLabel="Save targets" onSaved={() => {}} />
+            </View>
+          </>
         ) : (
           <>
             <FuelSummary target={target} totals={totals} locale={locale} />
             <MacroBars target={target} totals={totals} locale={locale} />
-            <FoodEntries entries={entries} totals={totals} locale={locale} />
-            <View style={{ gap: 8 }}>
-              <Button label="Add food" onPress={() => push(() => router.push({ pathname: '/food/add', params: { date: day } }))} />
-              <Button label="Quick add" variant="secondary" onPress={() => push(() => router.push({ pathname: '/food/add', params: { date: day, mode: 'quick' } }))} />
-            </View>
+            {food}
             <FuelTrends today={today} />
             {/* Steps back by the quiet button's padding so its words line up with the page. */}
             <View style={{ alignItems: 'flex-start', marginLeft: -20 }}>

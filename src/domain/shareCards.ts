@@ -199,7 +199,7 @@ export function nameInSentence(name: string): string {
 export function pbShareLabel(h: PrHighlight): string {
   const line = prLine(h);
   const detail = line.slice(line.indexOf(' — ') + 3);
-  return `Share your ${nameInSentence(h.name)} personal best as an image. ${detail.charAt(0).toUpperCase()}${detail.slice(1)}`;
+  return `Share your ${nameInSentence(h.name)} personal record as an image. ${detail.charAt(0).toUpperCase()}${detail.slice(1)}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { useDb } from '../db/DbProvider';
 import { getExercise, type ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { musclesLine } from '../domain/labels';
 import { Button } from './Button';
-import { canHaveOwnPhotos, useExercisePhotos } from './exercisePhotos';
+import { canHaveOwnPhotos, photoNote, useExercisePhotos } from './exercisePhotos';
 import { OwnPhotos } from './OwnPhotos';
 import { afterSheetCloses, Sheet } from './Sheet';
 import { SheetTitle } from './SheetTitle';
@@ -149,8 +149,13 @@ function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => v
         {musclesLine(exercise.primaryMuscles, exercise.secondaryMuscles)}
       </Body>
       {photos ? (
-        <View style={{ marginTop: 16 }}>
+        <View style={{ marginTop: 16, gap: 8 }}>
           <Photos name={exercise.name} photos={photos} />
+          {photoNote(exercise.id) !== null ? (
+            <Body muted style={{ fontSize: 14 }}>
+              {photoNote(exercise.id)}
+            </Body>
+          ) : null}
         </View>
       ) : null}
       {exercise.instructions.length > 0 ? (

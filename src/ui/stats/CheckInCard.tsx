@@ -56,7 +56,7 @@ function sessionsLine(checkIn: CheckIn, unit: WeightUnit, locale: string): strin
  */
 function reviewLines(checkIn: CheckIn, unit: WeightUnit, locale: string): string[] {
   const out: string[] = [sessionsLine(checkIn, unit, locale)];
-  if (checkIn.prs > 0) out.push(count(checkIn.prs, 'personal best', 'personal bests'));
+  if (checkIn.prs > 0) out.push(count(checkIn.prs, 'personal record', 'personal records'));
   out.push(bodyweightLine(checkIn, unit));
   if (checkIn.sessions === 0) return out;
   if (checkIn.under.length > 0) out.push(`Under 8 sets: ${checkIn.under.map((g) => GROUP_LABELS[g]).join(', ')}`);

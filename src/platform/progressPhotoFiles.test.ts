@@ -42,6 +42,7 @@ jest.mock('expo-image-manipulator', () => ({
   },
 }));
 jest.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Automatic: 'automatic', Compatible: 'compatible', Current: 'current' },
   requestCameraPermissionsAsync: jest.fn(),
   launchCameraAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
@@ -145,7 +146,7 @@ describe('deleteProgressPhotoFile', () => {
 
 describe('pickProgressPhoto (R181)', () => {
   const picked = (width: number, height: number) => ({ canceled: false, assets: [{ uri: 'file:///cache/picker/photo.jpg', width, height }] });
-  const OPTIONS = { mediaTypes: ['images'], allowsEditing: false, quality: 1 };
+  const OPTIONS = { mediaTypes: ['images'], allowsEditing: false, quality: 1, preferredAssetRepresentationMode: 'compatible' };
   const stepNames = (i = 0) => mockManipulations[i].map((step) => (step as unknown[])[0]);
 
   it('chooses from the library uncropped, then saves it 1080 px wide as a JPEG at 0.8', async () => {

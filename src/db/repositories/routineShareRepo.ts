@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { RoutineDraft } from '../../domain/routineDraft';
-import { isShareableLibraryId, type SharedCustomExercise, type SharedRoutine } from '../../domain/routineShare';
+import { isShareableLibraryId, type DecodeResult, type SharedCustomExercise, type SharedRoutine } from '../../domain/routineShare';
 import { exercises, routines } from '../schema';
 import type { Db } from '../types';
 import { createCustomExercise } from './customExercisesRepo';
@@ -77,6 +77,14 @@ export function sharedRoutineFor(db: Db, routineId: string): SharedRoutine | nul
       })),
     })),
   };
+}
+
+/**
+ * The routine a code that reads holds: the routine itself, or for a premade named by its code (R472) this phone's own
+ * copy of that program, which is the same on every phone. Null when the premade isn't here.
+ */
+export function sharedFromDecoded(db: Db, decoded: Extract<DecodeResult, { ok: true }>): SharedRoutine | null {
+  return decoded.routine ?? sharedRoutineFor(db, decoded.premadeId);
 }
 
 /** An exercise of your own on this phone that a shared one becomes: same name (any case) and logging type, not archived. */

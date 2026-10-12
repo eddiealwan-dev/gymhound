@@ -89,4 +89,13 @@ describe('withTrial (§18.19, R483)', () => {
     expect(entitlements.isPro()).toBe(false);
     entitlements.dispose();
   });
+
+  it('counts the trial as what gives Pro while only the debug unlock is also on, so its lines show (Round 8)', () => {
+    const { db } = createTestDb();
+    setSetting(db, 'trialStartedAt', START);
+    const base = { ...createFreeOnlyEntitlements(), isPro: () => true, isDebugPro: () => true };
+    expect(withTrial(db, base, () => START).isTrialOnly()).toBe(true);
+    const bought = { ...createFreeOnlyEntitlements(), isPro: () => true, isDebugPro: () => false };
+    expect(withTrial(db, bought, () => START).isTrialOnly()).toBe(false);
+  });
 });

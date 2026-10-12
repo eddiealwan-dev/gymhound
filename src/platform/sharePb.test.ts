@@ -27,7 +27,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-const SHARE_OPTIONS = { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share a personal best' };
+const SHARE_OPTIONS = { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Share a personal record' };
 
 describe('toFileUri', () => {
   it('adds file:// to a bare path and leaves a URI alone', () => {

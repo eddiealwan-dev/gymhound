@@ -6,7 +6,7 @@ import { saveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { draftReducer, newDraft } from '../domain/routineDraft';
-import { encodeRoutine, shareMessage } from '../domain/routineShare';
+import { encodePremade, encodeRoutine, shareMessage, signBytes } from '../domain/routineShare';
 import { ImportRoutine } from './routines/ImportRoutine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -67,6 +67,24 @@ describe('Add from code (§18.18)', () => {
     act(() => addButton(tree).props.onPress());
     expect(userRoutineCount(mockDb)).toBe(1);
     expect(mockReplace).toHaveBeenCalledWith(expect.stringMatching(/^\/routines\//));
+  });
+
+  it("a premade program's code adds nothing: it opens the program, free or Pro (R472)", () => {
+    mockPro = false;
+    const tree = render(shareMessage('Push/pull/legs', encodePremade('premade-ppl-6')));
+    expect(allText(tree)).toContain('Push/pull/legs');
+    expect(allText(tree)).toContain('already in your Routines');
+    const open = tree.root.findByProps({ label: 'Open program' });
+    act(() => open.props.onPress());
+    expect(mockReplace).toHaveBeenCalledWith('/routines/premade-ppl-6');
+    expect(userRoutineCount(mockDb)).toBe(0);
+    mockPro = true;
+  });
+
+  it('a program only a newer GymHound has says to update', () => {
+    const tree = render(signBytes([0, 200], 2));
+    expect(allText(tree)).toContain('That code is from a newer version of GymHound. Update the app and try again.');
+    expect(addButton(tree).props.disabled).toBe(true);
   });
 
   it('says in plain words why a code does not read, and adds nothing', () => {

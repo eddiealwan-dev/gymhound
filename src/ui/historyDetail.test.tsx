@@ -218,10 +218,10 @@ describe('History detail (R165)', () => {
     const shown = shownText(tree);
     expect(shown).toEqual(expect.arrayContaining(['W', '1', '2', 'D', '95 × 10', '185 × 5', '185 × 5 @ 8', '30 × 12']));
     const marks = textNodes(tree, 'PR');
-    // One in the set rows, one in Personal bests.
+    // One in the set rows, one in Personal records.
     expect(marks).toHaveLength(2);
     for (const m of marks) expect(flatColor(m)).toBe(RED);
-    expect(spoken(tree, 'Set 1, 185 by 5, personal best')).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 185 by 5, personal record')).toHaveLength(1);
     expect(spoken(tree, 'Set 2, 185 by 5, RPE 8')).toHaveLength(1);
     expect(spoken(tree, 'Warmup, 95 by 10')).toHaveLength(1);
     expect(spoken(tree, 'Drop set, 30 by 12')).toHaveLength(1);
@@ -261,9 +261,9 @@ describe('History detail (R165)', () => {
     expect(inBar).toEqual(expect.arrayContaining(['Cable fly', 'Triceps pushdown']));
   });
 
-  it('shows the personal bests', () => {
+  it('shows the personal records', () => {
     const shown = shownText(mount());
-    expect(shown).toContain('Personal bests');
+    expect(shown).toContain('Personal records');
     expect(shown).toContain('Barbell bench press — heaviest: 185 lb × 5');
   });
 

@@ -36,13 +36,26 @@ export function cropToThreeByTwo(width: number, height: number): { originX: numb
  * Takes a photo with the camera or chooses one from the library, cropped 3:2 (the shape of the bundled photos), and
  * writes it 720 px wide as a JPEG at 0.7 to a temporary file. The camera asks for access the first time; refused, it
  * opens nothing and says 'denied'. The library needs no access: the phone's own picker hands over only the photo chosen.
+ *
+ * The library is opened without iOS's crop step (Round 8: a photo chosen from the library never arrived). That step
+ * uses the older picker, which can't fetch a photo kept in iCloud and hands back nothing; the newer one fetches it.
+ * The 3:2 cut is made here, from the middle, as it already was for iOS's square crop. The photo comes as a JPEG or
+ * other common format rather than HEIC, which every part of the save can read.
  */
 export async function pickPhoto(source: 'camera' | 'library'): Promise<PickedPhoto> {
   if (source === 'camera') {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) return { status: 'denied' };
   }
-  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 2], quality: 1 };
+  const options: ImagePicker.ImagePickerOptions =
+    source === 'camera'
+      ? { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 2], quality: 1 }
+      : {
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 1,
+          preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        };
   const result = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   const asset = result.canceled ? undefined : result.assets[0];
   if (!asset) return { status: 'cancelled' };

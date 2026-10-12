@@ -6,7 +6,7 @@ import { photoFileExists } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
 import { bumpData, useDataVersion } from '../state/dataVersion';
-import { canHaveOwnPhotos, exercisePhotos, useExercisePhotos } from './exercisePhotos';
+import { canHaveOwnPhotos, exercisePhotos, photoNote, useExercisePhotos } from './exercisePhotos';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,9 +35,17 @@ describe('exercisePhotos', () => {
     expect(exercisePhotos('toString')).toBeUndefined();
   });
 
-  it('finds photos for exactly the library exercises that have them', () => {
+  it('finds photos for exactly the library exercises that have them, and the sissy squat', () => {
     const withPhotos = LIBRARY_EXERCISES.filter((e) => exercisePhotos(e.id) !== undefined).map((e) => e.id);
-    expect(withPhotos.sort()).toEqual(Object.keys(EXERCISE_PHOTOS).sort());
+    expect(withPhotos.sort()).toEqual([...Object.keys(EXERCISE_PHOTOS), 'sissy-squat'].sort());
+  });
+
+  it("shows the bodyweight sissy squat the weighted one's photos, with a note (Round 8)", () => {
+    expect(exercisePhotos('sissy-squat')).toBe(EXERCISE_PHOTOS['fedb-weighted-sissy-squat']);
+    expect(photoNote('sissy-squat')).toBe('Shown with a plate held to the chest. Leave it out.');
+    expect(photoNote('fedb-weighted-sissy-squat')).toBeNull();
+    expect(photoNote('constructor')).toBeNull();
+    expect(canHaveOwnPhotos('sissy-squat')).toBe(false);
   });
 });
 

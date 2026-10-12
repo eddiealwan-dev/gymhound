@@ -159,7 +159,7 @@ describe('History (R163)', () => {
     const text = shownText(tree);
     expect(text).toContain('Fri, Oct 9');
     expect(text).toContain('Workout');
-    // 2 × 185 × 5 = 1,850 lb; heavier than the first session, so it holds personal bests.
+    // 2 × 185 × 5 = 1,850 lb; heavier than the first session, so it holds personal records.
     const [newest] = listHistory(mockDb, 'lb');
     expect(newest.prCount).toBeGreaterThan(0);
     const prs = newest.prCount === 1 ? '1 PR' : `${newest.prCount} PRs`;
@@ -242,7 +242,7 @@ describe('History (R163)', () => {
     expect(tree.root.findByType(ConsistencyCalendar).props.month).toBe('2026-09');
   });
 
-  it('uses no red and no live region, even with personal bests', () => {
+  it('uses no red and no live region, even with personal records', () => {
     trainOn('2026-10-02', 135);
     trainOn('2026-10-09', 185);
     const tree = mount();

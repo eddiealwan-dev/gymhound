@@ -78,7 +78,7 @@ describe('writePrFlags at finish (7.6, R103)', () => {
     expect(getWorkoutPrs(db, first.id)).toEqual([]);
   });
 
-  it('flags a heavier bench on the second Push A, and lists it as a personal best', () => {
+  it('flags a heavier bench on the second Push A, and lists it as a personal record', () => {
     const db = seededDb();
     const startPushA = (at: number, lifts: Lift[]) => {
       const id = startWorkoutFromDay(db, PUSH_A, at);

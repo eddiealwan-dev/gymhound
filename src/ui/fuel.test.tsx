@@ -238,6 +238,20 @@ describe('Pro without targets', () => {
     expect(tree.root.findAllByType(Footer)).toHaveLength(1);
   });
 
+  it('logs food before targets are set: Add food and Quick add sit above the setup card (Round 8)', () => {
+    mockPro = true;
+    logQuickAdd(mockDb, 'Breakfast', { kcal: 600, proteinG: 40, carbsG: 50, fatG: 20 }, TODAY, NOW);
+    const tree = mount();
+    const text = shownText(tree);
+    expect(text).toContain('Breakfast');
+    const at = (s: string) => text.indexOf(s);
+    expect(at('Add food')).toBeGreaterThan(-1);
+    expect(at('Quick add')).toBeGreaterThan(-1);
+    expect(at('Add food')).toBeLessThan(at('Set your targets'));
+    act(() => tree.root.findByProps({ label: 'Quick add' }).props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/food/add', params: { date: TODAY, mode: 'quick' } });
+  });
+
   it('turns into the day once targets are saved and the data version bumps', () => {
     mockPro = true;
     const tree = mount();

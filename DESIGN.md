@@ -27,7 +27,7 @@ typography:
     letterSpacing: "-0.5px"
   date:
     fontFamily: "BarlowCondensed_800ExtraBold"
-    fontSize: "56px"
+    fontSize: "28px"
     fontWeight: 800
   headline:
     fontFamily: "BarlowCondensed_800ExtraBold"
@@ -181,7 +181,7 @@ What a set shows is what it logs, so suggestion and fact look different on sight
 A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a single signal red reserved for the brand.
 
 ### Primary
-- **Wordmark Red** (wordmark-red): the GYMHOUND wordmark in the header, the focused dock tab's icon and label, and PR marks: the "PR" mark on each personal best row of the finish summary, and the personal best card's GYMHOUND and PERSONAL BEST. Nothing else, including errors, warnings, flags, destructive actions, the Share pill and the chart.
+- **Wordmark Red** (wordmark-red): the GYMHOUND wordmark in the header, the focused dock tab's icon and label, and PR marks: the "PR" mark on each personal record row of the finish summary, and the personal record card's GYMHOUND and PERSONAL RECORD. Nothing else, including errors, warnings, flags, destructive actions, the Share pill and the chart.
 
 ### Neutral
 - **Iron Black / Chalk Paper** (bg-dark / bg-light): the page, the header, the dock and the session header.
@@ -207,20 +207,21 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 
 ### Hierarchy
 - **Wordmark** (Barlow 800, 38px, -0.5 tracking, uppercase): GYMHOUND only. Fixed size: it does not follow the phone's text size.
-- **Date** (Barlow 800, 56px, uppercase by content): Train's date, one line, shrinks to fit.
+- **Date** (Barlow 800, 28px, uppercase by content, 12pt under the daily line): Train's date, one line, shrinks to fit. Half the 56px it was (the owner, after Round 8).
 - **Headline** (Barlow 800, 32px): the workout name on Train's Resume card. Up next's title uses Barlow 700 at 24px.
 - **Display** (Barlow 700, 28px): every page's title (`ScreenTitle`, a VoiceOver heading, R355), every sheet's title (`SheetTitle`, R351) and an editor's title (`ModalHeader`).
 - **Title** (Barlow 700, 22px): exercise names and the session header's workout name (the header caps at 1.3x).
-- **Greeting** (Barlow 700, 20px, 0.5 tracking, muted): GOOD MORNING over the date.
+- **Greeting** (Barlow 700, 20px, 0.5 tracking, muted): GOOD MORNING, then the daily line, then the date.
+- **Daily line** (Inter 400, 15px on 21, text colour, 4pt under the greeting): Train's one line a day (R530).
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS), the caption over a big number (STREAK and THIS WEEK on Train, DURATION, VOLUME and LOGGED on the finish summary, CALORIES LEFT on Fuel; not read as headings there, R358) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, PLATES, PROGRESSION, REST TIMER, FUEL, BACKUPS, EXPORT, GYMHOUND PRO on Settings; BODY and MEASUREMENTS on Stats; WATER, SET YOUR TARGETS, CALORIES LEFT, PROTEIN LEFT, FOOD and TRENDS on Fuel; RECENT on Add food; TRAINING DAY and REST DAY on Targets; SAVED WORKOUTS on Routines; PERSONAL BESTS on the finish summary). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
+- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS), the caption over a big number (STREAK and THIS WEEK on Train, DURATION, VOLUME and LOGGED on the finish summary, CALORIES LEFT on Fuel; not read as headings there, R358) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, PLATES, PROGRESSION, REST TIMER, FUEL, BACKUPS, EXPORT, GYMHOUND PRO on Settings; BODY and MEASUREMENTS on Stats; WATER, SET YOUR TARGETS, CALORIES LEFT, PROTEIN LEFT, FOOD and TRENDS on Fuel; RECENT on Add food; TRAINING DAY and REST DAY on Targets; SAVED WORKOUTS on Routines; PERSONAL RECORDS on the finish summary). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
 - **Chart label** (Inter 400, 12px, muted, tabular figures): a line chart's y labels and the dates under its axis. The one place numbers are not in Barlow, as R116 sets them: the labels are the chart's scaffolding, quieter than the values a screen shows in Barlow beside it.
 
 ### Named Rules
-**The Text-Size Rule.** All text follows the phone's text size except the wordmark (fixed), the session header's name, progress line and Finish label (capped at 1.3x so the header stays one row), the body number field (capped at 1.5x so "182.5" stays whole) and the personal best card (an image, so every text on it is fixed). Rows wrap instead of capping or truncating.
+**The Text-Size Rule.** All text follows the phone's text size except the wordmark (fixed), the session header's name, progress line and Finish label (capped at 1.3x so the header stays one row), the body number field (capped at 1.5x so "182.5" stays whole) and the personal record card (an image, so every text on it is fixed). Rows wrap instead of capping or truncating.
 
 **The Tabular Rule.** Every number that can sit above or beside another number uses tabular figures.
 
@@ -304,11 +305,11 @@ The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt bo
 ### The rest row (signature)
 Under the set that started it: a surface panel with a Strong Seam edge, a REST label over a Barlow 800 countdown, then −15s, +15s and Skip as compact pills, over a 3px text-colour track that drains with the time left. At zero it holds a check and "Rest's up" at the same height.
 
-### Personal bests (finish summary)
-After the next-time lines, across a Seam hairline 16pt above: a PERSONAL BESTS Label, then one row per personal best. A row is a red "PR" (Barlow 800, 14px), 8pt before the line in body text ("Bench press — heaviest: 185 lb × 5"), baseline-aligned; the mark and the line are one element read as "Personal best. {line}". On a phone that can share, a compact secondary **Share** pill ends the row, 12pt after the line, and drops under it as a unit at large text. Rows are 8pt apart. A failed share puts "Couldn't make the image. Try again." in muted body text 4pt under its row. The pill is never red; only the mark is.
+### Personal records (finish summary)
+After the next-time lines, across a Seam hairline 16pt above: a PERSONAL RECORDS Label, then one row per personal record. A row is a red "PR" (Barlow 800, 14px), 8pt before the line in body text ("Bench press — heaviest: 185 lb × 5"), baseline-aligned; the mark and the line are one element read as "Personal record. {line}". On a phone that can share, a compact secondary **Share** pill ends the row, 12pt after the line, and drops under it as a unit at large text. Rows are 8pt apart. A failed share puts "Couldn't make the image. Try again." in muted body text 4pt under its row. The pill is never red; only the mark is.
 
 ### Share cards (§18.17)
-Shared images, always in the warm dark palette whatever the theme, at a fixed text size, 360 × 450 points captured at 1080 × 1350 (4:5). One frame (`src/ui/share/ShareFrame.tsx`): the header lockup (the hound mark beside the red GYMHOUND), the content, then a hairline and the quiet footer "GymHound · gym log" (one constant, `SHARE_CARD_FOOTER`, ready for a store link). The **personal best card** has a red PR mark and PERSONAL BEST, the lift in Barlow 700, the figure in Barlow 800 at 80 with its unit at 30 beside it, the kind of best in Inter, how far it beat the one before ("Up 5 kg from 135 kg on 2 Sep."), then the day and the lift's session count. The **weekly card** has THIS WEEK and the dates, seven day letters over dots (filled in the text colour for a day trained, a Strong Seam ring otherwise), workouts · sets · volume · time as Barlow figures over small Inter labels, then the week's personal bests with red PR marks, or its top three lifts by volume, and the streak. Red appears only in the wordmark and on PR marks. Cards are drawn under the page while they are captured, never seen.
+Shared images, always in the warm dark palette whatever the theme, at a fixed text size, 360 × 450 points captured at 1080 × 1350 (4:5). One frame (`src/ui/share/ShareFrame.tsx`): the header lockup (the hound mark beside the red GYMHOUND), the content, then a hairline and the quiet footer "GymHound · gym log" (one constant, `SHARE_CARD_FOOTER`, ready for a store link). The **personal record card** has a red PR mark and PERSONAL RECORD, the lift in Barlow 700, the figure in Barlow 800 at 80 with its unit at 30 beside it, the kind of best in Inter, how far it beat the one before ("Up 5 kg from 135 kg on 2 Sep."), then the day. The **weekly card** has THIS WEEK and the dates, seven day letters over dots (filled in the text colour for a day trained, a Strong Seam ring otherwise), workouts · sets · volume · time as Barlow figures over small Inter labels, then the week's personal bests with red PR marks, or its top three lifts by volume, and the streak. Red appears only in the wordmark and on PR marks. Cards are drawn under the page while they are captured, never seen.
 
 ### The line chart
 Hand-drawn SVG (R116), never red. A 2px line in the text colour with round joins, a dot at each point (r = 2, filled with the text colour), and a 1px border-colour grid line at each y tick. The y labels sit on the left in the chart label style (Inter 12px, muted, tabular), centred on their ticks and taking at most 30% of the width; the first and last dates sit under the axis in the same style (one date centred when there is one day). The plot is 180pt tall by default. One point is a dot only; with nothing in the range the screen says "No entries in this range." in muted body text instead. Under a body or lift chart, 12pt below it, the change across the range shown in muted body text (R175): "Down 2 cm since Aug 3.", "Up 1.5 kg since 12 Jul." or "No change since 3 Aug." (none with fewer than two points). The range control (3M, 1Y, All) is a segmented control 12pt under that line (under the chart when there is no line). The whole chart is one image element that reads the series in words.
@@ -358,6 +359,6 @@ Choices take the shape that says how many can be picked. Primary muscles, second
 - **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but field edges (set, number, search, name and note fields), compact pill outlines, the rest row's edge, the Short on food banner's edge and a switch's off track.
 - **Don't** put red on Fuel, water, "over" values or the paywall, or the footer on the paywall, Add food or a food editor.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
-- **Don't** put a footer, a quote or the light palette on the personal best card.
-- **Don't** add motivational quotes, flames or skulls.
+- **Don't** put a footer, a quote or the light palette on the personal record card.
+- **Don't** add flames or skulls, or any motivational line beyond Train's one daily line under the greeting.
 - **Don't** truncate a row's text at large text sizes when it can wrap.

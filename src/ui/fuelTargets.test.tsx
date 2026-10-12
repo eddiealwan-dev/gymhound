@@ -131,19 +131,19 @@ function fill(tree: ReactTestRenderer, day: 'Training day' | 'Rest day', values:
 }
 
 describe('TargetsForm (R145)', () => {
-  it('labels both days and their four fields, carbs and fat optional', () => {
+  it('labels both days and their four fields', () => {
     const tree = mount(<TargetsForm initial={null} submitLabel="Save" onSaved={() => {}} />);
     const t = shownText(tree);
-    expect(t).toEqual(expect.arrayContaining(['Training day', 'Rest day', 'Calories', 'Protein (g)', 'Carbs (g, optional)', 'Fat (g, optional)', 'Same as training day', 'Save']));
+    expect(t).toEqual(expect.arrayContaining(['Training day', 'Rest day', 'Calories', 'Protein (g)', 'Carbs (g)', 'Fat (g)', 'Same as training day', 'Save']));
     expect(fields(tree).map((f) => f.props.accessibilityLabel)).toEqual([
       'Training day, Calories',
       'Training day, Protein, grams',
-      'Training day, Carbs, grams, optional',
-      'Training day, Fat, grams, optional',
+      'Training day, Carbs, grams',
+      'Training day, Fat, grams',
       'Rest day, Calories',
       'Rest day, Protein, grams',
-      'Rest day, Carbs, grams, optional',
-      'Rest day, Fat, grams, optional',
+      'Rest day, Carbs, grams',
+      'Rest day, Fat, grams',
     ]);
     for (const f of fields(tree)) {
       expect(f.props.keyboardType).toBe('decimal-pad');
@@ -175,7 +175,7 @@ describe('TargetsForm (R145)', () => {
     press(tree, 'Save');
     expect(shownText(tree).filter((s) => s === 'Check this number')).toHaveLength(2);
     expect(shownText(tree)).not.toContain('Needed.');
-    expect(field(tree, 'Training day, Carbs').props.accessibilityLabel).toBe('Training day, Carbs, grams, optional, Check this number');
+    expect(field(tree, 'Training day, Carbs').props.accessibilityLabel).toBe('Training day, Carbs, grams, Check this number');
     expect(getFuelTargets(mockDb)).toBeNull();
   });
 

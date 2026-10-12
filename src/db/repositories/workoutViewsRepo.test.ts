@@ -160,13 +160,13 @@ describe('getFinishSummary', () => {
     });
   });
 
-  it('has no personal bests on the first workout with each exercise (R103)', () => {
+  it('has no personal records on the first workout with each exercise (R103)', () => {
     const db = seededDb();
     const { oct1 } = buildHistory(db);
     expect(getFinishSummary(db, oct1, 'lb').prs).toEqual([]);
   });
 
-  it('lists a heavier bench on a second Push A as a personal best, whatever the display unit (R105)', () => {
+  it('lists a heavier bench on a second Push A as a personal record, whatever the display unit (R105)', () => {
     const db = seededDb();
     runPushA(db, OCT_1, [[135, 5]]);
     const id = runPushA(db, OCT_6, [[140, 5]]);

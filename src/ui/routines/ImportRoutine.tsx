@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
-import { importSharedRoutine, previewShared } from '../../db/repositories/routineShareRepo';
+import { importSharedRoutine, previewShared, sharedFromDecoded } from '../../db/repositories/routineShareRepo';
+import { getRoutineDetail } from '../../db/repositories/routinesRepo';
 import { decodeRoutine, SHARE_CODE_ERRORS } from '../../domain/routineShare';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
@@ -18,7 +19,8 @@ import { useTheme } from '../ThemeProvider';
  * either; once it reads, a preview (name, days, exercises, any exercise of the sender's own it will make, any it can't
  * find); then **Add routine**, which keeps to the free limit (R471) and opens the new routine. A code that doesn't
  * read says why in plain words (R470), once something has been pasted. `initial` fills the field (the link's page).
- * Render it once; it draws the limit sheet itself.
+ * A code that names one of GymHound's programs (R472) adds nothing: every phone has the program, so **Open program**
+ * opens it, free or Pro, and its page says whether it needs Pro. Render it once; it draws the limit sheet itself.
  */
 export function ImportRoutine({ initial = '', onCancel }: { initial?: string; onCancel: () => void }): ReactElement {
   const db = useDb();
@@ -28,15 +30,21 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
   const limit = useRoutineLimit();
 
   const decoded = useMemo(() => (text.trim() === '' ? null : decodeRoutine(text)), [text]);
-  const preview = useMemo(() => (decoded?.ok ? previewShared(db, decoded.routine) : null), [db, decoded]);
+  const program = useMemo(() => (decoded?.ok && decoded.premadeId !== null ? getRoutineDetail(db, decoded.premadeId) : null), [db, decoded]);
+  const shared = useMemo(() => (decoded?.ok && decoded.premadeId === null ? sharedFromDecoded(db, decoded) : null), [db, decoded]);
+  const preview = useMemo(() => (shared === null ? null : previewShared(db, shared)), [db, shared]);
 
   const add = () => {
-    if (!decoded?.ok) return;
+    if (program !== null) {
+      router.replace(`/routines/${program.id}`);
+      return;
+    }
+    if (shared === null) return;
     limit.whenRoomFor(() => {
       setFailed(false);
       let routineId: string;
       try {
-        routineId = importSharedRoutine(db, decoded.routine, Date.now()).routineId;
+        routineId = importSharedRoutine(db, shared, Date.now()).routineId;
       } catch (error) {
         console.warn('GymHound could not add the shared routine.', error);
         setFailed(true);
@@ -82,6 +90,17 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
           {SHARE_CODE_ERRORS[decoded.error]}
         </Body>
       ) : null}
+      {decoded?.ok && decoded.premadeId !== null && program === null ? <Body muted>{SHARE_CODE_ERRORS.newer_version}</Body> : null}
+      {program !== null ? (
+        <View
+          testID="import-preview"
+          style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 4 }}
+        >
+          <Label>Program</Label>
+          <Body weight={600}>{program.name}</Body>
+          <Body muted>{`${program.days.length} ${program.days.length === 1 ? 'day' : 'days'} · already in your Routines`}</Body>
+        </View>
+      ) : null}
       {preview !== null ? (
         <View
           testID="import-preview"
@@ -102,7 +121,7 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
       ) : null}
       {failed ? <Body muted>Couldn't add the routine. Try again.</Body> : null}
       <View style={{ gap: 8, marginTop: 4 }}>
-        <Button label="Add routine" disabled={preview === null} onPress={add} />
+        <Button label={program !== null ? 'Open program' : 'Add routine'} disabled={preview === null && program === null} onPress={add} />
         <Button label="Cancel" variant="quiet" onPress={onCancel} />
       </View>
       {limit.sheets}

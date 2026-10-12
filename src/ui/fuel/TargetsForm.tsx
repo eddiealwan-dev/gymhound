@@ -23,8 +23,8 @@ const DAY_LABEL: Record<Day, string> = { training: 'Training day', rest: 'Rest d
 const FIELD: Record<Key, { shown: string; spoken: string; named: string }> = {
   kcal: { shown: 'Calories', spoken: 'Calories', named: 'calories' },
   protein: { shown: 'Protein (g)', spoken: 'Protein, grams', named: 'protein' },
-  carbs: { shown: 'Carbs (g, optional)', spoken: 'Carbs, grams, optional', named: 'carbs' },
-  fat: { shown: 'Fat (g, optional)', spoken: 'Fat, grams, optional', named: 'fat' },
+  carbs: { shown: 'Carbs (g)', spoken: 'Carbs, grams', named: 'carbs' },
+  fat: { shown: 'Fat (g)', spoken: 'Fat, grams', named: 'fat' },
 };
 
 /** A stored target as the field shows it: blank when not set. */
