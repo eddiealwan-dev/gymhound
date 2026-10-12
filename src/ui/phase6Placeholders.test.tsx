@@ -12,7 +12,6 @@ import { Footer } from './Footer';
 import { ConsistencyCalendar } from './history/ConsistencyCalendar';
 import { LiftsSection } from './stats/LiftsSection';
 import { PhotosRow } from './stats/PhotosRow';
-import { StepsCard } from './stats/StepsCard';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -103,7 +102,6 @@ describe('the placeholder routes', () => {
 describe('the stubs draw nothing until their task fills them', () => {
   it.each([
     ['LiftsSection', <LiftsSection key="l" today="2026-10-11" />],
-    ['StepsCard', <StepsCard key="s" />],
     ['PhotosRow', <PhotosRow key="p" today="2026-10-11" />],
     ['ConsistencyCalendar', <ConsistencyCalendar key="k" month="2026-10" today="2026-10-11" onMonthChange={() => {}} />],
   ])('%s', (_name, element) => {
