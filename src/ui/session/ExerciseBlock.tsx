@@ -29,6 +29,8 @@ const SET_TYPES: { type: SetType; label: string }[] = [
   { type: 'failure', label: 'Failure' },
 ];
 
+export type ExerciseBlockProps = Props;
+
 type Props = {
   workoutId: string;
   ex: WorkoutExerciseView;
@@ -74,6 +76,48 @@ type Props = {
   /** Opens this exercise's Something off reasons: its Something off control was tapped (R81). */
   onOpenMark: () => void;
 };
+
+/** Whether `setId` is one of this exercise's sets. */
+const holds = (ex: WorkoutExerciseView, setId: string | null) => setId !== null && ex.sets.some((set) => set.id === setId);
+
+/**
+ * What a block draws of the rest: the running rest under one of its sets (and when it ends), the rest just up under one
+ * of its sets, or none. A rest running under another block draws nothing here, except that it hides this block's
+ * "Rest after" line, so it counts only where that line could show.
+ */
+function restFace(p: Props): string {
+  if (p.restEndsAt !== null) {
+    if (holds(p.ex, p.restSetId)) return `running:${p.restSetId}:${p.restEndsAt}`;
+    return p.restWaitsFor !== null && holds(p.ex, p.latestTickedSetId) ? 'elsewhere' : 'none';
+  }
+  return p.restUp !== null && holds(p.ex, p.restUp.setId) ? `up:${p.restUp.setId}:${p.restUp.endsAt}` : 'none';
+}
+
+/** The props `blockPropsEqual` compares by what they draw in this block, not by value. */
+const BY_FACE = new Set<string>(['latestTickedSetId', 'nextSetId', 'restSetId', 'restEndsAt', 'restUp', 'upText']);
+
+/**
+ * Whether a block would draw the same with `next` as with `prev`, for `memo` (R406). Every prop is compared by identity,
+ * except the workout-wide set ids and rest, which matter to a block only where they touch its own sets: a tick elsewhere
+ * moves the next set and the rest, and only the blocks those touch draw again. `ex` and `gear` come from a shared read
+ * (`useDbQuery` with `share`), so an exercise that did not change is the same object; the callbacks must be stable.
+ */
+export function blockPropsEqual(prev: Props, next: Props): boolean {
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]) as Set<keyof Props>;
+  for (const key of keys) {
+    if (!BY_FACE.has(key) && !Object.is(prev[key], next[key])) return false;
+  }
+  const { ex } = next;
+  if (holds(ex, prev.latestTickedSetId) !== holds(ex, next.latestTickedSetId)) return false;
+  if (holds(ex, next.latestTickedSetId) && prev.latestTickedSetId !== next.latestTickedSetId) return false;
+  if (holds(ex, prev.nextSetId) !== holds(ex, next.nextSetId)) return false;
+  if (holds(ex, next.nextSetId) && prev.nextSetId !== next.nextSetId) return false;
+  const face = restFace(next);
+  if (restFace(prev) !== face) return false;
+  // The rest row's words at zero matter only where a rest row shows.
+  if (face !== 'none' && face !== 'elsewhere' && prev.upText !== next.upText) return false;
+  return true;
+}
 
 /**
  * How far a name-row control's target reaches past what it draws: 10pt above and below its 24pt line (a 44pt target),

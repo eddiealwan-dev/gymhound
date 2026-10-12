@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
@@ -22,7 +22,7 @@ import { useDbQuery } from '../src/state/dataVersion';
 import { discard, finish } from '../src/state/sessionActions';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
-import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
+import { blockPropsEqual, ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
 import { FoodOfferBanner } from '../src/ui/session/FoodOfferBanner';
 import { MusicBar } from '../src/ui/session/MusicBar';
@@ -48,6 +48,41 @@ function readSession(db: Db) {
   const settings = getSettings(db);
   const { unit, distanceUnit, musicApp, restSeconds } = settings;
   return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds };
+}
+
+/** The workout is read again after every write; the exercises that did not change stay the same objects (R400). */
+const SHARED = { share: true } as const;
+
+/**
+ * An exercise block that draws again only when something it shows changed (R406): a tick redraws the ticked block and
+ * the ones the next set and the rest moved to or from, not every block in the workout.
+ */
+const Block = memo(ExerciseBlock, blockPropsEqual);
+
+type Panel = 'menu' | 'rest' | 'mark';
+type BlockHandlers = { onOpenMenu: () => void; onOpenRest: () => void; onOpenMark: () => void };
+
+/**
+ * Each exercise's menu, rest and Something off openers, made once per exercise and kept, so a block is never handed a
+ * new function (R406). Each saves what is typed and puts the keyboard away before its sheet opens.
+ */
+function useBlockHandlers(open: (id: string, panel: Panel) => void): (id: string) => BlockHandlers {
+  const made = useRef(new Map<string, BlockHandlers>());
+  const openRef = useRef(open);
+  openRef.current = open;
+  return (id) => {
+    let handlers = made.current.get(id);
+    if (handlers === undefined) {
+      const opener = (panel: Panel) => () => {
+        flushAll();
+        Keyboard.dismiss();
+        openRef.current(id, panel);
+      };
+      handlers = { onOpenMenu: opener('menu'), onOpenRest: opener('rest'), onOpenMark: opener('mark') };
+      made.current.set(id, handlers);
+    }
+    return handlers;
+  };
 }
 
 /** The question open over the session, if any. Only one at a time. */
@@ -176,12 +211,13 @@ export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useDbQuery(readSession);
+  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useDbQuery(readSession, SHARED);
   /**
    * The exercise whose ⋯ menu is open, and what it opens on: its menu, its rest choices from the countdown, or its
    * Something off reasons from the name row (R81).
    */
-  const [menuFor, setMenuFor] = useState<{ id: string; panel: 'menu' | 'rest' | 'mark' } | null>(null);
+  const [menuFor, setMenuFor] = useState<{ id: string; panel: Panel } | null>(null);
+  const handlersFor = useBlockHandlers((id, panel) => setMenuFor({ id, panel }));
   const [ask, setAsk] = useState<Ask | null>(null);
   /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
@@ -327,7 +363,7 @@ export default function Session() {
           }}
         >
           {workout.exercises.map((ex) => (
-            <ExerciseBlock
+            <Block
               // A replaced exercise keeps its row but is a new exercise: start its block fresh.
               key={`${ex.id}:${ex.exerciseId}`}
               workoutId={workout.id}
@@ -350,22 +386,9 @@ export default function Session() {
               restUp={restUp}
               upText={upText}
               settingsRestSeconds={restSeconds}
-              onOpenMenu={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'menu' });
-              }}
-              // A rest length chosen here sets future rests only; the running rest keeps its end (R50).
-              onOpenRest={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'rest' });
-              }}
-              onOpenMark={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'mark' });
-              }}
+              // The menu, the rest choices (a rest length chosen there sets future rests only; the running rest keeps
+              // its end, R50) and the Something off reasons.
+              {...handlersFor(ex.id)}
             />
           ))}
           <Button
