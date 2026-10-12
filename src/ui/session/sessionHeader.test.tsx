@@ -203,10 +203,10 @@ describe('the session header (spec 18.6)', () => {
     expect(jest.mocked(flushAll).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(getActiveWorkoutView).mock.invocationCallOrder[0]);
   });
 
-  it('passes each block the next set', () => {
+  it('passes the next set to the block that has it, and null to the others, so a tick redraws only the blocks it changes', () => {
     mount();
     expect(mockBlocks.length).toBeGreaterThanOrEqual(2);
-    expect(mockBlocks.map((b) => b.nextSetId)).toEqual(mockBlocks.map(() => 's2'));
+    expect(mockBlocks.slice(-2).map((b) => b.nextSetId)).toEqual(['s2', null]);
   });
 
   describe('at the largest text, on a 320 or 390 phone with Music (Round 4, A2)', () => {

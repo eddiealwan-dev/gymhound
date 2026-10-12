@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Fragment, useState } from 'react';
+import { Fragment, memo, useCallback, useMemo, useRef, useState } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -12,6 +12,7 @@ import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { flushAll, useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
+import { sameProps, useShareEqual } from '../../state/shareEqual';
 import { Button } from '../Button';
 import type { FormDemo as FormDemoType } from '../FormDemo';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
@@ -19,6 +20,7 @@ import { SheetTitle } from '../SheetTitle';
 import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
+import { useCallbacksByKey } from '../useCallbacksByKey';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow } from './SetRow';
 
@@ -54,8 +56,13 @@ type Props = {
   restWaitsFor: string | null;
   /** The set ticked last in the whole workout (`latestTickedSetId`), or null. */
   latestTickedSetId: string | null;
-  /** When the running rest ends (`rest_ends_at`), or null when none is running. */
+  /**
+   * When the running rest ends (`rest_ends_at`), or null when none is running. The session passes it only to the block
+   * that holds `restSetId`, so a rest starting or moving redraws that block alone.
+   */
   restEndsAt: number | null;
+  /** Whether a rest is running anywhere in the workout. Left out, it is `restEndsAt !== null`. */
+  restRunning?: boolean;
   /**
    * The set whose tick started the running rest (`rest_set_id`, R38): the countdown shows under it, and only when that
    * set is in this block. A removed set shows none, and the rest bar still does.
@@ -142,7 +149,7 @@ const BLOCK_GAP = 28;
  * that removes it too. A ticked set is removed only after "Remove set n?". The running rest shows under the set that
  * started it, and holds "Rest's up" there for a moment after it runs out. Tapping the name opens its form demo (R86).
  */
-export function ExerciseBlock({
+export const ExerciseBlock = memo(function ExerciseBlock({
   workoutId,
   ex,
   unit,
@@ -162,12 +169,18 @@ export function ExerciseBlock({
   settingsRestSeconds,
   onOpenRest,
   onOpenMark,
+  restRunning = restEndsAt !== null,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
-  const columns = tableColumns(ex.loggingType, unit, ex.showRpe);
-  // Each row's previous is worked out once for the whole block.
-  const rows = buildRows(ex, unit, gear, distanceUnit);
+  const columns = useMemo(() => tableColumns(ex.loggingType, unit, ex.showRpe), [ex.loggingType, unit, ex.showRpe]);
+  // Each row's previous is worked out once for the whole block. A row equal to the one drawn before keeps its object,
+  // so only the set rows that changed draw again.
+  const rows = useShareEqual(useMemo(() => buildRows(ex, unit, gear, distanceUnit), [ex, unit, gear, distanceUnit]));
+  /** The exercise as last drawn, for a set row's tick (`SetRow`'s `latestEx`). */
+  const exRef = useRef(ex);
+  exRef.current = ex;
+  const latestEx = useCallback(() => exRef.current, []);
   const progress = exerciseProgress(ex);
   /** A plan or an override in the unit shown, as the set table shows today's target (`planInUnit`, spec 7.1). */
   const shown = (weight: number | null, from: WeightUnit | null) =>
@@ -185,7 +198,7 @@ export function ExerciseBlock({
   const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
   /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
   const restUnder = (setId: string): number | null => {
-    if (restEndsAt !== null) return setId === restSetId ? restEndsAt : null;
+    if (restRunning) return setId === restSetId ? restEndsAt : null;
     return restUp?.setId === setId ? restUp.endsAt : null;
   };
 
@@ -196,6 +209,17 @@ export function ExerciseBlock({
   const openNote = () => setNoteDraft(ex.note ?? '');
   const [typeFor, setTypeFor] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<string | null>(null);
+  /** Each set row's sheet openers, the same functions on every draw. The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too). */
+  const rowHandlers = useCallbacksByKey((setId) => ({
+    onChangeType: () => {
+      Keyboard.dismiss();
+      setTypeFor(setId);
+    },
+    onLongPress: () => {
+      Keyboard.dismiss();
+      setRemoveFor(setId);
+    },
+  }));
   const typeRow = rows.find((r) => r.set.id === typeFor);
   const removeRow = rows.find((r) => r.set.id === removeFor);
   /** The ticked set waiting on "Remove set n?". */
@@ -424,20 +448,13 @@ export function ExerciseBlock({
           return (
             <Fragment key={row.set.id}>
               <SetRow
-                ex={ex}
+                latestEx={latestEx}
                 row={row}
                 columns={columns}
                 unit={unit}
                 distanceUnit={distanceUnit}
-                // The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too).
-                onChangeType={() => {
-                  Keyboard.dismiss();
-                  setTypeFor(row.set.id);
-                }}
-                onLongPress={() => {
-                  Keyboard.dismiss();
-                  setRemoveFor(row.set.id);
-                }}
+                onChangeType={rowHandlers(row.set.id).onChangeType}
+                onLongPress={rowHandlers(row.set.id).onLongPress}
                 isNext={row.set.id === nextSetId}
               />
               {restEnd !== null ? (
@@ -451,7 +468,7 @@ export function ExerciseBlock({
                   upText={upText}
                   onOpenRest={onOpenRest}
                 />
-              ) : restWaitsFor !== null && row.set.id === latestTickedSetId && restEndsAt === null ? (
+              ) : restWaitsFor !== null && row.set.id === latestTickedSetId && !restRunning ? (
                 // A tick mid-superset starts no rest: where the rest row would be, a quiet line says when it comes (R100).
                 // Not while a rest runs anywhere (the rest watcher clears its end at zero), so two rests never seem to show.
                 <Body muted style={{ fontSize: 14, paddingVertical: 6 }}>
@@ -538,4 +555,4 @@ export function ExerciseBlock({
       {FormDemo !== null ? <FormDemo exerciseId={demoOpen ? ex.exerciseId : null} onClose={() => setDemoOpen(false)} /> : null}
     </View>
   );
-}
+}, sameProps);
