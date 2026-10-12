@@ -1,3 +1,4 @@
+import { dateFormat } from './intl';
 import { daysBetween, fromLocalDate } from './dates';
 
 /** A chart's date range (§8.9, R116): 3M is the default. */
@@ -109,7 +110,7 @@ export function plotSeries(points: readonly SeriesPoint[], box: PlotBox): Plotte
 
 /** A chart date: the day and short month, laid out for the locale ("3 Aug", or "Aug 3" in en-US). */
 export function formatChartDate(localDate: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(fromLocalDate(localDate));
+  return dateFormat(locale, { day: 'numeric', month: 'short' }).format(fromLocalDate(localDate));
 }
 
 /**

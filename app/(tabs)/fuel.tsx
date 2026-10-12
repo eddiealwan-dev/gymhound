@@ -7,7 +7,7 @@ import { calendarDayTitle, toLocalDate } from '../../src/domain/dates';
 import { dayTotals, targetsFor } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
-import { useDbQuery } from '../../src/state/dataVersion';
+import { useFocusedDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
 import { deviceLocale } from '../../src/platform/locale';
 import { Button } from '../../src/ui/Button';
@@ -69,7 +69,9 @@ export default function Fuel() {
     (db: Db) => ({ targets: getFuelTargets(db), entries: listEntries(db, day), trainingDay: isTrainingDay(db, day) }),
     [day],
   );
-  const { targets, entries, trainingDay } = useDbQuery(read);
+  // Focused only, as Train, History and Stats (R185): the tab stays mounted, and every tick in a workout bumps the data
+  // version. A bump while away is read when Fuel is back in view.
+  const { targets, entries, trainingDay } = useFocusedDbQuery(read);
 
   const goTo = (next: string) => {
     flushAll();

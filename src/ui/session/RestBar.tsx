@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
@@ -8,6 +7,7 @@ import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
+import { useRestClock } from './useRestClock';
 
 type Props = {
   workoutId: string;
@@ -16,9 +16,6 @@ type Props = {
   /** Whether the bar is the lowest thing docked, and so clears the bottom safe area itself. The music bar below it does that instead. */
   bottomInset: boolean;
 };
-
-/** How often the clock is read. The bar exists only while a rest is running, so this costs nothing the rest of the time. */
-const TICK_MS = 250;
 
 /**
  * The rest timer docked at the bottom of the session: −15s, the clock, +15s and Skip, as compact pills that wrap with
@@ -31,12 +28,8 @@ export function RestBar({ workoutId, endsAt, bottomInset }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, []);
+  // Read on each whole second of the rest, until it ends.
+  const now = useRestClock(endsAt, endsAt);
 
   const remaining = restRemainingSeconds(endsAt, now);
   if (remaining === null) return null;

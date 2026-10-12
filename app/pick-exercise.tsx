@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
@@ -25,6 +25,9 @@ const MUSCLE_CHIPS: readonly Muscle[] = MUSCLE_ORDER.filter((m) => m !== 'side_d
 
 /** The equipment chips: the six since phase 1, then the ones the library brings (R85). */
 const EQUIPMENT_CHIPS: readonly Equipment[] = EQUIPMENT_ORDER;
+
+/** Each row's key: the exercise id. Module-level, so the list is handed the same function on every draw. */
+const keyOf = (item: ExerciseRow) => item.id;
 
 /** Closes the picker. With nothing to go back to (the page was opened by address, or reloaded), it lands on Train. */
 function close() {
@@ -175,9 +178,14 @@ export default function PickExercise() {
   const [query, setQuery] = useState('');
   const [muscle, setMuscle] = useState<Muscle | undefined>(undefined);
   const [equipment, setEquipment] = useState<Equipment | undefined>(undefined);
+  /**
+   * The query the list is searched with. It follows the field at a lower priority, so a keystroke draws the field at
+   * once and the list catches up after, rather than each letter waiting for the list to redraw.
+   */
+  const searched = useDeferredValue(query);
   const results = useMemo(
-    () => searchExercises(filterExercises(everything, { muscle, equipment }), query),
-    [everything, muscle, equipment, query],
+    () => searchExercises(filterExercises(everything, { muscle, equipment }), searched),
+    [everything, muscle, equipment, searched],
   );
 
   const choose = useCallback(
@@ -229,6 +237,25 @@ export default function PickExercise() {
     Keyboard.dismiss();
     setDemoFor(exerciseId);
   }, []);
+
+  const listPadding = useMemo(() => ({ paddingBottom: 16 + insets.bottom }), [insets.bottom]);
+  // Nothing found (R404): say what was looked for, and offer to make it with the typed name. Memoized on what it shows,
+  // so opening a form demo does not hand the list a new one. It names the deferred search the list was drawn from.
+  const filtered = muscle !== undefined || equipment !== undefined;
+  const noMatches = useMemo(() => {
+    const name = searched.trim();
+    const create = () => {
+      Keyboard.dismiss();
+      router.push({ pathname: '/exercise/[id]', params: { id: 'new', name, from: 'picker' } });
+    };
+    return (
+      <EmptyState
+        style={{ paddingHorizontal: 16, paddingTop: 16 }}
+        text={noMatchText(searched, filtered)}
+        action={name === '' ? undefined : { label: `New exercise called ${name}`, onPress: create }}
+      />
+    );
+  }, [searched, filtered]);
 
   const renderItem = useCallback(
     ({ item }: { item: ExerciseRow }) => <ExerciseOption exercise={item} onChoose={choose} onShowForm={showForm} />,
@@ -284,7 +311,7 @@ export default function PickExercise() {
         <ChipRow values={EQUIPMENT_CHIPS} label={equipmentLabel} chosen={equipment} onChoose={setEquipment} />
         <FlatList
           data={results}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyOf}
           renderItem={renderItem}
           // Rows wrap at large text, so their heights are not known ahead: a screenful is drawn, the rest as it scrolls.
           initialNumToRender={12}
@@ -294,15 +321,8 @@ export default function PickExercise() {
           keyboardDismissMode="on-drag"
           // The list takes the height left under the chips, and is the one thing that gives way.
           style={{ flex: 1, marginTop: 4 }}
-          contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
-          ListEmptyComponent={
-            // Nothing found (R404): say what was looked for, and offer to make it with the typed name.
-            <EmptyState
-              style={{ paddingHorizontal: 16, paddingTop: 16 }}
-              text={noMatchText(query, muscle !== undefined || equipment !== undefined)}
-              action={query.trim() === '' ? undefined : { label: `New exercise called ${query.trim()}`, onPress: newExercise }}
-            />
-          }
+          contentContainerStyle={listPadding}
+          ListEmptyComponent={noMatches}
         />
       </View>
       {/* A routine's unsaved draft may hold the exercise, so it is not edited from here (review of R110). */}

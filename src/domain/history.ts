@@ -1,3 +1,4 @@
+import { dateFormat } from './intl';
 import { MARK_LABELS } from './labels';
 import { formatPrevious, type PrevSet } from './setEntry';
 import type { ExerciseMark, LoggingType, WeightUnit } from './types';
@@ -43,7 +44,7 @@ export function groupByMonth(cards: readonly HistoryCard[], locale: string, toda
 export function monthTitle(month: string, locale: string, today: string): string {
   const [y, m] = month.split('-').map(Number);
   const sameYear = month.slice(0, 4) === today.slice(0, 4);
-  return new Intl.DateTimeFormat(locale, { month: 'long', ...(sameYear ? null : { year: 'numeric' }) }).format(new Date(y, m - 1, 1));
+  return dateFormat(locale, { month: 'long', ...(sameYear ? null : { year: 'numeric' }) }).format(new Date(y, m - 1, 1));
 }
 
 /** A workout's length: "48 min", "1 h 5 min", "1 h"; anything under a minute reads "1 min". */

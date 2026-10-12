@@ -406,6 +406,18 @@ describe('the exercise picker: the info button (R86)', () => {
       dismiss.mockRestore();
     }
   });
+
+  it('hands the list the same props when a demo opens, so the drawn rows are left alone (performance pass)', () => {
+    const tree = mount();
+    search(tree, 'barbell bench press');
+    const KEPT = ['data', 'renderItem', 'keyExtractor', 'contentContainerStyle', 'ListEmptyComponent'] as const;
+    const before = KEPT.map((key) => list(tree).props[key]);
+
+    act(() => row(tree, SHOW_BENCH).props.onPress());
+
+    expect(demo(tree).props.exerciseId).toBe('barbell-bench-press');
+    KEPT.forEach((key, i) => expect(list(tree).props[key]).toBe(before[i]));
+  });
 });
 
 describe('the exercise picker: your own exercises (R110)', () => {

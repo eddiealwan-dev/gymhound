@@ -20,6 +20,7 @@ import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, t
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
 import { discard, finish } from '../src/state/sessionActions';
+import { useShareEqual } from '../src/state/shareEqual';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
 import { EmptyState } from '../src/ui/EmptyState';
@@ -36,6 +37,7 @@ import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { SheetTitle } from '../src/ui/SheetTitle';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
+import { useCallbacksByKey } from '../src/ui/useCallbacksByKey';
 
 /**
  * Back to the Train screen already under the session, as the finish summary's Done does (R78), so leaving never stacks
@@ -66,6 +68,28 @@ const ICON_BUTTON = { width: 44, height: 44, flexShrink: 0, alignItems: 'center'
 const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
 
 /**
+ * The count and the time under the workout name. It is the only part of the header that reads the clock, so each second
+ * redraws this line alone, not the header with its buttons and music sheet. In the line the count gives way before the time.
+ */
+function ProgressLine({ startedAt, progress }: { startedAt: number; progress: Progress }) {
+  const now = useNow(1000);
+  const elapsed = formatElapsed(now - startedAt);
+  const { count, time } = progressParts(progress, elapsed);
+  return (
+    <View accessible accessibilityLabel={progressLabel(progress, elapsed)} style={{ flexDirection: 'row', minWidth: 0 }}>
+      {count === '' ? null : (
+        <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 1 }}>
+          {count}
+        </Body>
+      )}
+      <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 0 }}>
+        {time}
+      </Body>
+    </View>
+  );
+}
+
+/**
  * The back chevron, the workout name with its progress and time under it, on a phone the music button, whose sheet shows
  * `musicApp` as picked, and Finish (spec 18.6). A 2pt line along the bottom fills with the share of sets ticked. The name,
  * the line under it and the Finish label stop growing at 1.3× the text size, so the header stays one row. The row grows
@@ -88,11 +112,8 @@ function SessionHeader({
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const now = useNow(1000);
   const [musicOpen, setMusicOpen] = useState(false);
-  const elapsed = formatElapsed(now - startedAt);
   const { done, total } = progress;
-  const { count, time } = progressParts(progress, elapsed);
   return (
     // The 2pt under the row is the progress line's own strip, so the line never covers the text (Round 4).
     <View style={{ backgroundColor: colors.bg, paddingTop: insets.top, paddingBottom: 2, borderBottomWidth: 1, borderBottomColor: colors.border }}>
@@ -123,16 +144,7 @@ function SessionHeader({
           <Display weight={700} numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 22 }}>
             {name}
           </Display>
-          <View accessible accessibilityLabel={progressLabel(progress, elapsed)} style={{ flexDirection: 'row', minWidth: 0 }}>
-            {count === '' ? null : (
-              <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 1 }}>
-                {count}
-              </Body>
-            )}
-            <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 0 }}>
-              {time}
-            </Body>
-          </View>
+          <ProgressLine startedAt={startedAt} progress={progress} />
         </View>
         {MUSIC_APPS_HERE.length > 0 ? (
           <Pressable
@@ -181,7 +193,8 @@ export default function Session() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useDbQuery(readSession);
+  // Every write reads the workout again; what did not change keeps its objects, so only the blocks that changed draw again.
+  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useShareEqual(useDbQuery(readSession));
   /**
    * The exercise whose ⋯ menu is open, and what it opens on: its menu, its rest choices from the countdown, or its
    * Something off reasons from the name row (R81).
@@ -204,6 +217,18 @@ export default function Session() {
   );
   /** The rest that has just run out, whose "Rest's up" still shows under its set. Hooks run before the early return. */
   const restUp = useRestUp(workout?.restEndsAt ?? null, workout?.restSetId ?? null, progress.done);
+  /**
+   * Each block's ⋯ menu, rest choices and Something off openers, the same functions on every draw. A rest length chosen
+   * from the countdown sets future rests only; the running rest keeps its end (R50).
+   */
+  const openersFor = useCallbacksByKey((id) => {
+    const open = (panel: 'menu' | 'rest' | 'mark') => () => {
+      flushAll();
+      Keyboard.dismiss();
+      setMenuFor({ id, panel });
+    };
+    return { menu: open('menu'), rest: open('rest'), mark: open('mark') };
+  });
 
   // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
   // what is typed first (R29, R31). The browser's back button does not remove it (expo-router resets the navigator, which
@@ -233,6 +258,8 @@ export default function Session() {
    */
   const showRestBar =
     restEndsAt !== null && (restSetId === null || !workout.exercises.some((ex) => ex.sets.some((set) => set.id === restSetId)));
+  /** The set the rest row's words are about: the running rest's, else the one whose "Rest's up" still shows. */
+  const restRowSetId = restSetId ?? restUp?.setId ?? null;
   /** The music bar's app: the one picked in the music sheet, if this platform can have it (never on web). */
   const musicBarApp = musicAppOn(Platform.OS, musicApp);
 
@@ -333,48 +360,44 @@ export default function Session() {
           }}
         >
           {workout.exercises.length > 0 ? <SessionTip /> : null}
-          {workout.exercises.map((ex) => (
-            <ExerciseBlock
-              // A replaced exercise keeps its row but is a new exercise: start its block fresh.
-              key={`${ex.id}:${ex.exerciseId}`}
-              workoutId={workout.id}
-              ex={ex}
-              unit={unit}
-              gear={gear}
-              distanceUnit={distanceUnit}
-              inSuperset={ex.supersetGroup !== null}
-              joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
-              supersetLabel={
-                startsSuperset(workout.exercises, ex.id)
-                  ? `Superset of ${listNames(workout.exercises.filter((e) => e.supersetGroup === ex.supersetGroup).map((e) => e.name))}`
-                  : null
-              }
-              restWaitsFor={restWaitsFor(workout.exercises, ex.id, restSeconds)}
-              latestTickedSetId={lastTicked}
-              restEndsAt={restEndsAt}
-              restSetId={restSetId}
-              nextSetId={next}
-              restUp={restUp}
-              upText={upText}
-              settingsRestSeconds={restSeconds}
-              onOpenMenu={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'menu' });
-              }}
-              // A rest length chosen here sets future rests only; the running rest keeps its end (R50).
-              onOpenRest={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'rest' });
-              }}
-              onOpenMark={() => {
-                flushAll();
-                Keyboard.dismiss();
-                setMenuFor({ id: ex.id, panel: 'mark' });
-              }}
-            />
-          ))}
+          {workout.exercises.map((ex) => {
+            // What is about one set goes only to the block that has it, so a tick redraws the blocks it changed, not all.
+            const has = (setId: string | null) => setId !== null && ex.sets.some((set) => set.id === setId);
+            const holdsRest = has(restSetId);
+            const waits = restWaitsFor(workout.exercises, ex.id, restSeconds);
+            const openers = openersFor(ex.id);
+            return (
+              <ExerciseBlock
+                // A replaced exercise keeps its row but is a new exercise: start its block fresh.
+                key={`${ex.id}:${ex.exerciseId}`}
+                workoutId={workout.id}
+                ex={ex}
+                unit={unit}
+                gear={gear}
+                distanceUnit={distanceUnit}
+                inSuperset={ex.supersetGroup !== null}
+                joinsNext={joinsNextInSuperset(workout.exercises, ex.id)}
+                supersetLabel={
+                  startsSuperset(workout.exercises, ex.id)
+                    ? `Superset of ${listNames(workout.exercises.filter((e) => e.supersetGroup === ex.supersetGroup).map((e) => e.name))}`
+                    : null
+                }
+                restWaitsFor={waits}
+                latestTickedSetId={has(lastTicked) ? lastTicked : null}
+                restEndsAt={holdsRest ? restEndsAt : null}
+                // Only the block with the countdown, or with a "Rest after" line that a running rest hides, needs to know.
+                restRunning={restEndsAt !== null && (holdsRest || (waits !== null && has(lastTicked)))}
+                restSetId={holdsRest ? restSetId : null}
+                nextSetId={has(next) ? next : null}
+                restUp={restUp !== null && has(restUp.setId) ? restUp : null}
+                upText={has(restRowSetId) ? upText : ''}
+                settingsRestSeconds={restSeconds}
+                onOpenMenu={openers.menu}
+                onOpenRest={openers.rest}
+                onOpenMark={openers.mark}
+              />
+            );
+          })}
           {/* An empty workout (R406): say what fills it, and Add exercise becomes its one filled action. */}
           {workout.exercises.length === 0 ? <EmptyState style={{ marginBottom: 16 }} text={NO_EXERCISES} /> : null}
           <Button

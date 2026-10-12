@@ -254,7 +254,8 @@ describe('a superset in words (R100)', () => {
 
     const [benchBlock, abBlock, squatBlock] = tree!.root.findAllByType(ExerciseBlock);
     expect(benchBlock.props).toMatchObject({ supersetLabel: 'Superset of Bench Press and Ab roller', restWaitsFor: 'Ab roller', latestTickedSetId: 's1' });
-    expect(abBlock.props).toMatchObject({ supersetLabel: null, restWaitsFor: null, latestTickedSetId: 's1' });
+    // The set ticked last is in the bench block: only that block is told, so a tick redraws only the blocks it changes.
+    expect(abBlock.props).toMatchObject({ supersetLabel: null, restWaitsFor: null, latestTickedSetId: null });
     expect(squatBlock.props).toMatchObject({ supersetLabel: null, restWaitsFor: null });
     expect(benchBlock.findAll((n) => n.props.children === 'Rest after Ab roller' && typeof n.type !== 'string').length).toBeGreaterThan(0);
   });

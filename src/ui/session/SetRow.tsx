@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Keyboard, Platform, Pressable, TextInput, Vibration, View } from 'react-native';
 import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
@@ -24,6 +24,7 @@ import {
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
 import { announce } from '../../platform/announce';
 import { useDraftFlush } from '../../state/draftFlush';
+import { sameProps } from '../../state/shareEqual';
 import { commitSetField, tick, untick } from '../../state/sessionActions';
 import { Body, Num } from '../Text';
 import { fonts, type Colors } from '../theme';
@@ -137,7 +138,11 @@ export function inputLook(look: FieldLook, invalid: boolean, colors: Colors, nee
 }
 
 type Props = {
-  ex: WorkoutExerciseView;
+  /**
+   * The exercise as the block last drew it, read when the set is ticked. A getter, not the exercise itself: the row then
+   * draws again only when its own set or suggestions change, yet a tick still uses the current rule and rest.
+   */
+  latestEx: () => WorkoutExerciseView;
   row: RowModel;
   columns: Column[];
   unit: WeightUnit;
@@ -154,7 +159,7 @@ type Props = {
  * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, buzzes, marks the
  * field and says why, and leaves the person to tap the field (spec 18.6, R99).
  */
-export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onLongPress, isNext }: Props) {
+export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, distanceUnit, onChangeType, onLongPress, isNext }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const { set } = row;
@@ -240,7 +245,7 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       }
       return;
     }
-    if (tick(db, ex, set, reading.entered, reading.weightUnit, reading.distanceUnit)) {
+    if (tick(db, latestEx(), set, reading.entered, reading.weightUnit, reading.distanceUnit)) {
       // RPE is not part of a tick; save it if it is still being typed.
       if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
       setDrafts({});
@@ -380,4 +385,4 @@ export function SetRow({ ex, row, columns, unit, distanceUnit, onChangeType, onL
       </View>
     </Pressable>
   );
-}
+}, sameProps);

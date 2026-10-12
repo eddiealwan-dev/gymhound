@@ -1,3 +1,4 @@
+import { numberFormat } from './intl';
 import { parseDecimal } from './input';
 import type { FuelTargets, Macros } from './types';
 
@@ -90,7 +91,7 @@ export function targetsFor(targets: FuelTargets, trainingDay: boolean): Macros {
 /** A whole number with the locale's thousands separators: "1,840". Never "-0". */
 export function fuelNumber(value: number, locale?: string): string {
   const n = Math.round(value) || 0;
-  return n.toLocaleString(locale, { maximumFractionDigits: 0 });
+  return numberFormat(locale, { maximumFractionDigits: 0 }).format(n);
 }
 
 /** Grams in words for VoiceOver, rounded as shown and singular for exactly 1: "1 gram", "86 grams". */
@@ -142,7 +143,7 @@ export function leftSpoken(target: number, eaten: number, unit: 'calories' | 'gr
 
 /** Servings with up to 2 decimals, no trailing zeros, in the locale's decimal mark: "1", "1.5", "0.33" ("1,5" in de-DE). */
 export function servingsText(servings: number, locale?: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(round2(servings));
+  return numberFormat(locale, { maximumFractionDigits: 2 }).format(round2(servings));
 }
 
 /** The four macro fields of a form, as typed. */

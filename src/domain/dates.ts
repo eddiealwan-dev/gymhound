@@ -1,3 +1,5 @@
+import { dateFormat } from './intl';
+
 const MS_PER_DAY = 86_400_000;
 
 function pad2(n: number): string {
@@ -35,7 +37,7 @@ export function calendarDayTitle(localDate: string, today: string, locale: strin
   if (localDate === today) return 'Today';
   if (localDate === shiftDay(today, -1)) return 'Yesterday';
   const sameYear = localDate.slice(0, 4) === today.slice(0, 4);
-  return new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', ...(sameYear ? null : { year: 'numeric' }) }).format(
+  return dateFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', ...(sameYear ? null : { year: 'numeric' }) }).format(
     fromLocalDate(localDate),
   );
 }
@@ -49,7 +51,7 @@ export function calendarDayInSentence(localDate: string, today: string, locale: 
 /** An entry's day, laid out for the locale: "3 Aug" (or "Aug 3") this year, "3 Aug 2025" in another. */
 export function formatEntryDate(localDate: string, today: string, locale: string): string {
   const sameYear = localDate.slice(0, 4) === today.slice(0, 4);
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', ...(sameYear ? null : { year: 'numeric' }) }).format(fromLocalDate(localDate));
+  return dateFormat(locale, { day: 'numeric', month: 'short', ...(sameYear ? null : { year: 'numeric' }) }).format(fromLocalDate(localDate));
 }
 
 /** Whole calendar days from a to b (b minus a). Uses UTC so DST cannot shift the count. */
@@ -79,7 +81,7 @@ export function greetingFor(d: Date): 'GOOD MORNING' | 'GOOD AFTERNOON' | 'GOOD 
  * year follows: "SUN 11 OCT 2026" or "SUN OCT 11 2026" (the personal best card).
  */
 export function formatTrainDate(d: Date, locale: string, opts?: { year?: boolean }): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', ...(opts?.year ? { year: 'numeric' } : {}) })
+  return dateFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', ...(opts?.year ? { year: 'numeric' } : {}) })
     .format(d)
     .replace(/[,.]/g, '')
     .replace(/\s+/g, ' ')
