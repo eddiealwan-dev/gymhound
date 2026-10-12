@@ -42,10 +42,24 @@ class GymHoundMediaModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
   private var observing = false
   private var sessionsListener: MediaSessionManager.OnActiveSessionsChangedListener? = null
+  /** The manager the listener was registered with, so it can be removed without the React context. */
+  private var registeredManager: MediaSessionManager? = null
   private var watched: MediaController? = null
+  /** The last PlaybackState.state / playing flag a playback-state `change` was sent for (main thread). */
+  private var lastState: Int? = null
+  private var lastPlaying: Boolean? = null
 
   private val controllerCallback = object : MediaController.Callback() {
-    override fun onPlaybackStateChanged(state: PlaybackState?) = emitChange()
+    // Players report position updates through this callback too; only a new state or playing
+    // flag is a change the bar shows.
+    override fun onPlaybackStateChanged(state: PlaybackState?) {
+      val code = state?.state
+      val playing = code == PlaybackState.STATE_PLAYING
+      if (code == lastState && playing == lastPlaying) return
+      lastState = code
+      lastPlaying = playing
+      emitChange()
+    }
 
     override fun onMetadataChanged(metadata: MediaMetadata?) = emitChange()
 
@@ -166,6 +180,7 @@ class GymHoundMediaModule : Module() {
   private fun seekBy(seconds: Double) {
     val controller = requireController()
     val state = controller.playbackState ?: throw NoPlayerException()
+    if ((state.actions and PlaybackState.ACTION_SEEK_TO) == 0L) throw NoPlayerException()
     var position = state.position
     if (state.state == PlaybackState.STATE_PLAYING && state.lastPositionUpdateTime > 0) {
       val elapsed = SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
@@ -202,6 +217,7 @@ class GymHoundMediaModule : Module() {
       }
       manager.addOnActiveSessionsChangedListener(listener, listenerComponent(), mainHandler)
       sessionsListener = listener
+      registeredManager = manager
       watch(firstController())
     } catch (e: Exception) {
       Log.w(TAG, "GymHound: couldn't watch media sessions", e)
@@ -210,11 +226,13 @@ class GymHoundMediaModule : Module() {
 
   private fun stopWatching() {
     val listener = sessionsListener
+    val manager = registeredManager
     sessionsListener = null
+    registeredManager = null
     watch(null)
-    if (listener != null) {
+    if (listener != null && manager != null) {
       try {
-        sessionManager()?.removeOnActiveSessionsChangedListener(listener)
+        manager.removeOnActiveSessionsChangedListener(listener)
       } catch (e: Exception) {
         Log.w(TAG, "GymHound: couldn't stop watching media sessions", e)
       }
@@ -226,6 +244,8 @@ class GymHoundMediaModule : Module() {
     if (current != null && controller != null && current.sessionToken == controller.sessionToken) return
     current?.unregisterCallback(controllerCallback)
     watched = controller
+    lastState = controller?.playbackState?.state
+    lastPlaying = lastState == PlaybackState.STATE_PLAYING
     controller?.registerCallback(controllerCallback, mainHandler)
   }
 

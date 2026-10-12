@@ -20,7 +20,8 @@ export type MediaModule = {
   requestAccess(): Promise<MediaAccess>;
   /** null when no item (iOS) or no active media session / no access (Android). */
   nowPlaying(): Promise<NowPlaying | null>;
-  /** Commands reject when there is no player to reach (Android: no active session). */
+  /** play, next, previous and seekBy reject with code ERR_NO_PLAYER when there is no player to reach (iOS: no
+   * nowPlayingItem; Android: no active session, and for seekBy a player without ACTION_SEEK_TO). pause on iOS never rejects. */
   play(): Promise<void>;
   pause(): Promise<void>;
   next(): Promise<void>;

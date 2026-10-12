@@ -57,7 +57,7 @@ public class GymHoundMediaModule: Module {
     .runOnQueue(.main)
 
     AsyncFunction("play") {
-      MPMusicPlayerController.systemMusicPlayer.play()
+      try Self.playerWithItem().play()
     }
     .runOnQueue(.main)
 
@@ -67,19 +67,19 @@ public class GymHoundMediaModule: Module {
     .runOnQueue(.main)
 
     AsyncFunction("next") {
-      MPMusicPlayerController.systemMusicPlayer.skipToNextItem()
+      try Self.playerWithItem().skipToNextItem()
     }
     .runOnQueue(.main)
 
     AsyncFunction("previous") {
-      MPMusicPlayerController.systemMusicPlayer.skipToPreviousItem()
+      try Self.playerWithItem().skipToPreviousItem()
     }
     .runOnQueue(.main)
 
     AsyncFunction("seekBy") { (seconds: Double) in
-      let player = MPMusicPlayerController.systemMusicPlayer
+      let player = try Self.playerWithItem()
       guard let item = player.nowPlayingItem else {
-        return
+        throw Self.noPlayer()
       }
       var target = max(0, player.currentPlaybackTime + seconds)
       let duration = item.playbackDuration
@@ -136,6 +136,20 @@ public class GymHoundMediaModule: Module {
     }
     observers.removeAll()
     MPMusicPlayerController.systemMusicPlayer.endGeneratingPlaybackNotifications()
+  }
+
+  /// The system player when it has an item; otherwise the same rejection Android uses
+  /// (`ERR_NO_PLAYER`), so the bar shows "Couldn't reach the player."
+  private static func playerWithItem() throws -> MPMusicPlayerController {
+    let player = MPMusicPlayerController.systemMusicPlayer
+    guard player.nowPlayingItem != nil else {
+      throw noPlayer()
+    }
+    return player
+  }
+
+  private static func noPlayer() -> Exception {
+    return Exception(name: "NoPlayerException", description: "Apple Music has no song loaded", code: "ERR_NO_PLAYER")
   }
 
   private static func accessName(_ status: MPMediaLibraryAuthorizationStatus) -> String {
