@@ -174,7 +174,8 @@ function AddFood() {
 
   const header = (
     <View style={{ paddingHorizontal: 16, gap: 16, paddingBottom: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, paddingTop: 8 }}>
+      {/* Done steps back by the quiet button's padding, so its word ends on the gutter. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -20, paddingTop: 8 }}>
         <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
           Add food
         </Display>
@@ -284,7 +285,7 @@ export default function AddFoodScreen() {
   if (pro) return <AddFood />;
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -20, marginBottom: 24 }}>
         <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
           Add food
         </Display>

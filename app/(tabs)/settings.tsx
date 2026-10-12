@@ -317,7 +317,7 @@ function RestTimerSection() {
         />
       </Field>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
-        <Body>Bell at the end</Body>
+        <Body style={{ flexShrink: 1 }}>Bell at the end</Body>
         <Toggle
           accessibilityLabel="Bell at the end"
           value={restBell}

@@ -171,7 +171,7 @@ describe('Routine detail (§8.6)', () => {
     show(MINE);
     const tree = mount();
 
-    expect(labels(tree)).toEqual(['Set active', 'Duplicate', 'Edit', 'Delete']);
+    expect(labels(tree)).toEqual(['Set active', 'Duplicate', 'Edit', 'Delete routine']);
   });
 
   it('the active routine shows the Active mark instead of Set active', () => {
@@ -270,7 +270,7 @@ describe('Routine detail: Edit and Delete (R89, R90)', () => {
     show(MINE);
     const tree = mount();
 
-    press(tree, 'Delete');
+    press(tree, 'Delete routine');
     const shown = shownText(tree);
     expect(shown).toContain('Delete this routine?');
     expect(shown).toContain('Workouts you finished with it stay in History.');
@@ -284,8 +284,8 @@ describe('Routine detail: Edit and Delete (R89, R90)', () => {
     show(MINE);
     const tree = mount();
 
+    press(tree, 'Delete routine');
     press(tree, 'Delete');
-    press(tree, 'Delete', 1);
 
     expect(deleteRoutine).toHaveBeenCalledWith('db', 'mine');
     expect(bumpData).toHaveBeenCalled();

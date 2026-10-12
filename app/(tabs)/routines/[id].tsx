@@ -132,9 +132,9 @@ export default function RoutineDetailScreen() {
         ))}
       </View>
       {routine.isPremade ? null : (
-        // A quiet button steps back by its padding, so its label lines up with the content edge.
-        <View style={{ alignSelf: 'flex-start', marginTop: 16, marginLeft: -20 }}>
-          <Button label="Delete" variant="quiet" accessibilityLabel="Delete routine" onPress={() => setAskDelete(true)} />
+        // At the foot of the page, quiet and centred, as Delete workout is on a workout and Discard workout in the session.
+        <View style={{ marginTop: 24 }}>
+          <Button label="Delete routine" variant="quiet" onPress={() => setAskDelete(true)} />
         </View>
       )}
       <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />

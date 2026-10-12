@@ -177,7 +177,8 @@ function PlateList({ unit, owned }: { unit: WeightUnit; owned: Record<string, nu
           <Body muted>{unit}</Body>
         </View>
       </View>
-      <View style={{ alignItems: 'flex-start' }}>
+      {/* A quiet button steps back by its padding, so its label lines up with the rows above it. */}
+      <View style={{ alignItems: 'flex-start', marginLeft: -20 }}>
         <Button label="Reset to defaults" variant="quiet" onPress={() => save({ ...defaultSettings(null)[PLATES_KEY[unit]] })} />
       </View>
     </View>
