@@ -40,7 +40,11 @@ export function loadOptional<T>(load: () => unknown, env: NativeEnv = nativeEnv(
     if (module === null || module === undefined || isMissingNative(module)) return null;
     return module as T;
   } catch (error) {
-    console.warn('GymHound: a native module is not in this build.', error);
+    // A package that is not installed at all is the expected case under Jest (Metro stubs it in a build): say nothing.
+    // Anything else (the JS is there but its native side is not) is worth a line in the log.
+    if ((error as { code?: unknown } | null)?.code !== 'MODULE_NOT_FOUND') {
+      console.warn('GymHound: a native module is not in this build.', error);
+    }
     return null;
   }
 }

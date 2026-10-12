@@ -38,6 +38,16 @@ describe('loadOptional (R306)', () => {
     expect(loadOptional(() => null, IOS_BUILD)).toBeNull();
   });
 
+  it('says nothing when the package is simply not installed (Jest)', () => {
+    const notInstalled = Object.assign(new Error("Cannot find module 'expo-widgets'"), { code: 'MODULE_NOT_FOUND' });
+    expect(
+      loadOptional(() => {
+        throw notInstalled;
+      }, IOS_BUILD),
+    ).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
   it('knows a native build and the stand-in', () => {
     expect(isNativeBuild(IOS_BUILD)).toBe(true);
     expect(isNativeBuild(EXPO_GO)).toBe(false);

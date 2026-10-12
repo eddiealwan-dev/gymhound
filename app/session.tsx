@@ -29,6 +29,7 @@ import { MusicBar } from '../src/ui/session/MusicBar';
 import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
 import { useRestUp } from '../src/ui/session/useRestUp';
+import { SleepOfferBanner } from '../src/ui/native/SleepOfferBanner';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
@@ -306,6 +307,7 @@ export default function Session() {
       <SessionHeader name={workout.name} startedAt={workout.startedAt} musicApp={musicApp} progress={progress} onFinish={onFinish} />
       {/* The Short on food offer (§7.10): under the header, outside the scroll. */}
       <FoodOfferBanner workoutId={workout.id} />
+      <SleepOfferBanner workoutId={workout.id} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1 }}
