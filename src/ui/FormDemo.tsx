@@ -17,6 +17,13 @@ import { useTheme } from './ThemeProvider';
 const PHOTO_MS = 1200;
 /** The steps shown before **Show all steps**. */
 const FIRST_STEPS = 3;
+/** A photo fills its frame. One object, so a flip hands the photos the same style and nothing about them changes. */
+const FILL = { width: '100%', height: '100%' } as const;
+
+/** What a photo source is known by, so a photo that has loaded is still known when its source is made again. */
+function sourceKey(source: ImageSourcePropType): string {
+  return typeof source === 'number' ? String(source) : JSON.stringify(source);
+}
 
 /**
  * Whether the phone asks for less motion, and null until it has said. A check that fails counts as on, so nothing moves
@@ -49,7 +56,9 @@ function useReduceMotion(): boolean | null {
  * two poses of the same person shows a ghost of the first). Both photos stay mounted, the end photo stacked over the
  * start photo, and only the end photo's opacity flips between 0 and 1, so iOS never shows a blank frame decoding a new
  * source. The end photo sits in an opaque view that fills the frame, so none of the start photo shows around it (Round 7). With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while
- * unknown, the start photo shows alone. With one photo only (your own, R111), it shows alone and still.
+ * unknown, the start photo shows alone. With one photo only (your own, R111), it shows alone and still. The flipping
+ * waits until both photos have loaded (R403), so the first flip never shows the end photo's empty frame while it is
+ * still decoding (or, in Expo Go, still coming from the computer); one that fails to load leaves the start photo still.
  */
 function Photos({ name, photos }: { name: string; photos: readonly [ImageSourcePropType, ImageSourcePropType | null] }) {
   const { colors } = useTheme();
@@ -57,20 +66,28 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   /** Whether the end photo is shown: its opacity is 1 and it covers the start photo, or 0 and the start photo shows. */
   const [endShown, setEndShown] = useState(false);
   const single = photos[1] === null;
+  /** The sources that have loaded, by `sourceKey`. */
+  const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set());
+  const markLoaded = (source: ImageSourcePropType) => {
+    const key = sourceKey(source);
+    setLoaded((keys) => (keys.has(key) ? keys : new Set(keys).add(key)));
+  };
+  const ready = photos[1] !== null && loaded.has(sourceKey(photos[0])) && loaded.has(sourceKey(photos[1]));
 
   useEffect(() => {
-    if (reduced !== false || single) return;
+    if (reduced !== false || single || !ready) return;
     const timer = setInterval(() => setEndShown((shown) => !shown), PHOTO_MS);
     return () => {
       clearInterval(timer);
       setEndShown(false);
     };
-  }, [reduced, single]);
+  }, [reduced, single, ready]);
 
   const frame = { aspectRatio: 3 / 2, borderRadius: 12, overflow: 'hidden' as const, backgroundColor: colors.surfaceRaised };
   // Neither photo is a stop for the screen reader, so it never lands on the hidden one: the frame is (review of R86).
   const photo = (which: 0 | 1) => ({
     source: photos[which] ?? photos[0],
+    onLoad: () => markLoaded(photos[which] ?? photos[0]),
     testID: which === 0 ? 'form-demo-start' : 'form-demo-end',
     accessible: false,
     accessibilityIgnoresInvertColors: true,
@@ -81,7 +98,7 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   if (single) {
     return (
       <View accessible accessibilityRole="image" accessibilityLabel={`${name}, photo`} style={frame}>
-        <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
+        <Image {...photo(0)} style={FILL} />
       </View>
     );
   }
@@ -89,24 +106,24 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
     return (
       <View {...described} style={{ flexDirection: 'row', gap: 8 }}>
         <View style={[frame, { flex: 1 }]}>
-          <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
+          <Image {...photo(0)} style={FILL} />
         </View>
         <View style={[frame, { flex: 1 }]}>
-          <Image {...photo(1)} style={{ width: '100%', height: '100%' }} />
+          <Image {...photo(1)} style={FILL} />
         </View>
       </View>
     );
   }
   return (
     <View {...described} style={frame}>
-      <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
+      <Image {...photo(0)} style={FILL} />
       {/*
         The end photo sits in an opaque view that fills the frame, sized like the start photo. On the phone an Image given
         only absoluteFill drew at its own size, smaller than the frame, so the start photo showed along the right and
         bottom (Round 7).
       */}
       <View testID="form-demo-end-cover" style={[StyleSheet.absoluteFill, { opacity: endShown ? 1 : 0, backgroundColor: colors.surfaceRaised }]}>
-        <Image {...photo(1)} style={{ width: '100%', height: '100%' }} />
+        <Image {...photo(1)} style={FILL} />
       </View>
     </View>
   );

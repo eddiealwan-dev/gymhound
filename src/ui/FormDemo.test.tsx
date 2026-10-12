@@ -137,12 +137,25 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-/** Opens the demo and lets the Reduce Motion check answer. */
-async function open(exerciseId: string | null, onClose: () => void = () => {}): Promise<ReactTestRenderer> {
+/** Tells every photo drawn that it has loaded, as the phone does once it has decoded it. */
+function loadPhotos(tree: ReactTestRenderer, which: 'start' | 'end' | 'both' = 'both') {
+  const ids = which === 'both' ? ['form-demo-start', 'form-demo-end'] : [`form-demo-${which}`];
+  const drawn = tree.root.findAll((n) => n.type === Image && ids.includes(n.props.testID));
+  act(() => {
+    for (const image of drawn) image.props.onLoad?.({ nativeEvent: { source: { width: 360, height: 240 } } });
+  });
+}
+
+/**
+ * Opens the demo and lets the Reduce Motion check answer. Its photos then load at once (the swap waits for them, R403),
+ * unless `loaded` is false.
+ */
+async function open(exerciseId: string | null, onClose: () => void = () => {}, loaded = true): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
   await act(async () => {
     tree = create(<FormDemo exerciseId={exerciseId} onClose={onClose} />);
   });
+  if (loaded) loadPhotos(tree);
   return tree;
 }
 
@@ -249,6 +262,40 @@ describe('the form demo: the photos (R86)', () => {
     // No fade in between: it is an instant flip, so both photos stay drawn and the start photo is never touched.
     expect(photos(tree)).toHaveLength(2);
     expect(opacity(photo(tree, START))).toBeUndefined();
+  });
+
+  it('waits for both photos to load before it swaps, so the first swap never shows an empty frame (R403)', async () => {
+    const tree = await open(BENCH.id, () => {}, false);
+    act(() => void jest.advanceTimersByTime(5000));
+    expect(opacity(cover(tree))).toBe(0);
+
+    loadPhotos(tree, 'start');
+    act(() => void jest.advanceTimersByTime(5000));
+    expect(opacity(cover(tree))).toBe(0);
+
+    loadPhotos(tree, 'end');
+    act(() => void jest.advanceTimersByTime(1199));
+    expect(opacity(cover(tree))).toBe(0);
+    act(() => void jest.advanceTimersByTime(1));
+    expect(opacity(cover(tree))).toBe(1);
+  });
+
+  it('stays on the start photo when the end photo never loads', async () => {
+    const tree = await open(BENCH.id, () => {}, false);
+    loadPhotos(tree, 'start');
+    act(() => {
+      photo(tree, END).props.onError?.({ nativeEvent: { error: 'gone' } });
+    });
+    act(() => void jest.advanceTimersByTime(5000));
+    expect(opacity(cover(tree))).toBe(0);
+  });
+
+  it('hands each photo the same style on every flip, so nothing about the photos changes as they swap', async () => {
+    const tree = await open(BENCH.id);
+    const before = [photo(tree, START).props.style, photo(tree, END).props.style];
+    act(() => void jest.advanceTimersByTime(1200));
+    expect([photo(tree, START).props.style, photo(tree, END).props.style]).toEqual(before);
+    expect(photo(tree, START).props.style).toBe(before[0]);
   });
 
   it('gives the end photo an opaque background, so nothing of the start photo shows around it', async () => {
