@@ -1,4 +1,5 @@
 import { Text } from 'react-native';
+import type { Ref } from 'react';
 import type { TextProps } from 'react-native';
 import { fonts } from './theme';
 import { useTheme } from './ThemeProvider';
@@ -32,7 +33,7 @@ export function Body({ weight = 400, muted = false, style, ...rest }: BodyProps)
  * of a group of settings or routines. The words are written as they read ("Units"); the screen reader hears them as a
  * heading, in the case they were written in.
  */
-export function Label({ style, ...rest }: TextProps) {
+export function Label({ style, ...rest }: TextProps & { ref?: Ref<Text> }) {
   const { colors } = useTheme();
   return (
     <Text

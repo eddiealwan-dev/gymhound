@@ -1,8 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType, Ref } from 'react';
 import { Text, View } from 'react-native';
-import type { TextProps } from 'react-native';
 import { listHistory } from '../../../src/db/repositories/historyRepo';
 import { getSettings } from '../../../src/db/repositories/settingsRepo';
 import type { Db } from '../../../src/db/types';
@@ -20,9 +18,6 @@ import { Body, Display, Label } from '../../../src/ui/Text';
 /** Months shown at first, and how many more each Show earlier months adds (R163). */
 const FIRST_MONTHS = 3;
 const MORE_MONTHS = 6;
-
-/** `Label` passes its props, `ref` among them (React 19), to its Text; typed here so a month heading can take focus. */
-const MonthLabel = Label as ComponentType<TextProps & { ref?: Ref<Text> }>;
 
 /** Every finished workout as a card, in the display unit. */
 function readHistory(db: Db) {
@@ -45,6 +40,14 @@ export default function History() {
     }, []),
   );
   const [month, setMonth] = useState(() => today.slice(0, 7));
+  // Back in sight in a new month: a calendar left on the old current month moves to the new one; an earlier month the
+  // lifter chose stays.
+  const shownToday = useRef(today);
+  useEffect(() => {
+    const before = shownToday.current.slice(0, 7);
+    shownToday.current = today;
+    if (today.slice(0, 7) !== before) setMonth((m) => (m === before ? today.slice(0, 7) : m));
+  }, [today]);
   const [shown, setShown] = useState(FIRST_MONTHS);
   const { unit, cards } = useFocusedDbQuery(readHistory);
   const locale = deviceLocale();
@@ -79,7 +82,7 @@ export default function History() {
         <View style={{ marginTop: 32, gap: 32 }}>
           {visible.map((group) => (
             <View key={group.month} style={{ gap: 8 }}>
-              <MonthLabel
+              <Label
                 testID="history-month"
                 ref={(node: Text | null) => {
                   if (node) labels.current.set(group.month, node);
@@ -87,7 +90,7 @@ export default function History() {
                 }}
               >
                 {group.title}
-              </MonthLabel>
+              </Label>
               {group.cards.map((card) => (
                 <HistoryCard key={card.id} card={card} unit={unit} today={today} locale={locale} />
               ))}

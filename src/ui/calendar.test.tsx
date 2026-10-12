@@ -13,7 +13,7 @@ import {
   calendarSentence,
   monthGrid,
   ordinal,
-  sessionsLine,
+  trainedLine,
   shiftMonth,
   weekdayInitials,
 } from './history/ConsistencyCalendar';
@@ -125,16 +125,17 @@ describe('the calendar rules', () => {
   });
 
   it('reads the month as one sentence', () => {
-    expect(calendarSentence('October', [])).toBe('October: no workouts.');
+    expect(calendarSentence('October', [])).toBe('October: no training.');
     expect(calendarSentence('October', ['2026-10-01'])).toBe('October: trained on the 1st.');
     expect(calendarSentence('October', ['2026-10-01', '2026-10-03'])).toBe('October: trained on the 1st and 3rd.');
     expect(calendarSentence('October', ['2026-10-01', '2026-10-03', '2026-10-05'])).toBe('October: trained on the 1st, 3rd and 5th.');
   });
 
-  it('counts sessions, with the streak only when given one', () => {
-    expect(sessionsLine(1, 'October', 0)).toBe('1 session in October');
-    expect(sessionsLine(3, 'September', 0)).toBe('3 sessions in September');
-    expect(sessionsLine(4, 'October', 4)).toBe('4 sessions in October · 4-day streak');
+  it('counts days trained (R193), with the streak only when given one', () => {
+    expect(trainedLine(0, 'October', 0)).toBe('No training in October');
+    expect(trainedLine(1, 'October', 0)).toBe('Trained 1 day in October');
+    expect(trainedLine(3, 'September', 0)).toBe('Trained 3 days in September');
+    expect(trainedLine(4, 'October', 9)).toBe('Trained 4 days in October · 9-day streak');
   });
 
   it('moves a month back and forth across years', () => {
@@ -149,6 +150,21 @@ describe('the calendar rules', () => {
     expect(weeks[0]).toEqual([null, null, null, '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']);
     expect(weeks[weeks.length - 1]).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', null]);
     expect(weeks.every((w) => w.length === 7)).toBe(true);
+  });
+
+  it('lays out a month that starts on Sunday with six empty days before the 1st', () => {
+    // 1 November 2026 is a Sunday; 30 days end on a Monday.
+    const weeks = monthGrid('2026-11');
+    expect(weeks[0]).toEqual([null, null, null, null, null, null, '2026-11-01']);
+    expect(weeks).toHaveLength(6);
+    expect(weeks[5]).toEqual(['2026-11-30', null, null, null, null, null, null]);
+  });
+
+  it('gives a leap February 29 days and a common one 28', () => {
+    const days = (m: string) => monthGrid(m).flat().filter(Boolean);
+    expect(days('2028-02')).toHaveLength(29);
+    expect(days('2028-02').at(-1)).toBe('2028-02-29');
+    expect(days('2027-02')).toHaveLength(28);
   });
 
   it('gives weekday initials from the locale, Monday first', () => {
@@ -174,6 +190,17 @@ describe('ConsistencyCalendar (R164)', () => {
     expect(StyleSheet.flatten(one.props.style).color).toBe(BG);
   });
 
+  it("keeps today's ring on a day trained today", () => {
+    trainOn('2026-10-11');
+    const tree = mount(<Harness initial="2026-10" />);
+    expect(filled(tree, '2026-10-11')).toBe(true);
+    expect(StyleSheet.flatten(dayCircle(tree, '2026-10-11').props.style).borderColor).toBe(TEXT);
+    // Another trained day has no ring.
+    trainOn('2026-10-09');
+    const again = mount(<Harness initial="2026-10" />);
+    expect(StyleSheet.flatten(dayCircle(again, '2026-10-09').props.style).borderColor).toBe('transparent');
+  });
+
   it('puts Monday first: the grid starts with the weekday initials and three empty days before the 1st', () => {
     const tree = mount(<Harness initial="2026-10" />);
     const text = shownText(tree);
@@ -186,6 +213,7 @@ describe('ConsistencyCalendar (R164)', () => {
     expect(disabled(button(tree, 'Next month'))).toBe(true);
     expect(disabled(button(tree, 'Previous month'))).toBe(true);
     expect(shownText(tree)).toContain('October');
+    expect(shownText(tree)).toContain('No training in October');
   });
 
   it('goes back month by month and stops at the first workout\'s month, then forward to the current one', () => {
@@ -210,27 +238,27 @@ describe('ConsistencyCalendar (R164)', () => {
     expect(disabled(button(tree, 'Next month'))).toBe(true);
   });
 
-  it('says the sessions and the streak for the current month', () => {
+  it('says the days trained and the streak for the current month', () => {
     trainOn('2026-10-01');
     trainOn('2026-10-03');
     trainOn('2026-10-08');
     trainOn('2026-10-10');
     const tree = mount(<Harness initial="2026-10" />);
     // The run is 8 → 10, alive on the 11th: 4 days.
-    expect(shownText(tree)).toContain('4 sessions in October · 4-day streak');
+    expect(shownText(tree)).toContain('Trained 4 days in October · 4-day streak');
   });
 
   it('leaves the streak out for another month, and when there is none', () => {
     trainOn('2026-09-15');
     trainOn('2026-10-10');
     const tree = mount(<Harness initial="2026-09" />);
-    expect(shownText(tree)).toContain('1 session in September');
+    expect(shownText(tree)).toContain('Trained 1 day in September');
 
     const lapsed = seededDb();
     mockDb = lapsed;
     trainOn('2026-10-01');
     const other = mount(<Harness initial="2026-10" />);
-    expect(shownText(other)).toContain('1 session in October');
+    expect(shownText(other)).toContain('Trained 1 day in October');
   });
 
   it('reads the grid as one sentence', () => {
@@ -244,7 +272,7 @@ describe('ConsistencyCalendar (R164)', () => {
     expect(tree.root.findAll((n) => typeof n.props.onPress === 'function' && /^day-/.test(String(n.props.testID))).length).toBe(0);
 
     const empty = mount(<Harness initial="2026-09" />);
-    expect(empty.root.findAll((n) => n.props.accessibilityLabel === 'September: no workouts.').length).toBeGreaterThan(0);
+    expect(empty.root.findAll((n) => n.props.accessibilityLabel === 'September: no training.').length).toBeGreaterThan(0);
   });
 
   it('says the new month when it moves, without a live region', () => {

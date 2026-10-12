@@ -29,17 +29,20 @@ export function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
-/** The grid as VoiceOver reads it: "October: trained on the 1st, 3rd and 5th." or "October: no workouts." */
+/** The grid as VoiceOver reads it: "October: trained on the 1st, 3rd and 5th." or "October: no training." */
 export function calendarSentence(title: string, days: readonly string[]): string {
-  if (days.length === 0) return `${title}: no workouts.`;
+  if (days.length === 0) return `${title}: no training.`;
   const names = days.map((d) => ordinal(Number(d.slice(8, 10))));
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   return `${title}: trained on the ${list}.`;
 }
 
-/** "4 sessions in October · 4-day streak" ("1 session"); the streak part only when `streak` > 0. */
-export function sessionsLine(sessions: number, title: string, streak: number): string {
-  const line = `${sessions} ${sessions === 1 ? 'session' : 'sessions'} in ${title}`;
+/**
+ * The line under the grid (R193): it counts days trained, not workouts. "Trained 4 days in October · 9-day streak",
+ * "Trained 1 day in October", "No training in October"; the streak part only when `streak` > 0.
+ */
+export function trainedLine(days: number, title: string, streak: number): string {
+  const line = days === 0 ? `No training in ${title}` : `Trained ${days} ${days === 1 ? 'day' : 'days'} in ${title}`;
   return streak > 0 ? `${line} · ${streak}-day streak` : line;
 }
 
@@ -86,8 +89,8 @@ function MonthStep({ glyph, label, disabled, onPress }: { glyph: string; label: 
  * Monday-first grid with the locale's weekday initials. A trained day (a finished workout's `local_date`; the active
  * workout is not one) is a circle filled with the text colour and numbered in the background colour; today has a 1.5pt
  * text-colour ring; other days are muted. Days are not buttons (at 320pt a day is ~41pt, under 44), so the grid is one
- * element read as a sentence. Under it "{n} sessions in {Month}", with "· {s}-day streak" on the current month while a
- * streak runs. A session here is a day trained. › stops at the current month and ‹ at the first workout's month; each
+ * element read as a sentence. Under it "Trained {n} days in {Month}" (R193), with "· {s}-day streak" on the current
+ * month while a streak runs. › stops at the current month and ‹ at the first workout's month; each
  * move says the new month's sentence. Its reads wait while History is out of sight (R185).
  *
  * The day numbers and initials are capped at 1.3x the text size, so a day stays inside its circle at the largest size;
@@ -193,7 +196,7 @@ export function ConsistencyCalendar({ month, today, onMonthChange }: { month: st
         ))}
       </View>
       <Body muted style={{ fontSize: 14, marginTop: 8 }}>
-        {sessionsLine(days.length, title, streak)}
+        {trainedLine(days.length, title, streak)}
       </Body>
     </View>
   );

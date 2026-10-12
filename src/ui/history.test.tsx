@@ -19,7 +19,17 @@ import { ConsistencyCalendar } from './history/ConsistencyCalendar';
 
 let mockDb: Db;
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: () => undefined }));
+/** Every focus callback the screen registered, so a test can bring History back into sight. */
+const mockFocusCallbacks = new Set<() => void>();
+const mockCalls: string[] = [];
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn((href: string) => mockCalls.push(`push ${href}`)) },
+  useFocusEffect: (cb: () => void) => mockFocusCallbacks.add(cb),
+}));
+jest.mock('../state/draftFlush', () => ({
+  ...jest.requireActual('../state/draftFlush'),
+  flushAll: () => mockCalls.push('flushAll'),
+}));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
@@ -46,7 +56,16 @@ beforeEach(() => {
   jest.mocked(router.push).mockClear();
   mockAnnounce.mockClear();
   mockFocusOn.mockClear();
+  mockFocusCallbacks.clear();
+  mockCalls.length = 0;
 });
+
+/** History comes back into sight: every focus callback runs, as React Navigation's would. */
+function refocus() {
+  act(() => {
+    for (const cb of [...mockFocusCallbacks]) cb();
+  });
+}
 
 afterEach(() => jest.restoreAllMocks());
 
@@ -64,6 +83,12 @@ function trainOn(localDate: string, weight = 135, mark: ExerciseMark | null = nu
   if (mark) setExerciseMark(mockDb, we, mark);
   finishWorkout(mockDb, id, start + 48 * MIN);
   return id;
+}
+
+/** The heading the nth focusOn call was given: its testID and words (the ref is the Text, carrying its props). */
+function focused(n: number) {
+  const node = mockFocusOn.mock.calls[n][0] as { props: { testID?: string; children?: unknown } };
+  return { testID: node.props.testID, words: node.props.children };
 }
 
 function mount(): ReactTestRenderer {
@@ -148,6 +173,8 @@ describe('History (R163)', () => {
     expect(card.props.accessibilityRole).toBe('button');
     act(() => card.props.onPress());
     expect(router.push).toHaveBeenCalledWith(`/history/${id}`);
+    // Drafts are saved before the screen changes (R29).
+    expect(mockCalls).toEqual(['flushAll', `push /history/${id}`]);
   });
 
   it('shows the 3 newest months, then Show earlier months adds 6 more each tap until none are left', () => {
@@ -166,11 +193,12 @@ describe('History (R163)', () => {
 
     // VoiceOver moves to the first month added (the 4th month, July).
     expect(mockFocusOn).toHaveBeenCalledTimes(1);
-    expect(mockFocusOn.mock.calls[0][0]).toBeTruthy();
+    expect(focused(0)).toEqual({ testID: 'history-month', words: 'July' });
 
     act(() => pressable(tree, 'Show earlier months')!.props.onPress());
     expect(monthLabels(tree)).toHaveLength(11);
     expect(mockFocusOn).toHaveBeenCalledTimes(2);
+    expect(focused(1)).toEqual({ testID: 'history-month', words: 'January' });
     expect(monthLabels(tree)[10]).toBe('December 2025');
     expect(pressable(tree, 'Show earlier months')).toBeUndefined();
   });
@@ -191,6 +219,24 @@ describe('History (R163)', () => {
     act(() => pressable(tree, 'Previous month')!.props.onPress());
     expect(tree.root.findByType(ConsistencyCalendar).props.month).toBe('2026-09');
     expect(monthLabels(tree)).toEqual(['October', 'September']);
+  });
+
+  it('moves the calendar to the new current month when History comes back in a new month', () => {
+    const tree = mount();
+    expect(tree.root.findByType(ConsistencyCalendar).props.month).toBe('2026-10');
+    jest.mocked(Date.now).mockReturnValue(new Date(2026, 10, 2, 9, 0).getTime());
+    refocus();
+    expect(tree.root.findByType(ConsistencyCalendar).props.month).toBe('2026-11');
+    expect(tree.root.findByType(ConsistencyCalendar).props.today).toBe('2026-11-02');
+  });
+
+  it('keeps an earlier month the lifter moved to when History comes back in a new month', () => {
+    trainOn('2026-09-05');
+    const tree = mount();
+    act(() => pressable(tree, 'Previous month')!.props.onPress());
+    jest.mocked(Date.now).mockReturnValue(new Date(2026, 10, 2, 9, 0).getTime());
+    refocus();
+    expect(tree.root.findByType(ConsistencyCalendar).props.month).toBe('2026-09');
   });
 
   it('uses no red and no live region, even with personal bests', () => {
