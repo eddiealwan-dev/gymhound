@@ -101,9 +101,8 @@ function StatCard({ label, value, caption }: { label: string; value: string; cap
   const fontSize = statFontSize(value);
   return (
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16 }}>
-      <Body weight={600} muted style={{ fontSize: 14 }}>
-        {label}
-      </Body>
+      {/* The Label style UP NEXT uses, as Fuel's CALORIES LEFT does under its number; not a heading here. */}
+      <Label accessibilityRole="none">{label}</Label>
       {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's
           text size is turned up. No fixed line height, as for the date (R79): iOS shrinks only the font to fit. */}
       <View style={{ minHeight: 52, justifyContent: 'center' }}>
