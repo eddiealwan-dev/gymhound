@@ -7,10 +7,13 @@ import type { Db } from '../../db/types';
 import type { PurchasesSdk } from './index';
 import { createRevenueCatEntitlements, DEFAULT_OFFERING, PRO_ENTITLEMENT, storePeriod } from './revenuecat';
 
-type Info = { activeEntitlements: string[] };
+type Info = { activeEntitlements: string[]; proExpires?: boolean };
 const PRO: Info = { activeEntitlements: ['pro'] };
 const NONE: Info = { activeEntitlements: [] };
-const MONTHLY = { id: '$rc_monthly', priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
+const MONTHLY = { id: '$rc_monthly', kind: 'monthly' as const, priceString: '$4.99', price: 4.99, perMonthString: null, period: { count: 1, unit: 'month' as const }, freeTrialDays: 7 };
+const YEARLY = { id: '$rc_annual', kind: 'yearly' as const, priceString: '$39.99', price: 39.99, perMonthString: '$3.33', period: { count: 1, unit: 'year' as const }, freeTrialDays: 7 };
+const LIFETIME = { id: '$rc_lifetime', kind: 'lifetime' as const, priceString: '$99.99', price: 99.99, perMonthString: null, period: null, freeTrialDays: null };
+type Plans = Awaited<ReturnType<PurchasesSdk['getPlans']>>;
 
 /** A fake store: every call is a jest.fn, `push` plays a customer-info update from the store. */
 function fakeSdk(overrides: Partial<PurchasesSdk> = {}) {
@@ -24,7 +27,7 @@ function fakeSdk(overrides: Partial<PurchasesSdk> = {}) {
         listener = null;
       };
     }),
-    getDefaultPackage: jest.fn<ReturnType<PurchasesSdk['getDefaultPackage']>, []>(async () => MONTHLY),
+    getPlans: jest.fn<Promise<Plans>, []>(async () => [MONTHLY]),
     purchase: jest.fn<Promise<Info>, [string]>(async () => PRO),
     restore: jest.fn<Promise<Info>, []>(async () => PRO),
     showManageSubscriptions: jest.fn<Promise<void>, []>(async () => {}),
@@ -63,7 +66,7 @@ describe('RevenueCat entitlements (R135)', () => {
     expect(entitlements.kind).toBe('revenuecat');
     expect(sdk.configure).toHaveBeenCalledWith('appl_key');
     expect(sdk.getCustomerInfo).toHaveBeenCalledTimes(1);
-    expect(sdk.getDefaultPackage).toHaveBeenCalledTimes(1);
+    expect(sdk.getPlans).toHaveBeenCalledTimes(1);
     expect(entitlements.isPro()).toBe(false);
     expect(entitlements.canPurchase()).toBe(false);
     await settle();
@@ -100,7 +103,7 @@ describe('RevenueCat entitlements (R135)', () => {
   });
 
   it('customer info with pro writes pro_cached and notifies once', async () => {
-    const { sdk } = fakeSdk({ getCustomerInfo: jest.fn(async () => PRO), getDefaultPackage: jest.fn(async () => null) });
+    const { sdk } = fakeSdk({ getCustomerInfo: jest.fn(async () => PRO), getPlans: jest.fn(async (): Promise<Plans> => []) });
     const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
     const seen: boolean[] = [];
     entitlements.subscribe(() => seen.push(entitlements.isPro()));
@@ -137,17 +140,17 @@ describe('RevenueCat entitlements (R135)', () => {
     expect(entitlements.isPro()).toBe(true);
     expect(entitlements.canPurchase()).toBe(false);
     expect(sdk.getCustomerInfo).not.toHaveBeenCalled();
-    await expect(entitlements.purchase()).resolves.toBe('unavailable');
+    await expect(entitlements.purchase('monthly')).resolves.toBe('unavailable');
     await expect(entitlements.restore()).resolves.toBe('unavailable');
     expect(entitlements.canRestore()).toBe(false);
     entitlements.refreshOffer();
-    expect(sdk.getDefaultPackage).not.toHaveBeenCalled();
+    expect(sdk.getPlans).not.toHaveBeenCalled();
     await expect(entitlements.manageSubscription()).resolves.toBe(false);
     expect(sdk.showManageSubscriptions).not.toHaveBeenCalled();
   });
 
   it('can restore once the store is configured, even with nothing to buy', async () => {
-    const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => null) });
+    const { sdk } = fakeSdk({ getPlans: jest.fn(async (): Promise<Plans> => []) });
     const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
     await settle();
     expect(entitlements.canPurchase()).toBe(false);
@@ -155,16 +158,16 @@ describe('RevenueCat entitlements (R135)', () => {
   });
 
   it('loads the offering again when the app comes back to the foreground, so a store that was slow can sell', async () => {
-    const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => Promise.reject(new Error('offline'))) });
+    const { sdk } = fakeSdk({ getPlans: jest.fn(async (): Promise<Plans> => Promise.reject(new Error('offline'))) });
     const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
     await settle();
     expect(entitlements.canPurchase()).toBe(false);
     const seen: boolean[] = [];
     entitlements.subscribe(() => seen.push(entitlements.canPurchase()));
 
-    (sdk.getDefaultPackage as jest.Mock).mockResolvedValueOnce(MONTHLY);
+    (sdk.getPlans as jest.Mock).mockResolvedValueOnce([MONTHLY]);
     appStateHandler?.('active');
-    expect(sdk.getDefaultPackage).toHaveBeenCalledTimes(2);
+    expect(sdk.getPlans).toHaveBeenCalledTimes(2);
     await settle();
     expect(entitlements.canPurchase()).toBe(true);
     expect(seen).toEqual([true]);
@@ -174,15 +177,15 @@ describe('RevenueCat entitlements (R135)', () => {
     const { sdk } = fakeSdk();
     const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
     await settle();
-    (sdk.getDefaultPackage as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    (sdk.getPlans as jest.Mock).mockRejectedValueOnce(new Error('offline'));
     entitlements.refreshOffer();
-    expect(sdk.getDefaultPackage).toHaveBeenCalledTimes(2);
+    expect(sdk.getPlans).toHaveBeenCalledTimes(2);
     await settle();
     expect(entitlements.canPurchase()).toBe(true);
-    (sdk.getDefaultPackage as jest.Mock).mockResolvedValueOnce({ ...MONTHLY, priceString: '$5.99' });
+    (sdk.getPlans as jest.Mock).mockResolvedValueOnce([{ ...MONTHLY, priceString: '$5.99' }]);
     entitlements.refreshOffer();
     await settle();
-    expect(entitlements.offer()?.priceString).toBe('$5.99');
+    expect(entitlements.plans()[0]?.priceString).toBe('$5.99');
   });
 
   it('manageSubscription() opens the store page; a failure resolves false and never throws', async () => {
@@ -212,36 +215,55 @@ describe('RevenueCat entitlements (R135)', () => {
     expect(entitlements.isPro()).toBe(true);
   });
 
-  describe('offer()', () => {
-    it('reads the price and period of the default package and notifies when it arrives', async () => {
-      const { sdk } = fakeSdk();
+  it('isSubscribed() is on only while Pro comes from an entitlement with an end date (a subscription), not lifetime', async () => {
+    const { sdk, push } = fakeSdk({ getCustomerInfo: jest.fn(async () => ({ activeEntitlements: ['pro'], proExpires: true })) });
+    const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+    expect(entitlements.isSubscribed()).toBe(false);
+    await settle();
+    expect(entitlements.isSubscribed()).toBe(true);
+    const seen: boolean[] = [];
+    entitlements.subscribe(() => seen.push(entitlements.isSubscribed()));
+    push({ activeEntitlements: ['pro'], proExpires: false });
+    expect(entitlements.isSubscribed()).toBe(false);
+    expect(entitlements.isPro()).toBe(true);
+    expect(seen).toEqual([false]);
+    push({ activeEntitlements: [], proExpires: true });
+    expect(entitlements.isSubscribed()).toBe(false);
+  });
+
+  describe('plans() (R556)', () => {
+    it("reads the default offering's plans, yearly, monthly and lifetime in that order, and notifies when they arrive", async () => {
+      const { sdk } = fakeSdk({ getPlans: jest.fn(async () => [LIFETIME, MONTHLY, YEARLY]) });
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
       const seen: number[] = [];
       entitlements.subscribe(() => seen.push(1));
-      expect(entitlements.offer()).toBeNull();
+      expect(entitlements.plans()).toEqual([]);
       await settle();
-      expect(entitlements.offer()).toEqual({ priceString: '$4.99', period: { count: 1, unit: 'month' } });
+      expect(entitlements.plans().map((p) => p.kind)).toEqual(['yearly', 'monthly', 'lifetime']);
+      const { id: _id, ...yearly } = YEARLY;
+      expect(entitlements.plans()[0]).toEqual(yearly);
       expect(seen).toEqual([1]);
     });
 
-    it('a lifetime product has period null', async () => {
-      const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => ({ id: 'lifetime', priceString: '$29.99', period: null })) });
+    it('keeps one plan of each kind', async () => {
+      const { sdk } = fakeSdk({ getPlans: jest.fn(async () => [MONTHLY, { ...MONTHLY, id: 'other', priceString: '$9.99' }]) });
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
       await settle();
-      expect(entitlements.offer()).toEqual({ priceString: '$29.99', period: null });
+      expect(entitlements.plans()).toHaveLength(1);
+      expect(entitlements.plans()[0].priceString).toBe('$4.99');
     });
 
-    it('no package, or the offering failing, leaves no offer and nothing to buy', async () => {
-      const none = createRevenueCatEntitlements(db, fakeSdk({ getDefaultPackage: jest.fn(async () => null) }).sdk, 'key', false);
+    it('no plans, or the offering failing, leaves none and nothing to buy', async () => {
+      const none = createRevenueCatEntitlements(db, fakeSdk({ getPlans: jest.fn(async (): Promise<Plans> => []) }).sdk, 'key', false);
       const broken = createRevenueCatEntitlements(
         db,
-        fakeSdk({ getDefaultPackage: jest.fn(async () => Promise.reject(new Error('offline'))) }).sdk,
+        fakeSdk({ getPlans: jest.fn(async (): Promise<Plans> => Promise.reject(new Error('offline'))) }).sdk,
         'key',
         false,
       );
       await settle();
       for (const entitlements of [none, broken]) {
-        expect(entitlements.offer()).toBeNull();
+        expect(entitlements.plans()).toEqual([]);
         expect(entitlements.canPurchase()).toBe(false);
       }
     });
@@ -262,13 +284,13 @@ describe('RevenueCat entitlements (R135)', () => {
   });
 
   describe('purchase()', () => {
-    it('buys the default package: pro active → purchased, pro_cached written, subscribers told', async () => {
+    it('buys the chosen plan: pro active → purchased, pro_cached written, subscribers told', async () => {
       const { sdk } = fakeSdk();
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
       await settle();
       const seen: boolean[] = [];
       entitlements.subscribe(() => seen.push(entitlements.isPro()));
-      await expect(entitlements.purchase()).resolves.toBe('purchased');
+      await expect(entitlements.purchase('monthly')).resolves.toBe('purchased');
       expect(sdk.purchase).toHaveBeenCalledWith('$rc_monthly');
       expect(getSettings(db).proCached).toBe(true);
       expect(seen).toEqual([true]);
@@ -277,25 +299,25 @@ describe('RevenueCat entitlements (R135)', () => {
     it('waits for the offering when it has not arrived yet', async () => {
       const { sdk } = fakeSdk();
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
-      await expect(entitlements.purchase()).resolves.toBe('purchased');
+      await expect(entitlements.purchase('monthly')).resolves.toBe('purchased');
     });
 
     it('a purchase that leaves pro inactive is failed', async () => {
       const { sdk } = fakeSdk({ purchase: jest.fn(async () => NONE) });
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
-      await expect(entitlements.purchase()).resolves.toBe('failed');
+      await expect(entitlements.purchase('monthly')).resolves.toBe('failed');
       expect(entitlements.isPro()).toBe(false);
     });
 
     it('cancelled by the user → cancelled', async () => {
       const { sdk } = fakeSdk({ purchase: jest.fn(async () => Promise.reject({ userCancelled: true })) });
-      await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase()).resolves.toBe('cancelled');
+      await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase('monthly')).resolves.toBe('cancelled');
     });
 
     it('waiting for approval (Ask to Buy, a pending payment) → pending, Pro unchanged', async () => {
       const { sdk } = fakeSdk({ purchase: jest.fn(async () => Promise.reject({ paymentPending: true })) });
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
-      await expect(entitlements.purchase()).resolves.toBe('pending');
+      await expect(entitlements.purchase('monthly')).resolves.toBe('pending');
       expect(entitlements.isPro()).toBe(false);
     });
 
@@ -303,22 +325,37 @@ describe('RevenueCat entitlements (R135)', () => {
       setSetting(db, 'proCached', false);
       const { sdk } = fakeSdk({ purchase: jest.fn(async () => Promise.reject(new Error('network'))) });
       const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
-      await expect(entitlements.purchase()).resolves.toBe('failed');
+      await expect(entitlements.purchase('monthly')).resolves.toBe('failed');
       expect(entitlements.isPro()).toBe(false);
     });
 
+    it("buys the chosen plan's own package", async () => {
+      const { sdk } = fakeSdk({ getPlans: jest.fn(async () => [YEARLY, MONTHLY, LIFETIME]) });
+      const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
+      await expect(entitlements.purchase('lifetime')).resolves.toBe('purchased');
+      expect(sdk.purchase).toHaveBeenCalledWith('$rc_lifetime');
+      await expect(entitlements.purchase('yearly')).resolves.toBe('purchased');
+      expect(sdk.purchase).toHaveBeenLastCalledWith('$rc_annual');
+    });
+
+    it('a plan the store does not sell → unavailable', async () => {
+      const { sdk } = fakeSdk();
+      await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase('lifetime')).resolves.toBe('unavailable');
+      expect(sdk.purchase).not.toHaveBeenCalled();
+    });
+
     it('no package → unavailable, and the store is not asked to buy', async () => {
-      const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(async () => null) });
-      await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase()).resolves.toBe('unavailable');
+      const { sdk } = fakeSdk({ getPlans: jest.fn(async (): Promise<Plans> => []) });
+      await expect(createRevenueCatEntitlements(db, sdk, 'key', false).purchase('monthly')).resolves.toBe('unavailable');
       expect(sdk.purchase).not.toHaveBeenCalled();
     });
     it('gives up waiting for an offering that never arrives after 10 seconds: unavailable', async () => {
       jest.useFakeTimers();
       try {
-        const { sdk } = fakeSdk({ getDefaultPackage: jest.fn(() => new Promise<null>(() => {})) });
+        const { sdk } = fakeSdk({ getPlans: jest.fn(() => new Promise<Plans>(() => {})) });
         const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
         let result: string | null = null;
-        void entitlements.purchase().then((r) => (result = r));
+        void entitlements.purchase('monthly').then((r) => (result = r));
         await jest.advanceTimersByTimeAsync(9_999);
         expect(result).toBeNull();
         await jest.advanceTimersByTimeAsync(1);
@@ -335,7 +372,7 @@ describe('RevenueCat entitlements (R135)', () => {
       try {
         const { sdk } = fakeSdk();
         const entitlements = createRevenueCatEntitlements(db, sdk, 'key', false);
-        await expect(entitlements.purchase()).resolves.toBe('purchased');
+        await expect(entitlements.purchase('monthly')).resolves.toBe('purchased');
         expect(jest.getTimerCount()).toBe(0);
       } finally {
         jest.useRealTimers();

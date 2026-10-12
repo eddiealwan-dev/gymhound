@@ -44,7 +44,8 @@ export function createDebugEntitlements(db: Db): AppEntitlements {
     refreshOffer: () => {},
     manageSubscription: async () => false,
     dispose: () => {},
-    offer: () => null,
+    plans: () => [],
+    isSubscribed: () => false,
     purchase: async () => 'unavailable',
     restore: async () => 'unavailable',
     setDebugUnlock(on) {

@@ -6,7 +6,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import PaywallRoute from '../../app/paywall';
 import { announce } from '../platform/announce';
 import type { EntitlementsState } from '../platform/entitlements/useIsPro';
-import type { PurchaseResult, RestoreResult } from '../platform/entitlements';
+import type { PlanKind, PurchaseResult, RestoreResult, StorePlan } from '../platform/entitlements';
 import { Button } from './Button';
 import { Footer } from './Footer';
 import { priceLine, ProPitch } from './pro/ProPitch';
@@ -15,7 +15,7 @@ import { priceLine, ProPitch } from './pro/ProPitch';
 
 /** What the hooks report, and the store calls Unlock and Restore make. */
 let mockState: EntitlementsState;
-const mockPurchase = jest.fn<Promise<PurchaseResult>, []>();
+const mockPurchase = jest.fn<Promise<PurchaseResult>, [PlanKind]>();
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
 const mockRefreshOffer = jest.fn();
 
@@ -58,10 +58,20 @@ const NONE_FOUND = 'No earlier purchase found.';
 const RESTORE_FAILED = "Couldn't reach the store. Try again.";
 
 const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
+const START = 'Start your free trial';
+
+/** The store's plans, at the owner's prices (R556). */
+const PLANS: StorePlan[] = [
+  { kind: 'yearly', priceString: '$119.99', price: 119.99, perMonthString: '$9.99', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
+  { kind: 'monthly', priceString: '$19.99', price: 19.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
+  { kind: 'lifetime', priceString: '$199', price: 199, perMonthString: null, period: null, freeTrialDays: null },
+];
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: MONTHLY, kind: 'revenuecat', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: PLANS, subscribed: false, kind: 'revenuecat', trialOnly: false, ...over };
 }
+
+const radios = (tree: ReactTestRenderer) => tree.root.findAll((n) => typeof n.type !== 'string' && n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function');
 
 function render(element: React.ReactElement): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -123,17 +133,17 @@ describe('priceLine (§8.12, R157)', () => {
 });
 
 describe('ProPitch (§8.12, R137)', () => {
-  it('shows the title, the three Pro lines each with a check, the free list, Unlock, Restore purchases and Not now', () => {
+  it('shows the title, the three Pro lines each with a check, the free list, Start your free trial, Restore purchases and Not now', () => {
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
     const shown = shownText(tree);
 
     expect(shown).toEqual(expect.arrayContaining([TITLE, ROUTINES, OWN, FUEL, FREE]));
-    const checks = tree.root.findAllByType(Ionicons);
+    const checks = tree.root.findAllByType(Ionicons).filter((icon) => icon.props.name === 'checkmark');
     expect(checks).toHaveLength(3);
     for (const check of checks) {
       expect(check.props).toMatchObject({ name: 'checkmark', size: 20, color: '#f1ece2' });
     }
-    expect(button(tree, 'Unlock').props.variant ?? 'primary').toBe('primary');
+    expect(button(tree, START).props.variant ?? 'primary').toBe('primary');
     expect(button(tree, 'Restore purchases').props.variant).toBe('secondary');
     expect(button(tree, 'Not now').props.variant).toBe('secondary');
   });
@@ -147,29 +157,53 @@ describe('ProPitch (§8.12, R137)', () => {
   it('in the Fuel tab has no Not now', () => {
     const tree = render(<ProPitch context="tab" />);
     expect(buttons(tree, 'Not now')).toHaveLength(0);
-    expect(button(tree, 'Unlock')).toBeTruthy();
+    expect(button(tree, START)).toBeTruthy();
   });
 
-  it('shows the store price under Unlock for a subscription: "$4.99 a month"', () => {
+  it('offers Yearly, Monthly and Lifetime as radio buttons, Yearly chosen and marked with its saving (R556)', () => {
     const tree = render(<ProPitch context="screen" />);
-    expect(shownText(tree)).toContain('$4.99 a month');
+    expect(radios(tree).map((r) => [r.props.accessibilityLabel, r.props.accessibilityState.checked])).toEqual([
+      ['Yearly, Save 50%, $9.99/mo, $119.99 billed yearly, 7 days free', true],
+      ['Monthly, $19.99/mo, Billed monthly, 7 days free', false],
+      ['Lifetime, $199, One-time payment', false],
+    ]);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$119.99 billed yearly', '$19.99/mo', '$199', 'One-time payment']));
     expect(shownText(tree)).not.toContain(UNAVAILABLE);
-    expect(button(tree, 'Unlock').props.disabled).toBeFalsy();
+    expect(button(tree, START).props.disabled).toBeFalsy();
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
   });
 
-  it('says a subscription renews until cancelled in the store (R159)', () => {
+  it('says what the free trial leads to, and that a subscription renews until cancelled (R159)', () => {
     const tree = render(<ProPitch context="screen" />);
     const shown = shownText(tree);
+    const terms = "7 days free, then $119.99 a year. Cancel before the trial ends and you won't be charged.";
+    expect(shown).toContain(terms);
     expect(shown).toContain(RENEWS);
-    expect(shown.indexOf(RENEWS)).toBeGreaterThan(shown.indexOf('$4.99 a month'));
+    expect(shown.indexOf(RENEWS)).toBeGreaterThan(shown.indexOf(terms));
   });
 
-  it('shows a one-time price as "{price} once", with no renewal line (R159)', () => {
-    mockState = state({ offer: { priceString: '$24.99', period: null } });
+  it('choosing a plan changes the button and its terms, and buys that plan', async () => {
+    mockPurchase.mockResolvedValue('cancelled');
     const tree = render(<ProPitch context="screen" />);
-    expect(shownText(tree)).toContain('$24.99 once');
+    act(() => radios(tree)[1].props.onPress());
+    expect(shownText(tree)).toContain("7 days free, then $19.99 a month. Cancel before the trial ends and you won't be charged.");
+    await press(tree, START);
+    expect(mockPurchase).toHaveBeenLastCalledWith('monthly');
+
+    act(() => radios(tree)[2].props.onPress());
+    expect(radios(tree)[2].props.accessibilityState.checked).toBe(true);
+    expect(shownText(tree)).toContain('$199 once. Pro is yours to keep.');
     expect(shownText(tree)).not.toContain(RENEWS);
+    await press(tree, 'Buy lifetime');
+    expect(mockPurchase).toHaveBeenLastCalledWith('lifetime');
+  });
+
+  it('a subscription with no free trial says Subscribe, with its price', () => {
+    mockState = state({ plans: [{ ...PLANS[1], freeTrialDays: null }] });
+    const tree = render(<ProPitch context="screen" />);
+    expect(button(tree, 'Subscribe')).toBeTruthy();
+    expect(shownText(tree)).toContain('$19.99 a month.');
+    expect(shownText(tree)).not.toContain('Save 50%');
   });
 
   it('asks the store for its offer again when it opens', () => {
@@ -178,9 +212,10 @@ describe('ProPitch (§8.12, R137)', () => {
   });
 
   it('with a store that has nothing to sell yet, disables Unlock only and says the store is not answering', () => {
-    mockState = state({ canPurchase: false, offer: null });
+    mockState = state({ canPurchase: false, plans: [] });
     const tree = render(<ProPitch context="screen" />);
 
+    expect(radios(tree)).toHaveLength(0);
     expect(button(tree, 'Unlock').props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
     expect(shownText(tree)).toContain(NOT_ANSWERING);
@@ -228,11 +263,13 @@ describe('ProPitch (§8.12, R137)', () => {
     });
   });
 
-  it('with no store (Expo Go, the debug unlock, free) disables Unlock and Restore under one line', () => {
-    mockState = state({ kind: 'debug', canPurchase: false, canRestore: false, offer: null });
+  it('with no store (Expo Go, the debug unlock, free) shows the planned prices, and disables buying and Restore under one line', () => {
+    mockState = state({ kind: 'debug', canPurchase: false, canRestore: false, plans: [] });
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
 
-    expect(button(tree, 'Unlock').props.disabled).toBe(true);
+    expect(radios(tree)).toHaveLength(3);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$19.99/mo', '$199']));
+    expect(button(tree, START).props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBe(true);
     expect(shownText(tree).filter((line) => line === UNAVAILABLE)).toHaveLength(1);
     expect(button(tree, 'Not now').props.disabled).toBeFalsy();
@@ -251,9 +288,9 @@ describe('ProPitch (§8.12, R137)', () => {
     mockPurchase.mockReturnValue(pending.promise);
     const tree = render(<ProPitch context="screen" onDone={onDone} />);
 
-    await press(tree, 'Unlock');
-    expect(mockPurchase).toHaveBeenCalledTimes(1);
-    expect(button(tree, 'Unlock').props.disabled).toBe(true);
+    await press(tree, START);
+    expect(mockPurchase).toHaveBeenCalledWith('yearly');
+    expect(button(tree, START).props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBe(true);
     expect(shownText(tree)).toContain(WORKING);
     expect(announce).toHaveBeenCalledWith(WORKING);
@@ -270,13 +307,13 @@ describe('ProPitch (§8.12, R137)', () => {
     mockPurchase.mockResolvedValue('cancelled');
     const tree = render(<ProPitch context="screen" onDone={onDone} />);
 
-    await press(tree, 'Unlock');
+    await press(tree, START);
 
     expect(onDone).not.toHaveBeenCalled();
     expect(shownText(tree)).not.toContain(PURCHASE_FAILED);
     expect(shownText(tree)).not.toContain(WORKING);
     expect(jest.mocked(announce).mock.calls).toEqual([[WORKING]]);
-    expect(button(tree, 'Unlock').props.disabled).toBeFalsy();
+    expect(button(tree, START).props.disabled).toBeFalsy();
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
   });
 
@@ -284,17 +321,17 @@ describe('ProPitch (§8.12, R137)', () => {
     mockPurchase.mockResolvedValue('failed');
     const tree = render(<ProPitch context="screen" />);
 
-    await press(tree, 'Unlock');
+    await press(tree, START);
 
     expect(shownText(tree)).toContain(PURCHASE_FAILED);
     expect(announce).toHaveBeenCalledWith(PURCHASE_FAILED);
-    expect(button(tree, 'Unlock').props.disabled).toBeFalsy();
+    expect(button(tree, START).props.disabled).toBeFalsy();
   });
 
   it('a purchase the store could not offer says the store is not answering', async () => {
     mockPurchase.mockResolvedValue('unavailable');
     const tree = render(<ProPitch context="screen" />);
-    await press(tree, 'Unlock');
+    await press(tree, START);
     expect(shownText(tree)).toContain(NOT_ANSWERING);
     expect(announce).toHaveBeenCalledWith(NOT_ANSWERING);
   });
@@ -303,7 +340,7 @@ describe('ProPitch (§8.12, R137)', () => {
     const onDone = jest.fn();
     mockPurchase.mockResolvedValue('pending');
     const tree = render(<ProPitch context="screen" onDone={onDone} />);
-    await press(tree, 'Unlock');
+    await press(tree, START);
     expect(shownText(tree)).toContain(PENDING);
     expect(announce).toHaveBeenLastCalledWith(PENDING);
     expect(onDone).not.toHaveBeenCalled();
@@ -312,7 +349,7 @@ describe('ProPitch (§8.12, R137)', () => {
   it('a purchase call that throws counts as failed', async () => {
     mockPurchase.mockRejectedValue(new Error('boom'));
     const tree = render(<ProPitch context="screen" />);
-    await press(tree, 'Unlock');
+    await press(tree, START);
     expect(shownText(tree)).toContain(PURCHASE_FAILED);
   });
 
@@ -344,14 +381,13 @@ describe('ProPitch (§8.12, R137)', () => {
     const tree = render(<ProPitch context="screen" />);
 
     await press(tree, 'Restore purchases');
-    expect(button(tree, 'Unlock').props.disabled).toBe(true);
+    expect(button(tree, START).props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBe(true);
     await act(async () => pending.resolve('none'));
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
   });
 
   it('draws nothing in red (red is for the wordmark, the active tab and PR marks)', () => {
-    mockState = state({ canPurchase: false, offer: null });
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
     const styles = tree.root.findAll((n) => n.props.style !== undefined).map((n) => JSON.stringify(StyleSheet.flatten(n.props.style)));
     expect(styles.join(' ').toUpperCase()).not.toContain('#E10600');
@@ -373,7 +409,7 @@ describe('/paywall (§8.12, R154)', () => {
     mockPurchase.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     const tree = render(<PaywallRoute />);
 
-    await press(tree, 'Unlock');
+    await press(tree, START);
     act(() => button(tree, 'Not now').props.onPress());
     act(() => button(tree, 'Not now').props.onPress());
     await act(async () => finish('purchased'));
@@ -383,7 +419,7 @@ describe('/paywall (§8.12, R154)', () => {
   it('goes back once the purchase goes through', async () => {
     mockPurchase.mockResolvedValue('purchased');
     const tree = render(<PaywallRoute />);
-    await press(tree, 'Unlock');
+    await press(tree, START);
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 

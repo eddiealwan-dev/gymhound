@@ -20,11 +20,12 @@ describe('free-only entitlements (R133): a build with no store and no debug unlo
     unsubscribe();
   });
 
-  it('has no store: nothing to buy or restore, no offer', async () => {
+  it('has no store: nothing to buy or restore, no plans', async () => {
     const entitlements = createFreeOnlyEntitlements();
     expect(entitlements.canPurchase()).toBe(false);
-    expect(entitlements.offer()).toBeNull();
-    await expect(entitlements.purchase()).resolves.toBe('unavailable');
+    expect(entitlements.plans()).toEqual([]);
+    expect(entitlements.isSubscribed()).toBe(false);
+    await expect(entitlements.purchase('yearly')).resolves.toBe('unavailable');
     await expect(entitlements.restore()).resolves.toBe('unavailable');
     expect(entitlements.canRestore()).toBe(false);
     expect(() => entitlements.refreshOffer()).not.toThrow();

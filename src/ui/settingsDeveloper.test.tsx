@@ -172,7 +172,7 @@ describe('Settings: Developer (R126)', () => {
       configure: () => {},
       getCustomerInfo: async () => ({ activeEntitlements: ['pro'] }),
       onCustomerInfo: () => () => {},
-      getDefaultPackage: async () => null,
+      getPlans: async () => [],
       purchase: async () => ({ activeEntitlements: ['pro'] }),
       restore: async () => ({ activeEntitlements: ['pro'] }),
       showManageSubscriptions: async () => {},

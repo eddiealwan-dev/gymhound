@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { useDb } from '../../db/DbProvider';
-import type { EntitlementsKind, StoreOffer } from './index';
+import type { EntitlementsKind, StorePlan } from './index';
 import { entitlementsFor } from './select';
 import type { TrialView } from './trial';
 
@@ -9,7 +9,10 @@ export type EntitlementsState = {
   isDebugPro: boolean;
   canPurchase: boolean;
   canRestore: boolean;
-  offer: StoreOffer | null;
+  /** The plans the store sells (R556), yearly, monthly and lifetime; empty with no store or before it answers. */
+  plans: StorePlan[];
+  /** Pro comes from a store subscription that renews. */
+  subscribed: boolean;
   kind: EntitlementsKind;
   /** Pro is on only because of the 7-day full access trial (§18.19). */
   trialOnly: boolean;
@@ -31,7 +34,8 @@ export function useEntitlementsState(): EntitlementsState {
       isDebugPro: entitlements.isDebugPro(),
       canPurchase: entitlements.canPurchase(),
       canRestore: entitlements.canRestore(),
-      offer: entitlements.offer(),
+      plans: entitlements.plans(),
+      subscribed: entitlements.isSubscribed(),
       kind: entitlements.kind,
       trialOnly: entitlements.isTrialOnly(),
     }),

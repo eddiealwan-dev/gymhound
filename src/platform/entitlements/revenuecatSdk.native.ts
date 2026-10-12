@@ -1,11 +1,17 @@
-import type { PurchasesSdk } from './index';
-import { DEFAULT_OFFERING, storePeriod } from './revenuecat';
+import type { PlanKind, PurchasesSdk } from './index';
+import { DEFAULT_OFFERING, PRO_ENTITLEMENT, storePeriod } from './revenuecat';
 
 type PurchasesModule = typeof import('react-native-purchases');
 type PurchasesPackage = import('react-native-purchases').PurchasesPackage;
 type CustomerInfo = import('react-native-purchases').CustomerInfo;
 
-const toInfo = (info: CustomerInfo) => ({ activeEntitlements: Object.keys(info.entitlements.active) });
+const toInfo = (info: CustomerInfo) => ({
+  activeEntitlements: Object.keys(info.entitlements.active),
+  proExpires: info.entitlements.active[PRO_ENTITLEMENT]?.expirationDate != null,
+});
+
+/** Days in one of the store's period units, for a free trial's length. */
+const UNIT_DAYS: Record<string, number> = { DAY: 1, WEEK: 7, MONTH: 30, YEAR: 365 };
 
 /**
  * The RevenueCat SDK behind GymHound's narrow adapter (R134). This is the only file that names `react-native-purchases`,
@@ -16,7 +22,7 @@ const toInfo = (info: CustomerInfo) => ({ activeEntitlements: Object.keys(info.e
 export function loadPurchasesSdk(): PurchasesSdk | null {
   const rc = require('react-native-purchases') as PurchasesModule;
   const Purchases = rc.default;
-  /** The packages handed out by `getDefaultPackage`, by identifier, so `purchase` can buy the store's own object. */
+  /** The packages handed out by `getPlans`, by identifier, so `purchase` can buy the store's own object. */
   const packages = new Map<string, PurchasesPackage>();
 
   return {
@@ -33,13 +39,34 @@ export function loadPurchasesSdk(): PurchasesSdk | null {
         Purchases.removeCustomerInfoUpdateListener(native);
       };
     },
-    async getDefaultPackage() {
+    async getPlans() {
       const offerings = await Purchases.getOfferings();
       const offering = offerings.all[DEFAULT_OFFERING] ?? offerings.current;
-      const pkg = offering?.availablePackages[0];
-      if (pkg === undefined) return null;
-      packages.set(pkg.identifier, pkg);
-      return { id: pkg.identifier, priceString: pkg.product.priceString, period: storePeriod(pkg.product.subscriptionPeriod) };
+      const kinds: Partial<Record<string, PlanKind>> = {
+        [rc.PACKAGE_TYPE.ANNUAL]: 'yearly',
+        [rc.PACKAGE_TYPE.MONTHLY]: 'monthly',
+        [rc.PACKAGE_TYPE.LIFETIME]: 'lifetime',
+      };
+      return (offering?.availablePackages ?? []).flatMap((pkg) => {
+        const kind = kinds[pkg.packageType];
+        if (kind === undefined) return [];
+        packages.set(pkg.identifier, pkg);
+        const { product } = pkg;
+        const intro = product.introPrice;
+        const freeTrialDays = intro !== null && intro.price === 0 ? intro.periodNumberOfUnits * (UNIT_DAYS[intro.periodUnit] ?? 0) || null : null;
+        const period = kind === 'lifetime' ? null : storePeriod(product.subscriptionPeriod);
+        return [
+          {
+            id: pkg.identifier,
+            kind,
+            priceString: product.priceString,
+            price: product.price,
+            perMonthString: kind === 'yearly' ? product.pricePerMonthString : null,
+            period,
+            freeTrialDays,
+          },
+        ];
+      });
     },
     async purchase(packageId) {
       const pkg = packages.get(packageId);

@@ -2,14 +2,14 @@ import { AppState } from 'react-native';
 import { getSettings, setSetting } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
 import { createListeners } from './debug';
-import type { AppEntitlements, PurchasesSdk, StoreOffer, StorePeriod } from './index';
+import type { AppEntitlements, CustomerInfoLite, PlanKind, PurchasesSdk, StorePeriod, StorePlan } from './index';
 
 /** The RevenueCat entitlement that is GymHound Pro. */
 export const PRO_ENTITLEMENT = 'pro';
-/** The RevenueCat offering whose first package Unlock buys. */
+/** The RevenueCat offering whose yearly, monthly and lifetime packages the paywall sells. */
 export const DEFAULT_OFFERING = 'default';
 
-/** How long `purchase()` waits for the offering before it says 'unavailable'. */
+/** How long `purchase(kind)` waits for the offering before it says 'unavailable'. */
 export const OFFER_WAIT_MS = 10_000;
 
 const PERIOD_UNITS: Record<string, StorePeriod['unit']> = { D: 'day', W: 'week', M: 'month', Y: 'year' };
@@ -24,8 +24,11 @@ export function storePeriod(iso: string | null | undefined): StorePeriod | null 
   return { count: Number(match[1]), unit: PERIOD_UNITS[match[2]] };
 }
 
-type Info = { activeEntitlements: string[] };
-type Package = NonNullable<Awaited<ReturnType<PurchasesSdk['getDefaultPackage']>>>;
+type Info = CustomerInfoLite;
+type Package = StorePlan & { id: string };
+
+/** The order the paywall shows plans in (R556). */
+const PLAN_ORDER: PlanKind[] = ['yearly', 'monthly', 'lifetime'];
 
 /** Runs `call`, turning a synchronous throw into a rejection, so one `catch` handles both. */
 function attempt<T>(call: () => Promise<T>): Promise<T> {
@@ -46,7 +49,8 @@ function attempt<T>(call: () => Promise<T>): Promise<T> {
 export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: string, debugAllowed: boolean): AppEntitlements {
   const listeners = createListeners();
   let configured = false;
-  let pkg: Package | null = null;
+  let packages: Package[] = [];
+  let subscribed = false;
   let packageLoad: Promise<void> = Promise.resolve();
   let disposed = false;
   const cleanups: (() => void)[] = [];
@@ -54,11 +58,12 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
   const debugOn = () => debugAllowed && getSettings(db).proDebugUnlock;
   const isPro = () => getSettings(db).proCached || debugOn();
   const isDebugPro = () => !getSettings(db).proCached && debugOn();
-  const canPurchase = () => configured && pkg !== null;
-  const offer = (): StoreOffer | null => (pkg === null ? null : { priceString: pkg.priceString, period: pkg.period });
+  const canPurchase = () => configured && packages.length > 0;
+  const plans = (): StorePlan[] => packages.map(({ id: _id, ...plan }) => plan);
+  const isSubscribed = () => getSettings(db).proCached && subscribed;
 
   /** What subscribers can see; they hear a change only when it differs. */
-  const visible = () => JSON.stringify([isPro(), isDebugPro(), canPurchase(), offer()]);
+  const visible = () => JSON.stringify([isPro(), isDebugPro(), isSubscribed(), canPurchase(), plans()]);
   const changing = (change: () => void) => {
     const before = visible();
     change();
@@ -70,6 +75,7 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
     if (disposed) return info.activeEntitlements.includes(PRO_ENTITLEMENT);
     const active = info.activeEntitlements.includes(PRO_ENTITLEMENT);
     changing(() => {
+      subscribed = active && info.proExpires === true;
       if (getSettings(db).proCached !== active) setSetting(db, 'proCached', active);
     });
     return active;
@@ -79,11 +85,12 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
     attempt(() => sdk.getCustomerInfo()).then(apply, () => {});
   };
 
-  /** Asks for the `default` offering's package; a failure keeps the last one. */
+  /** Asks for the `default` offering's plans, one of each kind in the paywall's order; a failure keeps the last ones. */
   const loadPackage = () => {
-    packageLoad = attempt(() => sdk.getDefaultPackage()).then(
+    packageLoad = attempt(() => sdk.getPlans()).then(
       (found) => {
-        if (!disposed) changing(() => (pkg = found ?? null));
+        const sorted = PLAN_ORDER.flatMap((kind) => found.find((p) => p.kind === kind) ?? []);
+        if (!disposed) changing(() => (packages = sorted));
       },
       () => {},
     );
@@ -136,14 +143,16 @@ export function createRevenueCatEntitlements(db: Db, sdk: PurchasesSdk, apiKey: 
         return false;
       }
     },
-    offer,
-    async purchase() {
+    plans,
+    isSubscribed,
+    async purchase(kind) {
       if (!configured) return 'unavailable';
       // Wait for the offering, but not forever: a store that never answers leaves nothing to buy.
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([packageLoad, new Promise<void>((resolve) => (timer = setTimeout(resolve, OFFER_WAIT_MS)))]);
       clearTimeout(timer);
-      if (pkg === null) return 'unavailable';
+      const pkg = packages.find((p) => p.kind === kind);
+      if (pkg === undefined) return 'unavailable';
       const id = pkg.id;
       try {
         const info = await attempt(() => sdk.purchase(id));

@@ -551,10 +551,10 @@ function ExportSection() {
  */
 function ProSection() {
   const db = useDb();
-  const { isPro, isDebugPro, canRestore, offer, kind, trialOnly } = useEntitlementsState();
+  const { isPro, isDebugPro, canRestore, subscribed: storeSubscription, kind, trialOnly } = useEntitlementsState();
   const { busy, status, run } = useStoreAction();
   const openPaywall = useOpenPaywall();
-  const subscribed = kind === 'revenuecat' && canRestore && isPro && !isDebugPro && offer !== null && offer.period !== null;
+  const subscribed = kind === 'revenuecat' && canRestore && isPro && !isDebugPro && storeSubscription;
   return (
     <Section title="GymHound Pro">
       {trialOnly ? (

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDb } from '../../db/DbProvider';
 import { announce } from '../../platform/announce';
 import { entitlementsFor, useEntitlementsState } from '../../platform/entitlements';
-import type { PurchaseResult, RestoreResult } from '../../platform/entitlements';
+import type { PlanKind, PurchaseResult, RestoreResult } from '../../platform/entitlements';
 
 /** Under Unlock and Restore purchases when the build has no store (Expo Go, the debug unlock, free-only). */
 export const PURCHASES_UNAVAILABLE = "Purchases aren't available in this build.";
@@ -36,12 +36,13 @@ function lineFor(action: StoreAction, result: PurchaseResult | RestoreResult, st
 }
 
 /**
- * Runs Unlock (`purchase`) or Restore purchases (`restore`) on the app's entitlements object, one at a time (R136).
+ * Runs a purchase of the chosen plan (`purchase`, R556) or Restore purchases (`restore`) on the app's entitlements
+ * object, one at a time (R136).
  * While one runs, `busy` is true (the screen disables both buttons) and `status` is "Working…", said once. Pro coming
  * on says "Pro is on." and calls `onDone`, even when the pitch has already gone because Pro turned on under it; any
  * other result but a cancel leaves its line in `status` and says it. A call that throws counts as failed.
  */
-export function useStoreAction(onDone?: () => void): { busy: boolean; status: string | null; run: (action: StoreAction) => void } {
+export function useStoreAction(onDone?: () => void): { busy: boolean; status: string | null; run: (action: StoreAction, plan?: PlanKind) => void } {
   const db = useDb();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function useStoreAction(onDone?: () => void): { busy: boolean; status: st
     };
   }, []);
 
-  const run = (action: StoreAction) => {
+  const run = (action: StoreAction, plan: PlanKind = 'yearly') => {
     if (running.current) return;
     running.current = true;
     setBusy(true);
@@ -68,7 +69,7 @@ export function useStoreAction(onDone?: () => void): { busy: boolean; status: st
     const entitlements = entitlementsFor(db);
     let call: Promise<PurchaseResult | RestoreResult>;
     try {
-      call = action === 'purchase' ? entitlements.purchase() : entitlements.restore();
+      call = action === 'purchase' ? entitlements.purchase(plan) : entitlements.restore();
     } catch {
       call = Promise.resolve('failed');
     }

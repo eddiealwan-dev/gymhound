@@ -56,7 +56,7 @@ const FREE_LINE = 'Free includes four programs, Stats and logging. Pro adds ever
 const UNAVAILABLE = "Purchases aren't available in this build.";
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: null, kind: 'revenuecat', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: [], subscribed: false, kind: 'revenuecat', trialOnly: false, ...over };
 }
 
 function mount(): ReactTestRenderer {
@@ -178,10 +178,8 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
   });
 
   describe('Manage subscription', () => {
-    const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
-
     it('shows a quiet Manage subscription when Pro comes from a store subscription; it opens the store page', async () => {
-      mockState = state({ isPro: true, offer: MONTHLY });
+      mockState = state({ isPro: true, subscribed: true });
       const tree = mount();
       const [manage] = buttons(tree, 'Manage subscription');
       expect(manage.props.variant).toBe('quiet');
@@ -190,7 +188,7 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
     });
 
     it('a store page that cannot open changes nothing and throws nothing', async () => {
-      mockState = state({ isPro: true, offer: MONTHLY });
+      mockState = state({ isPro: true, subscribed: true });
       mockManage.mockResolvedValue(false);
       const tree = mount();
       await act(async () => buttons(tree, 'Manage subscription')[0].props.onPress());
@@ -198,10 +196,10 @@ describe('Settings: GymHound Pro (§8.11, R138)', () => {
     });
 
     it.each([
-      ['a one-time unlock', { isPro: true, offer: { priceString: '$24.99', period: null } }],
-      ['the debug unlock', { isPro: true, isDebugPro: true, kind: 'debug' as const, canRestore: false, canPurchase: false, offer: null }],
-      ['free', { offer: MONTHLY }],
-      ['no store', { isPro: true, canRestore: false, canPurchase: false, offer: MONTHLY }],
+      ['a one-time unlock', { isPro: true, subscribed: false }],
+      ['the debug unlock', { isPro: true, isDebugPro: true, kind: 'debug' as const, canRestore: false, canPurchase: false, subscribed: false }],
+      ['free', { subscribed: false }],
+      ['no store', { isPro: true, canRestore: false, canPurchase: false, subscribed: true }],
     ])('is hidden for %s', (_name, over) => {
       mockState = state(over);
       expect(buttons(mount(), 'Manage subscription')).toHaveLength(0);

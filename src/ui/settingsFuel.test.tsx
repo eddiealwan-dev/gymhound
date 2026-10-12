@@ -52,7 +52,7 @@ jest.mock('./ThemeProvider', () => {
 const LOCKED = 'Fuel targets are part of GymHound Pro.';
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: false, canRestore: false, offer: null, kind: 'free', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: false, canRestore: false, plans: [], subscribed: false, kind: 'free', trialOnly: false, ...over };
 }
 
 function mount(): ReactTestRenderer {
