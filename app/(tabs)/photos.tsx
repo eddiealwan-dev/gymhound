@@ -1,7 +1,15 @@
 import { router } from 'expo-router';
+import { Image, Platform, Pressable, View } from 'react-native';
+import type { ProgressPhoto } from '../../src/db/repositories/progressPhotosRepo';
+import { toLocalDate } from '../../src/domain/dates';
+import { progressPhotoUri } from '../../src/platform/progressPhotoFiles';
+import { flushAll } from '../../src/state/draftFlush';
 import { BackLink } from '../../src/ui/BackLink';
+import { deviceLocale, formatEntryDate } from '../../src/ui/body/BodyLog';
 import { Screen } from '../../src/ui/Screen';
+import { AddProgressPhoto, PHONE_ONLY, useProgressPhotos } from '../../src/ui/stats/progressPhotos';
 import { Body, Display } from '../../src/ui/Text';
+import { useTheme } from '../../src/ui/ThemeProvider';
 
 /** Back where it was opened from; a link opened with no history goes to /stats. */
 function leave() {
@@ -9,13 +17,72 @@ function leave() {
   else router.navigate('/stats');
 }
 
-/** Progress photos, a hidden tab route under Stats (R181). A placeholder until Task 12; no footer (§18.4). */
+function openPhoto(id: string) {
+  flushAll();
+  router.push(`/photo/${id}`);
+}
+
+/**
+ * Progress photos (R181), a hidden tab route under Stats: where they are kept, **Add a photo**, and a 3-column grid,
+ * newest first, each square with its date, opening it full screen. A photo whose file is gone is not shown. Phone
+ * builds only; the web says so. No footer (§18.4).
+ */
 export default function Photos() {
   return (
     <Screen>
       <BackLink label="Stats" onPress={leave} />
       <Display>Progress photos</Display>
-      <Body muted>Not built yet.</Body>
+      {Platform.OS === 'web' ? (
+        <Body muted style={{ marginTop: 8 }}>
+          {PHONE_ONLY}
+        </Body>
+      ) : (
+        <PhotosOnPhone />
+      )}
     </Screen>
+  );
+}
+
+function PhotosOnPhone() {
+  const photos = useProgressPhotos();
+  const today = toLocalDate(Date.now());
+  const locale = deviceLocale();
+  return (
+    <>
+      <Body muted style={{ marginTop: 8, marginBottom: 16 }}>
+        They stay on this phone. They aren't in backups.
+      </Body>
+      <AddProgressPhoto />
+      {/* Each cell's 4pt padding makes an 8pt gutter; the row steps out by 4 so the squares line up with the edges. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, marginTop: 20 }}>
+        {photos.map((photo) => (
+          <GridCell key={photo.id} photo={photo} date={formatEntryDate(photo.localDate, today, locale)} />
+        ))}
+      </View>
+    </>
+  );
+}
+
+function GridCell({ photo, date }: { photo: ProgressPhoto; date: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ width: '33.333%', padding: 4 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Photo, ${date}`}
+        onPress={() => openPhoto(photo.id)}
+        style={({ pressed }) => ({ gap: 4, opacity: pressed ? 0.8 : 1 })}
+      >
+        <Image
+          source={{ uri: progressPhotoUri(photo.fileName) }}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+          style={{ width: '100%', aspectRatio: 1, borderRadius: 8, backgroundColor: colors.surfaceRaised }}
+        />
+        <Body muted style={{ fontSize: 12 }}>
+          {date}
+        </Body>
+      </Pressable>
+    </View>
   );
 }
