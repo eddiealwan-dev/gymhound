@@ -56,20 +56,31 @@ function PhotosOnPhone() {
       {/* Each cell's 4pt padding makes an 8pt gutter; the row steps out by 4 so the squares line up with the edges. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, marginTop: 20 }}>
         {photos.map((photo) => (
-          <GridCell key={photo.id} photo={photo} date={formatEntryDate(photo.localDate, today, locale)} />
+          <GridCell key={photo.id} photo={photo} date={formatEntryDate(photo.localDate, today, locale)} label={cellLabel(photo, photos, today, locale)} />
         ))}
       </View>
     </>
   );
 }
 
-function GridCell({ photo, date }: { photo: ProgressPhoto; date: string }) {
+/**
+ * What the screen reader hears for a square: "Photo, Oct 2", with the time added when another photo was taken that day
+ * ("Photo, Oct 2, 7:14 AM"), so two squares never sound the same.
+ */
+function cellLabel(photo: ProgressPhoto, photos: readonly ProgressPhoto[], today: string, locale: string): string {
+  const label = `Photo, ${formatEntryDate(photo.localDate, today, locale)}`;
+  const shared = photos.some((other) => other.id !== photo.id && other.localDate === photo.localDate);
+  if (!shared) return label;
+  return `${label}, ${new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(photo.takenAt)}`;
+}
+
+function GridCell({ photo, date, label }: { photo: ProgressPhoto; date: string; label: string }) {
   const { colors } = useTheme();
   return (
     <View style={{ width: '33.333%', padding: 4 }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Photo, ${date}`}
+        accessibilityLabel={label}
         onPress={() => openPhoto(photo.id)}
         style={({ pressed }) => ({ gap: 4, opacity: pressed ? 0.8 : 1 })}
       >

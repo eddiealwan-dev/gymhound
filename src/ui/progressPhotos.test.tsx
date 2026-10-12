@@ -205,6 +205,25 @@ describe('/photos (R181)', () => {
     expect([first, latest]).toHaveLength(2);
   });
 
+  it('adds the time to the labels of photos taken the same day', () => {
+    addProgressPhoto(mockDb, 'progress-am.jpg', new Date(2026, 9, 2, 7, 14).getTime());
+    addProgressPhoto(mockDb, 'progress-pm.jpg', new Date(2026, 9, 2, 19, 5).getTime());
+    addProgressPhoto(mockDb, 'progress-alone.jpg', at(9, 1));
+    const tree = mount(<PhotosRoute />);
+    const labels = [
+      ...new Set(
+        tree.root
+          .findAll((n) => typeof n.type !== 'string' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Photo, '))
+          .map((n) => n.props.accessibilityLabel as string),
+      ),
+    ];
+    expect(labels).toHaveLength(3);
+    // ICU puts a narrow no-break space before AM and PM.
+    expect(labels[0]).toMatch(/^Photo, Oct 2, 7:05\sPM$/);
+    expect(labels[1]).toMatch(/^Photo, Oct 2, 7:14\sAM$/);
+    expect(labels[2]).toBe('Photo, Sep 1');
+  });
+
   it('hides a photo whose file is gone', () => {
     threePhotos();
     mockMissing.add('progress-middle.jpg');
@@ -324,6 +343,27 @@ describe('/photo/[id] (R181)', () => {
     expect(control(tree, 'Newer photo').props.label).toBe('›');
   });
 
+  it('‹ and › say the date of the photo now shown', () => {
+    const { middle } = threePhotos();
+    mockId = middle;
+    const tree = mount(<PhotoRoute />);
+    tap(tree, 'Older photo');
+    expect(announce).toHaveBeenLastCalledWith('Progress photo, Sep 1');
+    tap(tree, 'Newer photo');
+    expect(announce).toHaveBeenLastCalledWith('Progress photo, Oct 2');
+  });
+
+  it('Side by side turns off on moving to another photo', () => {
+    const { latest } = threePhotos();
+    mockId = latest;
+    const tree = mount(<PhotoRoute />);
+    tap(tree, 'Side by side');
+    expect(images(tree)).toHaveLength(2);
+    tap(tree, 'Older photo');
+    expect(control(tree, 'Side by side').props.selected).toBe(false);
+    expect(images(tree)).toEqual(['file:///documents/progress-photos/progress-middle.jpg']);
+  });
+
   it('skips a photo whose file is gone', () => {
     const { latest } = threePhotos();
     mockMissing.add('progress-middle.jpg');
@@ -391,8 +431,10 @@ describe('/photo/[id] (R181)', () => {
     tap(tree, 'Delete photo');
     act(() => tree.root.findAllByType(ConfirmSheet)[0].props.onConfirm());
     expect(listProgressPhotos(mockDb)).toEqual([]);
-    // It closes once the question has gone.
+    // It closes once the question has gone, still showing the last view, never "That photo isn't here.".
     expect(router.back).not.toHaveBeenCalled();
+    expect(texts(tree)).not.toContain("That photo isn't here.");
+    expect(images(tree)).toEqual(['file:///documents/progress-photos/progress-newer.jpg']);
     act(() => {
       jest.runAllTimers();
     });

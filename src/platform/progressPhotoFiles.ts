@@ -76,6 +76,7 @@ export function progressPhotoExists(fileName: string): boolean {
  */
 export function saveProgressPhoto(tempUri: string, now: number): string {
   const name = `progress-${now}.jpg`;
+  if (!isPhotoFileName(name)) throw new Error(`Not a photo file name: ${name}`);
   new Directory(fileUri(folderPath())).create({ intermediates: true, idempotent: true });
   new File(tempUri).moveSync(new File(progressPhotoUri(name)), { overwrite: true });
   return name;

@@ -66,8 +66,12 @@ function Viewer() {
   const locale = deviceLocale();
   const dateOf = (photo: ProgressPhoto) => formatEntryDate(photo.localDate, today, locale);
 
+  /** Shows another photo, on its own (Side by side turns off), and says its date: the screen reader stays on ‹ or ›. */
   const go = (photo: ProgressPhoto | undefined) => {
-    if (photo) setShownId(photo.id);
+    if (!photo) return;
+    setShownId(photo.id);
+    setSideBySide(false);
+    announce(`Progress photo, ${dateOf(photo)}`);
   };
 
   const remove = () => {
@@ -87,9 +91,12 @@ function Viewer() {
       bumpData();
       return;
     }
-    bumpData();
-    // The screen goes once the question has: iOS can't dismiss it while the sheet is still going away.
-    afterSheetCloses(leave);
+    // The screen goes once the question has: iOS can't dismiss it while the sheet is still going away. Until then it
+    // keeps the last view; reading again first would flash "That photo isn't here.".
+    afterSheetCloses(() => {
+      bumpData();
+      leave();
+    });
   };
 
   return (
