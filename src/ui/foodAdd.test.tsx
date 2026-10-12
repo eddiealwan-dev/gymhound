@@ -10,6 +10,7 @@ import * as foodsRepo from '../db/repositories/foodsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useCreatedFood } from '../state/createdFood';
+import { bumpData } from '../state/dataVersion';
 import { Footer } from './Footer';
 import { ConfirmSheet, Sheet } from './Sheet';
 
@@ -522,12 +523,24 @@ describe('review fixes', () => {
   it('reads the food list once per data version, not on every keystroke', () => {
     const list = jest.spyOn(foodsRepo, 'listFoods');
     const tree = mount();
-    const before = list.mock.calls.length;
     type(tree, 'Search foods', 'e');
+    const before = list.mock.calls.length;
+    expect(before).toBe(1);
     type(tree, 'Search foods', 'eg');
     type(tree, 'Search foods', 'egg');
     expect(list.mock.calls.length).toBe(before);
     expect(allText(tree)).toContain('Egg, large');
+  });
+
+  it('searches through the food lookup, so a food saved since shows once the data version moves on', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'zzqx');
+    expect(allText(tree)).toContain('No food called zzqx.');
+    act(() => {
+      createCustomFood(mockDb, { name: 'Zzqx bar', servingLabel: '1 bar', servingGrams: null, kcal: 200, proteinG: 20, carbsG: 20, fatG: 5 });
+      bumpData();
+    });
+    expect(allText(tree)).toContain('Zzqx bar');
   });
 
   it('a double tap on Add logs one serving', () => {

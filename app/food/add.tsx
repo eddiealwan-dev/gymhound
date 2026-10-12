@@ -3,15 +3,15 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../src/db/DbProvider';
-import { getFood, listFoods, recentFoods } from '../../src/db/repositories/foodsRepo';
+import { getFood, recentFoods } from '../../src/db/repositories/foodsRepo';
 import { calendarDayInSentence, toLocalDate } from '../../src/domain/dates';
-import { indexFoods } from '../../src/domain/foodSearch';
 import { type FoodPerServing, kcalProteinSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
+import { createLocalFoodLookup } from '../../src/platform/foodLookup';
 import { deviceLocale } from '../../src/platform/locale';
 import { useCreatedFood } from '../../src/state/createdFood';
-import { useDbQuery } from '../../src/state/dataVersion';
+import { useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
@@ -123,12 +123,13 @@ function AddFood() {
   const [askDiscard, setAskDiscard] = useState(false);
 
   const searching = query.trim() !== '';
-  // The food list is read once per data version (and on focus), with its names folded once; a keystroke only searches it
-  // (R140, the same rules as `createLocalFoodLookup`).
-  const allFoods = useDbQuery(listFoods);
-  const search = useMemo(() => indexFoods(allFoods), [allFoods]);
+  // Search goes through the food lookup (R140), which reads the food list and folds its names once per data version: a
+  // keystroke only searches what was read, and a food saved since shows once its write bumps the version.
+  const lookup = useMemo(() => createLocalFoodLookup(db, () => useDataVersion.getState().version), [db]);
+  const version = useDataVersion((state) => state.version);
   const recent = useDbQuery(recentFoods);
-  const foods = useMemo(() => (searching ? search(query) : recent), [searching, search, query, recent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a new data version means the lookup reads the list again
+  const foods = useMemo(() => (searching ? lookup.searchLocal(query) : recent), [searching, lookup, query, recent, version]);
 
   const changed = quickAddStarted(quickDraft);
   /** Read by the back button's listener, which is added once. */
