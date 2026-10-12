@@ -42,13 +42,27 @@ export function normalizeBarcode(raw: string): string | null {
 }
 
 /**
- * The ways one barcode is written: as scanned, and UPC-A with or without the leading 0 that makes it an EAN-13 (iPhones
- * read a UPC-A as the EAN-13 with that 0; Open Food Facts may list either).
+ * A UPC-E (the 8-digit code on small packs and cans) written out as the UPC-A it stands for, which is how databases list
+ * it: 04963406 → 049000006346. Null for a code that can't be a UPC-E (it must start with 0 or 1).
+ */
+export function expandUpcE(code: string): string | null {
+  if (!/^[01]\d{7}$/.test(code)) return null;
+  const [s, d1, d2, d3, d4, d5, d6, check] = code;
+  const body =
+    d6 <= '2' ? `${d1}${d2}${d6}0000${d3}${d4}${d5}` : d6 === '3' ? `${d1}${d2}${d3}00000${d4}${d5}` : d6 === '4' ? `${d1}${d2}${d3}${d4}00000${d5}` : `${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+  return `${s}${body}${check}`;
+}
+
+/**
+ * The ways one barcode is written: as scanned; a UPC-A with or without the leading 0 that makes it an EAN-13 (iPhones
+ * read a UPC-A as the EAN-13 with that 0; Open Food Facts may list either); and a UPC-E as the UPC-A it stands for.
  */
 export function barcodeVariants(code: string): string[] {
   const out = [code];
   if (code.length === 12) out.push(`0${code}`);
   if (code.length === 13 && code.startsWith('0')) out.push(code.slice(1));
+  const upcA = code.length === 8 ? expandUpcE(code) : null;
+  if (upcA !== null) out.push(upcA, `0${upcA}`);
   return out;
 }
 

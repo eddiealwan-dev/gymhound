@@ -6,6 +6,7 @@ import { archiveCustomFood, createCustomFood, customFoodNames, getFood, isFoodLi
 import { type CustomFoodInput, validateCustomFood } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
+import { normalizeBarcode } from '../../src/domain/openFoodFacts';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
@@ -39,6 +40,8 @@ type EditorProps = {
   prefill: string;
   /** Opened by the add screen's **New food**: the saved food is handed back to it. */
   fromAdd: boolean;
+  /** A new food made for a scanned barcode nothing knew (R547): kept on the food, so the next scan finds it. */
+  barcode: string | null;
 };
 
 /**
@@ -47,7 +50,7 @@ type EditorProps = {
  * **Delete food** archives it: days you've logged keep their copies. Closing with changes not saved asks "Discard
  * changes?" first, by the close button, the Android back button or (held while there are changes) the swipe down.
  */
-function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
+function FoodEditor({ foodId, prefill, fromAdd, barcode }: EditorProps) {
   const db = useDb();
   const [existing] = useState(() => (foodId === null ? null : getFood(db, foodId)));
   const [initial] = useState<CustomFoodInput | null>(() => {
@@ -132,7 +135,7 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
       return;
     }
     if (foodId === null) {
-      const id = createCustomFood(db, checked.food);
+      const id = createCustomFood(db, checked.food, barcode);
       if (fromAdd) useCreatedFood.getState().set(id);
     } else {
       updateCustomFood(db, foodId, checked.food);
@@ -157,6 +160,9 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
       {/* The swipe down would close the editor without asking, so it is held while there are changes. */}
       <Stack.Screen options={{ gestureEnabled: !changed }} />
       {header(foodId === null ? 'New food' : 'Edit food')}
+      {foodId === null && barcode !== null ? (
+        <Body muted style={{ marginTop: -8, marginBottom: 16 }}>{`For barcode ${barcode}. Copy the label's numbers for one serving.`}</Body>
+      ) : null}
       <View style={{ gap: 24 }}>
         <FuelField
           label="Name"
@@ -241,9 +247,10 @@ function Locked({ title }: { title: string }) {
  * once, and an address can't open it around the lock. Your foods are kept.
  */
 export default function FoodEditorScreen() {
-  const { id, name, from } = useLocalSearchParams<{ id: string; name?: string; from?: string }>();
+  const { id, name, from, barcode } = useLocalSearchParams<{ id: string; name?: string; from?: string; barcode?: string }>();
+  const code = typeof barcode === 'string' ? normalizeBarcode(barcode) : null;
   const pro = useIsPro();
   if (!pro) return <Locked title={id === 'new' ? 'New food' : 'Edit food'} />;
   // A fresh editor for each food: what one held never shows in another's.
-  return <FoodEditor key={id} foodId={id === 'new' ? null : id} prefill={typeof name === 'string' ? name : ''} fromAdd={from === 'add'} />;
+  return <FoodEditor key={id} foodId={id === 'new' ? null : id} prefill={typeof name === 'string' ? name : ''} fromAdd={from === 'add'} barcode={code} />;
 }

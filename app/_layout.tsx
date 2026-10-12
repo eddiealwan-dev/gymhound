@@ -146,6 +146,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="paywall" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="food/add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="food/[id]" options={{ presentation: 'modal' }} />
+        {/* The barcode scanner (R547) fills the screen: the camera needs the room. */}
+        <Stack.Screen name="food/scan" options={{ presentation: 'fullScreenModal' }} />
         {/* Phase 6 (R181): a progress photo opens full screen, with no dock. */}
         <Stack.Screen name="photo/[id]" options={{ presentation: 'fullScreenModal' }} />
       </Stack>

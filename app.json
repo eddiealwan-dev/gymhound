@@ -34,8 +34,17 @@
         "expo-image-picker",
         {
           "photosPermission": "GymHound uses your photos only for exercise and progress pictures you choose.",
-          "cameraPermission": "GymHound uses the camera only to take exercise and progress pictures.",
+          "cameraPermission": "GymHound uses the camera only to read food barcodes and to take exercise and progress pictures.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "GymHound uses the camera only to read food barcodes and to take exercise and progress pictures.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
         }
       ],
       [

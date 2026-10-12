@@ -4,7 +4,7 @@ import { BackHandler, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import FoodEditorScreen from '../../app/food/[id]';
-import { archiveCustomFood, createCustomFood, getFood, listFoods } from '../db/repositories/foodsRepo';
+import { archiveCustomFood, createCustomFood, findFoodByBarcode, getFood, listFoods } from '../db/repositories/foodsRepo';
 import { listEntries, logFood } from '../db/repositories/foodLogRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
@@ -16,7 +16,7 @@ import { ConfirmSheet } from './Sheet';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let mockDb: Db;
-let mockParams: { id: string; name?: string; from?: string };
+let mockParams: { id: string; name?: string; from?: string; barcode?: string };
 
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), canGoBack: jest.fn(() => true), replace: jest.fn(), push: jest.fn() },
@@ -163,6 +163,16 @@ describe('a new food (R144)', () => {
     expect(mine).toEqual([{ ...SHAKE, id: expect.any(String), source: 'custom' }]);
     expect(useCreatedFood.getState().id).toBe(mine[0].id);
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('made for a scanned barcode nobody knew: says so, and keeps the code so the next scan finds it (R547)', () => {
+    mockParams = { id: 'new', from: 'add', barcode: '5000112548167' };
+    const tree = mount();
+    expect(allText(tree)).toContain("For barcode 5000112548167. Copy the label's numbers for one serving.");
+    fillShake(tree);
+    press(tree, 'Save');
+    const id = useCreatedFood.getState().id!;
+    expect(findFoodByBarcode(mockDb, '5000112548167')?.id).toBe(id);
   });
 
   it('opened from elsewhere, saves without handing it on', () => {

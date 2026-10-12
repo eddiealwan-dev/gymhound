@@ -1,17 +1,19 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { BackHandler, FlatList, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { BackHandler, FlatList, Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../src/db/DbProvider';
-import { getFood, recentFoods } from '../../src/db/repositories/foodsRepo';
+import { getFood, recentFoods, saveOnlineFood } from '../../src/db/repositories/foodsRepo';
 import { calendarDayInSentence, toLocalDate } from '../../src/domain/dates';
 import { type FoodPerServing, kcalProteinSpoken, kcalProteinText } from '../../src/domain/fuel';
+import type { OnlineFood } from '../../src/domain/openFoodFacts';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
 import { createLocalFoodLookup } from '../../src/platform/foodLookup';
 import { deviceLocale } from '../../src/platform/locale';
+import { searchOnline, type SearchResult } from '../../src/platform/openFoodFacts';
 import { useCreatedFood } from '../../src/state/createdFood';
-import { useDataVersion, useDbQuery } from '../../src/state/dataVersion';
+import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
@@ -34,6 +36,21 @@ const MODES: { value: Mode; label: string }[] = [
 
 const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A row of the search list: a food on the phone, one found online, or a line between them. */
+type Item =
+  | { kind: 'food'; key: string; food: FoodPerServing }
+  | { kind: 'online'; key: string; food: OnlineFood }
+  | { kind: 'heading'; key: string; text: string }
+  | { kind: 'note'; key: string; text: string };
+
+/** What Search online found for a query, or that it is still looking. */
+type OnlineSearch = { query: string; result: SearchResult | 'searching' };
+
+const ONLINE_NOTES = {
+  offline: "Couldn't reach Open Food Facts. Check your connection and try again.",
+  unavailable: "Open Food Facts didn't answer. Try again in a minute.",
+} as const;
+
 /** Closes the screen. With nothing to go back to (opened by address, or reloaded), it lands on Fuel. */
 function close() {
   if (router.canGoBack()) router.back();
@@ -42,15 +59,23 @@ function close() {
 
 /** A food: its name, then "{serving} · {kcal} kcal · {protein} g protein", and " · Yours" for your own. Tapping opens its servings. */
 const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing; onChoose: (food: FoodPerServing) => void }) {
+  return <FoodLine food={food} yours={food.source === 'custom'} onPress={() => onChoose(food)} />;
+});
+
+/** A food found on Open Food Facts, drawn as a food on the phone is; tapping keeps it on the phone and opens its servings. */
+const OnlineRow = memo(function OnlineRow({ food, onChoose }: { food: OnlineFood; onChoose: (food: OnlineFood) => void }) {
+  return <FoodLine food={food} yours={false} onPress={() => onChoose(food)} />;
+});
+
+function FoodLine({ food, yours, onPress }: { food: FoodPerServing | OnlineFood; yours: boolean; onPress: () => void }) {
   const { colors } = useTheme();
   const locale = deviceLocale();
   const amounts = kcalProteinText(food, locale);
-  const yours = food.source === 'custom';
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${food.name}, ${food.servingLabel}, ${kcalProteinSpoken(food, locale)}${yours ? ', Yours' : ''}`}
-      onPress={() => onChoose(food)}
+      onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 60,
         justifyContent: 'center',
@@ -65,12 +90,13 @@ const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing
       <Body muted style={{ fontSize: 14 }}>{`${food.servingLabel} · ${amounts}${yours ? ' · Yours' : ''}`}</Body>
     </Pressable>
   );
-});
+}
 
 /**
  * Add food (R140, R141), a modal over Fuel: `date` is the day it logs for (the day Fuel is showing, R148; today without
- * one) and `mode=quick` opens on Quick add. Search finds foods on the phone through the food lookup, with your recent
- * foods before anything is typed; a food opens its servings, and **Add** logs it, empties the search and stays, saying
+ * one) and `mode=quick` opens on Quick add. Search finds foods on the phone through the food lookup (about 8,300, R545),
+ * with your recent foods before anything is typed; **Search online** asks Open Food Facts for packaged foods (R546) and
+ * **Scan barcode** reads a pack's code (R547). A food opens its servings, and **Add** logs it, empties the search and stays, saying
  * "Added {name}." so a meal goes in one visit. **New food** opens your own food's editor with the search as its name;
  * saved, it comes back here and opens its servings. **Done** closes; a quick add typed and not added asks first.
  */
@@ -89,6 +115,7 @@ function AddFood() {
   const [added, setAdded] = useState<string | null>(null);
   const [servingsFor, setServingsFor] = useState<FoodPerServing | null>(null);
   const [askDiscard, setAskDiscard] = useState(false);
+  const [online, setOnline] = useState<OnlineSearch | null>(null);
 
   const searching = query.trim() !== '';
   // Search goes through the food lookup (R140), which reads the food list and folds its names once per data version: a
@@ -98,6 +125,37 @@ function AddFood() {
   const recent = useDbQuery(recentFoods);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a new data version means the lookup reads the list again
   const foods = useMemo(() => (searching ? lookup.searchLocal(query) : recent), [searching, lookup, query, recent, version]);
+
+  const trimmed = query.trim();
+  /** Search online's answer for what is in the field now; a changed search shows the button again. */
+  const onlineNow = online !== null && online.query === trimmed ? online.result : null;
+  const items = useMemo((): Item[] => {
+    const local = foods.map((food): Item => ({ kind: 'food', key: food.id, food }));
+    if (!searching || onlineNow === null) return local;
+    const top: Item[] = [{ kind: 'heading', key: 'h-online', text: 'Online · Open Food Facts' }];
+    if (onlineNow === 'searching') top.push({ kind: 'note', key: 'n-online', text: 'Searching Open Food Facts…' });
+    else if (onlineNow.status !== 'ok') top.push({ kind: 'note', key: 'n-online', text: ONLINE_NOTES[onlineNow.status] });
+    else if (onlineNow.foods.length === 0) top.push({ kind: 'note', key: 'n-online', text: `Nothing found online for ${trimmed}.` });
+    else {
+      // One already kept on the phone shows once, under On your phone.
+      const onPhone = new Set(foods.map((f) => f.id));
+      for (const food of onlineNow.foods) if (!onPhone.has(`off-${food.barcode}`)) top.push({ kind: 'online', key: `off-${food.barcode}`, food });
+    }
+    return local.length === 0 ? top : [...top, { kind: 'heading', key: 'h-phone', text: 'On your phone' }, ...local];
+  }, [foods, searching, onlineNow, trimmed]);
+
+  /** Search online (R546): asked for, never as you type, since Open Food Facts allows few searches a minute. */
+  const runOnlineSearch = () => {
+    if (trimmed === '') return;
+    Keyboard.dismiss();
+    setOnline({ query: trimmed, result: 'searching' });
+    announce('Searching Open Food Facts');
+    void searchOnline(trimmed).then((result) => {
+      setOnline((current) => (current !== null && current.query === trimmed ? { query: trimmed, result } : current));
+      if (result.status === 'ok') announce(result.foods.length === 0 ? `Nothing found online for ${trimmed}.` : `${result.foods.length} found online.`);
+      else announce(ONLINE_NOTES[result.status]);
+    });
+  };
 
   const changed = quickAddStarted(quickDraft);
   /** Read by the back button's listener, which is added once. */
@@ -129,6 +187,17 @@ function AddFood() {
     Keyboard.dismiss();
     setServingsFor(food);
   }, []);
+
+  /** A food found online is kept on the phone first (R546), so it logs, shows in Recent and works offline after. */
+  const chooseOnline = useCallback(
+    (found: OnlineFood) => {
+      const id = saveOnlineFood(db, found);
+      bumpData();
+      const food = getFood(db, id);
+      if (food !== null) choose(food);
+    },
+    [db, choose],
+  );
 
   /** Whether the screen has had its first focus, which is its opening. */
   const opened = useRef(false);
@@ -170,6 +239,13 @@ function AddFood() {
       flushAll();
       Keyboard.dismiss();
       router.push({ pathname: '/food/[id]', params: { id: 'new', name: query.trim(), from: 'add' } });
+    });
+  /** Scan barcode (R547): the food it finds comes back here with its servings open, as New food's does. */
+  const scan = () =>
+    once(() => {
+      flushAll();
+      Keyboard.dismiss();
+      router.push('/food/scan');
     });
 
   const header = (
@@ -220,7 +296,15 @@ function AddFood() {
               fontSize: 16,
             }}
           />
-          <View style={{ flexDirection: 'row' }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {/* Scanning needs the phone's camera; the web build has none to offer. */}
+            {Platform.OS !== 'web' ? <Button label="Scan barcode" variant="secondary" size="compact" onPress={scan} /> : null}
+            {searching && onlineNow === null ? (
+              <Button label="Search online" variant="secondary" size="compact" accessibilityLabel={`Search online for ${trimmed}`} onPress={runOnlineSearch} />
+            ) : null}
+            {searching && onlineNow !== null && onlineNow !== 'searching' && onlineNow.status !== 'ok' ? (
+              <Button label="Try again" variant="secondary" size="compact" accessibilityLabel={`Search online again for ${trimmed}`} onPress={runOnlineSearch} />
+            ) : null}
             <Button label="New food" variant="secondary" size="compact" onPress={newFood} />
           </View>
           {!searching && foods.length > 0 ? <Label style={{ marginTop: 8 }}>Recent</Label> : null}
@@ -236,14 +320,26 @@ function AddFood() {
       {/* The swipe down would close the screen without asking, so it is held while a quick add is typed. */}
       <Stack.Screen options={{ gestureEnabled: !changed }} />
       <FlatList
-        data={mode === 'search' ? foods : []}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <FoodRow food={item} onChoose={choose} />}
+        data={mode === 'search' ? items : []}
+        keyExtractor={(item) => item.key}
+        renderItem={({ item }) =>
+          item.kind === 'food' ? (
+            <FoodRow food={item.food} onChoose={choose} />
+          ) : item.kind === 'online' ? (
+            <OnlineRow food={item.food} onChoose={chooseOnline} />
+          ) : item.kind === 'heading' ? (
+            <Label style={{ paddingHorizontal: 16, marginTop: 16, marginBottom: 4 }}>{item.text}</Label>
+          ) : (
+            <Body muted style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+              {item.text}
+            </Body>
+          )
+        }
         ListHeaderComponent={header}
         ListEmptyComponent={
           mode === 'search' ? (
             <Body muted style={{ textAlign: 'center', padding: 24 }}>
-              {searching ? `No food called ${query.trim()}.` : 'Search the food list, or make your own.'}
+              {searching ? `No food called ${trimmed}. Search online, scan its barcode, or make your own.` : 'Search the food list, scan a barcode, or make your own.'}
             </Body>
           ) : null
         }

@@ -1,4 +1,4 @@
-import { barcodeVariants, foodFromProduct, foodsFromSearch, normalizeBarcode, openFoodFactsCountry } from './openFoodFacts';
+import { barcodeVariants, expandUpcE, foodFromProduct, foodsFromSearch, normalizeBarcode, openFoodFactsCountry } from './openFoodFacts';
 
 /** A product as Open Food Facts' API v2 returns it with GymHound's fields. */
 const yogurt = {
@@ -81,6 +81,16 @@ describe('barcodes', () => {
     expect(barcodeVariants('049000028911')).toEqual(['049000028911', '0049000028911']);
     expect(barcodeVariants('0049000028911')).toEqual(['0049000028911', '049000028911']);
     expect(barcodeVariants('5000112548167')).toEqual(['5000112548167']);
+  });
+
+  it('writes a UPC-E out as its UPC-A, as databases list it', () => {
+    expect(expandUpcE('04963406')).toBe('049000006346');
+    expect(expandUpcE('01234505')).toBe('012000003455');
+    expect(expandUpcE('01234531')).toBe('012300000451');
+    expect(expandUpcE('01234548')).toBe('012340000058');
+    expect(expandUpcE('01234567')).toBe('012345000067');
+    expect(expandUpcE('54963406')).toBeNull();
+    expect(barcodeVariants('04963406')).toEqual(['04963406', '049000006346', '0049000006346']);
   });
 
   it("searches the phone's country, the UK as uk, else the whole world", () => {

@@ -61,14 +61,24 @@ describe('app.json (R186)', () => {
     expect(expo.android.predictiveBackGestureEnabled).toBe(false);
   });
 
-  it('names the motion, photo and camera uses', () => {
+  it('names the motion, photo and camera uses (the camera for barcodes too, R547)', () => {
     expect(expo.plugins).toContainEqual(['expo-sensors', { motionPermission: 'GymHound reads your step count only to show your steps on Stats.' }]);
     expect(expo.plugins).toContainEqual([
       'expo-image-picker',
       {
         photosPermission: 'GymHound uses your photos only for exercise and progress pictures you choose.',
-        cameraPermission: 'GymHound uses the camera only to take exercise and progress pictures.',
+        cameraPermission: 'GymHound uses the camera only to read food barcodes and to take exercise and progress pictures.',
         microphonePermission: false,
+      },
+    ]);
+    // The barcode scanner (R547) says the same, so whichever plugin writes iOS's camera line last, it reads right.
+    expect(expo.plugins).toContainEqual([
+      'expo-camera',
+      {
+        cameraPermission: 'GymHound uses the camera only to read food barcodes and to take exercise and progress pictures.',
+        microphonePermission: false,
+        recordAudioAndroid: false,
+        barcodeScannerEnabled: true,
       },
     ]);
   });

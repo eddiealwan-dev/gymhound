@@ -11,6 +11,7 @@ import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useCreatedFood } from '../state/createdFood';
 import { bumpData } from '../state/dataVersion';
+import { searchOnline } from '../platform/openFoodFacts';
 import { Footer } from './Footer';
 import { ConfirmSheet, Sheet } from './Sheet';
 
@@ -47,6 +48,7 @@ jest.mock('expo-router', () => {
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
+jest.mock('../platform/openFoodFacts', () => ({ searchOnline: jest.fn() }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 const mockAnnounce = jest.fn();
 jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
@@ -198,7 +200,7 @@ describe('/food/add (R140, R141)', () => {
 
   it('with nothing logged and no search, points to the list and your own foods', () => {
     const tree = mount();
-    expect(allText(tree)).toContain('Search the food list, or make your own.');
+    expect(allText(tree)).toContain('Search the food list, scan a barcode, or make your own.');
     expect(field(tree, 'Search foods').props.placeholder).toBe('Search foods');
     expect(field(tree, 'Search foods').props.autoFocus).toBe(true);
   });
@@ -230,7 +232,7 @@ describe('/food/add (R140, R141)', () => {
     const text = allText(tree);
     expect(text).toContain('Recent');
     expect(text).toContain('Egg, large');
-    expect(text).not.toContain('Search the food list, or make your own.');
+    expect(text).not.toContain('Search the food list, scan a barcode, or make your own.');
   });
 
   it('logs 1,5 servings for the date param, clears the search, stays open and says so', () => {
@@ -613,5 +615,68 @@ describe('without Pro (R151)', () => {
     expect(listEntries(mockDb, TODAY)).toHaveLength(0);
     setPro(true);
     expect(field(tree, 'Search foods')).toBeTruthy();
+  });
+});
+
+describe('Search online and Scan barcode (R546, R547)', () => {
+  const cola = { barcode: '049000028911', name: 'Coca-Cola', servingLabel: '355 ml', servingGrams: null, kcal: 149, proteinG: 0, carbsG: 37.6, fatG: 0 };
+
+  it('Scan barcode opens the scanner', () => {
+    const tree = mount();
+    press(tree, 'Scan barcode');
+    expect(router.push).toHaveBeenCalledWith('/food/scan');
+  });
+
+  it('offers Search online only while searching, and asks only when tapped', async () => {
+    jest.mocked(searchOnline).mockResolvedValue({ status: 'ok', foods: [cola] });
+    const tree = mount();
+    expect(pressables(tree, 'Search online for coke')).toHaveLength(0);
+    type(tree, 'Search foods', 'coke');
+    expect(searchOnline).not.toHaveBeenCalled();
+    press(tree, 'Search online for coke');
+    expect(allText(tree)).toContain('Searching Open Food Facts…');
+    await act(async () => {});
+    expect(searchOnline).toHaveBeenCalledWith('coke');
+    const text = allText(tree);
+    expect(text).toContain('Online · Open Food Facts');
+    expect(text).toContain('Coca-Cola');
+    expect(text).toContain('355 ml · 149 kcal · 0 g protein');
+  });
+
+  it('a food found online is kept on the phone and opens its servings', async () => {
+    jest.mocked(searchOnline).mockResolvedValue({ status: 'ok', foods: [cola] });
+    const tree = mount();
+    type(tree, 'Search foods', 'coca');
+    press(tree, 'Search online for coca');
+    await act(async () => {});
+    press(tree, 'Coca-Cola, 355 ml, 149 calories, 0 grams protein');
+    expect(getFood(mockDb, 'off-049000028911')).toMatchObject({ name: 'Coca-Cola', source: 'online' });
+    expect(openSheet(tree)).toBeDefined();
+    // Now on the phone, it shows once: under On your phone, not again under Online.
+    expect(pressables(tree, 'Coca-Cola, 355 ml, 149 calories, 0 grams protein')).toHaveLength(1);
+  });
+
+  it('says so when there is no connection, with Try again', async () => {
+    jest.mocked(searchOnline).mockResolvedValue({ status: 'offline' });
+    const tree = mount();
+    type(tree, 'Search foods', 'oats');
+    press(tree, 'Search online for oats');
+    await act(async () => {});
+    expect(allText(tree)).toContain("Couldn't reach Open Food Facts. Check your connection and try again.");
+    jest.mocked(searchOnline).mockResolvedValue({ status: 'ok', foods: [] });
+    press(tree, 'Search online again for oats');
+    await act(async () => {});
+    expect(allText(tree)).toContain('Nothing found online for oats.');
+  });
+
+  it('a new search shows the button again', async () => {
+    jest.mocked(searchOnline).mockResolvedValue({ status: 'ok', foods: [cola] });
+    const tree = mount();
+    type(tree, 'Search foods', 'coke');
+    press(tree, 'Search online for coke');
+    await act(async () => {});
+    type(tree, 'Search foods', 'cola');
+    expect(allText(tree)).not.toContain('Online · Open Food Facts');
+    expect(pressables(tree, 'Search online for cola').length).toBeGreaterThan(0);
   });
 });
