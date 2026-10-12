@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["GymHoundMediaModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.gymhoundmedia.GymHoundMediaModule"]
+  }
+}
