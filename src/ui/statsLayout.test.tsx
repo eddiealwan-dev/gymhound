@@ -6,6 +6,7 @@ import Stats from '../../app/(tabs)/stats';
 
 /** Phase 6 Task 1 (R172): the order of Stats' sections, and the `today` each is given. The sections are tested in their own files. */
 
+jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('expo-router', () => ({ useFocusEffect: () => undefined }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {

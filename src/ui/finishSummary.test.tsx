@@ -238,35 +238,49 @@ describe('the personal best card (R106)', () => {
     return tree;
   }
 
-  it('shows the lockup, PERSONAL BEST, the exercise, the value, the caption and the date, and no footer', () => {
+  it('shows the lockup, the PR mark and PERSONAL BEST, the exercise, the figure and its unit, the caption, the date and the footer (§18.17)', () => {
     const text = shownText(renderCard(benchPr('heaviest')));
-    expect(text).toEqual(['GYMHOUND', 'PERSONAL BEST', 'Bench press', '185 lb × 5', 'Heaviest set', 'SUN 11 OCT 2026']);
+    expect(text).toEqual(['GYMHOUND', 'PR', 'PERSONAL BEST', 'Bench press', '185', 'lb × 5', 'Heaviest set', 'SUN 11 OCT 2026', 'GymHound · gym log']);
   });
 
-  it('lays the date out for the locale', () => {
-    expect(shownText(renderCard(plankPr, 'en-US'))).toEqual(['GYMHOUND', 'PERSONAL BEST', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026']);
+  it('lays the date out for the locale, and keeps a value with no unit whole', () => {
+    expect(shownText(renderCard(plankPr, 'en-US'))).toEqual(['GYMHOUND', 'PR', 'PERSONAL BEST', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026', 'GymHound · gym log']);
   });
 
-  it('is 360 × 450, always dark, at a fixed text size, even with the light theme on', () => {
+  it('adds how far it beat the best before, and the session count, when given them (R445, R446)', () => {
+    let tree!: ReactTestRenderer;
+    act(() => {
+      tree = create(
+        <PbCard
+          highlight={benchPr('heaviest')}
+          locale="en-GB"
+          model={{ name: 'Bench press', value: { main: '185', rest: 'lb × 5' }, caption: 'Heaviest set', comparison: 'Up 5 lb from 180 lb on 2 Oct.', date: 'SUN 11 OCT 2026', sessions: 12 }}
+        />,
+      );
+    });
+    const text = shownText(tree);
+    expect(text).toContain('Up 5 lb from 180 lb on 2 Oct.');
+    expect(text).toContain('12 SESSIONS');
+  });
+
+  it('is 360 × 450, always dark, at a fixed text size, with red only on the wordmark and the PR mark', () => {
     mockScheme = 'light';
     const tree = renderCard(benchPr('reps_at_weight', 8));
     const root = tree.root.findAll((n) => typeof n.type === 'string' && n.props.collapsable === false)[0];
     expect(flatStyle(root.props.style)).toMatchObject({ width: 360, height: 450, backgroundColor: '#100f0c' });
 
     const texts = tree.root.findAll((n) => (n.type as unknown) === 'Text');
-    expect(texts.length).toBe(6);
     for (const t of texts) expect(t.props.allowFontScaling).toBe(false);
     const styleOf = (label: string) => flatStyle(texts.find((t) => t.props.children === label)!.props.style);
-    expect(styleOf('GYMHOUND')).toMatchObject({ color: '#E10600', fontSize: 38 });
+    expect(styleOf('GYMHOUND').color).toBe('#E10600');
     expect(styleOf('PERSONAL BEST').color).toBe('#E10600');
-    expect(styleOf('Bench press')).toMatchObject({ color: '#f1ece2', fontSize: 32 });
-    expect(styleOf('8 reps')).toMatchObject({ color: '#f1ece2', fontSize: 64, fontVariant: ['tabular-nums'] });
-    expect(styleOf('Most reps at 185 lb')).toMatchObject({ color: '#a39d90', fontSize: 18 });
-    expect(styleOf('SUN 11 OCT 2026').color).toBe('#a39d90');
+    expect(styleOf('Bench press').color).toBe('#f1ece2');
+    expect(styleOf('8')).toMatchObject({ color: '#f1ece2', fontVariant: ['tabular-nums'] });
+    const reds = texts.filter((t) => flatStyle(t.props.style).color === '#E10600').map((t) => t.props.children);
+    expect(reds).toEqual(['GYMHOUND', 'PERSONAL BEST']);
 
     const mark = tree.root.findByType(Image);
     expect(mark.props.source).toBe(require('../../assets/brand/mark-dark.png'));
-    expect(flatStyle(mark.props.style)).toMatchObject({ width: 48, height: 48 });
   });
 });
 

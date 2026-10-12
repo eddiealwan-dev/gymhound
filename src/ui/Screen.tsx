@@ -7,9 +7,19 @@ import { useTheme } from './ThemeProvider';
  * A scrolling page: 16px gutters, content capped at 512px and centred.
  * `footer` adds the GruntHound footer. On a short page a flexible spacer (FieldHound's `.home-spacer`, at least 32px) pushes it to the bottom of the visible area; on a long page it follows the content.
  * On iOS the page scrolls clear of the keyboard, so a field low on it (Settings' custom bar) is not hidden under it.
+ * `under` is drawn beneath the page, which paints over it: a share card being captured (§18.17) exists on screen, so
+ * it is drawn, but is never seen.
  */
-export function Screen({ children, footer = false }: { children: ReactNode; footer?: boolean }) {
+export function Screen({ children, footer = false, under }: { children: ReactNode; footer?: boolean; under?: ReactNode }) {
   const { colors } = useTheme();
+  if (under !== undefined) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {under}
+        <Screen footer={footer}>{children}</Screen>
+      </View>
+    );
+  }
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bg }}

@@ -17,6 +17,8 @@ import { PbCardHost } from '../../src/ui/finish/PbCardHost';
 import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { TrialStartedNotice } from '../../src/ui/pro/TrialLines';
+import { pbCardFor } from '../../src/db/repositories/shareCardsRepo';
+import { useDb } from '../../src/db/DbProvider';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
 /**
@@ -60,13 +62,14 @@ export default function FinishSummary() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const db = useDb();
   const read = useCallback((db: Db) => readSummary(db, id), [id]);
   const { summary, unit, firstWorkout } = useDbQuery(read);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* The personal best card is drawn first, under the scroll view, which paints over it (R106). */}
-      <PbCardHost locale={deviceLocale()}>
+      <PbCardHost locale={deviceLocale()} modelFor={(h) => pbCardFor(db, h, id, deviceLocale())}>
         <ScrollView
           style={{ flex: 1, backgroundColor: colors.bg }}
           contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}

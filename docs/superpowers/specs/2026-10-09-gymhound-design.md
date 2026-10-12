@@ -1397,6 +1397,24 @@ Four questions the edge-case pass raised. The owner had asked for the work to co
 - **R422:** after a field is left, a set row asks for a second look ("Check this number") at an unlikely number: a working weight over 1,000 lb or 450 kg, more than 1.5 times the exercise's best and at least 20 lb or 10 kg heavier, or more than 100 reps. Warmups are never flagged, typing clears it, VoiceOver hears it, and the tick still logs what the row shows (R48). Cost if wrong: a rare honest PR gets a second look.
 - **R423:** after a unit switch, the plate calculator opens at the weight the row shows: a barbell rounds to the nearest weight the plates load, anything else to the nearest 0.5. Before, a 135 lb plan opened at 61.23 kg while the row showed 60 kg. Cost if wrong: none for the log.
 
+### 18.17 Share cards (2026-10-12)
+The owner asked for premium share cards for personal bests and weekly summaries, keeping the existing visual language. The rulings are Claude's, for the owner to check.
+
+- **R440:** share cards are free. They are how new lifters hear about the app, and a lapse never locks something already shared. Cost if wrong: a Pro feature given away.
+- **R441:** one frame for every card, always dark. It is 360 × 450 points captured at 1080 × 1350 (4:5, which feeds and stories crop safely), at a fixed text size. It holds the header lockup (the hound mark, never redrawn, beside the red GYMHOUND) and a hairline over the footer.
+- **R442:** red only in the wordmark and on PR marks, as everywhere else. No quotes, flames or skulls.
+- **R443:** the footer is "GymHound · gym log", one constant. There is no URL until there is a store listing.
+- **R444:** the personal best card draws the figure large with its unit beside it ("185" and "lb × 5"), the lift, and what kind of best it is.
+- **R445:** it says how far it beat the best of the workouts before it: "Up 5 kg from 135 kg on 2 Sep.". When the gap rounds to nothing it says "Previous best … on …" instead, and on a lift's first best it says nothing. Sharing an old best from History leaves later workouts out, so the card says what was true that day.
+- **R446:** the card's foot has the day and the lift's session count to that day ("12 SESSIONS"), warm-ups left out.
+- **R447:** the card's words are read when it is shared (`pbCardFor`). If that read fails, the card still shares with the best alone.
+- **R448:** VoiceOver reads each Share button with the lift and the best: "Share your bench press personal best as an image. Heaviest: 185 lb × 5".
+- **R449:** **Share this week** is a quiet compact pill on Stats' This week card, shown once the week has a finished workout and only on a phone that can share. A failure says "Couldn't make the image. Try again." and is logged.
+- **R450:** the weekly card lists the week's personal bests, one row per lift with red PR marks (up to three). With none, it lists the top three lifts by volume.
+- **R451:** the week is Monday to Sunday, with seven dots for the days trained, then workouts, sets (warm-ups left out), volume in the display unit, and time trained from start to finish.
+- **R452:** the streak shows on this week's card only, when it is above 0.
+- **R453:** a card is drawn under the page while it is captured (`Screen`'s `under`, or `PbCardHost`), so it is on screen and drawn but never seen. It waits for the hound mark (1.5 s at most), and is removed after.
+
 ### 18.18 Routine sharing (2026-10-12)
 The owner asked for easy routine sharing by link or code. GymHound has no server, no account and no network, so the routine itself travels inside the link and the code. The rulings are Claude's, for the owner to check.
 

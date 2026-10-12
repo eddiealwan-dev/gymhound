@@ -26,6 +26,7 @@ import { afterSheetCloses, ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
+import { pbCardFor } from '../../../src/db/repositories/shareCardsRepo';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
 /** Back where it was opened from; a link opened with no history goes to /history. */
@@ -161,7 +162,7 @@ function WorkoutDetailScreen({ id }: { id: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* The personal best card is drawn first, under the page, which paints over it (R106). */}
-      <PbCardHost locale={locale}>
+      <PbCardHost locale={locale} modelFor={(h) => pbCardFor(db, h, id, locale)}>
         <Screen>
           <BackLink label="History" onPress={leave} />
           <ScreenTitle>{summary.name}</ScreenTitle>

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactElement, ReactNode } from 'react';
 import { View } from 'react-native';
 import type { PrHighlight } from '../../domain/prs';
+import type { PbCardModel } from '../../domain/shareCards';
 import { sharePbImage } from '../../platform/sharePb';
 import { PbCard } from './PbCard';
 
@@ -29,7 +30,16 @@ type Job = { id: number; highlight: PrHighlight; resolve: (r: 'shared' | 'unavai
  * A share draws the card, waits for its hound mark to load (or fail, or `PB_READY_TIMEOUT_MS`), then one frame,
  * then captures and shares it, and removes it.
  */
-export function PbCardHost({ locale, children }: { locale: string; children: ReactNode }): ReactElement {
+export function PbCardHost({
+  locale,
+  modelFor,
+  children,
+}: {
+  locale: string;
+  /** The card's fuller words for a highlight (§18.17); without it, or when it throws, the card shows the best alone. */
+  modelFor?: (highlight: PrHighlight) => PbCardModel | null;
+  children: ReactNode;
+}): ReactElement {
   const [job, setJob] = useState<Job | null>(null);
   const card = useRef<View>(null);
   const nextId = useRef(0);
@@ -81,6 +91,17 @@ export function PbCardHost({ locale, children }: { locale: string; children: Rea
     };
   }, [job]);
 
+  const modelOf = (highlight: PrHighlight): PbCardModel | null => {
+    if (modelFor === undefined) return null;
+    try {
+      return modelFor(highlight);
+    } catch (error) {
+      // The card still shares with the personal best alone.
+      console.warn('GymHound could not read the personal best card details.', error);
+      return null;
+    }
+  };
+
   const onReady = useCallback(() => {
     ready.current = true;
     go.current?.();
@@ -95,7 +116,7 @@ export function PbCardHost({ locale, children }: { locale: string; children: Rea
           accessibilityElementsHidden
           style={{ position: 'absolute', top: 0, left: 0 }}
         >
-          <PbCard key={job.id} ref={card} highlight={job.highlight} locale={locale} onReady={onReady} />
+          <PbCard key={job.id} ref={card} highlight={job.highlight} locale={locale} model={modelOf(job.highlight)} onReady={onReady} />
         </View>
       )}
       {children}

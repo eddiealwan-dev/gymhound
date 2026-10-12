@@ -1,10 +1,13 @@
-import { type ReactElement, type ReactNode, useCallback } from 'react';
+import { type ReactElement, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { weekReport } from '../../db/repositories/analyticsRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
+import { weekShareLabel } from '../../domain/shareCards';
 import { groupWeekText, sessionsText, trendText } from '../../domain/weeklyAnalytics';
+import { canSharePb } from '../../platform/sharePb';
 import { useFocusedDbQuery } from '../../state/dataVersion';
+import { Button } from '../Button';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
@@ -28,7 +31,7 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
  * over are said in words, never in colour. With no workout this week one line stands in for the sets; before the first
  * workout ever, the card is one line. It reads only while Stats is in sight (R185).
  */
-export function WeekCard({ today }: { today: string }): ReactElement | null {
+export function WeekCard({ today, onShare }: { today: string; onShare?: () => void }): ReactElement | null {
   const { colors } = useTheme();
   const read = useCallback((db: Db) => {
     const unit = getSettings(db).unit;
@@ -74,6 +77,28 @@ export function WeekCard({ today }: { today: string }): ReactElement | null {
       <Part title="Bodyweight">
         <Body>{trendText(report.bodyweight, unit)}</Body>
       </Part>
+      {/* §18.17 (R449): the week as an image, once it has a workout, on a phone that can share. */}
+      {onShare !== undefined && sessions.thisWeek > 0 ? <ShareWeek onShare={onShare} /> : null}
+    </View>
+  );
+}
+
+/** Share this week: a quiet compact pill; it shows only where the phone can share. */
+function ShareWeek({ onShare }: { onShare: () => void }): ReactElement | null {
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void canSharePb().then((ok) => {
+      if (live) setCanShare(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!canShare) return null;
+  return (
+    <View style={{ alignItems: 'flex-start', padding: 4, margin: -4 }}>
+      <Button label="Share this week" variant="secondary" size="compact" accessibilityLabel={weekShareLabel('THIS WEEK')} onPress={onShare} />
     </View>
   );
 }

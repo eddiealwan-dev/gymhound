@@ -310,3 +310,6 @@ export function prCard(h: PrHighlight): { value: string; caption: string } {
       return { value: formatDuration(h.durationS ?? 0), caption: 'Longest hold' };
   }
 }
+
+/** The share cards' value texts (§18.17), the same words the finish summary uses: "185 lb × 5", "185 lb", "210 lb". */
+export { setText as prSetText, loadText as prLoadText, e1rmText as prE1rmText };
