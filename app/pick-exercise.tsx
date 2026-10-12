@@ -231,7 +231,7 @@ export default function PickExercise() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, minHeight: 56 }}>
-          <Display weight={700} style={{ flex: 1 }}>
+          <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
             {replacing ? 'Replace exercise' : 'Add exercise'}
           </Display>
           <Pressable
@@ -259,9 +259,9 @@ export default function PickExercise() {
             style={{
               minHeight: 48,
               paddingHorizontal: 12,
-              borderRadius: 10,
+              borderRadius: 8,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.borderStrong,
               backgroundColor: colors.surface,
               color: colors.text,
               fontFamily: fonts.body400,

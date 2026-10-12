@@ -2,7 +2,7 @@ import { Keyboard, Modal, Platform, Pressable, ScrollView, useWindowDimensions, 
 import { useEffect, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from './Button';
-import { Body, Display } from './Text';
+import { SheetTitle } from './SheetTitle';
 import { useTheme } from './ThemeProvider';
 
 type SheetProps = { visible: boolean; onClose: () => void; children: ReactNode };
@@ -101,14 +101,7 @@ export function ConfirmSheet({
   const answers = primary === 'cancel' ? [cancel, confirm] : [confirm, cancel];
   return (
     <Sheet visible={visible} onClose={onCancel}>
-      <Display weight={700} style={{ marginBottom: body ? 8 : 16 }}>
-        {title}
-      </Display>
-      {body ? (
-        <Body muted style={{ marginBottom: 16 }}>
-          {body}
-        </Body>
-      ) : null}
+      <SheetTitle subtitle={body}>{title}</SheetTitle>
       <View style={{ gap: 8 }}>
         {answers.map(({ key, label, onPress }, i) => (
           <Button key={key} label={label} onPress={onPress} variant={i === 0 ? 'primary' : 'secondary'} />

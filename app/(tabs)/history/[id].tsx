@@ -24,7 +24,7 @@ import { DetailExercise, nextLinesFor } from '../../../src/ui/history/DetailExer
 import { Screen } from '../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
@@ -160,7 +160,7 @@ function WorkoutDetailScreen({ id }: { id: string }) {
       <PbCardHost locale={locale}>
         <Screen>
           <BackLink label="History" onPress={leave} />
-          <Display>{summary.name}</Display>
+          <ScreenTitle>{summary.name}</ScreenTitle>
           <View style={{ gap: 4, marginTop: 4 }}>
             <Body muted style={{ fontSize: 14 }}>
               {when}

@@ -9,7 +9,8 @@ import { bumpData, useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { Button } from '../Button';
 import { afterSheetCloses, Sheet } from '../Sheet';
-import { Body, Display } from '../Text';
+import { SheetTitle } from '../SheetTitle';
+import { Body } from '../Text';
 
 // Shared by Stats → Progress photos, /photos and /photo/[id] (R181). Phone builds only: on the web the callers draw
 // nothing here, so these never touch the file system there.
@@ -102,13 +103,11 @@ export function AddProgressPhoto({ compact = false }: { compact?: boolean }) {
       )}
       {message !== null ? <Body muted>{message}</Body> : null}
       <Sheet visible={choosing} onClose={() => setChoosing(false)}>
-        <Display weight={700} style={{ marginBottom: 16 }}>
-          Add a photo
-        </Display>
+        <SheetTitle>Add a photo</SheetTitle>
         <View style={{ gap: 8 }}>
           <Button label="Take photo" onPress={() => choose('camera')} />
           <Button label="Choose a photo" variant="secondary" onPress={() => choose('library')} />
-          <Button label="Cancel" variant="secondary" onPress={() => setChoosing(false)} />
+          <Button label="Cancel" variant="quiet" onPress={() => setChoosing(false)} />
         </View>
       </Sheet>
     </View>

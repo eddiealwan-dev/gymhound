@@ -68,6 +68,11 @@ typography:
     fontSize: "14px"
     fontWeight: 600
     letterSpacing: "0.5px"
+  number-suggested:
+    fontFamily: "BarlowCondensed_600SemiBold"
+    fontSize: "20px"
+    fontWeight: 600
+    fontFeature: "tnum"
   column-label:
     fontFamily: "Inter_600SemiBold"
     fontSize: "10px"
@@ -138,6 +143,13 @@ components:
     textColor: "{colors.bg-dark}"
     rounded: "{rounded.round}"
     size: "40px"
+  text-field:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.text-dark}"
+    typography: "{typography.body}"
+    rounded: "{rounded.field}"
+    padding: "0 12px"
+    height: "48px"
   sheet:
     backgroundColor: "{colors.surface-dark}"
     rounded: "{rounded.card}"
@@ -176,7 +188,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row, entered set fields and the selected bar choice.
 - **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars, and the track under a 3pt progress bar (macro bars, water).
 - **Seam** (border-dark / border-light): card, sheet and dock edges, the set-number chip, regular secondary buttons.
-- **Strong Seam** (border-strong-dark / border-strong-light): set-field edges, compact pill outlines, the rest row's edge, the Short on food banner's bottom edge and the off track of a switch only: the edges a control or a passing prompt needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
+- **Strong Seam** (border-strong-dark / border-strong-light): every field's edge (set fields, number fields, search, name and note fields, R352), compact pill outlines, the rest row's edge, the Short on food banner's bottom edge and the off track of a switch only: the edges a control or a passing prompt needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
 - **Chalk / Ink** (text-dark / text-light): text, primary-button fill, tick fill, the progress line, the superset bar, the selected segment, the fill of the macro and water bars, the paywall's checkmarks.
 - **Worn Chalk / Worn Ink** (text-muted-dark / text-muted-light): secondary lines, labels, the rule line, previous results, open tick rings.
 - **Ghost Chalk / Ghost Ink** (text-faint-dark / text-faint-light): suggested values in empty set fields only. It holds 3:1 on bg and surface.
@@ -197,13 +209,13 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 - **Wordmark** (Barlow 800, 38px, -0.5 tracking, uppercase): GYMHOUND only. Fixed size: it does not follow the phone's text size.
 - **Date** (Barlow 800, 56px, uppercase by content): Train's date, one line, shrinks to fit.
 - **Headline** (Barlow 800, 32px): the workout name on Train's Resume card. Up next's title uses Barlow 700 at 24px.
-- **Display** (Barlow 700, 28px): screen titles (Routines, Settings) and sheet questions.
+- **Display** (Barlow 700, 28px): every page's title (`ScreenTitle`, a VoiceOver heading, R355), every sheet's title (`SheetTitle`, R351) and an editor's title (`ModalHeader`).
 - **Title** (Barlow 700, 22px): exercise names and the session header's workout name (the header caps at 1.3x).
 - **Greeting** (Barlow 700, 20px, 0.5 tracking, muted): GOOD MORNING over the date.
 - **Number** (Barlow 600-800, tabular figures): stat numbers at 44px, the rest countdown at 32px (40px in the docked bar), set fields at 20px (600 suggested, 800 entered), previous results at 17px, the per-exercise count at 16px.
 - **Body** (Inter 400, 16px): sentences. **Body strong** (Inter 600, 16px): button labels, list item names, field labels.
 - **Caption** (Inter 400, 14px, muted): secondary lines, the rule line, Up next's scheme column, the + Note and Something off controls.
-- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, PLATES, PROGRESSION, REST TIMER, FUEL, BACKUPS, EXPORT, GYMHOUND PRO on Settings; BODY and MEASUREMENTS on Stats; WATER, SET YOUR TARGETS, CALORIES LEFT, PROTEIN LEFT, FOOD and TRENDS on Fuel; RECENT on Add food; TRAINING DAY and REST DAY on Targets; SAVED WORKOUTS on Routines; PERSONAL BESTS on the finish summary). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
+- **Label** (Inter 600, 14px, 0.5 tracking, muted; `Label` in src/ui/Text.tsx): the state label on Train's cards (UP NEXT, IN PROGRESS), the caption over a big number (STREAK and THIS WEEK on Train, DURATION, VOLUME and LOGGED on the finish summary, CALORIES LEFT on Fuel; not read as headings there, R358) and the group headings on Settings and Routines. It renders its words in upper case: the source says "Premade" or "Rest timer" and the screen shows PREMADE or REST TIMER (APPEARANCE, UNITS, BAR, PLATES, PROGRESSION, REST TIMER, FUEL, BACKUPS, EXPORT, GYMHOUND PRO on Settings; BODY and MEASUREMENTS on Stats; WATER, SET YOUR TARGETS, CALORIES LEFT, PROTEIN LEFT, FOOD and TRENDS on Fuel; RECENT on Add food; TRAINING DAY and REST DAY on Targets; SAVED WORKOUTS on Routines; PERSONAL BESTS on the finish summary). Every Label is a VoiceOver heading, so a screen-reader user can jump group to group; VoiceOver reads the words as written, not spelled out.
 - **Column label** (Inter 600, 10px, 0.3 tracking, upper case, muted): the set table's column headers; the rest row's REST label is the same role at 11px.
 - **Chart label** (Inter 400, 12px, muted, tabular figures): a line chart's y labels and the dates under its axis. The one place numbers are not in Barlow, as R116 sets them: the labels are the chart's scaffolding, quieter than the values a screen shows in Barlow beside it.
 
@@ -216,7 +228,7 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 
 A single centred column, 16px gutters, capped at 512px, on every screen including sheets, the header, the dock and the docked bars. Pages scroll; the header and dock stay. On Train, History, Stats, Fuel and Settings a flexible spacer of at least 32px pins the GruntHound footer to the bottom of a short page and lets it follow a long one.
 
-Spacing runs on 4px steps: 4 inside tight pairs (a title and its subtitle, a label and its value), 8 between items of a group, 12 between the two stat cards and between a row's text and its action, 16 between cards, inside cards and between the fields of a Settings group, 24 under a screen title, 32 between Settings groups, 28 between exercise blocks in a session. A field's name sits 8 over its control, so it is closer to its own control than to the one above it. Interactive rows are at least 44pt tall; a compact pill is 36pt tall with a 4pt hit slop so its target is still 44pt.
+Spacing runs on 4px steps: 4 inside tight pairs (a title and its subtitle, a label and its value), 8 between items of a group, 12 between the two stat cards and between a row's text and its action, 16 between cards, inside cards and between the fields of a Settings group, 24 under a screen title (a muted line under a title sits 4 under it, and the 24 follows that line; R355), 32 between Settings groups, 28 between exercise blocks in a session. A field's name sits 8 over its control, so it is closer to its own control than to the one above it. Interactive rows are at least 44pt tall; a compact pill is 36pt tall with a 4pt hit slop so its target is still 44pt.
 
 Wrapping is structural: when the phone's text grows, a row's trailing group drops to its own line as a unit and then wraps among itself, rather than squeezing the leading text.
 
@@ -238,10 +250,18 @@ Plain, confident and quiet about it.
 - **Shape:** gently rounded rectangle (12px) at 48pt, or a full pill (18px) at 36pt for compact.
 - **Primary:** filled with the text colour, labelled in the background colour, Inter 600 16px, 20px side padding. One per sheet or card.
 - **Secondary:** transparent with a 1px border (Seam at regular size, Strong Seam at compact size), labelled in the text colour.
-- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout). The session's + Set / + Warmup row steps back by the buttons' 12px padding so "+ Set" lines up with the set column; Discard workout stays centred.
+- **Quiet:** no chrome, label only (+ Set, + Warmup, Discard workout, Cancel). A quiet button that starts or ends a line steps back by its own side padding (20px regular, 12px compact) so its words line up with the text around it: the session's + Set / + Warmup row lines "+ Set" up with the set column, Reset to defaults lines up with the plates, Done lines up with the screen's right edge (R356).
+- **Cancel is quiet:** in every sheet and question, Cancel is the last button and quiet; the answers above it are primary (one) then secondary (R351).
+- **Destructive actions at a page's foot** (Discard workout, Delete routine) are quiet and centred, 24pt under the content; they open a question before anything is lost (R356).
 - **Compact for a row's own action:** an action that belongs to one row of a list (Set active on a routine, the rest pills, Finish in the session header) is a compact secondary pill; full-size buttons are for a card's or a sheet's main answers.
 - **A state is not a button:** a row's current state (the routine in use) is a text-colour checkmark and a word, with no edge or fill.
-- **Pressed / disabled:** pressed drops opacity to 0.8; disabled to 0.4 and ignores presses.
+- **Pressed / disabled:** pressed drops opacity to 0.8; disabled to 0.4 and ignores presses. The same two values hold for every pressable in the app (rows, arrows, the reorder arrows), not only Buttons.
+
+### Sheets
+A sheet is a surface panel with 16px top corners under a 50% black scrim (the one colour outside the tokens). It opens with `SheetTitle`: Display 700 at 28px, a header VoiceOver moves to. A title alone sits 16pt over what follows; a title with a muted subtitle (the exercise or food it is about, or what a question will do) sits 4pt over the subtitle, which sits 16pt over what follows (R351). Buttons stack full width 8pt apart in order: the one primary answer, any secondary answers, then quiet Cancel. ConfirmSheet is a SheetTitle with its body as the subtitle.
+
+### Modal editors
+The exercise and food editors open with `ModalHeader`: the Display title as a header on the left and a 44pt close × (Ionicons, 28px, text colour) on the right, stepped 8pt into the gutter so the glyph lines up with the edge, 24pt over the form (R357).
 
 ### Cards / Containers
 - **Corner Style:** 16px.
@@ -250,10 +270,10 @@ Plain, confident and quiet about it.
 - **Internal Padding:** 16px.
 
 ### Segmented control
-A well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments; the chosen segment is filled with the text colour and labelled in the background colour. Used for Appearance, units, bell sound, bell volume, (wrapping in rows of three) rest length, the default increment on Settings → Progression, a body chart's range: 3M, 1Y and All, under the chart, read as "3M, last 3 months" and so on, and from phase 5 Search / Quick add on Add food and the Fuel trends' two controls.
+One component, `Segmented` (R353): a well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments with centred Inter 600 labels; the chosen segment is filled with the text colour and labelled in the background colour. VoiceOver hears a radio group named for the setting. Used for Appearance, units, bell sound, bell volume, (wrapping in rows of three) rest length, the default increment on Settings → Progression, a body chart's range: 3M, 1Y and All, under the chart, read as "3M, last 3 months" and so on, and from phase 5 Search / Quick add on Add food and the Fuel trends' two controls.
 - **Fuel trends** use their own ranges, **1M** (default), **3M** and **1Y**, under the chart, read "1M, last month", "3M, last 3 months", "1Y, last year"; the measure control above the chart (Calories, Protein, Carbs, Fat) is laid out by measured width: four in a row when the longest word fits each segment, else two, else one, so a word never breaks. An empty range says "Nothing logged in this range." (a body chart says "No entries in this range.").
 - **Body charts** keep 3M (default), 1Y and All.
-- Three copies of the control exist (Settings, Add food, Fuel trends) with the same look; merging them is an open minor (spec §18.10).
+- Settings, Add food, the body and lift ranges and both Fuel trends controls all render `Segmented`; the three copies spec §18.10 left open are gone (R353).
 
 ### Switch
 The platform switch, themed (`switchColors`, R131, R171): on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too) under a text-colour thumb, so on and off never look alike in either theme (Round 7: one dark thumb on both made on hard to tell in dark mode). The thumb takes its state's colour in the browser build too (react-native-web would otherwise turn an on thumb teal). Never red. Its row is 44pt tall with the setting's name on the left.
@@ -267,6 +287,7 @@ Each group is an upper-case Label heading 8pt over its items; items sit 16pt apa
 - **Invalid:** a 2px muted bottom edge and the line "Check this number" above the row. Never red.
 - **Needed (a tick tapped before it was ready):** the field it asks for takes the same 2px muted bottom edge, and the line ("Add a weight to tick") sits above the row in the text colour at body size, led by an alert-circle-outline icon inside the text. The tap buzzes a warning and focuses nothing, so the keyboard stays down and the person taps the field (R99). "Check this number" draws the same way. Never red.
 - **Body number field** (Stats and the body screens): a surface field with a 1px Strong Seam edge and 8px corners, at least 112pt wide and 44pt tall, the number centred in Barlow 700 at 20px with tabular figures, followed by its unit in muted body text. A number out of bounds takes the invalid field's 2px muted bottom edge, with "Check this number" muted under the row. Never red.
+- **Text field** (search, names, notes, food entry, the plate and bar editors): a 1px Strong Seam edge and 8px corners, at least 48pt tall, 12px side padding, body text; placeholders muted. Every field in the app shares the Strong Seam edge (R352).
 - **Focus:** the platform caret and keyboard; fields keep returnKeyType "done".
 
 ### Navigation
@@ -296,7 +317,7 @@ Marked points (phase 6, R173, R191), on a lift's chart: a session with something
 
 ### Fuel (phase 5)
 Nothing on Fuel is red: not "over", not water, not the pitch.
-- **Day header:** Display "Fuel", then a row of a 44pt **‹**, the day in Display (Barlow 700, 28px; "Today", "Yesterday", "Sat, Oct 10") centred and taking the rest of the row, and a 44pt **›**. The arrows are Barlow 700 at 32px; › on today is drawn at 0.3 opacity and ignores presses; pressed drops to 0.6. Under it, 2pt down, muted body "Training day" or "Rest day" when targets apply.
+- **Day header:** Display "Fuel", then a row of a 44pt **‹**, the day in Display (Barlow 700, 28px; "Today", "Yesterday", "Sat, Oct 10") centred and taking the rest of the row, and a 44pt **›**. The arrows are the shared `StepArrow` (R354): Barlow 700 at 32px in a 44pt box; › on today is drawn at 0.4 opacity, says it is dimmed and ignores presses; pressed drops to 0.8. History's month and the photo viewer step with the same arrow. Under it, 2pt down, muted body "Training day" or "Rest day" when targets apply.
 - **Water card:** a card (surface, Seam edge, 16px corners and padding, 12pt gaps) with the WATER Label; the total in Barlow (number style) followed by muted body " of 2,000 ml" when a goal is set, over a 3pt progress bar (text-colour fill on a surfaceRaised track, square ends, capped full); without a goal a quiet **Set a daily goal** under the total. Then a wrapping row of compact secondary pills, "+250 ml", "+500 ml" (or "+8 fl oz", "+16 fl oz") and **Other**, 8pt apart; then a quiet **Entries ›**. Quiet buttons step back by their 20px padding so their words line up with the card's text.
 - **Summary:** exactly two numbers side by side, each Barlow at 44px over its Label (CALORIES LEFT, PROTEIN LEFT), 4pt apart, each at least 120pt wide, 16pt between them; they sit side by side down to a 320pt screen at default text and wrap only at large text. Each pair is one VoiceOver element ("Protein left, 86 grams"). Past a target the value reads "120 over" / "12 g over" in the same colour. Under them, muted body "Target: 2,400 kcal · 180 g protein" (the day header already says Training day or Rest day).
 - **Macro bars:** one per macro with a target, 12pt apart: body "Protein 94 / 180 g" 6pt over a 3pt bar, text-colour fill on a surfaceRaised track, capped full (never past it, never red). A macro without a target is one muted line, "Carbs 210 g · Fat 64 g". Each bar is one VoiceOver element ("Protein 94 of 180 grams").
@@ -324,11 +345,12 @@ Choices take the shape that says how many can be picked. Primary muscles, second
 - **Do** keep every target at least 44pt, counting a compact pill's 4pt hit slop.
 - **Do** let rows wrap at large text: trailing groups drop to their own line together, then wrap among themselves.
 - **Do** keep suggestions faint and dashed, and entered values bold and solid.
+- **Do** reach for the shared pieces (ScreenTitle, SheetTitle, ModalHeader, Segmented, StepArrow, Button) before styling a new one by hand.
 
 ### Don't:
 - **Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.
 - **Don't** add shadows, gradients or glass; move a tonal step instead.
-- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines, the rest row's edge, the Short on food banner's edge and a switch's off track.
+- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but field edges (set, number, search, name and note fields), compact pill outlines, the rest row's edge, the Short on food banner's edge and a switch's off track.
 - **Don't** put red on Fuel, water, "over" values or the paywall, or the footer on the paywall, Add food or a food editor.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
 - **Don't** put a footer, a quote or the light palette on the personal best card.

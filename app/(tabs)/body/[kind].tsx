@@ -14,7 +14,7 @@ import { BackLink } from '../../../src/ui/BackLink';
 import { BodyEntrySheet } from '../../../src/ui/body/BodyEntrySheet';
 import { BodyChart, BodyQuickEntry } from '../../../src/ui/body/BodyLog';
 import { Screen } from '../../../src/ui/Screen';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to Stats. With nothing to go back to (opened by address, or reloaded), it lands on Stats. */
@@ -71,7 +71,7 @@ function KindDetail({ kind }: { kind: BodyKind }) {
   return (
     <Screen>
       <BackLink label="Stats" onPress={toStats} />
-      <Display>{BODY_LABELS[kind]}</Display>
+      <ScreenTitle>{BODY_LABELS[kind]}</ScreenTitle>
       <View style={{ gap: 16, marginTop: 24 }}>
         <BodyQuickEntry kind={kind} unit={unit} />
         <BodyChart kind={kind} entries={entries} unit={unit} today={today} locale={locale} />

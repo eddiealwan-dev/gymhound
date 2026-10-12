@@ -32,7 +32,7 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../platform/progressPhotoFiles', () => ({
   pickProgressPhoto: jest.fn(),
   saveProgressPhoto: jest.fn((_uri: string, now: number) => `progress-${now}.jpg`),
@@ -339,8 +339,8 @@ describe('/photo/[id] (R181)', () => {
     tap(tree, 'Newer photo');
     expect(images(tree)).toEqual(['file:///documents/progress-photos/progress-latest.jpg']);
     expect(control(tree, 'Newer photo').props.disabled).toBe(true);
-    expect(control(tree, 'Older photo').props.label).toBe('‹');
-    expect(control(tree, 'Newer photo').props.label).toBe('›');
+    expect(control(tree, 'Older photo').props.glyph).toBe('‹');
+    expect(control(tree, 'Newer photo').props.glyph).toBe('›');
   });
 
   it('‹ and › say the date of the photo now shown', () => {

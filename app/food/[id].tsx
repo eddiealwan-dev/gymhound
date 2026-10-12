@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Keyboard, Pressable, View } from 'react-native';
+import { BackHandler, Keyboard, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { archiveCustomFood, createCustomFood, customFoodNames, getFood, listFoods, updateCustomFood } from '../../src/db/repositories/foodsRepo';
 import { type CustomFoodInput, validateCustomFood } from '../../src/domain/fuel';
@@ -11,11 +10,11 @@ import { useCreatedFood } from '../../src/state/createdFood';
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { FuelField, MacroFields } from '../../src/ui/fuel/MacroFields';
+import { ModalHeader } from '../../src/ui/ModalHeader';
 import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
-import { Body, Display } from '../../src/ui/Text';
-import { useTheme } from '../../src/ui/ThemeProvider';
+import { Body } from '../../src/ui/Text';
 
 /** Back to what the editor opened over: the add screen; with nothing behind it, Fuel. */
 function goBack() {
@@ -50,7 +49,6 @@ type EditorProps = {
  */
 function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
   const db = useDb();
-  const { colors } = useTheme();
   const [existing] = useState(() => (foodId === null ? null : getFood(db, foodId)));
   const [initial] = useState<CustomFoodInput | null>(() => {
     if (foodId === null) return { ...BLANK, name: prefill };
@@ -99,22 +97,7 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
     return () => back.remove();
   }, []);
 
-  const header = (title: string) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -8, marginBottom: 24 }}>
-      <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
-        {title}
-      </Display>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-        hitSlop={4}
-        onPress={leave}
-        style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
-      >
-        <Ionicons name="close" size={28} color={colors.text} />
-      </Pressable>
-    </View>
-  );
+  const header = (title: string) => <ModalHeader title={title} onClose={leave} />;
 
   if (existing !== null && existing.source !== 'custom') {
     return (
@@ -243,23 +226,9 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
 
 /** The editor's title and Close, over the pitch. */
 function Locked({ title }: { title: string }) {
-  const { colors } = useTheme();
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -8, marginBottom: 24 }}>
-        <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
-          {title}
-        </Display>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          hitSlop={4}
-          onPress={goBack}
-          style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
-        >
-          <Ionicons name="close" size={28} color={colors.text} />
-        </Pressable>
-      </View>
+      <ModalHeader title={title} onClose={goBack} />
       <ProPitch context="tab" />
     </Screen>
   );

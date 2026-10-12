@@ -13,7 +13,7 @@ import { Button } from '../../../src/ui/Button';
 import { ConsistencyCalendar } from '../../../src/ui/history/ConsistencyCalendar';
 import { HistoryCard } from '../../../src/ui/history/HistoryCard';
 import { Screen } from '../../../src/ui/Screen';
-import { Body, Display, Label } from '../../../src/ui/Text';
+import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
 
 /** Months shown at first, and how many more each Show earlier months adds (R163). */
 const FIRST_MONTHS = 3;
@@ -70,8 +70,8 @@ export default function History() {
 
   return (
     <Screen footer>
-      <Display>History</Display>
-      <View style={{ marginTop: 16 }}>
+      <ScreenTitle>History</ScreenTitle>
+      <View style={{ marginTop: 24 }}>
         <ConsistencyCalendar month={month} today={today} onMonthChange={setMonth} />
       </View>
       {months.length === 0 ? (

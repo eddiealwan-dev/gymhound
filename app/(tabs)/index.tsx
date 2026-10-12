@@ -23,7 +23,6 @@ import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
-import { afterSheetCloses, Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
@@ -102,9 +101,8 @@ function StatCard({ label, value, caption }: { label: string; value: string; cap
   const fontSize = statFontSize(value);
   return (
     <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16 }}>
-      <Body weight={600} muted style={{ fontSize: 14 }}>
-        {label}
-      </Body>
+      {/* The Label style UP NEXT uses, as Fuel's CALORIES LEFT does under its number; not a heading here. */}
+      <Label accessibilityRole="none">{label}</Label>
       {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's
           text size is turned up. No fixed line height, as for the date (R79): iOS shrinks only the font to fit. */}
       <View style={{ minHeight: 52, justifyContent: 'center' }}>
@@ -299,16 +297,8 @@ export default function Train() {
         </View>
       ) : null}
 
-      <Sheet visible={blocked} onClose={() => setBlocked(false)}>
-        <Body style={{ marginBottom: 16 }}>Finish or discard the workout in progress first.</Body>
-        <Button
-          label="Resume"
-          onPress={() => {
-            setBlocked(false);
-            afterSheetCloses(openSession);
-          }}
-        />
-      </Sheet>
+      {/* The same question Routines, a saved workout and History ask, in the words spec 8.3 gives it. */}
+      <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} body="Finish or discard the workout in progress first." />
       <WorkoutInProgressSheet visible={changeBlocked} onClose={() => setChangeBlocked(false)} />
     </Screen>
   );

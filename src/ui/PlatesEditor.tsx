@@ -163,7 +163,7 @@ function PlateList({ unit, owned }: { unit: WeightUnit; owned: Record<string, nu
               paddingHorizontal: 8,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.borderStrong,
               // Red is reserved, so a number that needs another look gets a heavier muted underline.
               ...(invalid ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
               backgroundColor: colors.surface,
@@ -177,7 +177,8 @@ function PlateList({ unit, owned }: { unit: WeightUnit; owned: Record<string, nu
           <Body muted>{unit}</Body>
         </View>
       </View>
-      <View style={{ alignItems: 'flex-start' }}>
+      {/* A quiet button steps back by its padding, so its label lines up with the rows above it. */}
+      <View style={{ alignItems: 'flex-start', marginLeft: -20 }}>
         <Button label="Reset to defaults" variant="quiet" onPress={() => save({ ...defaultSettings(null)[PLATES_KEY[unit]] })} />
       </View>
     </View>

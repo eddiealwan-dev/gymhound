@@ -10,7 +10,8 @@ import { useDbQuery } from '../../state/dataVersion';
 import { BarPicker } from '../BarPicker';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
-import { Body, Display } from '../Text';
+import { SheetTitle } from '../SheetTitle';
+import { Body } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
 
@@ -34,12 +35,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
 
   return (
     <>
-      <Display weight={700}>
-        Plate calculator
-      </Display>
-      <Body muted style={{ marginBottom: 12 }}>
-        {ex.name}
-      </Body>
+      <SheetTitle subtitle={ex.name}>Plate calculator</SheetTitle>
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
@@ -58,7 +54,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
               paddingHorizontal: 8,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.borderStrong,
               // Red is reserved, so a number that needs another look gets a heavier muted underline.
               ...(!valid ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
               backgroundColor: colors.surface,
@@ -94,7 +90,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
         </Body>
         <BarPicker />
       </View>
-      <View style={{ marginTop: 12 }}>
+      <View style={{ marginTop: 16 }}>
         <Button label="Done" onPress={onClose} />
       </View>
     </>

@@ -9,7 +9,8 @@ import { Button } from './Button';
 import { canHaveOwnPhotos, useExercisePhotos } from './exercisePhotos';
 import { OwnPhotos } from './OwnPhotos';
 import { afterSheetCloses, Sheet } from './Sheet';
-import { Body, Display, Num } from './Text';
+import { SheetTitle } from './SheetTitle';
+import { Body, Num } from './Text';
 import { useTheme } from './ThemeProvider';
 
 /** How long each photo shows before the other swaps in (R86, R98). */
@@ -143,10 +144,8 @@ function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => v
   const yours = exercise.isCustom && exercise.instructions.length === 0;
   return (
     <>
-      <Display weight={700} accessibilityRole="header">
-        {exercise.name}
-      </Display>
-      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+      <SheetTitle marginBottom={4}>{exercise.name}</SheetTitle>
+      <Body muted style={{ fontSize: 14 }}>
         {musclesLine(exercise.primaryMuscles, exercise.secondaryMuscles)}
       </Body>
       {photos ? (

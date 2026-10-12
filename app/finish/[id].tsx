@@ -14,7 +14,7 @@ import { Button } from '../../src/ui/Button';
 import { FinishPrs } from '../../src/ui/finish/FinishPrs';
 import { PbCardHost } from '../../src/ui/finish/PbCardHost';
 import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
-import { Body, Display, Num } from '../../src/ui/Text';
+import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
 /**
@@ -38,9 +38,7 @@ function Figure({ caption, value, label }: { caption: string; value: string; lab
   const { colors } = useTheme();
   return (
     <View style={{ paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border }} accessible accessibilityLabel={`${label} ${value}`}>
-      <Body weight={600} muted style={{ fontSize: 14 }}>
-        {caption}
-      </Body>
+      <Label accessibilityRole="none">{caption}</Label>
       <Num weight={700} style={{ fontSize: 44, lineHeight: 52 }}>
         {value}
       </Num>

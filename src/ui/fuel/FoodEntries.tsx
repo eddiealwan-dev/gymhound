@@ -72,7 +72,7 @@ export function FoodEntries({ entries, totals, locale }: { entries: readonly Foo
                 justifyContent: 'center',
                 borderTopWidth: i === 0 ? 0 : 1,
                 borderTopColor: colors.border,
-                opacity: pressed ? 0.7 : 1,
+                opacity: pressed ? 0.8 : 1,
               })}
             >
               <Body weight={600}>{entry.name}</Body>

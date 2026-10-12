@@ -8,7 +8,7 @@ import { flushAll } from '../../src/state/draftFlush';
 import { BackLink } from '../../src/ui/BackLink';
 import { Screen } from '../../src/ui/Screen';
 import { AddProgressPhoto, PHONE_ONLY, useProgressPhotos } from '../../src/ui/stats/progressPhotos';
-import { Body, Display } from '../../src/ui/Text';
+import { Body, ScreenTitle } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
 /** Back where it was opened from; a link opened with no history goes to /stats. */
@@ -31,9 +31,9 @@ export default function Photos() {
   return (
     <Screen>
       <BackLink label="Stats" onPress={leave} />
-      <Display>Progress photos</Display>
+      <ScreenTitle>Progress photos</ScreenTitle>
       {Platform.OS === 'web' ? (
-        <Body muted style={{ marginTop: 8 }}>
+        <Body muted style={{ marginTop: 4 }}>
           {PHONE_ONLY}
         </Body>
       ) : (
@@ -49,7 +49,7 @@ function PhotosOnPhone() {
   const locale = deviceLocale();
   return (
     <>
-      <Body muted style={{ marginTop: 8, marginBottom: 16 }}>
+      <Body muted style={{ marginTop: 4, marginBottom: 16 }}>
         They stay on this phone. They aren't in backups.
       </Body>
       <AddProgressPhoto />

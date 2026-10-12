@@ -18,6 +18,7 @@ import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } fr
 import { ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
 import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
+import { Segmented } from '../../src/ui/Segmented';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
@@ -37,39 +38,6 @@ const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function close() {
   if (router.canGoBack()) router.back();
   else router.replace('/fuel');
-}
-
-/** Search / Quick add: a well with the chosen segment filled with ink, as on Settings. */
-function ModeControl({ value, onChange }: { value: Mode; onChange: (mode: Mode) => void }) {
-  const { colors } = useTheme();
-  return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
-      {MODES.map((mode) => {
-        const selected = mode.value === value;
-        return (
-          <Pressable
-            key={mode.value}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: selected }}
-            onPress={() => onChange(mode.value)}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              paddingHorizontal: 8,
-              borderRadius: 9,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: selected ? colors.text : 'transparent',
-            }}
-          >
-            <Body weight={600} style={{ color: selected ? colors.bg : colors.text, textAlign: 'center' }}>
-              {mode.label}
-            </Body>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 }
 
 /** A food: its name, then "{serving} · {kcal} kcal · {protein} g protein", and " · Yours" for your own. Tapping opens its servings. */
@@ -206,14 +174,17 @@ function AddFood() {
 
   const header = (
     <View style={{ paddingHorizontal: 16, gap: 16, paddingBottom: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, paddingTop: 8 }}>
+      {/* Done steps back by the quiet button's padding, so its word ends on the gutter. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -20, paddingTop: 8 }}>
         <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
           Add food
         </Display>
         <Button label="Done" variant="quiet" onPress={done} />
       </View>
       <Body muted style={{ marginTop: -12 }}>{`Logging for ${calendarDayInSentence(localDate, today, locale)}`}</Body>
-      <ModeControl
+      <Segmented
+        label="Add by"
+        options={MODES}
         value={mode}
         onChange={(m) => {
           Keyboard.dismiss();
@@ -240,9 +211,9 @@ function AddFood() {
             style={{
               minHeight: 48,
               paddingHorizontal: 12,
-              borderRadius: 10,
+              borderRadius: 8,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.borderStrong,
               backgroundColor: colors.surface,
               color: colors.text,
               fontFamily: fonts.body400,
@@ -314,7 +285,7 @@ export default function AddFoodScreen() {
   if (pro) return <AddFood />;
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -20, marginBottom: 24 }}>
         <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
           Add food
         </Display>

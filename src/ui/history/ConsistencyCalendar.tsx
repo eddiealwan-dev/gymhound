@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { firstWorkoutMonth, trainingDaysInMonth } from '../../db/repositories/historyRepo';
 import { getTrainingDates } from '../../db/repositories/workoutViewsRepo';
 import type { Db } from '../../db/types';
@@ -9,6 +9,7 @@ import { computeStreak } from '../../domain/streak';
 import { announce } from '../../platform/announce';
 import { deviceLocale } from '../../platform/locale';
 import { useFocusedDbQuery } from '../../state/dataVersion';
+import { StepArrow } from '../StepArrow';
 import { Body } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
@@ -66,24 +67,6 @@ export function weekdayInitials(locale: string): string[] {
   return Array.from({ length: 7 }, (_, i) => format.format(new Date(2026, 0, 5 + i)));
 }
 
-/** A 44pt ‹ or › that moves the month; faded and dimmed for VoiceOver at either end. */
-function MonthStep({ glyph, label, disabled, onPress }: { glyph: string; label: string; disabled: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => ({ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.4 : pressed ? 0.8 : 1 })}
-    >
-      <Body weight={600} style={{ fontSize: 28, lineHeight: 32 }}>
-        {glyph}
-      </Body>
-    </Pressable>
-  );
-}
-
 /**
  * History → the consistency calendar for one month (`YYYY-MM`, R164): a 44pt ‹ and › around the month's name, then a
  * Monday-first grid with the locale's weekday initials. A trained day (a finished workout's `local_date`; the active
@@ -135,11 +118,11 @@ export function ConsistencyCalendar({ month, today, onMonthChange }: { month: st
   return (
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <MonthStep glyph={'‹'} label="Previous month" disabled={month <= earliest} onPress={() => step(-1)} />
+        <StepArrow glyph={'‹'} label="Previous month" disabled={month <= earliest} onPress={() => step(-1)} />
         <Body weight={600} accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
           {title}
         </Body>
-        <MonthStep glyph={'›'} label="Next month" disabled={month >= currentMonth} onPress={() => step(1)} />
+        <StepArrow glyph={'›'} label="Next month" disabled={month >= currentMonth} onPress={() => step(1)} />
       </View>
       <View accessible accessibilityLabel={sentence} style={{ marginTop: 8, gap: 4 }}>
         <View style={{ flexDirection: 'row' }}>

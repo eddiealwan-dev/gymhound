@@ -63,7 +63,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
 }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -444,7 +444,7 @@ describe('the routine editor: your own routine', () => {
     jest.mocked(routineToDraft).mockReturnValue(null);
     const tree = mount('gone');
 
-    expect(shownText(tree)).toContain('Routine not found.');
+    expect(shownText(tree)).toContain("That routine isn't here.");
     expect(buttons(tree, 'Save')).toHaveLength(0);
   });
 

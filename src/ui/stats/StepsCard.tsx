@@ -129,7 +129,7 @@ export function StepsCard(): ReactElement | null {
   if (shown.kind === 'none') return null;
 
   return (
-    <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 }}>
+    <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 16 }}>
       <Label>Steps</Label>
       {shown.kind === 'undetermined' ? (
         <>

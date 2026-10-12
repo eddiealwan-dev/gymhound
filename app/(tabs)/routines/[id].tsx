@@ -16,7 +16,7 @@ import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { Screen } from '../../../src/ui/Screen';
 import { ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
@@ -76,7 +76,7 @@ export default function RoutineDetailScreen() {
       <Screen>
         <BackLink label="Routines" onPress={toRoutines} />
         <Body muted style={{ marginTop: 8 }}>
-          Routine not found.
+          That routine isn't here.
         </Body>
       </Screen>
     );
@@ -108,8 +108,8 @@ export default function RoutineDetailScreen() {
   return (
     <Screen>
       <BackLink label="Routines" onPress={toRoutines} />
-      <Display>{routine.name}</Display>
-      <Body muted style={{ fontSize: 14 }}>
+      <ScreenTitle>{routine.name}</ScreenTitle>
+      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
         {routine.days.length === 1 ? '1 day' : `${routine.days.length} days`}
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>
@@ -132,9 +132,9 @@ export default function RoutineDetailScreen() {
         ))}
       </View>
       {routine.isPremade ? null : (
-        // A quiet button steps back by its padding, so its label lines up with the content edge.
-        <View style={{ alignSelf: 'flex-start', marginTop: 16, marginLeft: -20 }}>
-          <Button label="Delete" variant="quiet" accessibilityLabel="Delete routine" onPress={() => setAskDelete(true)} />
+        // At the foot of the page, quiet and centred, as Delete workout is on a workout and Discard workout in the session.
+        <View style={{ marginTop: 24 }}>
+          <Button label="Delete routine" variant="quiet" onPress={() => setAskDelete(true)} />
         </View>
       )}
       <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />

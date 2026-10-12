@@ -15,6 +15,7 @@ import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '
 import { Button } from '../Button';
 import type { FormDemo as FormDemoType } from '../FormDemo';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
+import { SheetTitle } from '../SheetTitle';
 import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
@@ -362,9 +363,9 @@ export function ExerciseBlock({
             marginTop: NAME_ROW_HIT_SLOP.bottom,
             paddingHorizontal: 12,
             paddingVertical: 8,
-            borderRadius: 10,
+            borderRadius: 8,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.borderStrong,
             backgroundColor: colors.surface,
             color: colors.text,
             fontFamily: fonts.body400,
@@ -481,9 +482,7 @@ export function ExerciseBlock({
       </View>
 
       <Sheet visible={typeRow !== undefined} onClose={() => setTypeFor(null)}>
-        <Display weight={700} style={{ marginBottom: 12 }}>
-          Set type
-        </Display>
+        <SheetTitle>Set type</SheetTitle>
         <View style={{ gap: 8 }}>
           {SET_TYPES.map(({ type, label }) => (
             <Button
@@ -510,9 +509,7 @@ export function ExerciseBlock({
       </Sheet>
 
       <Sheet visible={removeRow !== undefined} onClose={() => setRemoveFor(null)}>
-        <Display weight={700} style={{ marginBottom: 12 }}>
-          {`Set ${removeRow?.label ?? ''}`}
-        </Display>
+        <SheetTitle>{`Set ${removeRow?.label ?? ''}`}</SheetTitle>
         <View style={{ gap: 8 }}>
           <Button
             label="Remove set"
@@ -521,7 +518,7 @@ export function ExerciseBlock({
               setRemoveFor(null);
             }}
           />
-          <Button label="Cancel" variant="secondary" onPress={() => setRemoveFor(null)} />
+          <Button label="Cancel" variant="quiet" onPress={() => setRemoveFor(null)} />
         </View>
       </Sheet>
 
