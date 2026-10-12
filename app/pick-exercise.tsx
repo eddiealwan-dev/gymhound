@@ -259,9 +259,9 @@ export default function PickExercise() {
             style={{
               minHeight: 48,
               paddingHorizontal: 12,
-              borderRadius: 10,
+              borderRadius: 8,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.borderStrong,
               backgroundColor: colors.surface,
               color: colors.text,
               fontFamily: fonts.body400,

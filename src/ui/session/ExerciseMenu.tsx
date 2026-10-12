@@ -124,7 +124,7 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
             paddingHorizontal: 8,
             borderRadius: 8,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.borderStrong,
             // Red is reserved, so a number that needs another look gets a heavier muted underline.
             ...(check ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
             backgroundColor: colors.surface,

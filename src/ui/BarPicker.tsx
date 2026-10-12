@@ -161,7 +161,7 @@ function BarChoices({ unit, bar }: { unit: WeightUnit; bar: number }) {
                 paddingHorizontal: 8,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: colors.borderStrong,
                 // Red is reserved, so a number that needs another look gets a heavier muted underline.
                 ...(invalid ? { borderBottomWidth: 2, borderBottomColor: colors.textMuted } : null),
                 backgroundColor: colors.surface,
