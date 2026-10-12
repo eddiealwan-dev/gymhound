@@ -1,3 +1,11 @@
+// The DST cases need a zone with DST: pin America/Chicago for this file (restored after).
+const originalTz = process.env.TZ;
+process.env.TZ = 'America/Chicago';
+afterAll(() => {
+  if (originalTz === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTz;
+});
+
 import {
   asleepMs,
   healthWeightLine,
@@ -37,10 +45,23 @@ describe('sleepWindow (R210)', () => {
     expect(sleepWindow('2026-10-11', at(2026, 10, 11, 19))).toEqual({ start: at(2026, 10, 10, 18), end: at(2026, 10, 11, 19) });
   });
 
-  it('starts at local 18:00 across a DST change night (spring forward and fall back)', () => {
-    // US DST: 2026-03-08 springs forward, 2026-11-01 falls back; local construction keeps 18:00 local either way.
-    expect(sleepWindow('2026-03-08', at(2026, 3, 8, 7))).toEqual({ start: at(2026, 3, 7, 18), end: at(2026, 3, 8, 7) });
-    expect(sleepWindow('2026-11-01', at(2026, 11, 1, 7))).toEqual({ start: at(2026, 10, 31, 18), end: at(2026, 11, 1, 7) });
+  it('runs in America/Chicago, where the DST nights below are 23 h and 25 h long', () => {
+    expect(at(2026, 3, 9) - at(2026, 3, 8)).toBe(23 * HOUR);
+    expect(at(2026, 11, 2) - at(2026, 11, 1)).toBe(25 * HOUR);
+  });
+
+  it('starts at local 18:00 on the spring-forward night, a real 12 h to a 07:00 start', () => {
+    // 2026-03-08 02:00 CST jumps to 03:00 CDT
+    const w = sleepWindow('2026-03-08', at(2026, 3, 8, 7));
+    expect(w).toEqual({ start: at(2026, 3, 7, 18), end: at(2026, 3, 8, 7) });
+    expect(w.end - w.start).toBe(12 * HOUR);
+  });
+
+  it('starts at local 18:00 on the fall-back night, a real 14 h to a 07:00 start', () => {
+    // 2026-11-01 02:00 CDT falls back to 01:00 CST
+    const w = sleepWindow('2026-11-01', at(2026, 11, 1, 7));
+    expect(w).toEqual({ start: at(2026, 10, 31, 18), end: at(2026, 11, 1, 7) });
+    expect(w.end - w.start).toBe(14 * HOUR);
   });
 
   it('crosses a month and a year end', () => {
@@ -56,8 +77,12 @@ describe('sleepWindow (R210)', () => {
 describe('asleepMs (R210)', () => {
   const window = { start: at(2026, 10, 10, 18), end: at(2026, 10, 11, 7) };
 
-  it('is 0 with no intervals', () => {
-    expect(asleepMs([], window)).toBe(0);
+  it('is null (no data) with no intervals', () => {
+    expect(asleepMs([], window)).toBeNull();
+  });
+
+  it('is null when no interval reaches into the window', () => {
+    expect(asleepMs([{ start: at(2026, 10, 10, 13), end: at(2026, 10, 10, 15) }], window)).toBeNull();
   });
 
   it('sums separate intervals', () => {
@@ -105,13 +130,17 @@ describe('asleepMs (R210)', () => {
   });
 
   it('ignores an interval that ends before it starts', () => {
-    expect(asleepMs([{ start: at(2026, 10, 11, 5), end: at(2026, 10, 11, 1) }], window)).toBe(0);
+    expect(asleepMs([{ start: at(2026, 10, 11, 5), end: at(2026, 10, 11, 1) }], window)).toBeNull();
   });
 
-  it('measures a DST night in real elapsed time', () => {
+  it('measures the spring-forward night in real elapsed time: 23:00 to 06:00 local is 6 h', () => {
     const w = sleepWindow('2026-03-08', at(2026, 3, 8, 7));
-    const night = { start: at(2026, 3, 7, 23), end: at(2026, 3, 8, 6) };
-    expect(asleepMs([night], w)).toBe(night.end - night.start);
+    expect(asleepMs([{ start: at(2026, 3, 7, 23), end: at(2026, 3, 8, 6) }], w)).toBe(6 * HOUR);
+  });
+
+  it('measures the fall-back night in real elapsed time: 23:00 to 06:00 local is 8 h', () => {
+    const w = sleepWindow('2026-11-01', at(2026, 11, 1, 7));
+    expect(asleepMs([{ start: at(2026, 10, 31, 23), end: at(2026, 11, 1, 6) }], w)).toBe(8 * HOUR);
   });
 });
 
@@ -193,6 +222,11 @@ describe('roughSleepOffer (§17.1, R210)', () => {
     expect(roughSleepOffer(none)).toBeNull();
   });
 
+  it('treats 0 asleep as no data, never "You slept 0 min"', () => {
+    expect(roughSleepOffer({ ...none, asleepMs: 0 })).toBeNull();
+    expect(roughSleepOffer({ asleepMs: 0, latestBpm: 70, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 15 });
+  });
+
   it('offers on a resting heart rate 10 above the baseline', () => {
     expect(roughSleepOffer({ ...none, latestBpm: 65, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 10 });
   });
@@ -238,7 +272,7 @@ describe('sleepOfferLine', () => {
   });
 
   it('says the heart-rate rise', () => {
-    expect(sleepOfferLine({ reason: 'heart_rate', riseBpm: 11 })).toBe('Your resting heart rate is 11 above your usual. Mark this session Rough sleep?');
+    expect(sleepOfferLine({ reason: 'heart_rate', riseBpm: 11 })).toBe('Your resting heart rate is 11 beats a minute above your usual. Mark this session Rough sleep?');
   });
 });
 

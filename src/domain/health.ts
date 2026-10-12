@@ -22,12 +22,9 @@ const DAY_MS = 24 * 60 * MINUTE_MS;
 const MIN_HEALTH_WORKOUT_MS = 60_000;
 
 export type Interval = { start: number; end: number };
-/**
- * A reading at an instant. Same shape as `TimedValue` in `src/platform/health` (the `HealthStore` interface); the
- * domain keeps its own copy so it never imports from the platform layer.
- */
+/** A reading at an instant. The single definition: `src/platform/health/index.ts` re-exports it for `HealthStore`. */
 export type TimedValue = { at: number; value: number };
-/** What GymHound writes to Health for one finished workout; same shape as `HealthWorkout` in `src/platform/health`. */
+/** What GymHound writes to Health for one finished workout. The single definition, re-exported by `src/platform/health`. */
 export type HealthWorkout = { id: string; name: string; startedAt: number; finishedAt: number };
 
 /**
@@ -42,14 +39,14 @@ export function sleepWindow(localDate: string, startedAt: number): Interval {
 
 /**
  * Asleep time inside `window`: the union of the intervals (so overlapping sources — a watch and a phone — count
- * once), each clipped to the window. No intervals is 0; the caller passes null to `roughSleepOffer` when the store
- * returned nothing at all (no sleep tracked is not zero sleep).
+ * once), each clipped to the window. Null when nothing reaches into the window: no sleep tracked is not zero sleep.
  */
-export function asleepMs(intervals: readonly Interval[], window: Interval): number {
+export function asleepMs(intervals: readonly Interval[], window: Interval): number | null {
   const clipped = intervals
     .map((i) => ({ start: Math.max(i.start, window.start), end: Math.min(i.end, window.end) }))
     .filter((i) => i.end > i.start)
     .sort((a, b) => a.start - b.start);
+  if (clipped.length === 0) return null;
   let total = 0;
   let curStart = 0;
   let curEnd = -Infinity;
@@ -101,10 +98,11 @@ export type SleepOffer = { reason: 'short_sleep'; asleepMs: number } | { reason:
 
 /**
  * One Rough sleep offer or none (§17.1, R210): short sleep (under 6 h) wins when both hold; otherwise a newest resting
- * heart rate 10 bpm or more above the baseline. Null inputs mean "no data", which never makes an offer.
+ * heart rate 10 bpm or more above the baseline. Null inputs mean "no data", which never makes an offer; 0 asleep is
+ * also no data (never "You slept 0 min").
  */
 export function roughSleepOffer(input: { asleepMs: number | null; latestBpm: number | null; baselineBpm: number | null }): SleepOffer | null {
-  if (input.asleepMs !== null && input.asleepMs < SHORT_SLEEP_MS) return { reason: 'short_sleep', asleepMs: input.asleepMs };
+  if (input.asleepMs !== null && input.asleepMs > 0 && input.asleepMs < SHORT_SLEEP_MS) return { reason: 'short_sleep', asleepMs: input.asleepMs };
   if (input.latestBpm !== null && input.baselineBpm !== null) {
     const rise = input.latestBpm - input.baselineBpm;
     if (rise >= RHR_RISE_BPM) return { reason: 'heart_rate', riseBpm: Math.round(rise) };
@@ -114,7 +112,7 @@ export function roughSleepOffer(input: { asleepMs: number | null; latestBpm: num
 
 /** The banner's line. Sleep is in whole minutes counted down, so time under 6 h never reads "6 h". */
 export function sleepOfferLine(offer: SleepOffer): string {
-  if (offer.reason === 'heart_rate') return `Your resting heart rate is ${offer.riseBpm} above your usual. Mark this session Rough sleep?`;
+  if (offer.reason === 'heart_rate') return `Your resting heart rate is ${offer.riseBpm} beats a minute above your usual. Mark this session Rough sleep?`;
   const totalMin = Math.floor(offer.asleepMs / MINUTE_MS);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
@@ -140,7 +138,7 @@ export function healthWeightOffer(input: {
 }
 
 /** "Apple Health: 182.4 lb at 7:02 AM." / "Health Connect: 82.7 kg at 07:02." — the time laid out for the locale. */
-export function healthWeightLine(store: 'apple' | 'health_connect', offer: { value: number; unit: string; at: number }, locale: string): string {
+export function healthWeightLine(store: 'apple' | 'health_connect', offer: { value: number; unit: WeightUnit; at: number }, locale: string): string {
   const name = store === 'apple' ? 'Apple Health' : 'Health Connect';
   const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(offer.at);
   return `${name}: ${Math.round(offer.value * 10) / 10} ${offer.unit} at ${time}.`;
