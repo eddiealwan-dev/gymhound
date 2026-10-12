@@ -190,6 +190,13 @@ describe('StepsCard (R182)', () => {
     expect(labelled(tree, '6,000 steps today')).toHaveLength(1);
   });
 
+  it("caps the weekday initials' text scaling at 1.5, so they never overlap at the largest text", async () => {
+    const tree = await render();
+    const initials = tree.root.findAllByType(Text).filter((t) => ['M', 'T', 'W', 'F', 'S'].includes([t.props.children].flat().join('')));
+    expect(initials).toHaveLength(7);
+    initials.forEach((t) => expect(t.props.maxFontSizeMultiplier).toBe(1.5));
+  });
+
   it('a week of no steps draws empty bars, not a division by zero', async () => {
     phone.counts = {};
     const tree = await render();

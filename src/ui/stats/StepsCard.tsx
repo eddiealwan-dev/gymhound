@@ -166,7 +166,8 @@ function StepsWeek({ days, counts, locale }: { days: string[]; counts: number[];
                 style={{ height: `${tallest > 0 ? (counts[i] / tallest) * 100 : 0}%`, backgroundColor: colors.text }}
               />
             </View>
-            <Body muted style={{ fontSize: 12, textAlign: 'center' }}>
+            {/* Capped, as the body charts' labels are, so seven initials still fit side by side at the largest text on a 320pt phone. */}
+            <Body muted maxFontSizeMultiplier={1.5} style={{ fontSize: 12, textAlign: 'center' }}>
               {weekdayInitial(day, locale)}
             </Body>
           </View>
