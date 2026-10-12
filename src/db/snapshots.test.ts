@@ -81,6 +81,18 @@ function finishOne(db: Db, at: number): string {
   return id;
 }
 
+/**
+ * As `finishOne`, on a database from before migration 0009, whose `workouts` lacks the phase 7 columns the code's table
+ * now names in every insert: they are added for the write and dropped again, so the file is left at its old schema.
+ */
+const PHASE_7_WORKOUT_COLUMNS = ['health_status text', 'health_record_id text', 'sleep_offer_shown integer DEFAULT false NOT NULL'];
+function finishOneBefore0009(db: Db, at: number): string {
+  for (const column of PHASE_7_WORKOUT_COLUMNS) db.run(sql.raw(`ALTER TABLE workouts ADD COLUMN ${column}`));
+  const id = finishOne(db, at);
+  for (const column of PHASE_7_WORKOUT_COLUMNS) db.run(sql.raw(`ALTER TABLE workouts DROP COLUMN ${column.split(' ')[0]}`));
+  return id;
+}
+
 function finishedIds(db: Db): string[] {
   return db
     .select({ id: workouts.id })
@@ -160,7 +172,7 @@ function liveAt0006(): { db: Db; close(): void } {
   handle.db.delete(schema.settings).where(eq(schema.settings.key, 'water_goal_ml')).run();
   setSetting(handle.db, 'restSeconds', 90);
   runSeed(handle.db, NOW);
-  finishOne(handle.db, NOW);
+  finishOneBefore0009(handle.db, NOW);
   return handle;
 }
 
@@ -181,7 +193,7 @@ function liveAt0007(): { db: Db; close(): void } {
   migrate(handle.db as BetterSQLite3Database<typeof schema>, { migrationsFolder: folder });
   ensureSettings(handle.db, 'us');
   runSeed(handle.db, NOW);
-  finishOne(handle.db, NOW);
+  finishOneBefore0009(handle.db, NOW);
   handle.db.run(sql`INSERT INTO water_log (id, local_date, logged_at, amount_ml) VALUES ('wl1', '2026-10-09', ${NOW}, 500)`);
   return handle;
 }
@@ -524,7 +536,7 @@ describe('startDatabase', () => {
     expect(finishedIds(result.db)).toEqual(ids);
   });
 
-  it('restores a snapshot taken before migrations 0002 to 0008, and migrates it forward with the finished workout intact (F11)', async () => {
+  it('restores a snapshot taken before migrations 0002 to 0009, and migrates it forward with the finished workout intact (F11)', async () => {
     const { deps, files } = makeDeps();
     const old = livePre0002();
     expect(appliedMigrations(old.db)).toBe(2);
@@ -538,13 +550,14 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(9);
+    expect(appliedMigrations(result.db)).toBe(10);
     expect(tableNames(result.db)).toContain('exercise_prefs');
     expect(tableNames(result.db)).toEqual(
       expect.arrayContaining(['measurements', 'exercise_photos', 'saved_workouts', 'saved_workout_exercises', 'water_log', 'progress_photos']),
     );
     expect(columnNames(result.db, 'workouts')).toContain('rest_set_id');
     expect(columnNames(result.db, 'workout_exercises')).toContain('mark');
+    expect(columnNames(result.db, 'workouts')).toEqual(expect.arrayContaining(['health_status', 'health_record_id', 'sleep_offer_shown']));
     expect(result.db.select().from(schema.exercises).where(eq(schema.exercises.id, 'barbell-bench-press')).get()).toMatchObject({
       name: 'Barbell bench press',
       instructions: [],
@@ -566,7 +579,7 @@ describe('startDatabase', () => {
     ]);
   });
 
-  it('restores a phase 4 snapshot (at 0006), migrates it to 0008, and ensureSettings adds no water goal (R132, R150)', async () => {
+  it('restores a phase 4 snapshot (at 0006), migrates it to 0009, and ensureSettings adds no water goal (R132, R150)', async () => {
     const { deps, files } = makeDeps();
     const old = liveAt0006();
     expect(appliedMigrations(old.db)).toBe(7);
@@ -579,7 +592,7 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(9);
+    expect(appliedMigrations(result.db)).toBe(10);
     expect(tableNames(result.db)).toContain('water_log');
     expect(result.db.select().from(schema.waterLog).all()).toEqual([]);
     expect(finishedIds(result.db)).toEqual(ids);
@@ -587,7 +600,7 @@ describe('startDatabase', () => {
     expect(getSettings(result.db)).toMatchObject({ waterGoalMl: null, restSeconds: 90 });
   });
 
-  it('restores a phase 5 snapshot (at 0007) and migrates it to 0008: its data is kept and progress_photos starts empty (R162)', async () => {
+  it('restores a phase 5 snapshot (at 0007) and migrates it to 0009: its data is kept and progress_photos starts empty (R162)', async () => {
     const { deps, files } = makeDeps();
     const old = liveAt0007();
     expect(appliedMigrations(old.db)).toBe(8);
@@ -600,7 +613,7 @@ describe('startDatabase', () => {
     const result = expectOk(await startDatabase(deps));
 
     expect(result.restoredFrom).toBe(name);
-    expect(appliedMigrations(result.db)).toBe(9);
+    expect(appliedMigrations(result.db)).toBe(10);
     expect(tableNames(result.db)).toContain('progress_photos');
     expect(result.db.select().from(schema.progressPhotos).all()).toEqual([]);
     expect(result.db.select().from(schema.waterLog).all()).toEqual([expect.objectContaining({ id: 'wl1', amountMl: 500 })]);
