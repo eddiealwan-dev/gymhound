@@ -18,7 +18,7 @@ import type { WeightUnit } from '../../src/domain/types';
 import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { deviceLocale } from '../../src/platform/locale';
-import { useDbQuery } from '../../src/state/dataVersion';
+import { useFocusedDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
@@ -234,7 +234,10 @@ export default function Train() {
   const locale = deviceLocale();
   const weekStart = mondayOf(today);
   const read = useCallback((d: Db) => readTrain(d, weekStart), [weekStart]);
-  const { unit, gear, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
+  // Focused only: Train stays mounted under the session, and every tick there bumps the data version. Reading the whole
+  // active workout, Up next, every training date and the week's volume again on each tick was wasted while out of sight;
+  // a bump while away is read when Train is back in view (R185).
+  const { unit, gear, active, upNext, trainingDates, weekVolume } = useFocusedDbQuery(read);
   const [blocked, setBlocked] = useState(false);
   /** Change routine was tapped while a workout runs (R80). */
   const [changeBlocked, setChangeBlocked] = useState(false);

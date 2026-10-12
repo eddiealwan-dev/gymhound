@@ -30,7 +30,7 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-GB
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead }));
+jest.mock('../state/dataVersion', () => ({ useFocusedDbQuery: () => mockRead }));
 jest.mock('../state/sessionActions', () => ({ startEmpty: jest.fn(), startFromDay: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../state/useNow', () => ({ useNow: () => new Date(2026, 9, 10, 9, 0).getTime() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
