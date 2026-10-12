@@ -1,9 +1,8 @@
-import { ScrollView, Text } from 'react-native';
+import { Keyboard, ScrollView, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { NavigationContext } from 'expo-router/build/react-navigation/core';
 import { Screen } from './Screen';
-import { staleInset, strandedOffset } from './useSafeScroll';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -11,38 +10,6 @@ jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
-});
-
-const page = { contentHeight: 2000, viewHeight: 700, insetTop: 0, insetBottom: 0 };
-
-describe('strandedOffset (R510)', () => {
-  it('leaves a page anywhere between its top and its end alone', () => {
-    expect(strandedOffset({ ...page, offsetY: 0 }, false)).toBeNull();
-    expect(strandedOffset({ ...page, offsetY: 650 }, false)).toBeNull();
-    expect(strandedOffset({ ...page, offsetY: 1300 }, false)).toBeNull();
-  });
-
-  it('brings a page scrolled past its end back to the end', () => {
-    expect(strandedOffset({ ...page, offsetY: 4200, insetBottom: 3000 }, false)).toBe(1300);
-    expect(strandedOffset({ ...page, offsetY: 1500 }, false)).toBe(1300);
-  });
-
-  it('allows the keyboard inset while the keyboard is up, and not after', () => {
-    const typing = { ...page, offsetY: 1600, insetBottom: 336 };
-    expect(strandedOffset(typing, true)).toBeNull();
-    expect(strandedOffset(typing, false)).toBe(1300);
-  });
-
-  it('brings a short page that drifted back to its top', () => {
-    expect(strandedOffset({ contentHeight: 300, viewHeight: 700, insetTop: 0, insetBottom: 0, offsetY: 900 }, false)).toBe(0);
-    expect(strandedOffset({ ...page, offsetY: -400 }, false)).toBe(0);
-  });
-
-  it('calls a bottom inset with no keyboard stale', () => {
-    expect(staleInset({ insetBottom: 336 }, false)).toBe(true);
-    expect(staleInset({ insetBottom: 336 }, true)).toBe(false);
-    expect(staleInset({ insetBottom: 0.5 }, false)).toBe(false);
-  });
 });
 
 describe('Screen and the keyboard (R510)', () => {
@@ -98,20 +65,43 @@ describe('Screen and the keyboard (R510)', () => {
     expect(tree.root.findByType(ScrollView).props.automaticallyAdjustKeyboardInsets).toBe(false);
   });
 
-  it('snaps a page stranded past its end back once the scroll has come to rest', () => {
-    const tree = mount();
-    const scroll = tree.root.findByType(ScrollView);
-    const scrollTo = jest.fn();
-    // The ref is the native ScrollView; give it a scrollTo to watch.
-    const instance = scroll.instance as { scrollTo?: unknown };
-    instance.scrollTo = scrollTo;
-    act(() =>
-      scroll.props.onMomentumScrollEnd({
-        nativeEvent: { contentOffset: { x: 0, y: 4200 }, contentSize: { width: 390, height: 2000 }, layoutMeasurement: { width: 390, height: 700 }, contentInset: { top: 0, bottom: 3000, left: 0, right: 0 } },
-      }),
-    );
-    expect(scrollTo).toHaveBeenCalledWith({ y: 1300, animated: true });
-    // The stale inset is cleared by a one-time change of the inset the page asks for.
-    expect(tree.root.findByType(ScrollView).props.contentInset.bottom).toBe(0.5);
+  it('never scrolls a page by itself, so a page is never left mid-scroll and taps always land (Round 10, R550)', () => {
+    const props = mount().root.findByType(ScrollView).props;
+    expect(props.onScroll).toBeUndefined();
+    expect(props.onMomentumScrollEnd).toBeUndefined();
+    expect(props.onScrollEndDrag).toBeUndefined();
+    expect(props.contentInset).toBeUndefined();
+  });
+
+  it('keeps following a keyboard it raised after leaving view, until it has gone, and closes it', () => {
+    const listeners: Record<string, (() => void)[]> = {};
+    const add = jest.spyOn(Keyboard, 'addListener').mockImplementation(((type: string, fn: () => void) => {
+      (listeners[type] ??= []).push(fn);
+      return { remove: () => {} };
+    }) as never);
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    const navigation = fakeNavigation(true);
+    const tree = mount(navigation);
+    const adjusts = () => tree.root.findByType(ScrollView).props.automaticallyAdjustKeyboardInsets;
+    act(() => (listeners.keyboardWillShow ?? listeners.keyboardDidShow ?? []).forEach((fn) => fn()));
+    act(() => navigation.emit('blur'));
+    expect(adjusts()).toBe(true);
+    expect(dismiss).toHaveBeenCalled();
+    act(() => (listeners.keyboardDidHide ?? []).forEach((fn) => fn()));
+    expect(adjusts()).toBe(false);
+    add.mockRestore();
+    dismiss.mockRestore();
+  });
+
+  it("doesn't follow a keyboard another screen raised while it was out of view", () => {
+    const listeners: Record<string, (() => void)[]> = {};
+    const add = jest.spyOn(Keyboard, 'addListener').mockImplementation(((type: string, fn: () => void) => {
+      (listeners[type] ??= []).push(fn);
+      return { remove: () => {} };
+    }) as never);
+    const tree = mount(fakeNavigation(false));
+    act(() => (listeners.keyboardWillShow ?? listeners.keyboardDidShow ?? []).forEach((fn) => fn()));
+    expect(tree.root.findByType(ScrollView).props.automaticallyAdjustKeyboardInsets).toBe(false);
+    add.mockRestore();
   });
 });
