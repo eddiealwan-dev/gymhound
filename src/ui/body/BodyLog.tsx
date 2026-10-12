@@ -24,8 +24,20 @@ const LOG_FAILED = "Couldn't log. Try again.";
 /**
  * Logs a value of `kind` for today (R115) in `unit`: the field, its unit and a filled **Log**. A number outside the
  * R117 bounds, or not a number, shows "Check this number" and writes nothing. An empty field logs nothing.
+ * `fieldLabel` and `buttonLabel` replace the VoiceOver labels ("Bodyweight, lb", "Log bodyweight") where a second
+ * entry for the same kind shares the screen (the weekly check-in on Stats).
  */
-export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit }) {
+export function BodyQuickEntry({
+  kind,
+  unit,
+  fieldLabel,
+  buttonLabel,
+}: {
+  kind: BodyKind;
+  unit: BodyUnit;
+  fieldLabel?: string;
+  buttonLabel?: string;
+}) {
   const db = useDb();
   const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
@@ -68,12 +80,12 @@ export function BodyQuickEntry({ kind, unit }: { kind: BodyKind; unit: BodyUnit 
               setFailed(false);
             }}
             onSubmit={log}
-            accessibilityLabel={`${BODY_LABELS[kind]}, ${unit}`}
+            accessibilityLabel={fieldLabel ?? `${BODY_LABELS[kind]}, ${unit}`}
             invalid={invalid}
           />
           <Body muted>{unit}</Body>
         </View>
-        <Button label="Log" onPress={log} accessibilityLabel={`Log ${BODY_LABELS[kind].toLowerCase()}`} />
+        <Button label="Log" onPress={log} accessibilityLabel={buttonLabel ?? `Log ${BODY_LABELS[kind].toLowerCase()}`} />
       </View>
       <CheckLine shown={invalid} />
       {failed ? <Body muted>{LOG_FAILED}</Body> : null}
