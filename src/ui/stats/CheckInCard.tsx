@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
 import { router } from 'expo-router';
 import { type ReactElement, useCallback } from 'react';
 import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { checkInReport, type CheckInReport } from '../../db/repositories/analyticsRepo';
-import { isPhotoFileName } from '../../db/repositories/exercisePhotosRepo';
 import { progressPhotosSince } from '../../db/repositories/progressPhotosRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
@@ -14,29 +12,18 @@ import type { WeightUnit } from '../../domain/types';
 import { formatVolume } from '../../domain/volume';
 import { type CheckIn, GROUP_LABELS } from '../../domain/weeklyAnalytics';
 import { deviceLocale } from '../../platform/locale';
-import { fileUri, pathFromUri } from '../../platform/snapshots/fileUri';
+import { progressPhotoExists } from '../../platform/progressPhotoFiles';
 import { useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { BodyQuickEntry } from '../body/BodyLog';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
-/** The documents folder's progress photo folder (R181). */
-const PROGRESS_FOLDER = 'progress-photos';
-
 /**
- * True when the named progress photo is in `progress-photos/` in the documents folder. A restored snapshot can name a
- * file that isn't on this phone, and such a photo is not counted (R181). Never true in the browser; never throws.
- * Task 12's `progressPhotoExists` (src/platform/progressPhotoFiles.ts) does the same and can replace this at merge.
+ * True when the named progress photo is on this phone (R181): a restored snapshot can name a file that isn't. Never true
+ * in the browser, which keeps no progress photos.
  */
-export function progressPhotoFileExists(fileName: string): boolean {
-  if (Platform.OS === 'web' || !isPhotoFileName(fileName)) return false;
-  try {
-    return new File(fileUri(`${pathFromUri(Paths.document.uri)}/${PROGRESS_FOLDER}/${fileName}`)).exists;
-  } catch {
-    return false;
-  }
-}
+const progressPhotoOnPhone = (fileName: string) => Platform.OS !== 'web' && progressPhotoExists(fileName);
 
 /** "1 session", "2 hard sets": a count and its noun, singular for one. */
 function count(n: number, one: string, many: string): string {
@@ -140,7 +127,7 @@ export function CheckInCard({ today }: { today: string }): ReactElement | null {
       const unit = getSettings(db).unit;
       const photo =
         Platform.OS !== 'web' &&
-        progressPhotosSince(db, mondayOf(today)).some((p) => p.localDate <= today && progressPhotoFileExists(p.fileName));
+        progressPhotosSince(db, mondayOf(today)).some((p) => p.localDate <= today && progressPhotoOnPhone(p.fileName));
       return { unit, ...checkInReport(db, today, unit, photo) };
     },
     [today],

@@ -4,12 +4,9 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
 import LiftRoute from '../../app/(tabs)/lift/[id]';
 import LiftsRoute from '../../app/(tabs)/lifts';
-import PhotosRoute from '../../app/(tabs)/photos';
-import PhotoRoute from '../../app/photo/[id]';
 import { Footer } from './Footer';
 import { ConsistencyCalendar } from './history/ConsistencyCalendar';
 import { LiftsSection } from './stats/LiftsSection';
-import { PhotosRow } from './stats/PhotosRow';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,8 +61,6 @@ beforeEach(() => {
 const ROUTES = [
   ['/lifts', LiftsRoute, 'Back to Stats', '/stats'],
   ['/lift/[id]', LiftRoute, 'Back', '/lifts'],
-  ['/photos', PhotosRoute, 'Back to Stats', '/stats'],
-  ['/photo/[id]', PhotoRoute, 'Close', '/photos'],
 ] as const;
 
 /** The control labelled `label` that does something when pressed. */
@@ -98,7 +93,6 @@ describe('the placeholder routes', () => {
 describe('the stubs draw nothing until their task fills them', () => {
   it.each([
     ['LiftsSection', <LiftsSection key="l" today="2026-10-11" />],
-    ['PhotosRow', <PhotosRow key="p" today="2026-10-11" />],
     ['ConsistencyCalendar', <ConsistencyCalendar key="k" month="2026-10" today="2026-10-11" onMonthChange={() => {}} />],
   ])('%s', (_name, element) => {
     expect(render(element).toJSON()).toBeNull();
