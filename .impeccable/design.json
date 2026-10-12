@@ -292,7 +292,7 @@
       },
       "display": {
         "displayName": "Display",
-        "purpose": "Screen titles and sheet questions."
+        "purpose": "Screen titles (ScreenTitle), sheet titles (SheetTitle) and editor titles (ModalHeader)."
       },
       "title": {
         "displayName": "Title",
@@ -321,6 +321,10 @@
       "label": {
         "displayName": "Label",
         "purpose": "Upper-case muted state and section labels."
+      },
+      "number-suggested": {
+        "displayName": "Number (suggested)",
+        "purpose": "A set field's suggested value, faint and dashed; never an entered value."
       },
       "column-label": {
         "displayName": "Column label",
@@ -384,7 +388,7 @@
       "name": "Segmented Control",
       "kind": "custom",
       "refersTo": "segmented-control",
-      "description": "Two to four choices in a well; the chosen one is filled with ink.",
+      "description": "Two to four choices in a well; the chosen one is filled with ink. One shared component (Segmented, R353).",
       "html": "<div class=\"ds-seg\"><button>Light</button><button class=\"on\">Dark</button><button>System</button></div>",
       "css": ".ds-seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #232019; } .ds-seg button { flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: #f1ece2; font: 600 16px 'Inter', sans-serif; } .ds-seg button.on { background: #f1ece2; color: #100f0c; } .ds-seg button:focus-visible { outline: 2px solid #f1ece2; outline-offset: 1px; }"
     },
@@ -395,6 +399,14 @@
       "description": "Suggested values are faint and dashed; entered values are bold and solid.",
       "html": "<div class=\"ds-fields\"><input class=\"ds-field-sug\" placeholder=\"60\"><input class=\"ds-field-ent\" value=\"8\"></div>",
       "css": ".ds-fields { display: flex; gap: 4px; } .ds-fields input { width: 72px; min-height: 44px; border-radius: 8px; text-align: center; font-size: 20px; font-variant-numeric: tabular-nums; } .ds-field-sug { background: transparent; border: 1px dashed #736c60; color: #6d675c; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; } .ds-field-sug::placeholder { color: #6d675c; } .ds-field-ent { background: #1a1814; border: 1px solid #736c60; color: #f1ece2; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; } .ds-fields input:focus-visible { outline: 2px solid #f1ece2; outline-offset: 1px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "Search, name, note and food fields: a Strong Seam edge and 8px corners, 48pt tall (R352).",
+      "html": "<input class=\"ds-text-field\" placeholder=\"Search exercises\">",
+      "css": ".ds-text-field { min-height: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid #736c60; background: #1a1814; color: #f1ece2; font: 400 16px 'Inter', sans-serif; } .ds-text-field::placeholder { color: #a39d90; }"
     },
     {
       "name": "Tick",
