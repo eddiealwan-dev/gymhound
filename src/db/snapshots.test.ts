@@ -19,6 +19,7 @@ import { workoutExercises, workouts } from './schema';
 import {
   KEEP_SNAPSHOTS,
   newestSnapshot,
+  setAsideDamaged,
   snapshotName,
   snapshotsToPrune,
   snapshotTime,
@@ -1175,9 +1176,42 @@ describe('startDatabase when the newest snapshot is damaged', () => {
 
     expect(result.newestSnapshot).toBe(newest);
     expect(result.setAside).toBeNull();
+    // The error screen may offer Start fresh (R421): there is no live data to lose.
+    expect(result.allDamaged).toBe(true);
     expect(count.opened).toBe(0);
     expect(fs.existsSync(liveFile)).toBe(false);
     expect(files.list().sort()).toEqual([oldest, newest].sort());
+  });
+
+  it('Start fresh (R421) moves every damaged snapshot and the empty live file aside, deleting nothing, and the next start opens an empty database', async () => {
+    const { deps, files } = makeDeps();
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    truncate(files, newest);
+    scramble(files, oldest);
+    fs.writeFileSync(liveFile, '');
+    fs.writeFileSync(`${liveFile}-wal`, 'stale');
+    const bytes = fs.readFileSync(files.pathFor(newest));
+    expectFailed(await startDatabase(deps));
+
+    setAsideDamaged(files, NOW);
+
+    expect(files.list().sort()).toEqual([`${newest}.damaged`, `${oldest}.damaged`].sort());
+    expect(fs.readFileSync(files.pathFor(`${newest}.damaged`)).equals(bytes)).toBe(true);
+    expect(fs.existsSync(liveFile)).toBe(false);
+    expect(fs.readdirSync(dir).filter((n) => /^gymhound\.damaged-.+\.db(-wal)?$/.test(n))).toHaveLength(2);
+
+    const result = expectOk(await startDatabase(deps));
+    expect(result.restoredFrom).toBeNull();
+    expect(finishedIds(result.db)).toEqual([]);
+  });
+
+  it('Start fresh with no live file at all moves the snapshots aside and does not throw', () => {
+    const { files } = makeDeps();
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    fs.rmSync(liveFile);
+
+    expect(() => setAsideDamaged(files, NOW)).not.toThrow();
+    expect(files.list().sort()).toEqual([`${newest}.damaged`, `${oldest}.damaged`].sort());
   });
 
   it('leaves the failed live file in place when the migration fails and every snapshot is damaged', async () => {
@@ -1191,6 +1225,8 @@ describe('startDatabase when the newest snapshot is damaged', () => {
 
     expect(result.error.message).toBe('migration exploded');
     expect(result.setAside).toBeNull();
+    // A live file with data is never offered Start fresh.
+    expect(result.allDamaged).toBeUndefined();
     expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
     expect(fs.readFileSync(liveFile).equals(original)).toBe(true);
     expect(count.opened).toBe(count.closed);
