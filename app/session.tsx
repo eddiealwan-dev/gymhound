@@ -22,6 +22,8 @@ import { useDbQuery } from '../src/state/dataVersion';
 import { discard, finish } from '../src/state/sessionActions';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
+import { EmptyState } from '../src/ui/EmptyState';
+import { SessionTip } from '../src/ui/SessionTip';
 import { ExerciseBlock } from '../src/ui/session/ExerciseBlock';
 import { ExerciseMenu } from '../src/ui/session/ExerciseMenu';
 import { FoodOfferBanner } from '../src/ui/session/FoodOfferBanner';
@@ -55,6 +57,9 @@ function readSession(db: Db) {
 type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed';
 
 /** Back and Music: a 44pt target that never shrinks. */
+/** What an empty workout says over Add exercise (R406). */
+const NO_EXERCISES = 'No exercises yet. Add one and it shows here, ready to log.';
+
 const ICON_BUTTON = { width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' } as const;
 
 /** The music apps this phone can have. None on web, so the web build shows no music button. */
@@ -327,6 +332,7 @@ export default function Session() {
             paddingBottom: 16 + Math.max(dockHeight, insets.bottom),
           }}
         >
+          {workout.exercises.length > 0 ? <SessionTip /> : null}
           {workout.exercises.map((ex) => (
             <ExerciseBlock
               // A replaced exercise keeps its row but is a new exercise: start its block fresh.
@@ -369,9 +375,11 @@ export default function Session() {
               }}
             />
           ))}
+          {/* An empty workout (R406): say what fills it, and Add exercise becomes its one filled action. */}
+          {workout.exercises.length === 0 ? <EmptyState style={{ marginBottom: 16 }} text={NO_EXERCISES} /> : null}
           <Button
             label="Add exercise"
-            variant="secondary"
+            variant={workout.exercises.length === 0 ? 'primary' : 'secondary'}
             onPress={() => {
               flushAll();
               Keyboard.dismiss();
