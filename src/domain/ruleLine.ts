@@ -137,6 +137,8 @@ export function todaysRead(a: {
 
 /** What the rule left for one exercise at finish: next time's weight, in the unit it was set in, and why. */
 export type NextTime = {
+  /** The workout exercise (block) the line belongs to, so a screen can put it under that block. */
+  workoutExerciseId: string;
   name: string;
   loggingType: LoggingType;
   outcome: Outcome;

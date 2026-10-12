@@ -41,7 +41,7 @@ const summary: FinishSummary = {
   durationMs: 3_600_000,
   volume: 4320,
   setCount: 3,
-  next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null }],
+  next: [{ workoutExerciseId: 'we1', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null }],
   prs: [],
 };
 

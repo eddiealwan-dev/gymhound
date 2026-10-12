@@ -14,11 +14,22 @@ import { Body } from '../Text';
  * (R118, R120). Sits just above Done, 16pt over it. The button opens a sheet with the workout's name to keep or
  * change; once saved it becomes the muted line "Saved as {name}.". With nothing done there is nothing to save, so no
  * button. "Saved as {name}." is said to the screen reader as it appears.
+ *
+ * `inHistory` (the History detail, R165): a past workout's sets aren't "today's", and its saved workout remembers them
+ * only if it is the latest one started from it (R169), so there is no such line and the button is always offered.
  */
-export function SaveAsWorkout({ workoutId, workoutName }: { workoutId: string; workoutName: string }): ReactElement | null {
+export function SaveAsWorkout({
+  workoutId,
+  workoutName,
+  inHistory = false,
+}: {
+  workoutId: string;
+  workoutName: string;
+  inHistory?: boolean;
+}): ReactElement | null {
   const db = useDb();
   // Read once: the workout is finished, and saving it here makes a new saved workout, not the one it came from.
-  const [from] = useState(() => savedWorkoutOf(db, workoutId));
+  const [from] = useState(() => (inHistory ? null : savedWorkoutOf(db, workoutId)));
   const [canSave] = useState(() => hasDoneSets(db, workoutId));
   const [open, setOpen] = useState(false);
   const [savedAs, setSavedAs] = useState<string | null>(null);

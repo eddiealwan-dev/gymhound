@@ -341,6 +341,7 @@ describe("lastSummary: last time's sets for the rule line", () => {
 
 describe('finishLine (spec 8.5, R64)', () => {
   const bench = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null, nextUnit: WeightUnit = 'lb'): NextTime => ({
+    workoutExerciseId: 'we1',
     name: 'Bench press',
     loggingType: 'weighted',
     outcome,
@@ -373,6 +374,7 @@ describe('finishLine (spec 8.5, R64)', () => {
 
   it('assisted: a raise takes assistance off, so it points down (R72); a hold reads as any other', () => {
     const pullUp = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null): NextTime => ({
+      workoutExerciseId: 'we1',
       name: 'Assisted pull-up',
       loggingType: 'assisted',
       outcome,
@@ -393,6 +395,7 @@ describe('finishLine (spec 8.5, R64)', () => {
 
   it('bodyweight_plus at 0 added load holds at bodyweight, with the reason when flagged; a raise reads as usual (R75)', () => {
     const dip = (outcome: NextTime['outcome'], nextWeight: number, mark: ExerciseMark | null = null, nextUnit: WeightUnit = 'lb'): NextTime => ({
+      workoutExerciseId: 'we1',
       name: 'Dip',
       loggingType: 'bodyweight_plus',
       outcome,

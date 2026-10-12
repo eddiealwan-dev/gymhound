@@ -84,11 +84,11 @@ describe('the finish summary (8.5, R64)', () => {
     mockRead = {
       unit: 'lb',
       summary: pushA([
-        { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
-        { name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
-        { name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
-        { name: 'Assisted pull-up', loggingType: 'assisted', outcome: 'raised', nextWeight: 30, nextUnit: 'lb', mark: null },
-        { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we1', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we2', name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+        { workoutExerciseId: 'we3', name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we4', name: 'Assisted pull-up', loggingType: 'assisted', outcome: 'raised', nextWeight: 30, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we5', name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
       ]),
     };
     const text = shownText(mount());
@@ -140,7 +140,7 @@ const plankPr: PrHighlight = {
 
 describe('personal bests on the finish summary (R104, R105)', () => {
   const next: FinishSummary['next'] = [
-    { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+    { workoutExerciseId: 'we6', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
   ];
 
   it('lists each personal best after the next-time lines, under "Personal bests", each with a PR mark', async () => {
