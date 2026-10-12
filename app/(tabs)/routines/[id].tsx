@@ -8,6 +8,7 @@ import { getActiveWorkoutId } from '../../../src/db/repositories/workoutsRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
+import { announce } from '../../../src/platform/announce';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
@@ -69,6 +70,8 @@ export default function RoutineDetailScreen() {
   const routine = useDbQuery(read);
   const [blocked, setBlocked] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
+  /** What a failed Duplicate or Delete says, muted, under the button pressed. Nothing was changed. */
+  const [failed, setFailed] = useState<{ action: 'copy' | 'delete'; text: string } | null>(null);
   const limit = useRoutineLimit();
 
   if (routine === null) {
@@ -91,16 +94,35 @@ export default function RoutineDetailScreen() {
     bumpData();
   };
 
+  const fail = (action: 'copy' | 'delete', text: string, error: unknown) => {
+    console.warn(`GymHound could not ${action} the routine.`, error);
+    setFailed({ action, text });
+    announce(text);
+  };
+
   const duplicate = () =>
     limit.whenRoomFor(() => {
-      const copyId = duplicateRoutine(db, routine.id, Date.now());
+      setFailed(null);
+      let copyId: string;
+      try {
+        copyId = duplicateRoutine(db, routine.id, Date.now());
+      } catch (error) {
+        fail('copy', "Couldn't copy. Try again.", error);
+        return;
+      }
       bumpData();
       router.push(`/routines/${copyId}`);
     });
 
   const remove = () => {
     setAskDelete(false);
-    deleteRoutine(db, routine.id);
+    setFailed(null);
+    try {
+      deleteRoutine(db, routine.id);
+    } catch (error) {
+      fail('delete', "Couldn't delete. Try again.", error);
+      return;
+    }
     bumpData();
     toRoutines();
   };
@@ -125,6 +147,7 @@ export default function RoutineDetailScreen() {
             </View>
           )}
         </View>
+        {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
       </View>
       <View style={{ gap: 16, marginTop: 32 }}>
         {routine.days.map((day) => (
@@ -135,6 +158,7 @@ export default function RoutineDetailScreen() {
         // At the foot of the page, quiet and centred, as Delete workout is on a workout and Discard workout in the session.
         <View style={{ marginTop: 24 }}>
           <Button label="Delete routine" variant="quiet" onPress={() => setAskDelete(true)} />
+          {failed?.action === 'delete' ? <Body muted style={{ textAlign: 'center' }}>{failed.text}</Body> : null}
         </View>
       )}
       <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />
