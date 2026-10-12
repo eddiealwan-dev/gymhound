@@ -432,7 +432,7 @@ describe('the form demo of your own exercise', () => {
     act(() => buttons(tree, 'Edit exercise')[0].props.onPress());
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(router.push).not.toHaveBeenCalled();
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: MINE.id } });
   });
 

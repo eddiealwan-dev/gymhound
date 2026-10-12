@@ -1,19 +1,25 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
-import { View } from 'react-native';
-import { getRoutineDetail } from '../../../src/db/repositories/routinesRepo';
+import { useCallback, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { useDb } from '../../../src/db/DbProvider';
+import { getRoutineDetail, swapRoutineExercise } from '../../../src/db/repositories/routinesRepo';
+import { programExerciseId } from '../../../src/domain/alternatives';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
-import { useDbQuery } from '../../../src/state/dataVersion';
+import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
 import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { useOpenPaywall } from '../../../src/ui/pro/openPaywall';
+import { ModifySheet } from '../../../src/ui/ModifySheet';
+import { useProGate } from '../../../src/ui/RoutineLimit';
 import { useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
+import { afterSheetCloses, Sheet } from '../../../src/ui/Sheet';
+import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Screen } from '../../../src/ui/Screen';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
@@ -25,21 +31,31 @@ function toRoutines() {
   else router.navigate('/routines');
 }
 
-/** An exercise of a day: its name, and its sets and reps (seconds for timed ones) as Up next shows them. */
-function ExerciseRow({ exercise }: { exercise: RoutineDetailExercise }) {
+/**
+ * An exercise of a day: its name, and its sets and reps (seconds for timed ones) as Up next shows them. Tapping it opens
+ * its Modify and Stats (R553, R554).
+ */
+function ExerciseRow({ exercise, onPress }: { exercise: RoutineDetailExercise; onPress: (exercise: RoutineDetailExercise) => void }) {
+  const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
   return (
     // At a large text size the scheme drops under the name rather than squeezing it, as on Up next.
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${exercise.name}, ${scheme}`}
+      accessibilityHint="Modify or see its stats"
+      onPress={() => onPress(exercise)}
+      style={({ pressed }) => ({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8, minHeight: 44, opacity: pressed ? 0.8 : 1 })}
+    >
       <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
       <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
-        {formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType)}
+        {scheme}
       </Body>
-    </View>
+    </Pressable>
   );
 }
 
 /** A day as a card: its name, then its exercises in order, a superset marked by the bar down its members' edge. */
-function DayCard({ day }: { day: RoutineDetail['days'][number] }) {
+function DayCard({ day, onExercise }: { day: RoutineDetail['days'][number]; onExercise: (exercise: RoutineDetailExercise) => void }) {
   const { colors } = useTheme();
   const links = linksFromGroups(day.exercises.map((e) => e.supersetGroup));
   return (
@@ -48,7 +64,7 @@ function DayCard({ day }: { day: RoutineDetail['days'][number] }) {
         {day.name}
       </Display>
       {supersetRuns(day.exercises, links).map((run) => {
-        const rows = run.members.map((exercise) => <ExerciseRow key={exercise.id} exercise={exercise} />);
+        const rows = run.members.map((exercise) => <ExerciseRow key={exercise.id} exercise={exercise} onPress={onExercise} />);
         return run.superset ? <SupersetBar key={run.members[0].id}>{rows}</SupersetBar> : rows;
       })}
     </View>
@@ -67,6 +83,11 @@ export default function RoutineDetailScreen() {
   const actions = useRoutineActions(toRoutines);
   const pro = useIsPro();
   const openPaywall = useOpenPaywall();
+  const db = useDb();
+  const gate = useProGate();
+  /** The exercise whose sheet is open, and the one Modify is open for. */
+  const [chosen, setChosen] = useState<RoutineDetailExercise | null>(null);
+  const [modifying, setModifying] = useState<RoutineDetailExercise | null>(null);
 
   if (routine === null) {
     return (
@@ -114,7 +135,7 @@ export default function RoutineDetailScreen() {
       </View>
       <View style={{ gap: 16, marginTop: 32 }}>
         {routine.days.map((day) => (
-          <DayCard key={day.id} day={day} />
+          <DayCard key={day.id} day={day} onExercise={setChosen} />
         ))}
       </View>
       {routine.isPremade ? null : (
@@ -124,6 +145,55 @@ export default function RoutineDetailScreen() {
           {failed?.action === 'delete' ? <Body muted style={{ textAlign: 'center' }}>{failed.text}</Body> : null}
         </View>
       )}
+      <Sheet visible={chosen !== null} onClose={() => setChosen(null)}>
+        <SheetTitle
+          subtitle={chosen === null ? null : formatRepScheme(chosen.setCount, chosen.repMin, chosen.repMax, chosen.loggingType)}
+        >
+          {chosen?.name ?? ''}
+        </SheetTitle>
+        <View style={{ gap: 8 }}>
+          <Button
+            label="Modify"
+            variant="secondary"
+            onPress={() => {
+              const exercise = chosen;
+              setChosen(null);
+              // A Pro program or a kept routine can't change until Pro is back (R524, R525).
+              if (exercise) afterSheetCloses(() => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => setModifying(exercise)));
+            }}
+          />
+          <Button
+            label="Stats"
+            variant="secondary"
+            onPress={() => {
+              const exercise = chosen;
+              setChosen(null);
+              if (exercise) afterSheetCloses(() => router.push(`/lift/${exercise.exerciseId}`));
+            }}
+          />
+          <Button label="Cancel" variant="quiet" onPress={() => setChosen(null)} />
+        </View>
+      </Sheet>
+      <ModifySheet
+        target={
+          modifying === null
+            ? null
+            : {
+                exerciseId: modifying.exerciseId,
+                name: modifying.name,
+                programExerciseId: programExerciseId(modifying.id, routine.isPremade),
+                inUse: routine.days.find((d) => d.exercises.some((e) => e.id === modifying.id))?.exercises.map((e) => e.exerciseId) ?? [],
+              }
+        }
+        note={`Changes it in ${routine.name} from the next workout. Its sets and reps stay; the next workout asks for a starting weight.`}
+        onClose={() => setModifying(null)}
+        onChoose={(exerciseId) => {
+          if (modifying) swapRoutineExercise(db, modifying.id, exerciseId);
+          setModifying(null);
+          bumpData();
+        }}
+      />
+      {gate.sheets}
       {actions.sheets}
     </Screen>
   );

@@ -184,7 +184,7 @@ const lineNode = (tree: ReactTestRenderer, line: string) => {
 const fieldStyle = (tree: ReactTestRenderer, label: string) => StyleSheet.flatten(byLabel(tree, label).props.style);
 
 /** iOS opens the next sheet a moment after the last one closes. */
-const afterSheetCloses = () => act(() => void jest.advanceTimersByTime(400));
+const afterSheetCloses = () => act(() => void jest.advanceTimersByTime(1000));
 
 let dismiss: jest.SpyInstance;
 

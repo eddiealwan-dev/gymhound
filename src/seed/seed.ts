@@ -128,7 +128,9 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
         // `next_weight` and `next_weight_unit` are left out of the update: they hold progress.
         db.insert(routineExercises)
           .values({ id, routineDayId: dayId, ...rule })
-          .onConflictDoUpdate({ target: routineExercises.id, set: rule })
+          // The exercise is left out too: a row's id names the exercise the program has there, so the seed never needs to
+          // change it, and one you swapped with Modify (R553) stays swapped through an update.
+          .onConflictDoUpdate({ target: routineExercises.id, set: { ...rule, exerciseId: undefined } })
           .run();
       });
     });

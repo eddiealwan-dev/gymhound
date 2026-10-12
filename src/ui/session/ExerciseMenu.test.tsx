@@ -123,7 +123,7 @@ function press(tree: ReturnType<typeof create>, label: string) {
 }
 
 /** iOS opens the next sheet or screen a moment after the last one closes. */
-const afterSheetCloses = () => act(() => void jest.advanceTimersByTime(400));
+const afterSheetCloses = () => act(() => void jest.advanceTimersByTime(1000));
 
 beforeEach(() => {
   jest.useFakeTimers();

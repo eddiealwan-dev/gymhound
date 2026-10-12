@@ -116,7 +116,7 @@ describe('Routines: Set active (R80, Round 5)', () => {
 
     press(tree, 'Set active');
     press(tree, 'Not now');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(shownText(tree)).not.toContain('Workout in progress');
     expect(router.push).not.toHaveBeenCalled();
 
@@ -124,7 +124,7 @@ describe('Routines: Set active (R80, Round 5)', () => {
     press(tree, 'Resume');
     expect(shownText(tree)).not.toContain('Workout in progress');
     expect(router.push).not.toHaveBeenCalled();
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledWith('/session');
     expect(setActiveRoutine).not.toHaveBeenCalled();
   });
@@ -239,7 +239,7 @@ describe('Routines: routines of your own are Pro (§18.21, R521)', () => {
       seePro.props.onPress();
       seePro.props.onPress();
     });
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledTimes(1);
   });
 
@@ -251,7 +251,7 @@ describe('Routines: routines of your own are Pro (§18.21, R521)', () => {
     press(tree, 'See Pro');
     expect(shownText(tree)).not.toContain(LIMIT);
     expect(router.push).not.toHaveBeenCalled();
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledTimes(1);
     expect(router.push).toHaveBeenCalledWith('/paywall');
   });

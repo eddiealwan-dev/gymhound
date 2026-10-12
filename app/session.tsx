@@ -15,11 +15,12 @@ import type { MusicAppId } from '../src/domain/types';
 import { musicAppOn, musicAppsFor } from '../src/platform/music';
 import { listNames } from '../src/domain/finishCheck';
 import { latestTickedSetId, restWaitsFor } from '../src/domain/rest';
-import { joinsNextInSuperset, startsSuperset } from '../src/domain/sessionMenu';
+import { joinsNextInSuperset, replaceNeedsConfirm, startsSuperset } from '../src/domain/sessionMenu';
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
-import { discard, finish } from '../src/state/sessionActions';
+import { discard, finish, replaceWith } from '../src/state/sessionActions';
+import { ModifySheet } from '../src/ui/ModifySheet';
 import { useShareEqual } from '../src/state/shareEqual';
 import { useNow } from '../src/state/useNow';
 import { Button } from '../src/ui/Button';
@@ -206,6 +207,12 @@ export default function Session() {
    * Something off reasons from the name row (R81).
    */
   const [menuFor, setMenuFor] = useState<{ id: string; panel: 'menu' | 'rest' | 'mark' } | null>(null);
+  /** The exercise Modify is open for (R553), and the swap waiting on "Replace?" when it has completed sets. */
+  const [modifyFor, setModifyFor] = useState<string | null>(null);
+  const [swapAsk, setSwapAsk] = useState<{ id: string; name: string; exerciseId: string } | null>(null);
+  /** The workout's exercises as last drawn, for openers made once per exercise. */
+  const exercisesRef = useRef(workout?.exercises ?? []);
+  exercisesRef.current = workout?.exercises ?? [];
   const [ask, setAsk] = useState<Ask | null>(null);
   /** The question Finish asks before it drops unticked sets. Kept after the sheet closes so its text does not change while it fades. */
   const [finishAsk, setFinishAsk] = useState<FinishConfirm | null>(null);
@@ -233,7 +240,24 @@ export default function Session() {
       Keyboard.dismiss();
       setMenuFor({ id, panel });
     };
-    return { menu: open('menu'), rest: open('rest'), mark: open('mark') };
+    return {
+      menu: open('menu'),
+      rest: open('rest'),
+      mark: open('mark'),
+      modify: () => {
+        flushAll();
+        Keyboard.dismiss();
+        setModifyFor(id);
+      },
+      // The exercise is read when tapped: a replaced one keeps its row (and these openers) with a new exercise.
+      stats: () => {
+        const exerciseId = exercisesRef.current.find((e) => e.id === id)?.exerciseId;
+        if (exerciseId === undefined) return;
+        flushAll();
+        Keyboard.dismiss();
+        router.push(`/lift-stats/${exerciseId}`);
+      },
+    };
   });
 
   // The chevron and Android's back button remove this screen. It can go before the input being typed in is left, so save
@@ -409,6 +433,8 @@ export default function Session() {
                 onOpenMenu={openers.menu}
                 onOpenRest={openers.rest}
                 onOpenMark={openers.mark}
+                onOpenModify={openers.modify}
+                onOpenStats={openers.stats}
               />
             );
           })}
@@ -428,6 +454,34 @@ export default function Session() {
           </View>
         </View>
       </ScrollView>
+      <ModifySheet
+        target={(() => {
+          const ex = workout.exercises.find((e) => e.id === modifyFor);
+          return ex ? { exerciseId: ex.exerciseId, name: ex.name, programExerciseId: null, inUse: workout.exercises.map((e) => e.exerciseId) } : null;
+        })()}
+        note="Just for this workout. To swap it for good, use Modify on the routine's page."
+        onClose={() => setModifyFor(null)}
+        onChoose={(exerciseId) => {
+          const ex = workout.exercises.find((e) => e.id === modifyFor);
+          setModifyFor(null);
+          if (!ex) return;
+          // Swapping clears its sets, so with any completed it asks first, as Replace does.
+          if (replaceNeedsConfirm(ex)) afterSheetCloses(() => setSwapAsk({ id: ex.id, name: ex.name, exerciseId }));
+          else replaceWith(db, ex.id, exerciseId);
+        }}
+      />
+      <ConfirmSheet
+        visible={swapAsk !== null}
+        title={`Replace ${swapAsk?.name ?? ''}?`}
+        body="Its completed sets will be cleared."
+        confirmLabel="Replace"
+        cancelLabel="Keep"
+        onConfirm={() => {
+          if (swapAsk) replaceWith(db, swapAsk.id, swapAsk.exerciseId);
+          setSwapAsk(null);
+        }}
+        onCancel={() => setSwapAsk(null)}
+      />
       <ExerciseMenu
         exercises={workout.exercises}
         exerciseId={menuFor?.id ?? null}

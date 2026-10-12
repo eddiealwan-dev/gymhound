@@ -262,11 +262,13 @@ describe('/lifts', () => {
 });
 
 describe('/lift/[id] (R173–R175)', () => {
-  it('says the lift is not in the history for an unknown id or one never done', () => {
+  it("says an unknown id isn't in the history, and names a lift never done with what fills its page (R554)", () => {
     mockId = 'nope';
     expect(shownText(mount(<LiftRoute />))).toContain("This lift isn't in your history.");
     mockId = SQUAT;
-    expect(shownText(mount(<LiftRoute />))).toContain("This lift isn't in your history.");
+    const shown = shownText(mount(<LiftRoute />));
+    expect(shown).toContain('No sessions yet. Its chart and history fill in once you log it.');
+    expect(shown.some((t) => /squat/i.test(t))).toBe(true);
   });
 
   it('goes back, or to Lifts with nothing to go back to; no footer', () => {

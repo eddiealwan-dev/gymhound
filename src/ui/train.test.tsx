@@ -445,7 +445,7 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
 
       expect(shownText(tree)).not.toContain('Workout in progress');
       expect(router.push).not.toHaveBeenCalled();
-      act(() => void jest.advanceTimersByTime(400));
+      act(() => void jest.advanceTimersByTime(1000));
       expect(router.push).toHaveBeenCalledWith('/session');
     });
 
@@ -453,7 +453,7 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
       const tree = tapped();
 
       press(tree, 'Not now');
-      act(() => void jest.advanceTimersByTime(400));
+      act(() => void jest.advanceTimersByTime(1000));
 
       expect(shownText(tree)).not.toContain('Workout in progress');
       expect(router.push).not.toHaveBeenCalled();

@@ -55,13 +55,15 @@ function valueFormat(metric: LiftMetric, unit: WeightUnit): (v: number) => strin
 }
 
 /** A row that opens a workout: at least 44pt, a hairline under it, its text wrapping at a large text size. */
-function WorkoutRow({ label, onPress, children }: { label: string; onPress: () => void; children: React.ReactNode }) {
+/** A session or a record. `onPress` opens its workout; without it (opened from a workout in progress) it is only read. */
+function WorkoutRow({ label, onPress, children }: { label: string; onPress?: () => void; children: React.ReactNode }) {
   const { colors } = useTheme();
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityLabel={label}
       onPress={onPress}
+      disabled={onPress === undefined}
       style={({ pressed }) => ({
         minHeight: 44,
         justifyContent: 'center',
@@ -117,10 +119,10 @@ function LiftChart({ points, caption, format, today, locale }: { points: LiftPoi
 }
 
 /** A record: its title (Body 600), its value in the unit logged, and its day, muted; opens its workout (R174). */
-function RecordRow({ record, today, locale }: { record: LiftRecord; today: string; locale: string }) {
+function RecordRow({ record, today, locale, onPress }: { record: LiftRecord; today: string; locale: string; onPress?: () => void }) {
   const day = calendarDayTitle(record.localDate, today, locale);
   return (
-    <WorkoutRow label={`${record.title}, ${spoken(record.value)}, ${day}`} onPress={() => openWorkout(record.workoutId)}>
+    <WorkoutRow label={`${record.title}, ${spoken(record.value)}, ${day}`} onPress={onPress}>
       <Body weight={600}>{record.title}</Body>
       <Body style={{ fontVariant: ['tabular-nums'] }}>{record.value}</Body>
       <Body muted>{day}</Body>
@@ -128,7 +130,11 @@ function RecordRow({ record, today, locale }: { record: LiftRecord; today: strin
   );
 }
 
-function LiftDetail({ id }: { id: string }) {
+/**
+ * A lift's chart, records and sessions. `fromWorkout` (Stats on an exercise in a workout, R554) shows it over the
+ * workout: its rows don't open other workouts, which would leave the one in progress.
+ */
+export function LiftDetail({ id, fromWorkout = false }: { id: string; fromWorkout?: boolean }) {
   const read = useCallback(
     (db: Db) => {
       const lift = getLift(db, id);
@@ -145,12 +151,14 @@ function LiftDetail({ id }: { id: string }) {
     return (
       <Screen>
         <BackLink label="Back" accessibilityLabel="Back" onPress={leave} />
+        {lift ? <ScreenTitle>{lift.name}</ScreenTitle> : null}
         <Body muted style={{ marginTop: 8 }}>
-          This lift isn't in your history.
+          {lift ? 'No sessions yet. Its chart and history fill in once you log it.' : "This lift isn't in your history."}
         </Body>
       </Screen>
     );
   }
+  const open = (workoutId: string) => (fromWorkout ? undefined : () => openWorkout(workoutId));
 
   const metric = liftMetric(lift.loggingType, sessions);
   const points = liftPoints(lift.loggingType, sessions, unit);
@@ -185,7 +193,7 @@ function LiftDetail({ id }: { id: string }) {
         <View style={{ marginTop: 32 }}>
           <Label style={{ marginBottom: 8 }}>Records</Label>
           {records.map((record) => (
-            <RecordRow key={record.kind} record={record} today={today} locale={locale} />
+            <RecordRow key={record.kind} record={record} today={today} locale={locale} onPress={open(record.workoutId)} />
           ))}
         </View>
       ) : null}
@@ -200,7 +208,7 @@ function LiftDetail({ id }: { id: string }) {
             <WorkoutRow
               key={s.workoutId}
               label={[day, spoken(sets), tag].filter((part) => part !== null && part !== '').join(', ')}
-              onPress={() => openWorkout(s.workoutId)}
+              onPress={open(s.workoutId)}
             >
               <Body muted>{day}</Body>
               <Body style={{ fontVariant: ['tabular-nums'] }}>{`${sets}${tag !== null ? ` · ${tag}` : ''}`}</Body>

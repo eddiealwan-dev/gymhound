@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import type { SwapCandidate } from '../../domain/alternatives';
 import type { Outcome } from '../../domain/progression';
 import { clampRule, dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
 import type { RoutineDraft } from '../../domain/routineDraft';
@@ -509,4 +510,31 @@ export function getUpNext(db: Db): UpNext | null {
       ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
     })),
   };
+}
+
+/** Every exercise Modify can offer (R553): the library and your own, not archived. */
+export function swapCandidates(db: Db): SwapCandidate[] {
+  return db
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+      primaryMuscles: exercises.primaryMuscles,
+      secondaryMuscles: exercises.secondaryMuscles,
+      pattern: exercises.pattern,
+      equipment: exercises.equipment,
+      loggingType: exercises.loggingType,
+      isCustom: exercises.isCustom,
+    })
+    .from(exercises)
+    .where(eq(exercises.archived, false))
+    .all();
+}
+
+/**
+ * Modify on a routine's page (R553): the routine's exercise at `routineExerciseId` becomes `exerciseId`, keeping its
+ * sets, reps and increment. Its next weight is cleared, since it was the old exercise's: the first workout with the new
+ * one asks for a starting weight. Workouts already finished keep the old exercise.
+ */
+export function swapRoutineExercise(db: Db, routineExerciseId: string, exerciseId: string): void {
+  db.update(routineExercises).set({ exerciseId, nextWeight: null, nextWeightUnit: null }).where(eq(routineExercises.id, routineExerciseId)).run();
 }

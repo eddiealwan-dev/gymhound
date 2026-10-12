@@ -80,6 +80,10 @@ type Props = {
   onOpenRest: () => void;
   /** Opens this exercise's Something off reasons: its Something off control was tapped (R81). */
   onOpenMark: () => void;
+  /** Opens Modify, to swap in an exercise that works the same muscles (R553). Without it there is no Modify. */
+  onOpenModify?: () => void;
+  /** Opens this exercise's stats: its chart and history (R554). Without it there is no Stats. */
+  onOpenStats?: () => void;
 };
 
 /**
@@ -106,7 +110,7 @@ function NameRowControl({
   readAs,
   onPress,
 }: {
-  icon: 'pencil' | 'alert-circle-outline';
+  icon: 'pencil' | 'alert-circle-outline' | 'swap-horizontal' | 'stats-chart-outline';
   label: string;
   /** What the screen reader says. */
   readAs: string;
@@ -169,6 +173,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   settingsRestSeconds,
   onOpenRest,
   onOpenMark,
+  onOpenModify,
+  onOpenStats,
   restRunning = restEndsAt !== null,
 }: Props) {
   const db = useDb();
@@ -351,6 +357,9 @@ export const ExerciseBlock = memo(function ExerciseBlock({
               readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
               onPress={onOpenMark}
             />
+            {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
+            {onOpenModify ? <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} /> : null}
+            {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
           </View>
         </View>
         <Pressable
