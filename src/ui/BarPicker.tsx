@@ -57,11 +57,12 @@ function Choice({ label, detail, selected, onPress }: { label: string; detail?: 
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      <Body weight={selected ? 600 : 400} style={{ flex: 1 }}>
+      {/* Both may wrap at a large text size; neither pushes the tick off the edge. */}
+      <Body weight={selected ? 600 : 400} style={{ flex: 1, minWidth: 0 }}>
         {label}
       </Body>
       {detail ? (
-        <Body muted style={{ fontVariant: ['tabular-nums'] }}>
+        <Body muted style={{ flexShrink: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
           {detail}
         </Body>
       ) : null}

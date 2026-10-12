@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { listRoutines } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineSummary } from '../../../src/db/repositories/routinesRepo';
 import { listSavedWorkouts } from '../../../src/db/repositories/savedWorkoutsRepo';
@@ -53,13 +53,14 @@ function RoutineRow({
   onOptions: () => void;
 }) {
   const { colors } = useTheme();
+  const stacked = useStackedRow();
   // "3 days a week · 12 weeks · Beginner" for a program (R555), the days for your own.
   const days = routineLine(routine);
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: stacked ? 'column' : 'row',
+        alignItems: stacked ? 'stretch' : 'center',
         gap: 12,
         backgroundColor: colors.surface,
         borderColor: colors.border,
@@ -72,7 +73,7 @@ function RoutineRow({
         accessibilityRole="button"
         accessibilityLabel={`${routine.name}, ${days}`}
         onPress={() => router.push(`/routines/${routine.id}`)}
-        style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.8 : 1 })}
+        style={({ pressed }) => ({ flex: stacked ? undefined : 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.8 : 1 })}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
           <Body weight={600}>{routine.name}</Body>
@@ -82,6 +83,7 @@ function RoutineRow({
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: stacked ? 'space-between' : undefined }}>
       {/* A program outside free, or a routine of your own kept after Pro ends, says Pro where Set active would be (R525). */}
       {routine.isActive && !locked ? (
         <ActiveBadge />
@@ -104,8 +106,16 @@ function RoutineRow({
       >
         <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
       </Pressable>
+      </View>
     </View>
   );
+}
+
+/** Above this text size a row's name takes the whole width and its buttons go under it, rather than squeezing it (R562). */
+const STACK_ABOVE_SCALE = 1.3;
+
+function useStackedRow(): boolean {
+  return useWindowDimensions().fontScale > STACK_ABOVE_SCALE;
 }
 
 const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
@@ -116,12 +126,13 @@ const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`)
  */
 function SavedRow({ saved, locked, onStart }: { saved: SavedWorkoutSummary; locked: boolean; onStart: () => void }) {
   const { colors } = useTheme();
+  const stacked = useStackedRow();
   const count = exerciseCount(saved.exerciseCount);
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: stacked ? 'column' : 'row',
+        alignItems: stacked ? 'flex-start' : 'center',
         gap: 12,
         backgroundColor: colors.surface,
         borderColor: colors.border,
@@ -134,7 +145,7 @@ function SavedRow({ saved, locked, onStart }: { saved: SavedWorkoutSummary; lock
         accessibilityRole="button"
         accessibilityLabel={`${saved.name}, ${count}`}
         onPress={() => router.push(`/saved/${saved.id}`)}
-        style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.8 : 1 })}
+        style={({ pressed }) => ({ flex: stacked ? undefined : 1, alignSelf: stacked ? 'stretch' : undefined, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.8 : 1 })}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
           <Body weight={600}>{saved.name}</Body>

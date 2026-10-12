@@ -31,9 +31,10 @@ export type SegmentOption<T extends string> = { value: T; label: string; spoken?
  * group named `label`, each choice by `spoken` when given. Labels wrap and stay centred rather than clip at a large
  * text size.
  *
- * With `fit` (a testID prefix), the segments are laid out from the measured width of the well and of each label
- * (hidden copies at the same size, each as wide as its words up to the well's width), so a word never breaks: all in a
- * row, else two, else one. Without it they share one row.
+ * The segments are laid out from the measured width of the well and of each label (hidden copies at the same size,
+ * each as wide as its words up to the well's width), so a word never breaks and no label runs into the next: all in a
+ * row, else two, else one (Round 11: Light, Dark and System overlapped at the largest text size until every control
+ * measured). Until measured they share one row. `fit` is a testID prefix for the well and the hidden copies.
  *
  * Settings (Appearance, units, bell sound), Add food (Search / Quick add), the body and lift charts' ranges and Fuel's
  * trends all use it; until the final design pass each kept its own copy (spec §18.10's open minor).
@@ -54,14 +55,14 @@ export function Segmented<T extends string>({
   const { colors } = useTheme();
   const [wellWidth, setWellWidth] = useState(0);
   const [labelWidths, setLabelWidths] = useState<Record<string, number>>({});
-  const measured = fit !== undefined && wellWidth > 0 && options.every((o) => labelWidths[o.label] !== undefined);
+  const measured = wellWidth > 0 && options.every((o) => labelWidths[o.label] !== undefined);
   const layout = measured ? segmentLayout(wellWidth, Math.max(...options.map((o) => labelWidths[o.label])), options.length) : null;
 
   return (
     <View>
-      {fit !== undefined && (
+      {
         <View
-          testID={`${fit}-probes`}
+          testID={fit !== undefined ? `${fit}-probes` : undefined}
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
@@ -70,7 +71,7 @@ export function Segmented<T extends string>({
           {options.map((option) => (
             <Body
               key={option.value}
-              testID={`${fit}-probe-${option.label}`}
+              testID={fit !== undefined ? `${fit}-probe-${option.label}` : undefined}
               weight={600}
               style={{ alignSelf: 'flex-start' }}
               onLayout={(e) => {
@@ -82,12 +83,12 @@ export function Segmented<T extends string>({
             </Body>
           ))}
         </View>
-      )}
+      }
       <View
         testID={fit !== undefined ? `${fit}-well` : undefined}
         accessibilityRole="radiogroup"
         accessibilityLabel={label}
-        onLayout={fit !== undefined ? (e) => setWellWidth(Math.floor(e.nativeEvent.layout.width)) : undefined}
+        onLayout={(e) => setWellWidth(Math.floor(e.nativeEvent.layout.width))}
         style={{
           flexDirection: 'row',
           flexWrap: 'wrap',

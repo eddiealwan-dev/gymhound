@@ -49,6 +49,8 @@ export function Button({
       style={({ pressed }) => ({
         minHeight: compact ? 36 : 48,
         minWidth: compact ? 44 : undefined,
+        // Never wider than its row: at a large text size the label wraps instead of running off the edge (R562).
+        maxWidth: '100%',
         paddingHorizontal: compact ? 12 : 20,
         borderRadius: compact ? 18 : 12,
         borderWidth: 1,
@@ -59,7 +61,7 @@ export function Button({
         opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
       })}
     >
-      <Body weight={600} maxFontSizeMultiplier={maxFontSizeMultiplier} style={compact ? { color: labelColor, fontSize: 15 } : { color: labelColor }}>
+      <Body weight={600} maxFontSizeMultiplier={maxFontSizeMultiplier} style={compact ? { color: labelColor, fontSize: 15, textAlign: 'center' } : { color: labelColor, textAlign: 'center' }}>
         {label}
       </Body>
     </Pressable>
