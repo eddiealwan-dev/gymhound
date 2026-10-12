@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Android 13+ asks for this at run time; the app asks through expo-notifications. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>
