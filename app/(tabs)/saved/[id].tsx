@@ -71,7 +71,7 @@ export default function SavedWorkoutScreen() {
       <Screen>
         <BackLink label="Routines" onPress={toRoutines} />
         <Body muted style={{ marginTop: 8 }}>
-          Saved workout not found.
+          That saved workout isn't here.
         </Body>
       </Screen>
     );

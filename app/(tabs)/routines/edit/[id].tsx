@@ -512,7 +512,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
       <Screen>
         <BackLink label="Routines" onPress={() => goBack('/routines')} />
         <Body muted style={{ marginTop: 8 }}>
-          Routine not found.
+          That routine isn't here.
         </Body>
       </Screen>
     );

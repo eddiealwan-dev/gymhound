@@ -288,7 +288,7 @@ describe('a saved workout (R122)', () => {
   it('says so when it is not there', () => {
     mockId = 'gone';
     const shown = shownText(mount(<SavedWorkoutScreen />));
-    expect(shown).toContain('Saved workout not found.');
+    expect(shown).toContain("That saved workout isn't here.");
     expect(shown).not.toContain('Start');
   });
 
@@ -313,7 +313,7 @@ describe('a saved workout: review round 1', () => {
     expect(deleteSavedWorkout).toHaveBeenCalledWith('db', 'push-a');
     expect(router.back).not.toHaveBeenCalled();
     const shown = shownText(tree);
-    expect(shown).not.toContain('Saved workout not found.');
+    expect(shown).not.toContain("That saved workout isn't here.");
     expect(shown).toContain('Push A');
     act(() => void jest.advanceTimersByTime(400));
     expect(router.back).toHaveBeenCalledTimes(1);

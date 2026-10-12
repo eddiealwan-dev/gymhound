@@ -186,7 +186,7 @@ describe('Routine detail (§8.6)', () => {
     show(null);
     const tree = mount();
 
-    expect(shownText(tree)).toContain('Routine not found.');
+    expect(shownText(tree)).toContain("That routine isn't here.");
     expect(labels(tree)).toEqual([]);
   });
 

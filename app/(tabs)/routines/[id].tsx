@@ -76,7 +76,7 @@ export default function RoutineDetailScreen() {
       <Screen>
         <BackLink label="Routines" onPress={toRoutines} />
         <Body muted style={{ marginTop: 8 }}>
-          Routine not found.
+          That routine isn't here.
         </Body>
       </Screen>
     );

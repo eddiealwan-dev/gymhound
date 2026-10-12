@@ -444,7 +444,7 @@ describe('the routine editor: your own routine', () => {
     jest.mocked(routineToDraft).mockReturnValue(null);
     const tree = mount('gone');
 
-    expect(shownText(tree)).toContain('Routine not found.');
+    expect(shownText(tree)).toContain("That routine isn't here.");
     expect(buttons(tree, 'Save')).toHaveLength(0);
   });
 

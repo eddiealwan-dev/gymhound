@@ -160,9 +160,9 @@ export function TargetsForm({
 
   return (
     <View>
-      <Label style={{ marginBottom: 12 }}>{DAY_LABEL.training}</Label>
+      <Label style={{ marginBottom: 8 }}>{DAY_LABEL.training}</Label>
       {day('training')}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 32, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 32, marginBottom: 8 }}>
         <Label>{DAY_LABEL.rest}</Label>
         <Button label="Same as training day" variant="quiet" size="compact" onPress={sameAsTraining} />
       </View>
