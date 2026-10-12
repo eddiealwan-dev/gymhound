@@ -269,7 +269,7 @@ describe('runSeed', () => {
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(7);
+    expect(SEED_VERSION).toBe(8);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
@@ -673,5 +673,51 @@ describe('seed version 5: the bundled foods (R139)', () => {
       expect(loads).toHaveBeenCalledTimes(1);
     });
     jest.dontMock('./foods.json');
+  });
+});
+
+describe('seed version 8: the food library (R545)', () => {
+  const food = (db: Db, id: string) => db.select().from(foods).where(eq(foods.id, id)).get();
+
+  it('adds about 8,000 USDA foods beside the hand-picked ones: staples, restaurants and brands', () => {
+    const db = seededDb('us');
+    const names = db.select({ name: foods.name }).from(foods).all().map((f) => f.name);
+    expect(names.length).toBeGreaterThan(8000);
+    expect(names).toEqual(expect.arrayContaining(["McDonald's, Big Mac", 'Taco Bell, Bean Burrito', "Chick-Fil-A, chicken sandwich", 'Egg, large']));
+    expect(food(db, 'sr28-21237')?.name).toBe("McDonald's, Big Mac");
+  });
+
+  it('gives each library food a stable id, a name, a serving and sensible macros', () => {
+    const library = loadSeedFoods().filter((f) => f.id.startsWith('sr28-'));
+    expect(library.length).toBeGreaterThan(7900);
+    expect(new Set(loadSeedFoods().map((f) => f.id)).size).toBe(loadSeedFoods().length);
+    for (const f of library) {
+      expect(f.id).toMatch(/^sr28-\d{5}$/);
+      expect(f.name.trim()).toBe(f.name);
+      expect(f.name.length).toBeGreaterThan(2);
+      expect(f.servingLabel).not.toMatch(/NLEA|^\.|\s{2}|,\s*,/);
+      expect(f.servingGrams).toBeGreaterThan(0);
+      expect(Number.isInteger(f.kcal)).toBe(true);
+      expect([f.id, Math.min(f.kcal, f.proteinG, f.carbsG, f.fatG) >= 0]).toEqual([f.id, true]);
+    }
+  });
+
+  it('leaves out what the hand-picked list already has, so egg shows once', () => {
+    const names = loadSeedFoods().map((f) => f.name);
+    expect(names).not.toContain('Egg, whole, raw, fresh');
+    expect(names).toContain('Egg, large');
+  });
+
+  it('adds the library to a phone seeded at version 7, keeping your own foods and what you logged', () => {
+    const db = seededDb('us');
+    db.delete(foods).where(sql`${foods.id} like 'sr28-%'`).run();
+    db.insert(foods).values({ id: 'custom-1', name: 'My shake', servingLabel: '1 bottle', servingGrams: null, kcal: 300, proteinG: 40, carbsG: 20, fatG: 5, source: 'custom', barcode: null, archived: false }).run();
+    setSetting(db, 'seedVersion', 7);
+
+    runSeed(db, 9999);
+
+    expect(rowCounts(db).foods).toBe(loadSeedFoods().length + 1);
+    expect(food(db, 'custom-1')?.name).toBe('My shake');
+    expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 });

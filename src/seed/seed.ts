@@ -14,9 +14,9 @@ export { PREMADE_ORDER } from './routines';
 
 /**
  * Bump this when the bundled data changes. `runSeed` re-applies the seed once per version.
- * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`). 5: about 300 foods from USDA FoodData Central (R139).
+ * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`). 5: about 300 foods from USDA FoodData Central (R139). 6 and 7: the programs of §18.21 (5×5 back, the free four first). 8: about 8,000 more foods from USDA SR28, grocery staples, restaurant and fast-food items and branded groceries (R545).
  */
-export const SEED_VERSION = 7;
+export const SEED_VERSION = 8;
 
 /** The library is about 800 KB of data, so it is loaded only when the seed has to run, never at every start. */
 function loadLibrary(): readonly LibraryExercise[] {
@@ -55,26 +55,43 @@ function upsertExercises(db: Db, now: number, library: readonly LibraryExercise[
   }
 }
 
-/** A re-seed refreshes a bundled food's name, serving and macros, but never `archived`, and never a food of your own. */
-const FOOD_REFRESHED = {
-  name: excluded(foods.name),
-  servingLabel: excluded(foods.servingLabel),
-  servingGrams: excluded(foods.servingGrams),
-  kcal: excluded(foods.kcal),
-  proteinG: excluded(foods.proteinG),
-  carbsG: excluded(foods.carbsG),
-  fatG: excluded(foods.fatG),
-};
+/** How many foods one statement writes. */
+const FOODS_PER_STATEMENT = 500;
 
+/** A text value written into the seed's SQL: quoted, with any quote doubled. Only the bundled seed's own text goes in. */
+const sqlText = (s: string) => `'${s.replace(/'/g, "''")}'`;
+
+/** A number written into the seed's SQL; anything but a finite number stops the seed rather than writing it. */
+function sqlNumber(n: number | null): string {
+  if (n === null) return 'NULL';
+  if (!Number.isFinite(n)) throw new Error(`Not a number for the food seed: ${n}`);
+  return String(n);
+}
+
+/**
+ * Upserts the bundled foods (about 8,300 since R545). A re-seed refreshes a bundled food's name, serving and macros,
+ * but never `archived`, and never a food of your own. The values are written into each statement rather than bound one
+ * by one: building a bound statement for every row took about a second for the library, this takes a few dozen ms, and
+ * the text is only the seed's own, quoted.
+ */
 function upsertFoods(db: Db, seedFoods: readonly SeedFood[]): void {
-  for (let start = 0; start < seedFoods.length; start += ROWS_PER_STATEMENT) {
-    const rows = seedFoods
-      .slice(start, start + ROWS_PER_STATEMENT)
-      .map((f) => ({ ...f, source: 'bundled' as const, barcode: null, archived: false }));
-    db.insert(foods)
-      .values(rows)
-      .onConflictDoUpdate({ target: foods.id, set: FOOD_REFRESHED, setWhere: eq(foods.source, 'bundled') })
-      .run();
+  for (let start = 0; start < seedFoods.length; start += FOODS_PER_STATEMENT) {
+    const values = seedFoods
+      .slice(start, start + FOODS_PER_STATEMENT)
+      .map(
+        (f) =>
+          `(${sqlText(f.id)}, ${sqlText(f.name)}, ${sqlText(f.servingLabel)}, ${sqlNumber(f.servingGrams)}, ${sqlNumber(f.kcal)}, ` +
+          `${sqlNumber(f.proteinG)}, ${sqlNumber(f.carbsG)}, ${sqlNumber(f.fatG)}, 'bundled', NULL, 0)`,
+      )
+      .join(', ');
+    db.run(
+      sql.raw(
+        'insert into foods (id, name, serving_label, serving_grams, kcal, protein_g, carbs_g, fat_g, source, barcode, archived) ' +
+          `values ${values} on conflict(id) do update set name = excluded.name, serving_label = excluded.serving_label, ` +
+          'serving_grams = excluded.serving_grams, kcal = excluded.kcal, protein_g = excluded.protein_g, ' +
+          "carbs_g = excluded.carbs_g, fat_g = excluded.fat_g where foods.source = 'bundled'",
+      ),
+    );
   }
 }
 

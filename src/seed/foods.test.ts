@@ -1,7 +1,10 @@
-import { loadSeedFoods } from './foods';
+import { isPickedFood, loadSeedFoods } from './foods';
 import type { SeedFood } from './foods';
 
-const FOODS = loadSeedFoods();
+/** Everything bundled: the hand-picked foods and the library (R545). */
+const ALL = loadSeedFoods();
+/** The 305 hand-picked foods (R139), which these rules are about; the library has its own checks in seed.test.ts. */
+const FOODS = ALL.filter((f) => isPickedFood(f.id));
 
 /** Energy from the macros with the general 4/4/9 factors. */
 const atwater = (f: SeedFood) => 4 * f.proteinG + 4 * f.carbsG + 9 * f.fatG;
@@ -146,6 +149,26 @@ describe('bundled foods (USDA FoodData Central SR Legacy, R139)', () => {
   });
 });
 
+describe('the library beside them (R545)', () => {
+  const library = ALL.filter((f) => !isPickedFood(f.id));
+
+  it('writes its servings as the hand-picked foods do: ½ not 0.5, and no NLEA notes', () => {
+    // An amount with no digit before its point (".5 cup"), a count as a decimal ("0.5 cup", weights keep "0.8 oz"), or a
+    // slashed count at the start ("1/2 cup"); sizes such as 1/8" thick and "11.2 fl oz" stay.
+    const odd = /NLEA|(^|[\s(,])\.\d|(^|[\s(])0\.(5|25|75|33)\s+(?!(oz|g|ml|fl|lb)\b)|^\d\/\d\s/;
+    expect(library.filter((f) => odd.test(f.servingLabel)).map((f) => f.servingLabel)).toEqual([]);
+    const labels = new Set(library.map((f) => f.servingLabel));
+    expect(labels).toContain('½ cup');
+    expect(labels).toContain('3 oz');
+  });
+
+  it('names brands as people write them', () => {
+    const names = library.map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(["McDonald's, Big Mac", "Kellogg's, Eggo Protein, Waffles, Homestyle", "T.G.I. Friday's, french fries"]));
+    expect(names.filter((n) => /McDONALD|KELLOGG'S|CAMPBELL'S/.test(n))).toEqual([]);
+  });
+});
+
 describe('loadSeedFoods', () => {
   it('reads foods.json only when it is called, never when the module loads', () => {
     const loads = jest.fn();
@@ -156,7 +179,7 @@ describe('loadSeedFoods', () => {
       });
       const isolated = require('./foods') as typeof import('./foods');
       expect(loads).not.toHaveBeenCalled();
-      expect(isolated.loadSeedFoods()).toHaveLength(FOODS.length);
+      expect(isolated.loadSeedFoods()).toHaveLength(ALL.length);
       expect(loads).toHaveBeenCalledTimes(1);
     });
     jest.dontMock('./foods.json');
