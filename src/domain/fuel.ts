@@ -55,6 +55,18 @@ export function parseServings(text: string): number | null {
   return servings > 0 && servings <= MAX_SERVINGS ? servings : null;
 }
 
+/**
+ * Servings from a typed weight in grams (R548): `grams` over the serving's weight, rounded to 2 decimals as typed
+ * servings are, then within the same bounds. Null when it isn't a weight, or the food has no serving weight.
+ */
+export function servingsFromGrams(text: string, servingGrams: number | null): number | null {
+  if (servingGrams === null || !(servingGrams > 0)) return null;
+  const grams = parseDecimal(text);
+  if (grams === null || grams <= 0) return null;
+  const servings = round2(grams / servingGrams);
+  return servings > 0 && servings <= MAX_SERVINGS ? servings : null;
+}
+
 function scale(t: EntryTotals, factor: number): EntryTotals {
   return { kcal: t.kcal * factor, proteinG: t.proteinG * factor, carbsG: t.carbsG * factor, fatG: t.fatG * factor };
 }

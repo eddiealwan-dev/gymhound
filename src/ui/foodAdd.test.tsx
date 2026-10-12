@@ -680,3 +680,17 @@ describe('Search online and Scan barcode (R546, R547)', () => {
     expect(pressables(tree, 'Search online for cola').length).toBeGreaterThan(0);
   });
 });
+
+describe('Servings by weight (R548)', () => {
+  it('a food with a serving weight can be logged in grams: 100 g of a 50 g egg is 2 eggs', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg, large');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
+    press(tree, 'Grams');
+    expect(field(tree, 'Grams').props.value).toBe('50');
+    type(tree, 'Grams', '100');
+    expect(allText(tree)).toContain('144 kcal · 13 g protein');
+    press(tree, 'Add');
+    expect(listEntries(mockDb, TODAY)[0]).toMatchObject({ foodId: EGG, servings: 2 });
+  });
+});

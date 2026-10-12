@@ -13,6 +13,7 @@ import {
   parseServings,
   rescaleEntry,
   SERVING_CHIPS,
+  servingsFromGrams,
   servingsText,
   targetsFor,
   validateCustomFood,
@@ -356,5 +357,21 @@ describe('leftSpoken', () => {
     expect(leftSpoken(180, 192, 'grams')).toBe('12 grams over');
     expect(leftSpoken(2600, 2601, 'calories')).toBe('1 calorie over');
     expect(leftSpoken(180, 180.4, 'grams')).toBe('0 grams');
+  });
+});
+
+describe('servingsFromGrams (R548)', () => {
+  it('turns a weight into servings of the food, rounded as typed servings are', () => {
+    expect(servingsFromGrams('170', 85)).toBe(2);
+    expect(servingsFromGrams('100', 28.4)).toBe(3.52);
+    expect(servingsFromGrams('42,5', 85)).toBe(0.5);
+  });
+
+  it('refuses no weight, a food with no serving weight, and more than the servings bound', () => {
+    expect(servingsFromGrams('', 85)).toBeNull();
+    expect(servingsFromGrams('0', 85)).toBeNull();
+    expect(servingsFromGrams('abc', 85)).toBeNull();
+    expect(servingsFromGrams('100', null)).toBeNull();
+    expect(servingsFromGrams('100000', 85)).toBeNull();
   });
 });

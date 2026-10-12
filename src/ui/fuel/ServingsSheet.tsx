@@ -2,11 +2,12 @@ import { useRef, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { logFood } from '../../db/repositories/foodLogRepo';
-import { entryTotals, type FoodPerServing, kcalProteinText, parseServings, SERVING_CHIPS, servingsText } from '../../domain/fuel';
+import { entryTotals, type FoodPerServing, kcalProteinText, parseServings, SERVING_CHIPS, servingsFromGrams, servingsText } from '../../domain/fuel';
 import { announce } from '../../platform/announce';
 import { deviceLocale } from '../../platform/locale';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
+import { Segmented } from '../Segmented';
 import { Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
@@ -20,14 +21,19 @@ type ContentProps = {
   onEdit: (id: string) => void;
 };
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentProps) {
   const db = useDb();
   const locale = deviceLocale();
   const [draft, setDraft] = useState(() => servingsText(1, locale));
   const [invalid, setInvalid] = useState(false);
+  /** By servings, or by weight in grams when the serving's weight is known (R548). */
+  const [by, setBy] = useState<'servings' | 'grams'>('servings');
+  const weighable = food.servingGrams !== null && food.servingGrams > 0;
   /** Logged already: a second tap before the sheet closes logs nothing more. */
   const addedRef = useRef(false);
-  const servings = parseServings(draft);
+  const servings = by === 'grams' ? servingsFromGrams(draft, food.servingGrams) : parseServings(draft);
   const grams = food.servingGrams === null ? '' : ` (${food.servingGrams.toLocaleString(locale, { maximumFractionDigits: 1 })} g)`;
 
   const change = (text: string) => {
@@ -53,24 +59,50 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
       <SheetTitle marginBottom={4}>{food.name}</SheetTitle>
       <Body muted style={{ marginBottom: 16 }}>{`${food.servingLabel}${grams}`}</Body>
       <View style={{ gap: 12, marginBottom: 24 }}>
-        <FuelField label="Servings" value={draft} onChangeText={change} onSubmit={add} numeric error={invalid ? 'Check this number' : undefined} />
+        {weighable ? (
+          <Segmented
+            label="Log by"
+            options={[
+              { value: 'servings', label: 'Servings' },
+              { value: 'grams', label: 'Grams' },
+            ]}
+            value={by}
+            onChange={(next) => {
+              if (next === by) return;
+              // The same amount, said the other way: 1.5 servings of 85 g reads 127.5 g.
+              const now = servings ?? 1;
+              setBy(next);
+              change(next === 'grams' ? servingsText(round1(now * (food.servingGrams ?? 0)), locale) : servingsText(now, locale));
+            }}
+          />
+        ) : null}
+        <FuelField
+          label={by === 'grams' ? 'Grams' : 'Servings'}
+          value={draft}
+          onChangeText={change}
+          onSubmit={add}
+          numeric
+          error={invalid ? 'Check this number' : undefined}
+        />
         {/* 4pt inset keeps each pill's 4pt hit slop inside the row. */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, margin: -4 }}>
-          {SERVING_CHIPS.map((chip) => {
-            const chosen = servings === chip.value;
-            return (
-              <Button
-                key={chip.value}
-                label={chip.label}
-                accessibilityLabel={chip.spoken}
-                size="compact"
-                variant={chosen ? 'primary' : 'secondary'}
-                selected={chosen}
-                onPress={() => change(servingsText(chip.value, locale))}
-              />
-            );
-          })}
-        </View>
+        {by === 'grams' ? null : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, margin: -4 }}>
+            {SERVING_CHIPS.map((chip) => {
+              const chosen = servings === chip.value;
+              return (
+                <Button
+                  key={chip.value}
+                  label={chip.label}
+                  accessibilityLabel={chip.spoken}
+                  size="compact"
+                  variant={chosen ? 'primary' : 'secondary'}
+                  selected={chosen}
+                  onPress={() => change(servingsText(chip.value, locale))}
+                />
+              );
+            })}
+          </View>
+        )}
         {servings !== null ? <Body>{kcalProteinText(entryTotals(food, servings), locale)}</Body> : null}
       </View>
       <View style={{ gap: 8 }}>
@@ -85,6 +117,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
 /**
  * How many servings of `food` to log for `localDate` (R141): its serving (and weight when known), a servings field that
  * starts at 1 and takes a comma or a dot, the ½ 1 1½ 2 chips, and the calories and protein those servings come to.
+ * When the serving's weight is known, **Grams** takes a weight instead and logs it as servings (R548).
  * **Add** logs and hands the name to `onAdded`; bad servings show "Check this number" and log nothing. Your own food
  * also offers **Edit food**. Closed while `food` is null; the last food stays drawn while the sheet fades out.
  */
