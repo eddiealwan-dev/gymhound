@@ -7,6 +7,7 @@ import { useDb } from '../../db/DbProvider';
 import { setSetting } from '../../db/repositories/settingsRepo';
 import type { MusicAppId } from '../../domain/types';
 import type { MusicApp } from '../../platform/music';
+import { announce } from '../../platform/announce';
 import { openMusicApp } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
@@ -62,7 +63,7 @@ export function MusicBar({ app }: Props) {
     const isMissing = (await openMusicApp(app)) === 'missing';
     setMissingApp(isMissing ? app.id : null);
     // TalkBack reads the line's live region; VoiceOver doesn't, so iOS is told.
-    if (isMissing && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(missingLine);
+    if (isMissing && Platform.OS === 'ios') announce(missingLine);
   };
 
   const close = () => {

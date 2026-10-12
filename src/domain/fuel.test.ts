@@ -1,12 +1,18 @@
 import {
+  caloriesSpoken,
   dayTotals,
   entryTotals,
   fuelNumber,
+  gramsSpoken,
+  kcalProteinSpoken,
+  kcalProteinText,
+  leftSpoken,
   leftText,
   MAX_SERVINGS,
   parseQuickAdd,
   parseServings,
   rescaleEntry,
+  SERVING_CHIPS,
   servingsText,
   targetsFor,
   validateCustomFood,
@@ -310,5 +316,45 @@ describe('validateCustomFood', () => {
     });
     expect(validateCustomFood(food({ servingGrams: '1001' }), []).ok).toBe(false);
     expect(validateCustomFood(food({ servingGrams: '1000', kcal: '0', protein: '1000' }), []).ok).toBe(true);
+  });
+});
+
+describe('spoken amounts', () => {
+  it('says 1 gram and 1 calorie in the singular, as shown (rounded)', () => {
+    expect(gramsSpoken(1)).toBe('1 gram');
+    expect(gramsSpoken(1.4)).toBe('1 gram');
+    expect(gramsSpoken(0)).toBe('0 grams');
+    expect(gramsSpoken(1.6)).toBe('2 grams');
+    expect(gramsSpoken(1840, 'en-US')).toBe('1,840 grams');
+    expect(caloriesSpoken(1)).toBe('1 calorie');
+    expect(caloriesSpoken(72)).toBe('72 calories');
+  });
+
+  it('writes and says calories and protein', () => {
+    expect(kcalProteinText({ kcal: 1840.4, proteinG: 6 }, 'en-US')).toBe('1,840 kcal · 6 g protein');
+    expect(kcalProteinSpoken({ kcal: 72, proteinG: 6 }, 'en-US')).toBe('72 calories, 6 grams protein');
+    expect(kcalProteinSpoken({ kcal: 1, proteinG: 1 }, 'en-US')).toBe('1 calorie, 1 gram protein');
+  });
+});
+
+describe('SERVING_CHIPS (R141)', () => {
+  it('are ½ 1 1½ 2, each said in words', () => {
+    expect(SERVING_CHIPS.map((c) => [c.label, c.value, c.spoken])).toEqual([
+      ['½', 0.5, 'Half a serving'],
+      ['1', 1, '1 serving'],
+      ['1½', 1.5, '1 and a half servings'],
+      ['2', 2, '2 servings'],
+    ]);
+  });
+});
+
+describe('leftSpoken', () => {
+  it('says what is left in words, rounded as leftText rounds it', () => {
+    expect(leftSpoken(2600, 1360, 'calories', 'en-US')).toBe('1,240 calories');
+    expect(leftSpoken(180, 179, 'grams')).toBe('1 gram');
+    expect(leftSpoken(180, 181, 'grams')).toBe('1 gram over');
+    expect(leftSpoken(180, 192, 'grams')).toBe('12 grams over');
+    expect(leftSpoken(2600, 2601, 'calories')).toBe('1 calorie over');
+    expect(leftSpoken(180, 180.4, 'grams')).toBe('0 grams');
   });
 });

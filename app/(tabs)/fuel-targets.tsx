@@ -43,7 +43,8 @@ export default function FuelTargets() {
     return true;
   };
 
-  const back = () => router.back();
+  // With nothing to go back to (opened by address, or reloaded), it lands on Fuel.
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/fuel'));
   const leave = () => {
     if (!askBeforeLeaving.current(back)) back();
   };

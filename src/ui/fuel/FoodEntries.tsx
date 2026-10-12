@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { Keyboard, Pressable, View } from 'react-native';
 import type { FoodEntry } from '../../db/repositories/foodLogRepo';
-import { type EntryTotals, fuelNumber, servingsText } from '../../domain/fuel';
+import { caloriesSpoken, type EntryTotals, fuelNumber, gramsSpoken, kcalProteinSpoken, kcalProteinText, servingsText } from '../../domain/fuel';
 import { flushAll } from '../../state/draftFlush';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -17,7 +17,7 @@ function servingsLine(entry: FoodEntry, locale: string): string | null {
 
 /** The muted line under an entry's name: "1.5 × 1 scoop · 180 kcal · 36 g protein" ("600 kcal · 40 g protein" for a quick add). */
 export function entryLine(entry: FoodEntry, locale: string): string {
-  const macros = `${fuelNumber(entry.kcal, locale)} kcal · ${fuelNumber(entry.proteinG, locale)} g protein`;
+  const macros = kcalProteinText(entry, locale);
   const servings = servingsLine(entry, locale);
   return servings === null ? macros : `${servings} · ${macros}`;
 }
@@ -28,10 +28,10 @@ function spokenEntry(entry: FoodEntry, locale: string): string {
   return [
     entry.name,
     ...(servings === null ? [] : [servings]),
-    `${fuelNumber(entry.kcal, locale)} calories`,
-    `${fuelNumber(entry.proteinG, locale)} grams protein`,
-    `${fuelNumber(entry.carbsG, locale)} grams carbs`,
-    `${fuelNumber(entry.fatG, locale)} grams fat`,
+    caloriesSpoken(entry.kcal, locale),
+    `${gramsSpoken(entry.proteinG, locale)} protein`,
+    `${gramsSpoken(entry.carbsG, locale)} carbs`,
+    `${gramsSpoken(entry.fatG, locale)} fat`,
   ].join(', ');
 }
 
@@ -85,9 +85,9 @@ export function FoodEntries({ entries, totals, locale }: { entries: readonly Foo
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 12 }}>
             <Body
               muted
-              accessibilityLabel={`Total, ${fuelNumber(totals.kcal, locale)} calories, ${fuelNumber(totals.proteinG, locale)} grams protein, ${fuelNumber(totals.carbsG, locale)} grams carbs, ${fuelNumber(totals.fatG, locale)} grams fat`}
+              accessibilityLabel={`Total, ${kcalProteinSpoken(totals, locale)}, ${gramsSpoken(totals.carbsG, locale)} carbs, ${gramsSpoken(totals.fatG, locale)} fat`}
             >
-              {`Total · ${fuelNumber(totals.kcal, locale)} kcal · ${fuelNumber(totals.proteinG, locale)} g protein · ${fuelNumber(totals.carbsG, locale)} g carbs · ${fuelNumber(totals.fatG, locale)} g fat`}
+              {`Total · ${kcalProteinText(totals, locale)} · ${fuelNumber(totals.carbsG, locale)} g carbs · ${fuelNumber(totals.fatG, locale)} g fat`}
             </Body>
           </View>
         </View>

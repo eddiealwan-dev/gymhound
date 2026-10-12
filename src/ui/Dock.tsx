@@ -10,14 +10,15 @@ import { useTheme } from './ThemeProvider';
 type Item = { route: string; label: string; icon: keyof typeof Ionicons.glyphMap; within?: string[] };
 
 /**
- * The four fixed tabs. A body detail is opened from Stats, so Stats stays highlighted there. Any other route (Settings,
- * Routines and a saved workout) is reached from elsewhere and highlights nothing.
+ * The four fixed tabs. A body detail is opened from Stats, so Stats stays highlighted there; Fuel's Targets keeps Fuel
+ * highlighted (Settings opens it too, but it is Fuel's). Any other route (Settings, Routines and a saved workout) is
+ * reached from elsewhere and highlights nothing.
  */
 const ITEMS: Item[] = [
   { route: 'index', label: 'Train', icon: 'barbell-outline' },
   { route: 'history/index', label: 'History', icon: 'time-outline' },
   { route: 'stats', label: 'Stats', icon: 'stats-chart-outline', within: ['body/[kind]'] },
-  { route: 'fuel', label: 'Fuel', icon: 'nutrition-outline' },
+  { route: 'fuel', label: 'Fuel', icon: 'nutrition-outline', within: ['fuel-targets'] },
 ];
 
 /**

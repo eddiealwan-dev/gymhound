@@ -7,7 +7,7 @@ import type { FuelTargets, Macros } from '../../domain/types';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
-import { BodyField } from '../body/BodyLog';
+import { BodyField } from '../fields';
 import { Button } from '../Button';
 import { Body, Label } from '../Text';
 

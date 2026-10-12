@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { archiveCustomFood, createCustomFood } from '../db/repositories/foodsRepo';
+import * as foodsRepo from '../db/repositories/foodsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import { createLocalFoodLookup } from './foodLookup';
 
@@ -32,5 +33,33 @@ describe('createLocalFoodLookup (Task 5)', () => {
 
   it('finds nothing for an empty query', () => {
     expect(createLocalFoodLookup(seededDb()).searchLocal('  ')).toEqual([]);
+  });
+});
+
+describe('createLocalFoodLookup with a data version (the add screen)', () => {
+  it('reads the food list once per data version, not at every search', () => {
+    const db = seededDb();
+    let version = 0;
+    const lookup = createLocalFoodLookup(db, () => version);
+    const list = jest.spyOn(foodsRepo, 'listFoods');
+    expect(lookup.searchLocal('e').length).toBeGreaterThan(0);
+    lookup.searchLocal('eg');
+    lookup.searchLocal('egg');
+    expect(list).toHaveBeenCalledTimes(1);
+
+    const id = createCustomFood(db, { ...food, name: 'Zzqx bar' });
+    // Not yet: nothing has said the data changed.
+    expect(lookup.searchLocal('zzqx')).toEqual([]);
+    version += 1;
+    expect(lookup.searchLocal('zzqx').map((f) => f.id)).toEqual([id]);
+    expect(list).toHaveBeenCalledTimes(2);
+    list.mockRestore();
+  });
+
+  it('searches as searchFoods does: names starting with the query first', () => {
+    const lookup = createLocalFoodLookup(seededDb(), () => 0);
+    const found = lookup.searchLocal('egg');
+    expect(found[0].name.toLowerCase().startsWith('egg')).toBe(true);
+    expect(lookup.searchLocal('  ')).toEqual([]);
   });
 });

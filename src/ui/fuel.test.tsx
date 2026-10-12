@@ -75,7 +75,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 const mockFlushAll = jest.fn();
 jest.mock('../state/draftFlush', () => ({ flushAll: () => mockFlushAll() }));
 jest.mock('./ThemeProvider', () => {
@@ -257,7 +257,9 @@ describe('the summary (§8.10, R147)', () => {
     expect(text).toContain('129 g');
     expect(text).toContain('Calories left');
     expect(text).toContain('Protein left');
-    expect(text).toContain('Rest day target: 2,400 kcal · 180 g protein');
+    // The day header says which targets apply; the line under the numbers doesn't say it again.
+    expect(text).toContain('Target: 2,400 kcal · 180 g protein');
+    expect(text.filter((t) => t.includes('Rest day'))).toEqual(['Rest day']);
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 1,699 calories').length).toBeGreaterThan(0);
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 129 grams').length).toBeGreaterThan(0);
   });
@@ -276,7 +278,8 @@ describe('the summary (§8.10, R147)', () => {
     expect(text).toContain('Training day');
     expect(text).toContain('2,800');
     expect(text).toContain('200 g');
-    expect(text).toContain('Training day target: 2,800 kcal · 200 g protein');
+    expect(text).toContain('Target: 2,800 kcal · 200 g protein');
+    expect(text.filter((t) => t.includes('Training day'))).toEqual(['Training day']);
   });
 
   it('says "120 over" past the calorie target, and "12 g over" past protein', () => {
@@ -287,6 +290,14 @@ describe('the summary (§8.10, R147)', () => {
     expect(text).toContain('12 g over');
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 12 grams over').length).toBeGreaterThan(0);
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 120 calories over').length).toBeGreaterThan(0);
+  });
+
+  it('says 1 gram and 1 calorie in the singular', () => {
+    logQuickAdd(mockDb, 'Nearly', { kcal: 2399, proteinG: 179, carbsG: 1, fatG: 1 }, TODAY, NOW);
+    const tree = mount();
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Protein left, 1 gram').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Calories left, 1 calorie').length).toBeGreaterThan(0);
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Nearly, 2,399 calories, 179 grams protein, 1 gram carbs, 1 gram fat').length).toBeGreaterThan(0);
   });
 });
 
@@ -410,8 +421,20 @@ describe('the entries', () => {
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/food/add', params: { date: TODAY } });
     expect(mockFlushAll).toHaveBeenCalled();
     press(tree, 'Previous day');
+    nowSpy.mockReturnValue(NOW + 1000);
     press(tree, 'Quick add');
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/food/add', params: { date: YESTERDAY, mode: 'quick' } });
+  });
+
+  it('opens one add screen however fast a second tap lands, on either button', () => {
+    const tree = mount();
+    press(tree, 'Add food');
+    press(tree, 'Add food');
+    press(tree, 'Quick add');
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    nowSpy.mockReturnValue(NOW + 1000);
+    press(tree, 'Quick add');
+    expect(mockPush).toHaveBeenCalledTimes(2);
   });
 
   it('Targets › opens the targets', () => {
@@ -521,7 +544,7 @@ describe('editing an entry (R142)', () => {
     logFood(mockDb, id, 1, TODAY, NOW);
     const tree = mount();
     openEntry(tree, 'Protein shake');
-    press(tree, '1.5 servings');
+    press(tree, '1 and a half servings');
     expect(field(tree, 'Servings')!.props.value).toBe('1.5');
     press(tree, 'Half a serving');
     expect(field(tree, 'Servings')!.props.value).toBe('0.5');

@@ -3,22 +3,26 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../src/db/DbProvider';
-import { getFood, listFoods, recentFoods } from '../../src/db/repositories/foodsRepo';
-import { daysBetween, fromLocalDate, toLocalDate } from '../../src/domain/dates';
-import { indexFoods } from '../../src/domain/foodSearch';
-import type { FoodPerServing } from '../../src/domain/fuel';
+import { getFood, recentFoods } from '../../src/db/repositories/foodsRepo';
+import { calendarDayInSentence, toLocalDate } from '../../src/domain/dates';
+import { type FoodPerServing, kcalProteinSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
+import { useIsPro } from '../../src/platform/entitlements';
+import { createLocalFoodLookup } from '../../src/platform/foodLookup';
+import { deviceLocale } from '../../src/platform/locale';
 import { useCreatedFood } from '../../src/state/createdFood';
-import { useDbQuery } from '../../src/state/dataVersion';
+import { useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
-import { deviceLocale } from '../../src/ui/body/BodyLog';
 import { Button } from '../../src/ui/Button';
 import { EMPTY_QUICK_ADD, QuickAddForm, quickAddStarted, type QuickAddDraft } from '../../src/ui/fuel/QuickAddForm';
-import { kcalProteinText, ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
+import { ServingsSheet } from '../../src/ui/fuel/ServingsSheet';
+import { ProPitch } from '../../src/ui/pro/ProPitch';
+import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { useOnce } from '../../src/ui/useOnce';
 
 type Mode = 'search' | 'quick';
 
@@ -33,15 +37,6 @@ const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function close() {
   if (router.canGoBack()) router.back();
   else router.replace('/fuel');
-}
-
-/** "Today", "Yesterday", or the day as "Sat, Oct 3" (and its year when it isn't this year's). */
-function dayText(localDate: string, today: string, locale: string): string {
-  const ago = daysBetween(localDate, today);
-  if (ago === 0) return 'Today';
-  if (ago === 1) return 'Yesterday';
-  const year = localDate.slice(0, 4) === today.slice(0, 4) ? undefined : 'numeric';
-  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year }).format(fromLocalDate(localDate));
 }
 
 /** Search / Quick add: a well with the chosen segment filled with ink, as on Settings. */
@@ -86,7 +81,7 @@ const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${food.name}, ${food.servingLabel}, ${amounts.replace(' · ', ', ')}${yours ? ', Yours' : ''}`}
+      accessibilityLabel={`${food.name}, ${food.servingLabel}, ${kcalProteinSpoken(food, locale)}${yours ? ', Yours' : ''}`}
       onPress={() => onChoose(food)}
       style={({ pressed }) => ({
         minHeight: 60,
@@ -111,7 +106,7 @@ const FoodRow = memo(function FoodRow({ food, onChoose }: { food: FoodPerServing
  * "Added {name}." so a meal goes in one visit. **New food** opens your own food's editor with the search as its name;
  * saved, it comes back here and opens its servings. **Done** closes; a quick add typed and not added asks first.
  */
-export default function AddFood() {
+function AddFood() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -128,12 +123,13 @@ export default function AddFood() {
   const [askDiscard, setAskDiscard] = useState(false);
 
   const searching = query.trim() !== '';
-  // The food list is read once per data version (and on focus), with its names folded once; a keystroke only searches it
-  // (R140, the same rules as `createLocalFoodLookup`).
-  const allFoods = useDbQuery(listFoods);
-  const search = useMemo(() => indexFoods(allFoods), [allFoods]);
+  // Search goes through the food lookup (R140), which reads the food list and folds its names once per data version: a
+  // keystroke only searches what was read, and a food saved since shows once its write bumps the version.
+  const lookup = useMemo(() => createLocalFoodLookup(db, () => useDataVersion.getState().version), [db]);
+  const version = useDataVersion((state) => state.version);
   const recent = useDbQuery(recentFoods);
-  const foods = useMemo(() => (searching ? search(query) : recent), [searching, search, query, recent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a new data version means the lookup reads the list again
+  const foods = useMemo(() => (searching ? lookup.searchLocal(query) : recent), [searching, lookup, query, recent, version]);
 
   const changed = quickAddStarted(quickDraft);
   /** Read by the back button's listener, which is added once. */
@@ -199,11 +195,14 @@ export default function AddFood() {
     afterSheetCloses(() => router.push({ pathname: '/food/[id]', params: { id } }));
   };
 
-  const newFood = () => {
-    flushAll();
-    Keyboard.dismiss();
-    router.push({ pathname: '/food/[id]', params: { id: 'new', name: query.trim(), from: 'add' } });
-  };
+  // A double tap on New food opens one editor.
+  const once = useOnce();
+  const newFood = () =>
+    once(() => {
+      flushAll();
+      Keyboard.dismiss();
+      router.push({ pathname: '/food/[id]', params: { id: 'new', name: query.trim(), from: 'add' } });
+    });
 
   const header = (
     <View style={{ paddingHorizontal: 16, gap: 16, paddingBottom: 8 }}>
@@ -213,8 +212,16 @@ export default function AddFood() {
         </Display>
         <Button label="Done" variant="quiet" onPress={done} />
       </View>
-      <Body muted style={{ marginTop: -12 }}>{`Logging for ${dayText(localDate, today, locale)}`}</Body>
-      <ModeControl value={mode} onChange={(m) => { Keyboard.dismiss(); setMode(m); }} />
+      <Body muted style={{ marginTop: -12 }}>{`Logging for ${calendarDayInSentence(localDate, today, locale)}`}</Body>
+      <ModeControl
+        value={mode}
+        onChange={(m) => {
+          Keyboard.dismiss();
+          // "Added {name}." belongs to the side it was said on.
+          if (m !== mode) setAdded(null);
+          setMode(m);
+        }}
+      />
       {/* Not a live region: `announce()` says it, and a live region would say it again on Android. */}
       {added !== null ? <Body weight={600}>{added}</Body> : null}
       {mode === 'search' ? (
@@ -295,5 +302,25 @@ export default function AddFood() {
         onCancel={() => setAskDiscard(false)}
       />
     </View>
+  );
+}
+
+/**
+ * The add screen, or without Pro the pitch in its place (R151) with **Done** to close: Pro lapsing while it is open
+ * locks it at once, and an address can't open it around the lock.
+ */
+export default function AddFoodScreen() {
+  const pro = useIsPro();
+  if (pro) return <AddFood />;
+  return (
+    <Screen>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -12, marginBottom: 24 }}>
+        <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
+          Add food
+        </Display>
+        <Button label="Done" variant="quiet" onPress={close} />
+      </View>
+      <ProPitch context="tab" />
+    </Screen>
   );
 }

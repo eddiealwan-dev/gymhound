@@ -4,12 +4,11 @@ import { useDb } from '../../db/DbProvider';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import { listWater, logWater } from '../../db/repositories/waterRepo';
 import type { Db } from '../../db/types';
-import { toLocalDate } from '../../domain/dates';
 import { formatWater, formatWaterSpoken, quickAmounts, toMl, waterUnitFor, waterUnitLabel } from '../../domain/water';
 import { announce } from '../../platform/announce';
 import { bumpData, useDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
-import { deviceLocale } from '../body/BodyLog';
+import { deviceLocale } from '../../platform/locale';
 import { Button } from '../Button';
 import { Body, Label, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -18,9 +17,10 @@ import { waterAddedMessage, waterDayPhrase, WaterSheet, type WaterSheetMode } fr
 /**
  * The day's water on the Fuel tab (R150), free whether Pro or not: the total, " of {goal}" with a bar when a goal is
  * set (or a quiet Set a daily goal), the quick adds and Other, and Entries when the day has any. Everything is logged
- * for `localDate`, which may be an earlier day.
+ * for `localDate`, which may be an earlier day. `today` is Fuel's own (`useToday`), so the card names the day as Fuel's
+ * header does.
  */
-export function WaterCard({ localDate }: { localDate: string }): ReactElement | null {
+export function WaterCard({ localDate, today }: { localDate: string; today: string }): ReactElement | null {
   const db = useDb();
   const { colors } = useTheme();
   const read = useCallback(
@@ -33,7 +33,6 @@ export function WaterCard({ localDate }: { localDate: string }): ReactElement | 
   const { entries, goalMl, unit } = useDbQuery(read);
   const [sheet, setSheet] = useState<WaterSheetMode | null>(null);
   const locale = deviceLocale();
-  const today = toLocalDate(Date.now());
   // Summed unrounded and rounded once for display (R156).
   const totalMl = entries.reduce((sum, e) => sum + e.amountMl, 0);
   const total = formatWater(totalMl, unit, locale);

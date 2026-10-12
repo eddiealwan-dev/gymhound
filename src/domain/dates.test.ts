@@ -1,8 +1,10 @@
 import {
-  dayTitle,
+  calendarDayInSentence,
+  calendarDayTitle,
   daysBetween,
   formatDateTime,
   formatElapsed,
+  formatEntryDate,
   formatRest,
   formatTrainDate,
   fromLocalDate,
@@ -105,13 +107,29 @@ describe('shiftDay', () => {
   });
 });
 
-describe('dayTitle', () => {
+describe('calendarDayTitle', () => {
   it('says Today and Yesterday, else the weekday and date, with the year only for another year', () => {
-    expect(dayTitle('2026-10-11', '2026-10-11', 'en-US')).toBe('Today');
-    expect(dayTitle('2026-10-10', '2026-10-11', 'en-US')).toBe('Yesterday');
-    expect(dayTitle('2026-10-09', '2026-10-11', 'en-US')).toBe('Fri, Oct 9');
-    expect(dayTitle('2025-12-31', '2026-01-01', 'en-US')).toBe('Yesterday');
-    expect(dayTitle('2025-12-15', '2026-10-11', 'en-US')).toBe('Mon, Dec 15, 2025');
-    expect(dayTitle('2026-10-09', '2026-10-11', 'en-GB')).toBe('Fri 9 Oct');
+    expect(calendarDayTitle('2026-10-11', '2026-10-11', 'en-US')).toBe('Today');
+    expect(calendarDayTitle('2026-10-10', '2026-10-11', 'en-US')).toBe('Yesterday');
+    expect(calendarDayTitle('2026-10-09', '2026-10-11', 'en-US')).toBe('Fri, Oct 9');
+    expect(calendarDayTitle('2025-12-31', '2026-01-01', 'en-US')).toBe('Yesterday');
+    expect(calendarDayTitle('2025-12-15', '2026-10-11', 'en-US')).toBe('Mon, Dec 15, 2025');
+    expect(calendarDayTitle('2026-10-09', '2026-10-11', 'en-GB')).toBe('Fri 9 Oct');
+  });
+});
+
+describe('formatEntryDate', () => {
+  it('lays out the day for the locale, with the year only for another year', () => {
+    expect(formatEntryDate('2026-08-03', '2026-10-11', 'en-GB')).toBe('3 Aug');
+    expect(formatEntryDate('2026-08-03', '2026-10-11', 'en-US')).toBe('Aug 3');
+    expect(formatEntryDate('2025-08-03', '2026-10-11', 'en-GB')).toBe('3 Aug 2025');
+  });
+});
+
+describe('calendarDayInSentence', () => {
+  it('lowers Today and Yesterday mid-sentence and leaves a date as it is', () => {
+    expect(calendarDayInSentence('2026-10-11', '2026-10-11', 'en-US')).toBe('today');
+    expect(calendarDayInSentence('2026-10-10', '2026-10-11', 'en-US')).toBe('yesterday');
+    expect(calendarDayInSentence('2026-10-03', '2026-10-11', 'en-US')).toBe('Sat, Oct 3');
   });
 });

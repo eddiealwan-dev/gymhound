@@ -22,7 +22,7 @@ jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('expo-router', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
-    router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true },
+    router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) },
     // Focus is the mount, as on the phone when the tab opens; the cleanup runs when the screen goes.
     useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
   };
@@ -47,7 +47,7 @@ jest.mock('./fuel/TargetsForm', () => {
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -62,6 +62,7 @@ beforeEach(() => {
   mockPro = true;
   mockAnnounce.mockClear();
   jest.mocked(router.back).mockClear();
+  jest.mocked(router.replace).mockClear();
 });
 
 afterEach(() => {
@@ -349,5 +350,27 @@ describe('/fuel-targets', () => {
     const leave = jest.fn();
     act(() => leaveGuarded(leave));
     expect(leave).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('/fuel-targets with nothing to go back to (opened by address, or reloaded)', () => {
+  it('Back lands on Fuel', () => {
+    jest.mocked(router.canGoBack).mockReturnValue(false);
+    const tree = mount(<FuelTargetsRoute />);
+    press(tree, 'Back');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.replace).toHaveBeenCalledWith('/fuel');
+    jest.mocked(router.canGoBack).mockReturnValue(true);
+  });
+
+  it('Save lands on Fuel', () => {
+    jest.mocked(router.canGoBack).mockReturnValue(false);
+    const tree = mount(<FuelTargetsRoute />);
+    fill(tree, 'Training day', ['2800', '180', '', '']);
+    press(tree, 'Same as training day');
+    press(tree, 'Save');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.replace).toHaveBeenCalledWith('/fuel');
+    jest.mocked(router.canGoBack).mockReturnValue(true);
   });
 });
