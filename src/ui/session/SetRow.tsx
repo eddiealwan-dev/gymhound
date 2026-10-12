@@ -299,6 +299,8 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         accessibilityLabel={`${header}, set ${row.label}`}
         // Not on a ticked set, whose tick would untick it (B2).
         accessibilityHint={look === 'suggested' && !set.done ? SUGGESTED_HINT : undefined}
+        // Capped as the body fields are, so "182.5" or "1:00" stays whole in its column at the largest text size (R562).
+        maxFontSizeMultiplier={1.5}
         style={{
           minHeight: 44,
           paddingHorizontal: 2,
