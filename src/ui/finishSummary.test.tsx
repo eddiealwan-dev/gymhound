@@ -16,7 +16,7 @@ import { PB_READY_TIMEOUT_MS } from './finish/PbCardHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let mockRead: { summary: FinishSummary | null; unit: 'lb' | 'kg' };
+let mockRead: { summary: FinishSummary | null; unit: 'lb' | 'kg'; firstWorkout?: boolean };
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() },
@@ -169,6 +169,23 @@ describe('personal bests on the finish summary (R104, R105)', () => {
 
     expect(text).not.toContain('Personal bests');
     expect(text).not.toContain('PR');
+  });
+
+  it('on the first finished workout, says when personal bests start, under the heading and with no red (R405)', async () => {
+    mockRead = { unit: 'lb', summary: pushA(next), firstWorkout: true };
+    const tree = await mountSettled();
+    const text = shownText(tree);
+
+    const at = text.indexOf('Personal bests');
+    expect(text.slice(at, at + 2)).toEqual(['Personal bests', "Personal bests start with your next workout. Today's sets are the ones to beat."]);
+    expect(text).not.toContain('PR');
+    const colours = tree.root.findAll((n) => typeof n.type === 'string' && typeof n.props.children === 'string').map((n) => flatStyle(n.props.style).color);
+    expect(colours).not.toContain('#E10600');
+  });
+
+  it('a later workout with no personal bests still hides the section', async () => {
+    mockRead = { unit: 'lb', summary: pushA(next), firstWorkout: false };
+    expect(shownText(await mountSettled())).not.toContain('Personal bests');
   });
 
   it('reads each row to VoiceOver as one sentence, and the heading as a heading', async () => {

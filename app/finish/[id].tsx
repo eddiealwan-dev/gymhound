@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { finishedWorkoutCount } from '../../src/db/repositories/onboardingRepo';
 import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { getFinishSummary } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
@@ -27,9 +28,9 @@ const goToTrain = () => router.dismissTo('/');
 function readSummary(db: Db, id: string) {
   const { unit } = getSettings(db);
   try {
-    return { summary: getFinishSummary(db, id, unit), unit };
+    return { summary: getFinishSummary(db, id, unit), unit, firstWorkout: finishedWorkoutCount(db) === 1 };
   } catch {
-    return { summary: null, unit };
+    return { summary: null, unit, firstWorkout: false };
   }
 }
 
@@ -57,7 +58,7 @@ export default function FinishSummary() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const read = useCallback((db: Db) => readSummary(db, id), [id]);
-  const { summary, unit } = useDbQuery(read);
+  const { summary, unit, firstWorkout } = useDbQuery(read);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -93,7 +94,7 @@ export default function FinishSummary() {
                     ))}
                   </View>
                 )}
-                <FinishPrs summary={summary} />
+                <FinishPrs summary={summary} firstWorkout={firstWorkout} />
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />

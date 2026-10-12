@@ -16,16 +16,31 @@ const SHARE_FAILED = "Couldn't make the image. Try again.";
 /**
  * The finish summary's personal bests (R105), after the next-time lines: the heading "Personal bests", then one row
  * per highlight, a red "PR" mark (a PR mark may be red) and the line, which wraps with the phone's text size. The mark
- * and line read to VoiceOver as "Personal best. {line}". Hidden when there are none, as on a first workout (R103). PRs
+ * and line read to VoiceOver as "Personal best. {line}". Hidden when there are none, except on the lifter's first
+ * finished workout, which never has one (R103) and says when they start instead (R405). PRs
  * are computed at finish only (R104).
  *
  * On a phone that can share, inside the finish screen's `PbCardHost`, each row ends with a Share pill (R106) that
  * wraps under the line at large text sizes. Share asks the host to draw, capture and share that highlight's card. A
  * failure, or a share sheet that has gone by the tap, shows a muted line under the row.
  */
-export function FinishPrs({ summary }: { summary: FinishSummary }): ReactElement | null {
-  if (summary.prs.length === 0) return null;
+export function FinishPrs({ summary, firstWorkout = false }: { summary: FinishSummary; firstWorkout?: boolean }): ReactElement | null {
+  if (summary.prs.length === 0) return firstWorkout ? <FirstWorkoutLine afterNext={summary.next.length > 0} /> : null;
   return <PrList prs={summary.prs} afterNext={summary.next.length > 0} />;
+}
+
+/** On the lifter's first finished workout, which never sets a personal best (R103): when they start (R405). */
+export const FIRST_WORKOUT_PRS = "Personal bests start with your next workout. Today's sets are the ones to beat.";
+
+/** The Personal bests heading over the first workout's line, with the same hairline and spacing as the list. No red: nothing here is a PR. */
+function FirstWorkoutLine({ afterNext }: { afterNext: boolean }): ReactElement {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 8, paddingTop: 16, marginTop: afterNext ? 16 : 0, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <Label>Personal bests</Label>
+      <Body muted>{FIRST_WORKOUT_PRS}</Body>
+    </View>
+  );
 }
 
 function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: boolean }): ReactElement {
