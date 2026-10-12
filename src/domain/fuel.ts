@@ -12,7 +12,8 @@ export type FoodPerServing = {
   proteinG: number;
   carbsG: number;
   fatG: number;
-  source: 'bundled' | 'custom';
+  /** Bundled with the app, your own, or found online (Open Food Facts, R546) and kept on the phone. */
+  source: 'bundled' | 'custom' | 'online';
 };
 
 /** Calories and grams of an entry, a day, or one serving. Unrounded; round once for display (R156). */

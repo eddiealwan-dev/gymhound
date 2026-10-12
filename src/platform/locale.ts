@@ -16,3 +16,9 @@ export function usableLocale(tag: string | null | undefined): string | null {
 
 /** The phone's language and region, for dates and numbers ("3 Aug", or "Aug 3" in en-US); en-US when it has none. */
 export const deviceLocale = (): string => usableLocale(getLocales()[0]?.languageTag) ?? 'en-US';
+
+/** The phone's region ("US"), or null when it reports none. */
+export const deviceRegion = (): string | null => {
+  const region = getLocales()[0]?.regionCode;
+  return typeof region === 'string' && region !== '' ? region : null;
+};

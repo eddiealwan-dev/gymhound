@@ -63,3 +63,28 @@ describe('indexFoods', () => {
     expect(search('butt').map((f) => f.name)).toEqual(['Butter', 'Butternut squash', 'Peanut butter']);
   });
 });
+
+describe('ranked search (R545)', () => {
+  const foods = [
+    { name: 'Chicken, broilers or fryers, breast, meat only, cooked, roasted', tier: 2 },
+    { name: 'Chicken breast, roasted', tier: 1 },
+    { name: 'Fried chicken', tier: 1 },
+    { name: 'My chicken bowl', tier: 0 },
+    { name: 'Chicken, wing', tier: 2 },
+  ];
+  const search = indexFoods(foods, (f) => f.tier);
+
+  it('puts your own first, then the staples, then the library; within each, names that start with the query, then shorter names', () => {
+    expect(search('chicken').map((f) => f.name)).toEqual([
+      'My chicken bowl',
+      'Chicken breast, roasted',
+      'Fried chicken',
+      'Chicken, wing',
+      'Chicken, broilers or fryers, breast, meat only, cooked, roasted',
+    ]);
+  });
+
+  it('still needs every word', () => {
+    expect(search('chicken breast').map((f) => f.name)).toEqual(['Chicken breast, roasted', 'Chicken, broilers or fryers, breast, meat only, cooked, roasted']);
+  });
+});

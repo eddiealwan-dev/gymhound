@@ -1,11 +1,13 @@
-import { and, asc, desc, eq, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, max, ne, sql } from 'drizzle-orm';
 import type { FoodPerServing } from '../../domain/fuel';
+import { barcodeVariants, type OnlineFood } from '../../domain/openFoodFacts';
 import { newId } from '../ids';
 import { foodLog, foods } from '../schema';
 import type { Db } from '../types';
 
-// Bundled foods come from the seed (R139); your own foods are `source = 'custom'` and are archived, never deleted
-// (R144), so a logged day keeps its copy and `getFood` still names them.
+// Bundled foods come from the seed (R139, R545); your own foods are `source = 'custom'` and are archived, never deleted
+// (R144), so a logged day keeps its copy and `getFood` still names them. Foods found on Open Food Facts are kept as
+// `source = 'online'` (R546).
 
 const columns = {
   id: foods.id,
@@ -19,18 +21,27 @@ const columns = {
   source: foods.source,
 };
 
-/** Every food not archived: your own first, then bundled, each by name ignoring case. */
-export function listFoods(db: Db): FoodPerServing[] {
+/**
+ * Every food not archived: your own first, then the rest, each by name ignoring case. `which` narrows it to the bundled
+ * foods, or to yours and the ones found online (R546), which the add screen reads apart (`createLocalFoodLookup`).
+ */
+export function listFoods(db: Db, which: 'all' | 'bundled' | 'yours' = 'all'): FoodPerServing[] {
+  const part = which === 'bundled' ? eq(foods.source, 'bundled') : which === 'yours' ? ne(foods.source, 'bundled') : undefined;
   return db
     .select(columns)
     .from(foods)
-    .where(eq(foods.archived, false))
+    .where(and(eq(foods.archived, false), part))
     .orderBy(
       sql`case ${foods.source} when 'custom' then 0 else 1 end`,
       sql`${foods.name} collate nocase`,
       asc(foods.id),
     )
     .all();
+}
+
+/** Whether a food is in the list: there and not archived (deleted). */
+export function isFoodListed(db: Db, id: string): boolean {
+  return db.select({ id: foods.id }).from(foods).where(and(eq(foods.id, id), eq(foods.archived, false))).get() !== undefined;
 }
 
 /** One food, archived ones included; null when there is none. */
@@ -65,11 +76,52 @@ export function customFoodNames(db: Db, exceptId?: string): string[] {
     .map((f) => f.name);
 }
 
-/** Saves one of your own foods (already validated by `validateCustomFood`). Returns the new id. */
-export function createCustomFood(db: Db, food: Omit<FoodPerServing, 'id' | 'source'>): string {
+/**
+ * Saves one of your own foods (already validated by `validateCustomFood`). Returns the new id. `barcode` is the code it
+ * was made for from a scan nothing knew (R547), so scanning it again finds it.
+ */
+export function createCustomFood(db: Db, food: Omit<FoodPerServing, 'id' | 'source'>, barcode: string | null = null): string {
   const id = newId();
   db.insert(foods)
-    .values({ ...food, id, source: 'custom', barcode: null, archived: false })
+    .values({ ...food, id, source: 'custom', barcode, archived: false })
+    .run();
+  return id;
+}
+
+/**
+ * The food on the phone with this barcode, in any of its forms (`barcodeVariants`), or null: your own first, then one
+ * found online before. Archived foods don't count.
+ */
+export function findFoodByBarcode(db: Db, code: string): FoodPerServing | null {
+  return (
+    db
+      .select(columns)
+      .from(foods)
+      .where(and(inArray(foods.barcode, barcodeVariants(code)), eq(foods.archived, false)))
+      .orderBy(sql`case ${foods.source} when 'custom' then 0 else 1 end`, asc(foods.id))
+      .get() ?? null
+  );
+}
+
+/**
+ * Keeps a food found on Open Food Facts on the phone (R546), as `off-{barcode}`, and returns its id: a later search,
+ * scan or Recent finds it offline. Found again, it takes Open Food Facts' current numbers; days already logged keep
+ * their own copies (§6).
+ */
+export function saveOnlineFood(db: Db, food: OnlineFood): string {
+  const id = `off-${food.barcode}`;
+  const values = {
+    name: food.name,
+    servingLabel: food.servingLabel,
+    servingGrams: food.servingGrams,
+    kcal: food.kcal,
+    proteinG: food.proteinG,
+    carbsG: food.carbsG,
+    fatG: food.fatG,
+  };
+  db.insert(foods)
+    .values({ ...values, id, source: 'online', barcode: food.barcode, archived: false })
+    .onConflictDoUpdate({ target: foods.id, set: { ...values, archived: false } })
     .run();
   return id;
 }

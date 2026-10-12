@@ -37,7 +37,7 @@ describe('createLocalFoodLookup (Task 5)', () => {
 });
 
 describe('createLocalFoodLookup with a data version (the add screen)', () => {
-  it('reads the food list once per data version, not at every search', () => {
+  it('reads the bundled foods once, and yours once per data version, not at every search', () => {
     const db = seededDb();
     let version = 0;
     const lookup = createLocalFoodLookup(db, () => version);
@@ -45,14 +45,15 @@ describe('createLocalFoodLookup with a data version (the add screen)', () => {
     expect(lookup.searchLocal('e').length).toBeGreaterThan(0);
     lookup.searchLocal('eg');
     lookup.searchLocal('egg');
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls.map((c) => c[1])).toEqual(['bundled', 'yours']);
 
     const id = createCustomFood(db, { ...food, name: 'Zzqx bar' });
     // Not yet: nothing has said the data changed.
     expect(lookup.searchLocal('zzqx')).toEqual([]);
     version += 1;
     expect(lookup.searchLocal('zzqx').map((f) => f.id)).toEqual([id]);
-    expect(list).toHaveBeenCalledTimes(2);
+    // Only yours is read again: logging a food never reads the 8,000 bundled ones again (R545).
+    expect(list.mock.calls.map((c) => c[1])).toEqual(['bundled', 'yours', 'yours']);
     list.mockRestore();
   });
 
@@ -61,5 +62,28 @@ describe('createLocalFoodLookup with a data version (the add screen)', () => {
     const found = lookup.searchLocal('egg');
     expect(found[0].name.toLowerCase().startsWith('egg')).toBe(true);
     expect(lookup.searchLocal('  ')).toEqual([]);
+  });
+});
+
+describe('searching the whole list (R545)', () => {
+  const lookup = createLocalFoodLookup(seededDb());
+  const names = (q: string) => lookup.searchLocal(q).map((f) => f.name);
+
+  it('finds restaurant and branded foods', () => {
+    expect(names('big mac')).toContain("McDonald's, Big Mac");
+    expect(names('taco bell burrito').length).toBeGreaterThan(2);
+    expect(names('eggo').length).toBeGreaterThan(3);
+  });
+
+  it('puts the hand-picked staples before the library for a common word', () => {
+    const found = lookup.searchLocal('chicken breast');
+    expect(found.length).toBeGreaterThan(20);
+    expect(found[0].id.startsWith('fdc-')).toBe(true);
+  });
+
+  it('ranks your own food first', () => {
+    const db = seededDb();
+    const mine = createCustomFood(db, { ...food, name: 'Chicken breast meal prep' });
+    expect(createLocalFoodLookup(db).searchLocal('chicken breast')[0].id).toBe(mine);
   });
 });

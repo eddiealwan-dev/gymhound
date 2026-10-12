@@ -6,9 +6,11 @@ import {
   archiveCustomFood,
   createCustomFood,
   customFoodNames,
+  findFoodByBarcode,
   getFood,
   listFoods,
   recentFoods,
+  saveOnlineFood,
   updateCustomFood,
 } from './foodsRepo';
 import { logFood, logQuickAdd } from './foodLogRepo';
@@ -114,5 +116,37 @@ describe('foodsRepo (Task 5)', () => {
     const ids = listFoods(db).slice(0, 14).map((f) => f.id);
     ids.forEach((id, i) => logFood(db, id, 1, '2026-10-10', NOW + i * MIN));
     expect(recentFoods(db).map((f) => f.id)).toEqual(ids.slice(2).reverse());
+  });
+});
+
+describe('barcodes and foods found online (R546, R547)', () => {
+  const online = { barcode: '049000028911', name: 'Coca-Cola', servingLabel: '355 ml', servingGrams: null, kcal: 149, proteinG: 0, carbsG: 37.6, fatG: 0 };
+  const mineFood = { name: 'My bar', servingLabel: '1 bar', servingGrams: 60, kcal: 230, proteinG: 20, carbsG: 24, fatG: 8 };
+
+  it('keeps a food found online on the phone, and finds it by its barcode in either form', () => {
+    const db = seededDb();
+    const id = saveOnlineFood(db, online);
+    expect(id).toBe('off-049000028911');
+    expect(getFood(db, id)).toMatchObject({ name: 'Coca-Cola', source: 'online', kcal: 149 });
+    expect(findFoodByBarcode(db, '049000028911')?.id).toBe(id);
+    expect(findFoodByBarcode(db, '0049000028911')?.id).toBe(id);
+    expect(findFoodByBarcode(db, '5000112548167')).toBeNull();
+    expect(listFoods(db).some((f) => f.id === id)).toBe(true);
+  });
+
+  it('found again, takes the new numbers', () => {
+    const db = seededDb();
+    saveOnlineFood(db, online);
+    saveOnlineFood(db, { ...online, kcal: 140 });
+    expect(getFood(db, 'off-049000028911')?.kcal).toBe(140);
+  });
+
+  it('a food of your own made for a barcode comes first, and an archived one not at all', () => {
+    const db = seededDb();
+    saveOnlineFood(db, online);
+    const mine = createCustomFood(db, mineFood, '049000028911');
+    expect(findFoodByBarcode(db, '049000028911')?.id).toBe(mine);
+    archiveCustomFood(db, mine);
+    expect(findFoodByBarcode(db, '049000028911')?.id).toBe('off-049000028911');
   });
 });

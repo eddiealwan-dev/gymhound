@@ -21,7 +21,7 @@ export type WorkoutStatus = 'active' | 'finished';
 /** Phase 7: whether the workout's copy in Apple Health or Health Connect was written (§17.1). */
 export type HealthStatus = 'done' | 'failed';
 export type WorkoutOutcome = 'raised' | 'held' | 'held_marked' | 'no_rule' | 'no_sets';
-export type FoodSource = 'bundled' | 'custom';
+export type FoodSource = 'bundled' | 'custom' | 'online';
 
 export const exercises = sqliteTable('exercises', {
   id: text('id').primaryKey(),

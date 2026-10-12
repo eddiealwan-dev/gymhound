@@ -525,7 +525,8 @@ describe('review fixes', () => {
     const tree = mount();
     type(tree, 'Search foods', 'e');
     const before = list.mock.calls.length;
-    expect(before).toBe(1);
+    // Once for the bundled foods and once for yours (R545).
+    expect(before).toBe(2);
     type(tree, 'Search foods', 'eg');
     type(tree, 'Search foods', 'egg');
     expect(list.mock.calls.length).toBe(before);

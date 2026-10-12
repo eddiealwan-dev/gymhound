@@ -2,7 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Keyboard, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
-import { archiveCustomFood, createCustomFood, customFoodNames, getFood, listFoods, updateCustomFood } from '../../src/db/repositories/foodsRepo';
+import { archiveCustomFood, createCustomFood, customFoodNames, getFood, isFoodListed, updateCustomFood } from '../../src/db/repositories/foodsRepo';
 import { type CustomFoodInput, validateCustomFood } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
@@ -54,7 +54,7 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
     if (foodId === null) return { ...BLANK, name: prefill };
     if (existing === null || existing.source !== 'custom') return null;
     // Deleted (archived): out of the food list, so there is nothing here to edit.
-    if (!listFoods(db).some((f) => f.id === existing.id)) return null;
+    if (!isFoodListed(db, existing.id)) return null;
     return {
       name: existing.name,
       servingLabel: existing.servingLabel,
