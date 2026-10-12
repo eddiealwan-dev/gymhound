@@ -10,6 +10,7 @@ import { formatRepScheme } from '../../../src/domain/labels';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
 import { announce } from '../../../src/platform/announce';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
+import { shareRoutine } from '../../../src/state/routineShare';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
@@ -71,7 +72,7 @@ export default function RoutineDetailScreen() {
   const [blocked, setBlocked] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
   /** What a failed Duplicate or Delete says, muted, under the button pressed. Nothing was changed. */
-  const [failed, setFailed] = useState<{ action: 'copy' | 'delete'; text: string } | null>(null);
+  const [failed, setFailed] = useState<{ action: 'copy' | 'delete' | 'share'; text: string } | null>(null);
   const limit = useRoutineLimit();
 
   if (routine === null) {
@@ -94,8 +95,8 @@ export default function RoutineDetailScreen() {
     bumpData();
   };
 
-  const fail = (action: 'copy' | 'delete', text: string, error: unknown) => {
-    console.warn(`GymHound could not ${action} the routine.`, error);
+  const fail = (action: 'copy' | 'delete' | 'share', text: string, error: unknown) => {
+    if (error !== null) console.warn(`GymHound could not ${action} the routine.`, error);
     setFailed({ action, text });
     announce(text);
   };
@@ -113,6 +114,15 @@ export default function RoutineDetailScreen() {
       bumpData();
       router.push(`/routines/${copyId}`);
     });
+
+  /** Share routine (§18.18): the link and the code through the share sheet. Closing the sheet says nothing. */
+  const share = () => {
+    setFailed(null);
+    void shareRoutine(db, routine.id).then((result) => {
+      // shareRoutine has logged the error already.
+      if (result === 'failed') fail('share', "Couldn't open the share sheet. Try again.", null);
+    });
+  };
 
   const remove = () => {
     setAskDelete(false);
@@ -148,6 +158,13 @@ export default function RoutineDetailScreen() {
           )}
         </View>
         {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
+        <Button
+          label="Share routine"
+          variant="quiet"
+          accessibilityLabel={`Share ${routine.name} as a link and a code`}
+          onPress={share}
+        />
+        {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
       </View>
       <View style={{ gap: 16, marginTop: 32 }}>
         {routine.days.map((day) => (

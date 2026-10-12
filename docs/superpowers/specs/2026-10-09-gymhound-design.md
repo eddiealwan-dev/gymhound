@@ -1397,6 +1397,22 @@ Four questions the edge-case pass raised. The owner had asked for the work to co
 - **R422:** after a field is left, a set row asks for a second look ("Check this number") at an unlikely number: a working weight over 1,000 lb or 450 kg, more than 1.5 times the exercise's best and at least 20 lb or 10 kg heavier, or more than 100 reps. Warmups are never flagged, typing clears it, VoiceOver hears it, and the tick still logs what the row shows (R48). Cost if wrong: a rare honest PR gets a second look.
 - **R423:** after a unit switch, the plate calculator opens at the weight the row shows: a barbell rounds to the nearest weight the plates load, anything else to the nearest 0.5. Before, a 135 lb plan opened at 61.23 kg while the row showed 60 kg. Cost if wrong: none for the log.
 
+### 18.18 Routine sharing (2026-10-12)
+The owner asked for easy routine sharing by link or code. GymHound has no server, no account and no network, so the routine itself travels inside the link and the code. The rulings are Claude's, for the owner to check.
+
+- **R460:** only the routine travels: its name, days, each exercise's sets, rep range, increment, superset links and the exercise's own rest. No history, next weights, notes, photos or anything about the person. Cost if wrong: none.
+- **R461:** a code reads `GH1.<payload>.<check>`. The payload is the routine as positional JSON in base64url, and the check is 24 bits of FNV-1a, so a changed or missing character is caught. Beginner full body is about 430 characters. The codec is `src/domain/routineShare.ts`. Decoding never trusts its input: every field is bounded, and anything off is refused. Cost if wrong: a long line in a message.
+- **R462:** a library exercise travels by its place in `src/seed/libraryIds.json`, which only ever grows, so a place means the same exercise on every version. An exercise of your own travels with its name, logging type, equipment and muscles. A place past this phone's list (a code from a newer GymHound) is skipped and said so.
+- **R463:** **Share routine** is a quiet action on every routine's page, premade or your own. It opens the share sheet with text, so the routine goes into any messaging app.
+- **R464:** the link is `gymhound://routine/<code>` (app.json's scheme). It opens Routines → Add from code with the code already in the field, and nothing is added until the person taps Add routine. In Expo Go the custom scheme doesn't open the app, so the message also carries the code on its own line.
+- **R465:** the message: "My {routine} routine on GymHound. Open this link on your phone, or paste the code in Routines → Add from code: {link}", then a blank line and "Code: {code}".
+- **R466:** **Add from code** (quiet, under New routine) is a page. Paste the code, the link or the whole message. A preview shows the name, days and exercises, any exercise of the sender's own it will make, and any it can't find; then **Add routine**.
+- **R467:** the code is found anywhere in the pasted text, and one a mail app broke over lines is joined again.
+- **R468:** the added routine is a new routine of your own, with new ids, never written over another. A name already in use gets " (2)", " (3)" and so on. An exercise of the sender's own matches one here with the same name (any case) and logging type, or is made. A shared rest is set only where this phone has none, so importing never changes rests you chose.
+- **R469:** the check comes last, so a code copied short has lost it, and that reads as cut short.
+- **R470:** a refused code says why: "That code isn't a GymHound routine.", "That code is from a newer version of GymHound. Update the app and try again." or "That code is cut short. Copy the whole code and try again."
+- **R471:** adding counts as making a routine. With the free limit reached, the limit sheet shows instead, and Pro holds more. A shared premade becomes a copy under Yours, like Duplicate.
+
 ### 18.19 Full access trial (2026-10-12)
 The owner asked for a 7-day full-access trial that starts after the first finished workout, with a clear days-left indicator. The rulings are Claude's, for the owner to check.
 

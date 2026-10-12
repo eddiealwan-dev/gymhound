@@ -161,6 +161,8 @@ export default function Routines() {
       <View style={{ gap: 8 }}>
         {yours.length === 0 ? <EmptyState text={YOURS_EMPTY} /> : yours.map(row)}
         <Button label="New routine" variant="secondary" onPress={() => limit.whenRoomFor(() => router.push('/routines/edit/new'))} />
+        {/* A routine someone shared, by its link or code (§18.18). The limit is checked when it is added. */}
+        <Button label="Add from code" variant="quiet" onPress={() => router.push('/routines/import')} />
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Saved workouts</Label>
       {saved.length === 0 ? (

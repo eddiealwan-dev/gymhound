@@ -160,10 +160,10 @@ describe('Routine detail (§8.6)', () => {
     expect(inBar).not.toContain('Barbell bench press');
   });
 
-  it('a premade has Set active and Duplicate, and no Edit or Delete', () => {
+  it('a premade has Set active, Duplicate and Share routine, and no Edit or Delete', () => {
     const tree = mount();
 
-    expect(labels(tree)).toEqual(['Set active', 'Duplicate']);
+    expect(labels(tree)).toEqual(['Set active', 'Duplicate', 'Share routine']);
     expect(buttons(tree, 'Set active')[0].props.variant ?? 'primary').toBe('primary');
   });
 
@@ -171,7 +171,7 @@ describe('Routine detail (§8.6)', () => {
     show(MINE);
     const tree = mount();
 
-    expect(labels(tree)).toEqual(['Set active', 'Duplicate', 'Edit', 'Delete routine']);
+    expect(labels(tree)).toEqual(['Set active', 'Duplicate', 'Edit', 'Share routine', 'Delete routine']);
   });
 
   it('the active routine shows the Active mark instead of Set active', () => {

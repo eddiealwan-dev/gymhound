@@ -13,6 +13,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="routines/index" options={{ href: null }} />
       <Tabs.Screen name="routines/[id]" options={{ href: null }} />
       <Tabs.Screen name="routines/edit/[id]" options={{ href: null }} />
+      <Tabs.Screen name="routines/import" options={{ href: null }} />
       <Tabs.Screen name="saved/[id]" options={{ href: null }} />
       <Tabs.Screen name="body/[kind]" options={{ href: null }} />
       <Tabs.Screen name="fuel-targets" options={{ href: null }} />
