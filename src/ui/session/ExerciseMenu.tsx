@@ -28,7 +28,9 @@ import {
 } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../Sheet';
-import { Body, Display } from '../Text';
+import { CheckLine } from '../fields';
+import { SheetTitle } from '../SheetTitle';
+import { Body } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
 import { PlateSheet } from './PlateSheet';
@@ -101,12 +103,7 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
 
   return (
     <>
-      <Display weight={700}>
-        Today's weight
-      </Display>
-      <Body muted style={{ marginBottom: 12 }}>
-        {ex.name}
-      </Body>
+      <SheetTitle subtitle={ex.name}>Today's weight</SheetTitle>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <TextInput
           value={text}
@@ -140,13 +137,13 @@ function TodaysWeight({ ex, onClose }: { ex: WorkoutExerciseView; onClose: () =>
         />
         <Body muted>{unit}</Body>
       </View>
+      {/* No live region: Save announces it on both phones, and TalkBack would read it twice. */}
       {check ? (
-        // No live region: Save announces it on both phones, and TalkBack would read it twice.
-        <Body muted style={{ fontSize: 12, marginTop: 2 }}>
-          Check this number
-        </Body>
+        <View style={{ marginTop: 8 }}>
+          <CheckLine shown />
+        </View>
       ) : null}
-      <View style={{ gap: 8, marginTop: 12 }}>
+      <View style={{ gap: 8, marginTop: 16 }}>
         <Button label="Save" onPress={save} />
         {ex.overrideWeight !== null ? <Button label="Clear" variant="secondary" onPress={clear} /> : null}
         <Button label="Cancel" variant="quiet" onPress={onClose} />
@@ -242,9 +239,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
       <Sheet visible={ex !== null && (panel === 'menu' || panel === 'reorder' || panel === 'rest' || panel === 'mark')} onClose={close}>
         {panel === 'reorder' ? (
           <>
-            <Display weight={700} style={{ marginBottom: 12 }}>
-              Reorder
-            </Display>
+            <SheetTitle>Reorder</SheetTitle>
             {/* The sheet scrolls too, so on Android this list must be allowed to scroll inside it. */}
             <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: 4 }} nestedScrollEnabled>
               {exercises.map((e) => (
@@ -268,7 +263,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
                           height: 44,
                           alignItems: 'center',
                           justifyContent: 'center',
-                          opacity: !enabled ? 0.3 : pressed ? 0.8 : 1,
+                          opacity: !enabled ? 0.4 : pressed ? 0.8 : 1,
                         })}
                       >
                         <Ionicons name={dir === 'up' ? 'arrow-up' : 'arrow-down'} size={22} color={colors.text} />
@@ -284,14 +279,11 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : panel === 'rest' ? (
           <>
-            <Display weight={700}>
+            <SheetTitle subtitle={ex?.name ?? ''} marginBottom={supersetLine === null ? 16 : 4}>
               Rest time
-            </Display>
-            <Body muted style={{ marginBottom: supersetLine === null ? 12 : 4 }}>
-              {ex?.name ?? ''}
-            </Body>
+            </SheetTitle>
             {supersetLine !== null ? (
-              <Body muted style={{ fontSize: 14, marginBottom: 12 }}>
+              <Body muted style={{ fontSize: 14, marginBottom: 16 }}>
                 {supersetLine}
               </Body>
             ) : null}
@@ -318,12 +310,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : panel === 'mark' ? (
           <>
-            <Display weight={700}>
-              Something off
-            </Display>
-            <Body muted style={{ marginBottom: 12 }}>
-              {ex?.name ?? ''}
-            </Body>
+            <SheetTitle subtitle={ex?.name ?? ''}>Something off</SheetTitle>
             <View style={{ gap: 8 }}>
               {MARKS.map((mark) => (
                 <Button
@@ -342,9 +329,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
           </>
         ) : (
           <>
-            <Display weight={700} style={{ marginBottom: 12 }}>
-              {ex?.name ?? ''}
-            </Display>
+            <SheetTitle>{ex?.name ?? ''}</SheetTitle>
             <View style={{ gap: 8 }}>
               <Button
                 label={ex?.mark ? `Something off · ${MARK_LABELS[ex.mark]}` : 'Something off'}

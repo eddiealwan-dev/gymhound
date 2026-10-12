@@ -23,7 +23,6 @@ import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Screen } from '../../src/ui/Screen';
-import { afterSheetCloses, Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
@@ -299,16 +298,8 @@ export default function Train() {
         </View>
       ) : null}
 
-      <Sheet visible={blocked} onClose={() => setBlocked(false)}>
-        <Body style={{ marginBottom: 16 }}>Finish or discard the workout in progress first.</Body>
-        <Button
-          label="Resume"
-          onPress={() => {
-            setBlocked(false);
-            afterSheetCloses(openSession);
-          }}
-        />
-      </Sheet>
+      {/* The same question Routines, a saved workout and History ask, in the words spec 8.3 gives it. */}
+      <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} body="Finish or discard the workout in progress first." />
       <WorkoutInProgressSheet visible={changeBlocked} onClose={() => setChangeBlocked(false)} />
     </Screen>
   );

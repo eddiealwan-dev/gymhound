@@ -4,7 +4,8 @@ import { MAX_SAVED_NAME } from '../domain/savedWorkout';
 import { announce } from '../platform/announce';
 import { Button } from './Button';
 import { Sheet } from './Sheet';
-import { Body, Display } from './Text';
+import { SheetTitle } from './SheetTitle';
+import { Body } from './Text';
 import { fonts } from './theme';
 import { useTheme } from './ThemeProvider';
 
@@ -58,9 +59,7 @@ export function NameSheet({ visible, title, fieldLabel, initial, onSave, onCance
 
   return (
     <Sheet visible={visible} onClose={onCancel}>
-      <Display weight={700} accessibilityRole="header" style={{ marginBottom: 16 }}>
-        {title}
-      </Display>
+      <SheetTitle>{title}</SheetTitle>
       <TextInput
         value={name}
         onChangeText={(text) => {
@@ -90,7 +89,7 @@ export function NameSheet({ visible, title, fieldLabel, initial, onSave, onCance
       ) : null}
       <View style={{ gap: 8, marginTop: 16 }}>
         <Button label="Save" onPress={save} />
-        <Button label="Cancel" variant="secondary" onPress={onCancel} />
+        <Button label="Cancel" variant="quiet" onPress={onCancel} />
       </View>
     </Sheet>
   );

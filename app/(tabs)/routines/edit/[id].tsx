@@ -27,6 +27,7 @@ import { useRoutineLimit } from '../../../../src/ui/RoutineLimit';
 import { Screen } from '../../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
+import { SheetTitle } from '../../../../src/ui/SheetTitle';
 import { Body, Display, Label, Num } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
 import { useTheme } from '../../../../src/ui/ThemeProvider';
@@ -341,9 +342,7 @@ function SavedWorkoutSheet({ visible, onPick, onClose }: { visible: boolean; onP
   const saved = useDbQuery(listSavedWorkouts);
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Display weight={700} accessibilityRole="header" style={{ marginBottom: 8 }}>
-        Add a saved workout
-      </Display>
+      <SheetTitle marginBottom={8}>Add a saved workout</SheetTitle>
       <View style={{ marginBottom: 16 }}>
         {saved.map((w, i) => (
           <Pressable
@@ -360,7 +359,7 @@ function SavedWorkoutSheet({ visible, onPick, onClose }: { visible: boolean; onP
           </Pressable>
         ))}
       </View>
-      <Button label="Cancel" variant="secondary" onPress={onClose} />
+      <Button label="Cancel" variant="quiet" onPress={onClose} />
     </Sheet>
   );
 }

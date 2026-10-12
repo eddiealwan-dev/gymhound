@@ -38,7 +38,7 @@ jest.mock('../db/repositories/customExercisesRepo', () => ({
 }));
 jest.mock('../platform/exercisePhotoFiles', () => ({ deleteExercisePhotoFile: jest.fn() }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 // Its own tests cover the photo slots; here, which exercise they are shown for is what the tests read.
 jest.mock('./OwnPhotos', () => ({ OwnPhotos: jest.fn(() => null) }));
 jest.mock('./ThemeProvider', () => {

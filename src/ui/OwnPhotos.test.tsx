@@ -14,7 +14,7 @@ import { ConfirmSheet, Sheet } from './Sheet';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../state/dataVersion', () => {
   const actual = jest.requireActual<typeof import('../state/dataVersion')>('../state/dataVersion');
   return { ...actual, bumpData: jest.fn(() => actual.bumpData()) };

@@ -27,7 +27,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead, bumpData: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ savedWorkoutOf: jest.fn(() => null), saveWorkoutAs: jest.fn(), hasDoneSets: jest.fn(() => true) }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
 jest.mock('../db/repositories/workoutViewsRepo', () => ({ getFinishSummary: jest.fn() }));
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///cache/ReactNative-snapshot-image1.png'), releaseCapture: jest.fn() }));

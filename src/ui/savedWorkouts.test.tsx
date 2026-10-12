@@ -41,7 +41,7 @@ jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: 
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };

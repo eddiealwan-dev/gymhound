@@ -63,7 +63,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   saveRoutine: jest.fn(),
   userRoutineCount: jest.fn(),
 }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {

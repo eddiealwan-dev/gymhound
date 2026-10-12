@@ -32,6 +32,7 @@ import { Button } from '../../../../src/ui/Button';
 import { EditExercise } from '../../../../src/ui/history/EditExercise';
 import { Screen } from '../../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
+import { SheetTitle } from '../../../../src/ui/SheetTitle';
 import { Body, Display } from '../../../../src/ui/Text';
 
 const SET_TYPES: { type: SetType; label: string }[] = [
@@ -343,9 +344,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
       </View>
 
       <Sheet visible={openSetType !== undefined} onClose={() => setSetFor(null)}>
-        <Display weight={700} style={{ marginBottom: 12 }}>
-          Set type
-        </Display>
+        <SheetTitle>Set type</SheetTitle>
         <View style={{ gap: 8 }}>
           {SET_TYPES.map(({ type, label }) => (
             <Button
@@ -370,9 +369,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
       </Sheet>
 
       <Sheet visible={dropping !== null} onClose={() => setDropping(null)}>
-        <Display weight={700} style={{ marginBottom: 8 }}>
-          Some sets will be dropped
-        </Display>
+        <SheetTitle marginBottom={8}>Some sets will be dropped</SheetTitle>
         <View style={{ gap: 4, marginBottom: 16 }}>
           {(dropping ?? []).map((text, i) => (
             <Body key={i} muted>
@@ -394,10 +391,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
       </Sheet>
 
       <Sheet visible={markExercise != null} onClose={() => setMarkFor(null)}>
-        <Display weight={700}>Something off</Display>
-        <Body muted style={{ marginBottom: 12 }}>
-          {markExercise?.name ?? ''}
-        </Body>
+        <SheetTitle subtitle={markExercise?.name ?? ''}>Something off</SheetTitle>
         <View style={{ gap: 8 }}>
           {MARKS.map((mark) => (
             <Button

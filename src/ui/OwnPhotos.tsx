@@ -8,7 +8,8 @@ import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
 import { useOwnPhotoNames } from './exercisePhotos';
 import { afterSheetCloses, ConfirmSheet, Sheet } from './Sheet';
-import { Body, Display } from './Text';
+import { SheetTitle } from './SheetTitle';
+import { Body } from './Text';
 import { useTheme } from './ThemeProvider';
 
 const SLOTS: readonly { slot: PhotoSlot; label: string; spoken: string }[] = [
@@ -148,13 +149,11 @@ export function OwnPhotos({ exerciseId }: { exerciseId: string }) {
         <Body muted>{message}</Body>
       ) : null}
       <Sheet visible={choosingFor !== null} onClose={() => setChoosingFor(null)}>
-        <Display weight={700} style={{ marginBottom: 16 }}>
-          {SLOTS.find((s) => s.slot === sheetSlot)?.label}
-        </Display>
+        <SheetTitle>{SLOTS.find((s) => s.slot === sheetSlot)?.label ?? ''}</SheetTitle>
         <View style={{ gap: 8 }}>
           <Button label="Take photo" onPress={() => choose('camera')} />
           <Button label="Choose a photo" variant="secondary" onPress={() => choose('library')} />
-          <Button label="Cancel" variant="secondary" onPress={() => setChoosingFor(null)} />
+          <Button label="Cancel" variant="quiet" onPress={() => setChoosingFor(null)} />
         </View>
       </Sheet>
       <ConfirmSheet

@@ -30,6 +30,7 @@ import { MusicSheet } from '../src/ui/session/MusicSheet';
 import { RestBar } from '../src/ui/session/RestBar';
 import { useRestUp } from '../src/ui/session/useRestUp';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
+import { SheetTitle } from '../src/ui/SheetTitle';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
 
@@ -388,9 +389,7 @@ export default function Session() {
       />
       {/* Nothing ticked: the finish is refused. Keep logging is the safe answer, so it is the primary button. */}
       <Sheet visible={ask === 'nothing_ticked'} onClose={() => setAsk(null)}>
-        <Display weight={700} style={{ marginBottom: 16 }}>
-          Nothing is ticked yet.
-        </Display>
+        <SheetTitle>Nothing is ticked yet.</SheetTitle>
         <View style={{ gap: 8 }}>
           <Button label="Keep logging" onPress={() => setAsk(null)} />
           {/* Discarding deletes what was typed, so it still asks first. */}
@@ -399,9 +398,7 @@ export default function Session() {
       </Sheet>
       {/* An error the finish did not expect: nothing was lost, and the workout is still active. */}
       <Sheet visible={ask === 'finish_failed'} onClose={() => setAsk(null)}>
-        <Display weight={700} style={{ marginBottom: 16 }}>
-          GymHound couldn't finish this workout. It's still here — try again.
-        </Display>
+        <SheetTitle>GymHound couldn't finish this workout. It's still here — try again.</SheetTitle>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
       {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer.

@@ -75,7 +75,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
       </View>
       <View style={{ gap: 8 }}>
         <Button label="Add" onPress={add} />
-        <Button label="Cancel" variant="secondary" onPress={onClose} />
+        <Button label="Cancel" variant="quiet" onPress={onClose} />
         {food.source === 'custom' ? <Button label="Edit food" variant="quiet" onPress={() => onEdit(food.id)} /> : null}
       </View>
     </>

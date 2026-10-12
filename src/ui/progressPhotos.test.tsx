@@ -32,7 +32,7 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../platform/progressPhotoFiles', () => ({
   pickProgressPhoto: jest.fn(),
   saveProgressPhoto: jest.fn((_uri: string, now: number) => `progress-${now}.jpg`),

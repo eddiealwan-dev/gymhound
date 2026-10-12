@@ -6,7 +6,7 @@ import type { MusicApp } from '../../platform/music';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { Sheet } from '../Sheet';
-import { Body, Display } from '../Text';
+import { SheetTitle } from '../SheetTitle';
 
 type Props = {
   visible: boolean;
@@ -32,12 +32,7 @@ export function MusicSheet({ visible, apps, musicApp, onClose }: Props) {
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Display weight={700} style={{ marginBottom: 8 }}>
-        Music
-      </Display>
-      <Body muted style={{ marginBottom: 16 }}>
-        Pick an app. It stays in a bar at the bottom of your workout.
-      </Body>
+      <SheetTitle subtitle="Pick an app. It stays in a bar at the bottom of your workout.">Music</SheetTitle>
       <View style={{ gap: 8 }}>
         {apps.map((app) => (
           <Button
