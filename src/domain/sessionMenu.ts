@@ -3,8 +3,9 @@
  * (by position), as `ActiveWorkoutView.exercises` is.
  */
 
+import { planInUnit, type Gear } from './plates';
 import { matchPrevious, placeholdersFor, type PrevSet } from './setEntry';
-import type { SetType, WeightUnit } from './types';
+import type { Equipment, SetType, WeightUnit } from './types';
 import { convertWeight } from './units';
 
 type Linked = { id: string; supersetGroup: number | null };
@@ -63,6 +64,7 @@ export function replaceNeedsConfirm(ex: { sets: { done: boolean }[] }): boolean 
 
 /** What `plateTarget` reads from a `WorkoutExerciseView`. Its sets are in position order. */
 type PlateTargetInput = {
+  equipment: Equipment;
   sets: { setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null }[];
   /** Last time's sets of the exercise, as the set table matches them. */
   previous: PrevSet[];
@@ -76,15 +78,19 @@ type PlateTargetInput = {
  * The weight the plate calculator starts from, in `unit`: the first undone working set's own value, else the override,
  * else the planned weight, else the newest done working set's weight (the last done one in position order, R35), else
  * last time's weight for that first undone working set (the placeholder its row shows, converted as the placeholder
- * is, to the nearest 0.5), else null. The others are rounded to 2 decimals, and one with no stored unit is read as `unit`.
+ * is, to the nearest 0.5), else null. An override or plan in the other unit is the weight the row shows (R423): a
+ * barbell to the nearest weight `gear` loads, anything else to the nearest 0.5 (`planInUnit`, as `targetFor`). A set's
+ * own value in the other unit is rounded to 2 decimals, and a value with no stored unit is read as `unit`.
  */
-export function plateTarget(ex: PlateTargetInput, unit: WeightUnit): number | null {
+export function plateTarget(ex: PlateTargetInput, unit: WeightUnit, gear: Gear): number | null {
   const inUnit = (weight: number, from: WeightUnit | null) => Number(convertWeight(weight, from ?? unit, unit).toFixed(2));
+  const shown = (weight: number, from: WeightUnit | null) =>
+    planInUnit(weight, from ?? unit, unit, ex.equipment === 'barbell', gear.bar, gear.plates);
   const working = ex.sets.filter((s) => s.setType === 'working');
   const next = working.find((s) => !s.done);
   if (next && next.weight !== null) return inUnit(next.weight, next.weightUnit);
-  if (ex.overrideWeight !== null) return inUnit(ex.overrideWeight, ex.overrideUnit);
-  if (ex.plannedWeight !== null) return inUnit(ex.plannedWeight, ex.plannedUnit);
+  if (ex.overrideWeight !== null) return shown(ex.overrideWeight, ex.overrideUnit);
+  if (ex.plannedWeight !== null) return shown(ex.plannedWeight, ex.plannedUnit);
   const newest = working.filter((s) => s.done && s.weight !== null).at(-1);
   if (newest && newest.weight !== null) return inUnit(newest.weight, newest.weightUnit);
   if (!next) return null;
