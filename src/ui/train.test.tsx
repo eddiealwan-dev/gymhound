@@ -200,7 +200,8 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
       numberOfLines: 1,
       adjustsFontSizeToFit: true,
       minimumFontScale: 0.3,
-      maxFontSizeMultiplier: undefined,
+      // A title: twice its size at most (R562).
+      maxFontSizeMultiplier: 2,
     });
     // iOS shrinks only the font to fit, never a fixed line height, which grows with the phone's text size.
     const flat = StyleSheet.flatten(style);

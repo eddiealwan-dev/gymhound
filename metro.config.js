@@ -44,6 +44,21 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return resolveBefore ? resolveBefore(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform);
 };
 
+// Hook 3, WEB DEV SERVER ONLY and only with GH_TEXT_SCALE set (e.g. 3.571): the app's own Text, TextInput and
+// useWindowDimensions draw text at that iOS text size (scripts/web-text-scale), so large-text layouts can be checked in
+// a browser. On web, Expo's Babel preset imports them from react-native-web's own files, so those are what is swapped.
+if (process.env.GH_TEXT_SCALE) {
+  process.env.EXPO_PUBLIC_GH_TEXT_SCALE = process.env.GH_TEXT_SCALE;
+  const shims = path.join(__dirname, 'scripts', 'web-text-scale');
+  const swapped = /^react-native-web\/dist\/exports\/(Text|TextInput|useWindowDimensions)$/;
+  const resolveScaled = config.resolver.resolveRequest;
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    const match = platform === 'web' && !context.originModulePath.startsWith(shims) && swapped.exec(moduleName);
+    if (match) return { type: 'sourceFile', filePath: path.join(shims, `${match[1]}.js`) };
+    return resolveScaled ? resolveScaled(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform);
+  };
+}
+
 // Hook 2: the headers. expo-sqlite on web needs SharedArrayBuffer, which needs the page to be cross-origin isolated
 // (COEP + COOP). `server.enhanceMiddleware` (the documented hook) runs after Expo's first middleware, which answers
 // `/`, `/manifest` and `/index.exp` itself, so the HTML at `/` never got the headers. The `expo-router` `headers`

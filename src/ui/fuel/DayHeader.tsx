@@ -1,8 +1,8 @@
 import type { ReactElement } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import { calendarDayTitle, shiftDay } from '../../domain/dates';
 import { StepArrow } from '../StepArrow';
-import { Body, Display } from '../Text';
+import { Body, Display, TITLE_MAX_SCALE } from '../Text';
 
 /**
  * The day Fuel shows (R148): ‹ steps back to any earlier day, › forward but never past today. Under it, which targets
@@ -23,13 +23,14 @@ export function DayHeader({
   onChange: (day: string) => void;
 }): ReactElement {
   const atToday = day >= today;
+  const { fontScale } = useWindowDimensions();
   return (
     <View style={{ gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <StepArrow glyph={'‹'} label="Previous day" disabled={false} onPress={() => onChange(shiftDay(day, -1))} />
-        {/* A line height of its own, which grows with the text size: at the largest size the tight metrics of the
-            display face left the foot of "Today" cut off (Round 10). */}
-        <Display accessibilityRole="header" style={{ flex: 1, textAlign: 'center', lineHeight: 36 }}>
+        {/* Room under the line that grows with the text size: at the largest sizes the foot of "Today" was cut off
+            (Rounds 10 and 11), and a glyph drawn past a text's frame on iOS is clipped. */}
+        <Display accessibilityRole="header" style={{ flex: 1, textAlign: 'center', paddingBottom: Math.ceil(4 * Math.min(fontScale, TITLE_MAX_SCALE)) }}>
           {calendarDayTitle(day, today, locale)}
         </Display>
         <StepArrow glyph={'›'} label="Next day" disabled={atToday} onPress={() => onChange(shiftDay(day, 1) > today ? today : shiftDay(day, 1))} />

@@ -823,7 +823,8 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4');
     expect(count).toHaveLength(1);
     expect(count[0].props.accessibilityLabel).toBe('1 of 4 sets done');
-    expect(count[0].props.maxFontSizeMultiplier).toBeUndefined();
+    // Grows like every number, to twice its size at most (R562); the row wraps for the rest.
+    expect(count[0].props.maxFontSizeMultiplier).toBe(2);
     // It comes before the ⋯ button in the name row.
     const order = shownText(tree).indexOf('1/4');
     expect(order).toBeGreaterThan(shownText(tree).indexOf('Bench Press'));

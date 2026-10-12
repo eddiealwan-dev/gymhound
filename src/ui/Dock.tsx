@@ -55,7 +55,8 @@ export function Dock({ state, navigation }: BottomTabBarProps) {
               style={({ pressed }) => ({ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, opacity: pressed ? 0.8 : 1 })}
             >
               <Ionicons name={item.icon} size={24} color={color} />
-              <Body weight={600} style={{ fontSize: 12, color }}>
+              {/* As iOS's own tab bars: the labels barely grow with the text size, and never run into each other (R562). */}
+              <Body weight={600} maxFontSizeMultiplier={1.35} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontSize: 12, color }}>
                 {item.label}
               </Body>
             </Pressable>

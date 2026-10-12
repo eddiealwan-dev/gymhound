@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Linking, Pressable, useWindowDimensions, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { PlanKind, StorePlan } from '../../platform/entitlements';
 import { entitlementsFor, useEntitlementsState } from '../../platform/entitlements';
 import { Button } from '../Button';
-import { Body, Display } from '../Text';
+import { Body, Display, TITLE_MAX_SCALE } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { buyLabel, buyTerms, PLAN_TITLES, planBilling, planPrice, planTrial, PLANNED_PLANS, yearlySaving } from './plans';
 import { TrialPitchLine } from './TrialLines';
@@ -41,9 +41,17 @@ function legalLinks(): { label: string; url: string }[] {
   return links.filter((link): link is { label: string; url: string } => typeof link.url === 'string' && link.url !== '');
 }
 
-/** One plan to choose (R556): its title, a "Save 50%" mark on the yearly, how it bills, its free days, its price. */
+/** Above this text size a plan's price moves under its title instead of beside it (Round 11: it squeezed the words). */
+const PRICE_BESIDE_MAX_SCALE = 1.3;
+
+/**
+ * One plan to choose (R556): its title, a "Save 50%" mark on the yearly, how it bills, its free days, its price. The
+ * price sits at the right; at a large text size it moves under the title, so nothing is squeezed (R562).
+ */
 function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen: boolean; saving: number | null; onChoose: () => void }) {
   const { colors } = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const priceBeside = fontScale <= PRICE_BESIDE_MAX_SCALE;
   const title = PLAN_TITLES[plan.kind];
   const badge = plan.kind === 'yearly' && saving !== null ? `Save ${saving}%` : null;
   const trial = planTrial(plan);
@@ -69,7 +77,7 @@ function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen:
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      <Ionicons name={chosen ? 'radio-button-on' : 'radio-button-off'} size={22} color={chosen ? colors.text : colors.textMuted} />
+      <Ionicons name={chosen ? 'radio-button-on' : 'radio-button-off'} size={22} color={chosen ? colors.text : colors.textMuted} style={{ alignSelf: priceBeside ? 'center' : 'flex-start' }} />
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <Body weight={600}>{title}</Body>
@@ -81,6 +89,11 @@ function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen:
             </View>
           ) : null}
         </View>
+        {priceBeside ? null : (
+          <Body weight={600} maxFontSizeMultiplier={TITLE_MAX_SCALE} style={{ fontSize: 18 }}>
+            {price}
+          </Body>
+        )}
         <Body muted style={{ fontSize: 14 }}>
           {billing}
         </Body>
@@ -90,9 +103,11 @@ function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen:
           </Body>
         ) : null}
       </View>
-      <Body weight={600} style={{ fontSize: 18, flexShrink: 0 }}>
-        {price}
-      </Body>
+      {priceBeside ? (
+        <Body weight={600} maxFontSizeMultiplier={TITLE_MAX_SCALE} style={{ fontSize: 18, flexShrink: 0 }}>
+          {price}
+        </Body>
+      ) : null}
     </Pressable>
   );
 }

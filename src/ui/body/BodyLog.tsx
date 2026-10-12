@@ -72,7 +72,7 @@ export function BodyQuickEntry({
     <View style={{ gap: 8 }}>
       {/* At a large text size Log drops under the field rather than squeezing it. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
           <BodyField
             value={draft}
             onChangeText={(text) => {
