@@ -89,7 +89,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
           label={by === 'grams' ? 'Grams' : by === 'ounces' ? 'Ounces' : 'Servings'}
           value={draft}
           onChangeText={change}
-          onSubmit={add}
+          // Done on the keyboard only puts it away; Add adds (Round 11).
           numeric
           error={invalid ? 'Check this number' : undefined}
         />

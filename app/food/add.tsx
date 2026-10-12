@@ -26,6 +26,7 @@ import { Body, Display, Label } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { useOnce } from '../../src/ui/useOnce';
+import { useKeyboardHeight } from '../../src/ui/useSafeScroll';
 
 type Mode = 'search' | 'quick';
 
@@ -104,6 +105,7 @@ function AddFood() {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardHeight();
   const params = useLocalSearchParams<{ date?: string; mode?: string }>();
   const locale = deviceLocale();
   // Read once: left open past midnight, it still logs for the day it says.
@@ -349,9 +351,9 @@ function AddFood() {
         windowSize={11}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
         style={{ flex: 1, width: '100%', maxWidth: 512, alignSelf: 'center' }}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 + insets.bottom }}
+        // Room under the rows for the keyboard, so the last results scroll above it (R560: no iOS keyboard insets).
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 + Math.max(insets.bottom, keyboard) }}
       />
       <ServingsSheet food={servingsFor} localDate={localDate} onClose={() => setServingsFor(null)} onAdded={addedFromSheet} onEdit={editFood} />
       <ConfirmSheet

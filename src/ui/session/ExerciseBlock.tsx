@@ -285,7 +285,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         />
       ) : null}
       {/*
-        The name row, in the order [name][count][+ Note][Something off][⋯] (R81). ⋯ keeps the right edge, over the tick
+        The name row, in the order [name][count][Something off][Modify][Stats][+ Note][⋯] (R81, R553, R554, R561). ⋯ keeps the right edge, over the tick
         column, centred on the name's first line. The group of count, + Note and Something off follows the name: on its
         line when both fit (a short name, a flagged day, a tablet), and otherwise under it as one quiet line, left-aligned
         with it. That line is 24pt and its targets reach 10pt above and below it, so it adds 26pt to the block rather
@@ -347,9 +347,6 @@ export const ExerciseBlock = memo(function ExerciseBlock({
                 {`${progress.done}/${progress.total}`}
               </Num>
             ) : null}
-            {!ex.note && !editingNote ? (
-              <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
-            ) : null}
             {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
             <NameRowControl
               icon="alert-circle-outline"
@@ -360,6 +357,10 @@ export const ExerciseBlock = memo(function ExerciseBlock({
             {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
             {onOpenModify ? <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} /> : null}
             {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
+            {/* + Note comes last (the owner's Round 11 note). */}
+            {!ex.note && !editingNote ? (
+              <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
+            ) : null}
           </View>
         </View>
         <Pressable

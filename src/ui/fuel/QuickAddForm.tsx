@@ -74,7 +74,7 @@ export function QuickAddForm({
         errors={errors}
         kcalLabel="Calories"
       />
-      <FuelField label="Name (optional)" value={draft.name} onChangeText={(name) => change({ ...draft, name })} error={errors.name} onSubmit={add} />
+      <FuelField label="Name (optional)" value={draft.name} onChangeText={(name) => change({ ...draft, name })} error={errors.name} />
       <View style={{ gap: 16 }}>
         {errors.form ? <Body muted>{errors.form}</Body> : null}
         <Button label="Add" onPress={add} />

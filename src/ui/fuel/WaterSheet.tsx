@@ -31,14 +31,12 @@ export function waterAddedMessage(addedMl: number, totalMl: number, unit: WaterU
 function AmountField({
   value,
   onChange,
-  onSubmit,
   label,
   unit,
   invalid,
 }: {
   value: string;
   onChange: (text: string) => void;
-  onSubmit: () => void;
   label: string;
   unit: WaterUnit;
   invalid: boolean;
@@ -46,7 +44,7 @@ function AmountField({
   return (
     <View style={{ gap: 8, marginBottom: 24 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <BodyField value={value} onChangeText={onChange} onSubmit={onSubmit} accessibilityLabel={`${label}, ${waterUnitSpoken(unit)}`} invalid={invalid} />
+        <BodyField value={value} onChangeText={onChange} accessibilityLabel={`${label}, ${waterUnitSpoken(unit)}`} invalid={invalid} />
         <Body muted>{waterUnitLabel(unit)}</Body>
       </View>
       <CheckLine shown={invalid} />
@@ -84,7 +82,6 @@ function OtherAmount({ localDate, today, unit, locale, totalMl, onClose }: Share
           setDraft(text);
           setInvalid(false);
         }}
-        onSubmit={add}
         label="Amount"
         unit={unit}
         invalid={invalid}
@@ -138,7 +135,6 @@ function GoalEditor({ unit, locale, goalMl, onClose }: Shared & { goalMl: number
           setDraft(text);
           setInvalid(false);
         }}
-        onSubmit={save}
         label="Daily water goal"
         unit={unit}
         invalid={invalid}

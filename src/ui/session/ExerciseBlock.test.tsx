@@ -831,7 +831,7 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     expect(shownText(mount(bench([])))).not.toContain('0/0');
   });
 
-  it('the name row keeps the name beside ⋯, and the count, + Note and Something off drop under it as one quiet line (design pass)', () => {
+  it('the name row keeps the name beside ⋯, and the count, Something off and + Note drop under it as one quiet line (design pass)', () => {
     const tree = mount(fourSets());
     const name = textNode(tree, 'Bench Press');
     const count = tree.root.findAll((n) => n.type === Text && n.props.children === '1/4')[0];
@@ -880,8 +880,9 @@ describe('ExerciseBlock: the set count and the next set (spec 18.6)', () => {
     // Order stays [name][count][+ Note][Something off][⋯] (R81).
     const shown = shownText(tree);
     expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf('1/4'));
-    expect(shown.indexOf('1/4')).toBeLessThan(shown.indexOf('+ Note'));
-    expect(shown.indexOf('+ Note')).toBeLessThan(shown.indexOf('Something off'));
+    // + Note comes last (Round 11).
+    expect(shown.indexOf('1/4')).toBeLessThan(shown.indexOf('Something off'));
+    expect(shown.indexOf('Something off')).toBeLessThan(shown.indexOf('+ Note'));
     const drawn = tree.root.findAll(() => true);
     expect(drawn.indexOf(somethingOff)).toBeLessThan(drawn.indexOf(options));
 

@@ -1,9 +1,11 @@
-import { Keyboard, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
-import { useEffect, type ReactNode } from 'react';
+import { Keyboard, LayoutAnimation, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import type { KeyboardEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from './Button';
 import { SheetTitle } from './SheetTitle';
 import { useTheme } from './ThemeProvider';
+import { KEYBOARD_MARGIN, whenFieldInside } from './useSafeScroll';
 
 type SheetProps = { visible: boolean; onClose: () => void; children: ReactNode };
 
@@ -44,15 +46,57 @@ export function afterSheetCloses(go: () => void): void {
   setTimeout(once, SHEET_GONE_MS);
 }
 
+/** Moves the panel with the keyboard, over the keyboard's own time. */
+function withKeyboard(e: KeyboardEvent): void {
+  LayoutAnimation.configureNext({ duration: e.duration > 10 ? e.duration : 250, update: { duration: e.duration > 10 ? e.duration : 250, type: 'keyboard' } });
+}
+
 /**
  * A panel that rises from the bottom over a dimmed page. Tapping outside it, the back gesture or VoiceOver's escape
  * gesture calls `onClose`. The panel is never taller than the window less the status bar and a 48-point strip of the
- * dimmed page, and its content scrolls when it is taller than that.
+ * dimmed page, and its content scrolls when it is taller than that. A field in it that raises the keyboard (iOS) lifts
+ * the panel above the keyboard, and is scrolled into view when the panel is too short to show it (R560: no iOS
+ * keyboard insets, which can outlive the sheet and leave empty space on a later page).
  */
 export function Sheet({ visible, onClose, children }: SheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  /** The keyboard's height while a field in the sheet has it up. */
+  const [keyboard, setKeyboard] = useState(0);
+  const contentRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const offset = useRef(0);
+  const viewHeight = useRef(0);
+
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'ios') return;
+    const shown = Keyboard.addListener('keyboardWillShow', (e) => {
+      withKeyboard(e);
+      setKeyboard(Math.max(0, Math.round(height - e.endCoordinates.screenY)));
+    });
+    const didShow = Keyboard.addListener('keyboardDidShow', () => {
+      whenFieldInside(contentRef.current, (top, fieldHeight) => {
+        const below = top + fieldHeight + KEYBOARD_MARGIN - (offset.current + viewHeight.current);
+        if (below <= 0) return;
+        offset.current += below;
+        scrollRef.current?.scrollTo({ y: offset.current, animated: true });
+      });
+    });
+    const hidden = Keyboard.addListener('keyboardWillHide', (e) => {
+      withKeyboard(e);
+      setKeyboard(0);
+    });
+    return () => {
+      shown.remove();
+      didShow.remove();
+      hidden.remove();
+      setKeyboard(0);
+    };
+  }, [visible, height]);
+  const atRest = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offset.current = e.nativeEvent.contentOffset.y;
+  };
 
   // The weight and reps pads have no return key, and a tap in the session keeps the keyboard up, so a set's field can
   // still have focus when a sheet opens. The keyboard would cover the sheet's buttons, so it goes away first; the blur
@@ -63,7 +107,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={sheetGone} statusBarTranslucent>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)', paddingBottom: keyboard }}>
         <Pressable accessible accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ flex: 1 }} />
         <View
           accessibilityViewIsModal
@@ -71,7 +115,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
           style={{
             width: '100%',
             maxWidth: 512,
-            maxHeight: height - insets.top - BACKDROP_STRIP,
+            maxHeight: height - insets.top - BACKDROP_STRIP - keyboard,
             alignSelf: 'center',
             backgroundColor: colors.surface,
             borderColor: colors.border,
@@ -82,12 +126,17 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
           }}
         >
           <ScrollView
+            ref={scrollRef}
             alwaysBounceVertical={false}
             keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
-            contentContainerStyle={{ padding: 16, paddingBottom: 16 + insets.bottom }}
+            onLayout={(e) => {
+              viewHeight.current = e.nativeEvent.layout.height;
+            }}
+            onScrollEndDrag={atRest}
+            onMomentumScrollEnd={atRest}
+            contentContainerStyle={{ padding: 16, paddingBottom: 16 + (keyboard > 0 ? 0 : insets.bottom) }}
           >
-            {children}
+            <View ref={contentRef}>{children}</View>
           </ScrollView>
         </View>
       </View>

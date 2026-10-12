@@ -196,7 +196,7 @@ function SessionHeader({
 /** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, Finish in the header, and Discard. */
 export default function Session() {
   const db = useDb();
-  // The picker's search keyboard opens over the session: only the screen in view adjusts, and nothing is left out of reach (R510).
+  // A set's field keeps clear of the keyboard; a keyboard raised elsewhere (the picker, a sheet) changes nothing here (R560).
   const safeScroll = useSafeScroll();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -387,6 +387,7 @@ export default function Session() {
         keyboardDismissMode="on-drag"
       >
         <View
+          ref={safeScroll.contentRef}
           style={{
             width: '100%',
             maxWidth: 512,
@@ -453,6 +454,7 @@ export default function Session() {
             <Button label="Discard workout" variant="quiet" onPress={onDiscard} />
           </View>
         </View>
+        {safeScroll.room > 0 ? <View style={{ height: safeScroll.room }} /> : null}
       </ScrollView>
       <ModifySheet
         target={(() => {
