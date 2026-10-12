@@ -142,7 +142,8 @@ describe('Routine detail (§8.6)', () => {
     expect(getRoutineDetail).toHaveBeenCalledWith('db', 'premade-ppl-6');
     const shown = shownText(tree);
     expect(shown).toContain('Push/pull/legs');
-    expect(shown).toContain('2 days');
+    // A program says how long it runs (R555); its test mock has two days.
+    expect(shown).toContain('2 days a week · 12 weeks · Intermediate');
     const order = ['Push A', 'Barbell bench press', '4×5–8', 'Cable fly', 'Cable triceps pushdown', 'Pull A', 'Plank', '3×30–60s'];
     expect(order.map((s) => shown.indexOf(s))).toEqual([...order.map((s) => shown.indexOf(s))].sort((a, b) => a - b));
     expect(order.every((s) => shown.includes(s))).toBe(true);

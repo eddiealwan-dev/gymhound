@@ -13,6 +13,7 @@ import { Button } from '../../../src/ui/Button';
 import { EmptyState } from '../../../src/ui/EmptyState';
 import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { RoutineOptionsSheet, useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
+import { routineLine } from '../../../src/domain/programInfo';
 import { canUseRoutine, canUseSavedWorkouts } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { Screen } from '../../../src/ui/Screen';
@@ -32,7 +33,7 @@ const PICK_ONE = 'Set one active and Train lines up its next workout.';
 /** Over New routine while you have none of your own (R401). */
 const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
-const dayCount = (n: number) => (n === 1 ? '1 day' : `${n} days`);
+
 
 /**
  * A routine: its name and days, which open its detail (the chevron says so), and Set active as a compact pill (36pt
@@ -52,7 +53,8 @@ function RoutineRow({
   onOptions: () => void;
 }) {
   const { colors } = useTheme();
-  const days = dayCount(routine.dayCount);
+  // "3 days a week · 12 weeks · Beginner" for a program (R555), the days for your own.
+  const days = routineLine(routine);
   return (
     <View
       style={{

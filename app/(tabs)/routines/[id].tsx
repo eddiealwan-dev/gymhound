@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
 import { getRoutineDetail, swapRoutineExercise } from '../../../src/db/repositories/routinesRepo';
 import { programExerciseId } from '../../../src/domain/alternatives';
+import { routineLine } from '../../../src/domain/programInfo';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
@@ -108,7 +109,7 @@ export default function RoutineDetailScreen() {
       <BackLink label="Routines" onPress={toRoutines} />
       <ScreenTitle>{routine.name}</ScreenTitle>
       <Body muted style={{ fontSize: 14, marginTop: 4 }}>
-        {routine.days.length === 1 ? '1 day' : `${routine.days.length} days`}
+        {routineLine({ id: routine.id, isPremade: routine.isPremade, dayCount: routine.days.length })}
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>
         {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : null}
