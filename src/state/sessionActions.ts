@@ -41,6 +41,7 @@ import type { BellSound, DistanceUnit, ExerciseMark, WeightUnit } from '../domai
 import { announce } from '../platform/announce';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
+import { afterFinish } from './nativeServices';
 import { bumpData } from './dataVersion';
 
 /**
@@ -222,6 +223,8 @@ export function finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'
   }
   onSurface((surface) => surface.cancel());
   takeSnapshotSafely(db, Date.now());
+  // Phase 7: the Health write-out and the iCloud copy, in the background. Nothing in Expo Go (R307, R303).
+  afterFinish(db);
   bumpData();
   return 'finished';
 }

@@ -67,6 +67,13 @@ jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnou
 
 // The snapshot writes a file on the phone and does nothing on web. Tests watch the calls (its own tests are in backup.test.ts).
 const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
+// Phase 7's Health write-out and iCloud copy (nativeServices) are watched, never run: their own tests cover them.
+const mockNative = { afterFinish: jest.fn(), healthRecordBeforeDelete: jest.fn((_db: Db, _id: string): string | null => null), afterHistoryDelete: jest.fn() };
+jest.mock('./nativeServices', () => ({
+  afterFinish: (db: Db) => mockNative.afterFinish(db),
+  healthRecordBeforeDelete: (db: Db, id: string) => mockNative.healthRecordBeforeDelete(db, id),
+  afterHistoryDelete: (db: Db, id: string | null) => mockNative.afterHistoryDelete(db, id),
+}));
 jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -1321,6 +1328,18 @@ describe('finish and discard', () => {
   });
 
   const FINISHED_ORDER = ['cancel (no active workout)', 'snapshot (no active workout)', 'bump (no active workout)'];
+
+  it('starts the phase 7 Health write-out and iCloud copy after the snapshot, and only for a finish (R307, R303)', () => {
+    mockNative.afterFinish.mockClear().mockImplementation(() => {
+      expect(mockSnapshot).toHaveBeenCalled();
+    });
+    startFromDay(db, PUSH_A);
+    expect(finish(db, workoutId())).toBe('nothing_ticked');
+    expect(mockNative.afterFinish).not.toHaveBeenCalled();
+    tickSetOf(0, 0);
+    expect(finish(db, workoutId())).toBe('finished');
+    expect(mockNative.afterFinish).toHaveBeenCalledWith(db);
+  });
 
   describe('finish', () => {
     it('finishes, cancels the rest surface, takes the snapshot, then bumps, in that order, once the finish has committed', () => {
