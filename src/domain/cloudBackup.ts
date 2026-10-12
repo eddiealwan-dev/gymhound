@@ -25,7 +25,7 @@ export function restoreCandidate(input: {
 }
 
 /**
- * Settings → Backups' line about the cloud copy. A failure shows while it is newer than the last good copy.
+ * Settings → Backups' line about the cloud copy. A failure shows while it is newer than the last good copy; its message gets a final period when it has none (R225).
  * - iCloud: "iCloud copy: {time}." / "No iCloud copy yet." / "The iCloud copy failed at {time}: {message}"
  * - Android: "Android backup copy: {time}. Android backs it up about once a day." / "No backup copy yet." /
  *   "The backup copy failed at {time}: {message}"
@@ -37,7 +37,8 @@ export function cloudBackupLine(
   const { kind, at, error } = input;
   const icloud = kind === 'icloud';
   if (error && (at === null || error.at >= at)) {
-    return `The ${icloud ? 'iCloud' : 'backup'} copy failed at ${formatTime(error.at)}: ${error.message}`;
+    const message = /[.!?]$/.test(error.message) ? error.message : `${error.message}.`;
+    return `The ${icloud ? 'iCloud' : 'backup'} copy failed at ${formatTime(error.at)}: ${message}`;
   }
   if (at === null) return icloud ? 'No iCloud copy yet.' : 'No backup copy yet.';
   return icloud

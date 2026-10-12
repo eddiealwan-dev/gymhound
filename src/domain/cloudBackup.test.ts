@@ -54,6 +54,15 @@ describe('cloudBackupLine (R213)', () => {
     );
   });
 
+  it('adds a final period to a message that lacks one, and none to one that has it', () => {
+    expect(cloudBackupLine({ kind: 'icloud', at: null, error: { at: 2000, message: 'The disk is full' } }, time)).toBe(
+      'The iCloud copy failed at T2000: The disk is full.',
+    );
+    expect(cloudBackupLine({ kind: 'android_backup', at: null, error: { at: 2000, message: 'Gone!' } }, time)).toBe(
+      'The backup copy failed at T2000: Gone!',
+    );
+  });
+
   it('iCloud: a copy newer than an old failure', () => {
     expect(cloudBackupLine({ kind: 'icloud', at: 3000, error: { at: 2000, message: 'Off.' } }, time)).toBe(
       'iCloud copy: T3000.',

@@ -10,12 +10,14 @@ export type CloudBackupModule = {
   available(): Promise<boolean>;
   /**
    * Copies the snapshot at `sourcePath` (absolute, no `file://`) to `<container>/Documents/backup/<name>` through a temporary
-   * file and a coordinated replace, then removes every other `gymhound-*.db` there. Rejects with the system's message.
+   * file and a coordinated replace, then removes the `gymhound-*.db` there whose names sort before `name` (a newer one from
+   * another device is kept). Rejects with the system's message.
    */
   save(sourcePath: string, name: string): Promise<void>;
   /**
    * The newest snapshot in the container, downloaded if needed (waiting up to `timeoutMs`) and copied into the app's caches
-   * folder; `path` is absolute with no `file://`. Null when there is none, iCloud is off, or it did not download in time.
+   * folder; `path` is absolute with no `file://`. An empty listing is retried until `timeoutMs` (iCloud may not have synced
+   * the file list yet on a new phone); 0 lists once. Null when there is none, iCloud is off, or it did not arrive in time.
    */
   latest(timeoutMs: number): Promise<{ name: string; path: string } | null>;
 };

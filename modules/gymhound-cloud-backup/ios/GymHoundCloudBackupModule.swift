@@ -129,8 +129,10 @@ public class GymHoundCloudBackupModule: Module {
 
   // MARK: - save
 
-  /// Copies the snapshot at `sourcePath` (absolute, no `file://`) to `<folder>/<name>`, then removes every other snapshot there.
-  /// The copy is made to a local temporary file first and swapped in under coordination, so the container never holds half a file.
+  /// Copies the snapshot at `sourcePath` (absolute, no `file://`) to `<folder>/<name>`, then removes the older snapshots there.
+  /// The copy is made to a temporary file first (in a replacement folder on the target's volume, from
+  /// `url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: target, create: true)`) and swapped in under
+  /// coordination, so the container never holds half a file.
   private static func save(sourcePath: String, name: String) throws {
     guard isSnapshotName(name) else {
       throw CloudBackupException("Not a snapshot name: \(name)")
@@ -140,15 +142,21 @@ public class GymHoundCloudBackupModule: Module {
     }
     let fm = FileManager.default
     let source = URL(fileURLWithPath: sourcePath)
-    let temp = fm.temporaryDirectory.appendingPathComponent("gymhound-cloud-\(UUID().uuidString).db")
+    let target = folder.appendingPathComponent(name)
+    let tempFolder: URL
+    do {
+      tempFolder = try fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: target, create: true)
+    } catch {
+      throw CloudBackupException(error.localizedDescription)
+    }
+    defer { try? fm.removeItem(at: tempFolder) }
+    let temp = tempFolder.appendingPathComponent(name)
     do {
       try fm.copyItem(at: source, to: temp)
     } catch {
       throw CloudBackupException(error.localizedDescription)
     }
-    defer { try? fm.removeItem(at: temp) }
 
-    let target = folder.appendingPathComponent(name)
     try coordinateWrite(target, options: .forReplacing) { url in
       if fm.fileExists(atPath: url.path) {
         _ = try fm.replaceItemAt(url, withItemAt: temp)
@@ -157,7 +165,8 @@ public class GymHoundCloudBackupModule: Module {
       }
     }
 
-    for old in try snapshotNames(in: folder) where old != name {
+    // Only older copies: names sort in time order, and a newer one may have come from another device.
+    for old in try snapshotNames(in: folder) where old < name {
       // A placeholder for a file not downloaded here is removed through its real URL, which removes it from iCloud.
       let url = folder.appendingPathComponent(old)
       do {
@@ -188,10 +197,24 @@ public class GymHoundCloudBackupModule: Module {
   }
 
   /// The newest snapshot in the folder, copied into the app's caches folder: `["name": name, "path": path]` (no `file://`).
-  /// Starts the download when the file is not on this phone and waits up to `timeoutMs`; nil when there is none or it did not
-  /// arrive in time (the download carries on, so a later call can find it).
+  /// On a new phone iCloud may not have synced the folder's file list yet, so an empty listing is retried every 0.2 s until
+  /// `timeoutMs` (with 0 the folder is listed once). Starts the download when the file is not on this phone and waits for it
+  /// within the same deadline; nil when there is none or it did not arrive in time (the download carries on, so a later call
+  /// can find it).
   private static func latest(timeoutMs: Double) throws -> [String: String]? {
-    guard let folder = try backupFolder(create: false), let name = try snapshotNames(in: folder).last else {
+    guard let folder = try backupFolder(create: false) else {
+      return nil
+    }
+    let deadline = Date().addingTimeInterval(max(0, timeoutMs) / 1000)
+    var newest = try snapshotNames(in: folder).last
+    while newest == nil {
+      if Date() >= deadline {
+        return nil
+      }
+      Thread.sleep(forTimeInterval: 0.2)
+      newest = try snapshotNames(in: folder).last
+    }
+    guard let name = newest else {
       return nil
     }
     let fm = FileManager.default
@@ -202,7 +225,6 @@ public class GymHoundCloudBackupModule: Module {
       } catch {
         throw CloudBackupException(error.localizedDescription)
       }
-      let deadline = Date().addingTimeInterval(max(0, timeoutMs) / 1000)
       while !isDownloaded(url) {
         if Date() >= deadline {
           return nil
