@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Keyboard, Pressable, View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { addBodyEntry } from '../../db/repositories/bodyRepo';
 import { BODY_LABELS, dailySeries, formatBodyValue, parseBodyValue } from '../../domain/body';
@@ -11,8 +11,8 @@ import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { BodyField, CheckLine } from '../fields';
 import { LineChart } from '../charts/LineChart';
+import { Segmented } from '../Segmented';
 import { Body } from '../Text';
-import { useTheme } from '../ThemeProvider';
 
 /** A body value's number alone, as `formatBodyValue` rounds it: "182.5". */
 export function bodyNumber(value: number): string {
@@ -99,41 +99,9 @@ const RANGES: { value: ChartRange; label: string; spoken: string }[] = [
   { value: 'All', label: 'All', spoken: 'All, all time' },
 ];
 
-/** 3M, 1Y and All as a segmented control: the chosen one filled with the text colour. */
+/** 3M, 1Y and All as the segmented control: the chosen one filled with the text colour. */
 export function RangeChips({ value, onChange }: { value: ChartRange; onChange: (range: ChartRange) => void }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel="Chart range"
-      style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}
-    >
-      {RANGES.map((range) => {
-        const selected = range.value === value;
-        return (
-          <Pressable
-            key={range.value}
-            accessibilityRole="radio"
-            accessibilityLabel={range.spoken}
-            accessibilityState={{ checked: selected }}
-            onPress={() => onChange(range.value)}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              borderRadius: 9,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: selected ? colors.text : 'transparent',
-            }}
-          >
-            <Body weight={600} style={{ color: selected ? colors.bg : colors.text }}>
-              {range.label}
-            </Body>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return <Segmented label="Chart range" options={RANGES} value={value} onChange={onChange} />;
 }
 
 /**

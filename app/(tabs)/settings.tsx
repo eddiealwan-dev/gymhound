@@ -24,6 +24,7 @@ import { PlatesEditor } from '../../src/ui/PlatesEditor';
 import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
+import { Segmented } from '../../src/ui/Segmented';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { Toggle } from '../../src/ui/Toggle';
@@ -56,58 +57,12 @@ const BELL_VOLUMES = [0.25, 0.5, 0.75, 1];
 /** The rest lengths Settings offers. Off is not one: it belongs to an exercise (its ⋯ menu), not to every exercise. */
 const REST_LENGTHS = REST_CHOICES.filter((seconds) => seconds > 0);
 
-/** Two or three choices in one pill; the chosen one is filled with `text`. */
-function SegmentedControl<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel={label}
-      style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}
-    >
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: selected }}
-            onPress={() => onChange(option.value)}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              borderRadius: 9,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: selected ? colors.text : 'transparent',
-            }}
-          >
-            <Body weight={600} style={{ color: selected ? colors.bg : colors.text }}>
-              {option.label}
-            </Body>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 /** Light, Dark or System. The choice is stored, and the theme provider re-reads it. */
 function AppearanceControl() {
   const db = useDb();
   const current = useDbQuery(getSettings).theme;
   return (
-    <SegmentedControl
+    <Segmented
       label="Appearance"
       options={OPTIONS}
       value={current}
@@ -153,7 +108,7 @@ function UnitsSection() {
   return (
     <Section title="Units">
       <Field label="Weight">
-        <SegmentedControl
+        <Segmented
           label="Weight"
           options={WEIGHT_OPTIONS}
           value={unit}
@@ -164,7 +119,7 @@ function UnitsSection() {
         />
       </Field>
       <Field label="Distance">
-        <SegmentedControl
+        <Segmented
           label="Distance"
           options={DISTANCE_OPTIONS}
           value={distanceUnit}
@@ -373,7 +328,7 @@ function RestTimerSection() {
         />
       </View>
       <Field label="Bell sound">
-        <SegmentedControl
+        <Segmented
           label="Bell sound"
           options={BELL_OPTIONS}
           value={restBellSound}
