@@ -333,6 +333,11 @@ A slim prompt directly under the session header, outside the scrolling list, the
 - **Pitch** (the same component on the paywall and inside a locked Fuel tab), 16pt gaps: Display "GymHound Pro"; two rows 12pt apart, each a 20px checkmark in the text colour 12pt before a body-strong line that wraps; the free list in muted body; then, 8pt down and 8pt apart, a filled **Unlock**, the store's price in muted body centred under it ("$4.99 a month", "$24.99 once"), the renewal line in muted body for a subscription, any "Purchases aren't available in this build." / "The store isn't answering. Try again later." line, secondary **Restore purchases**, secondary **Not now** (full screen only) and the result line in muted body. **Terms of use** and **Privacy policy**, when the build has them, are 44pt-tall muted underlined links in a wrapping row, 16pt apart. No red, no image, no price the store didn't give.
 - **Pro already on:** Display "GymHound Pro", body "Pro is on." and a filled **Done**.
 
+### Empty states and first-run tips (§18.15)
+- **Empty state** (`EmptyState`, R401): one muted body line saying what will show and how it gets there ("No photos yet. Each one you add shows here, newest first."), then at most one action, a compact secondary pill 12pt under it. Left-aligned, wrapping, never red. When the screen's next step is already a button beside the line (Add food, New routine, Add exercise), the line names it and has no pill of its own.
+- **Tip** (`Hint`, R411): a card (surface, Seam edge, 16pt corners, 16pt left and 4pt right padding) holding one body sentence and a 44pt × in the text colour (VoiceOver "Dismiss tip", "It won't show again"). Used only before the first finished workout: the units line on Train and the session's tip over the first exercise. A dismissal is stored in settings.
+- **Open Settings** (`OpenSettingsButton`, R409): a compact secondary pill under any "… access is off. Turn it on in Settings" line, opening the app's page in the phone's Settings.
+
 ### Choice chips and radio rows (exercise editor)
 Choices take the shape that says how many can be picked. Primary muscles, secondary muscles and equipment are compact pills (36pt, 4pt hit slop) that wrap 8pt apart: unchosen a secondary pill, chosen filled with the text colour and labelled in the background colour, as in the picker. Muscles allow many; equipment allows one, and a new exercise starts with none chosen (R128). Logging, a single choice of six, is a column of 44pt radio rows: a 22px radio mark (filled in the text colour when chosen, an open muted ring when not) 12pt before the label, which wraps. Once the exercise is in use the rows give way to the type in body strong over the muted line "It's in use, so this stays." What stops Save is listed in muted lines over it, never red.
 
@@ -345,7 +350,7 @@ Choices take the shape that says how many can be picked. Primary muscles, second
 - **Do** keep every target at least 44pt, counting a compact pill's 4pt hit slop.
 - **Do** let rows wrap at large text: trailing groups drop to their own line together, then wrap among themselves.
 - **Do** keep suggestions faint and dashed, and entered values bold and solid.
-- **Do** reach for the shared pieces (ScreenTitle, SheetTitle, ModalHeader, Segmented, StepArrow, Button) before styling a new one by hand.
+- **Do** reach for the shared pieces (ScreenTitle, SheetTitle, ModalHeader, Segmented, StepArrow, Button, EmptyState, Hint) before styling a new one by hand.
 
 ### Don't:
 - **Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.
