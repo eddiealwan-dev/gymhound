@@ -14,10 +14,11 @@ import { deleteExercisePhotoFile } from '../../src/platform/exercisePhotoFiles';
 import { useCreatedExercise } from '../../src/state/createdExercise';
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
+import { ModalHeader } from '../../src/ui/ModalHeader';
 import { OwnPhotos } from '../../src/ui/OwnPhotos';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
-import { Body, Display } from '../../src/ui/Text';
+import { Body } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
@@ -150,22 +151,7 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
     return () => back.remove();
   }, []);
 
-  const header = (title: string) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -8, marginBottom: 24 }}>
-      <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
-        {title}
-      </Display>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-        hitSlop={4}
-        onPress={leave}
-        style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
-      >
-        <Ionicons name="close" size={28} color={colors.text} />
-      </Pressable>
-    </View>
-  );
+  const header = (title: string) => <ModalHeader title={title} onClose={leave} />;
 
   if (initial === null || draft === null) {
     return (
