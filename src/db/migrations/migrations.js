@@ -10,6 +10,7 @@ import m0005 from './0005_peaceful_rictor.sql';
 import m0006 from './0006_supreme_hex.sql';
 import m0007 from './0007_cheerful_sauron.sql';
 import m0008 from './0008_numerous_yellowjacket.sql';
+import m0009 from './0009_amazing_loa.sql';
 
   export default {
     journal,
@@ -22,7 +23,8 @@ m0004,
 m0005,
 m0006,
 m0007,
-m0008
+m0008,
+m0009
     }
   }
   

@@ -23,12 +23,14 @@ const IDS = {
 /** The bundled bells (scripts/make-bells.mjs), also bundled as notification sounds so the lock screen rings the chosen one (R304). */
 const BELL_SOUND_FILES = ['./assets/sounds/bell.wav', './assets/sounds/chime.wav', './assets/sounds/ding.wav'];
 
-/** The Health Connect records GymHound writes or reads (§17.1): workouts out; sleep, resting heart rate and weight in. */
+/** The Health Connect records GymHound writes or reads (§17.1): workouts out; sleep, resting heart rate, weight and steps in. */
 const HEALTH_CONNECT_PERMISSIONS = [
   'android.permission.health.WRITE_EXERCISE',
   'android.permission.health.READ_SLEEP',
   'android.permission.health.READ_RESTING_HEART_RATE',
   'android.permission.health.READ_WEIGHT',
+  // The Stats steps card on Android (§18.3, R312).
+  'android.permission.health.READ_STEPS',
 ];
 
 const HEALTH_SHARE = 'GymHound reads your sleep, resting heart rate and body weight, only if you turn each on in Settings.';
