@@ -190,7 +190,7 @@ const squatName = () => getLift(mockDb, SQUAT)!.name;
 describe('Stats → Lifts (R172)', () => {
   it('says how lifts appear when there are none', () => {
     const tree = mount(<LiftsSection today="2026-10-11" />);
-    expect(shownText(tree)).toEqual(['Lifts', 'Finish a workout and your lifts show here.']);
+    expect(shownText(tree)).toEqual(['Lifts', 'Finish a workout and each lift you log shows here, with its chart and records.']);
     expect(tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'header')).toHaveLength(1);
   });
 
@@ -426,6 +426,17 @@ describe('/lift/[id] (R173–R175)', () => {
     expect(buttonLabels(tree)).toEqual(
       expect.arrayContaining(['Thu, Oct 1, 45 seconds, 1 minute', 'Longest hold, 1 minute 30 seconds, Sat, Oct 3']),
     );
+  });
+
+  it('says how the line starts while the lift has one session, and drops it at two (R402)', () => {
+    mockId = BENCH;
+    workout(OCT_1, [[BENCH, [lb(135, 5)]]]);
+    let tree = mount(<LiftRoute />);
+    expect(shownText(tree)).toContain('One session so far. Your next one starts the line.');
+    tree.unmount();
+    workout(OCT_1 + 2 * DAY, [[BENCH, [lb(140, 5)]]]);
+    tree = mount(<LiftRoute />);
+    expect(shownText(tree)).not.toContain('One session so far. Your next one starts the line.');
   });
 
   it('says there is no chart yet when no session has a value to chart', () => {

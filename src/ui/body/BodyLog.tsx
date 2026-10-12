@@ -93,6 +93,9 @@ export function BodyQuickEntry({
   );
 }
 
+/** Under a body chart while it has one day: a single dot, no line yet (R402). */
+export const ONE_DAY = 'One day logged so far. Log on another day to start the line.';
+
 const RANGES: { value: ChartRange; label: string; spoken: string }[] = [
   { value: '3M', label: '3M', spoken: '3M, last 3 months' },
   { value: '1Y', label: '1Y', spoken: '1Y, last year' },
@@ -124,7 +127,8 @@ export function BodyChart({
 }) {
   const [range, setRange] = useState<ChartRange>('3M');
   if (entries.length === 0) return null;
-  const points = pointsInRange(dailySeries(entries, unit), range, today);
+  const series = dailySeries(entries, unit);
+  const points = pointsInRange(series, range, today);
   const format = (v: number) => formatBodyValue(v, unit);
   // R175: the change across the range in words, under the chart; none with fewer than two days.
   const change = rangeChange(points, format, locale);
@@ -136,6 +140,8 @@ export function BodyChart({
         <LineChart points={points} formatValue={format} locale={locale} accessibilityLabel={`${BODY_LABELS[kind]}. ${chartSummary(points, format, locale)}`} />
       )}
       {change !== null ? <Body muted>{change}</Body> : null}
+      {/* One day ever is one dot: say how the line starts (R402). */}
+      {series.length === 1 ? <Body muted>{ONE_DAY}</Body> : null}
       <RangeChips value={range} onChange={setRange} />
     </View>
   );

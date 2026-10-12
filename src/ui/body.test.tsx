@@ -116,13 +116,13 @@ const type = (tree: ReactTestRenderer, label: string, text: string) => act(() =>
 const chartPoints = (tree: ReactTestRenderer) => tree.root.findByType(LineChart).props.points as { localDate: string; value: number }[];
 
 describe('Stats: Body (R114)', () => {
-  it('shows Stats, Body, a Bodyweight card with "No entries yet.", Measurements and the footer', () => {
+  it('shows Stats, Body, a Bodyweight card that says how it fills, Measurements and the footer', () => {
     const tree = mount(<Stats />);
     const t = shownText(tree);
     // Other Stats sections may draw between the title and Body (R172); Body is followed by its Bodyweight card.
     expect(t[0]).toBe('Stats');
     expect(t.slice(t.indexOf('Body'), t.indexOf('Body') + 2)).toEqual(['Body', 'Bodyweight']);
-    expect(t).toContain('No entries yet.');
+    expect(t).toContain('No entries yet. Log your weight here and the chart starts.');
     expect(t).toContain('Measurements');
     expect(t).not.toContain('Not built yet.');
     expect(tree.root.findAllByType(Footer).length).toBe(1);
@@ -138,12 +138,14 @@ describe('Stats: Body (R114)', () => {
     const [entry] = listBodyEntries(mockDb, 'bodyweight');
     expect(entry).toMatchObject({ value: 182.5, unit: 'lb', localDate: '2026-10-11', measuredAt: NOW });
     const t = shownText(tree);
-    expect(t).not.toContain('No entries yet.');
+    expect(t).not.toContain('No entries yet. Log your weight here and the chart starts.');
     expect(t).toContain('182.5');
     expect(t).toContain('Oct 11');
     expect(field(tree, 'Bodyweight, lb').props.value).toBe('');
     expect(chartPoints(tree)).toEqual([{ localDate: '2026-10-11', value: 182.5 }]);
     expect(mockAnnounce).toHaveBeenCalledWith('Logged 182.5 lb.');
+    // One day is one dot: the card says how the line starts (R402).
+    expect(t).toContain('One day logged so far. Log on another day to start the line.');
   });
 
   it.each(['1855', 'abc', '-3', '19'])('shows "Check this number" for %s and writes nothing', (text) => {
@@ -398,7 +400,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     press(tree, 'Delete');
     expect(listBodyEntries(mockDb, 'waist')).toEqual([]);
     expect(shownText(tree)).not.toContain('Delete this entry?');
-    expect(shownText(tree)).toContain('No entries yet.');
+    expect(shownText(tree)).toContain('No entries yet. Log one above and it shows here.');
   });
 
   it('on the web, which has no sendAccessibilityEvent, Delete asks and deletes without crashing', () => {

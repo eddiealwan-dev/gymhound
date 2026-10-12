@@ -77,6 +77,9 @@ function WorkoutRow({ label, onPress, children }: { label: string; onPress: () =
   );
 }
 
+/** Under a lift's chart while it has one session: a single dot, no line yet (R402). */
+const ONE_SESSION = 'One session so far. Your next one starts the line.';
+
 /**
  * The chart of `points` in the chosen range (3M by default, 1Y, All), the change across it, the hollow-point key when
  * a hollow point is in range, and the range chips (R173, R175). The whole chart reads as one sentence.
@@ -104,6 +107,8 @@ function LiftChart({ points, caption, format, today, locale }: { points: LiftPoi
         />
       )}
       {change !== null ? <Body muted>{change}</Body> : null}
+      {/* One session ever is one dot: say how the line starts (R402). */}
+      {points.length === 1 ? <Body muted>{ONE_SESSION}</Body> : null}
       {anyHollow ? <Body muted>Hollow points are sessions with something off.</Body> : null}
       {/* With nothing to chart in any range, the chips would change nothing. */}
       {points.length > 0 ? <RangeChips value={range} onChange={setRange} /> : null}
