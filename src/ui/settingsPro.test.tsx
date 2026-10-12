@@ -20,7 +20,7 @@ const mockManage = jest.fn<Promise<boolean>, []>();
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn(), focusOn: jest.fn() }));
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
 jest.mock('../platform/entitlements', () => ({
   debugUnlockAllowed: () => false,
@@ -73,6 +73,25 @@ beforeEach(() => {
 });
 
 describe('Settings: GymHound Pro (§8.11, R138)', () => {
+  describe('Import (R565)', () => {
+    it('sits after Export; free, it says Import data is part of Pro (its page offers See Pro)', () => {
+      const tree = mount();
+      const shown = texts(tree);
+      expect(shown.indexOf('Import')).toBeGreaterThan(shown.indexOf('Export'));
+      expect(shown).toContain('Part of GymHound Pro.');
+      act(() => buttons(tree, 'Import data')[0].props.onPress());
+      expect(router.push).toHaveBeenCalledWith('/import');
+    });
+
+    it('with Pro, Import data opens its page', () => {
+      mockState = state({ isPro: true });
+      const tree = mount();
+      expect(texts(tree)).not.toContain('Part of GymHound Pro.');
+      act(() => buttons(tree, 'Import data')[0].props.onPress());
+      expect(router.push).toHaveBeenCalledWith('/import');
+    });
+  });
+
   it('is a group after Export', () => {
     const shown = texts(mount());
     expect(shown).toContain('GymHound Pro');

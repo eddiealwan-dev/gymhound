@@ -67,10 +67,10 @@ function mount(): ReactTestRenderer {
 
 const lines = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join(''));
 
-/** Every line of text in the Export section, from its heading to the next group (GymHound Pro). */
+/** Every line of text in the Export section, from its heading to the next group (Import). */
 const exportLines = (tree: ReactTestRenderer) => {
   const all = lines(tree);
-  const next = all.indexOf('GymHound Pro');
+  const next = all.indexOf('Import');
   return all.slice(all.indexOf('Export') + 1, next === -1 ? undefined : next);
 };
 

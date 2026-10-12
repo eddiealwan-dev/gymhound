@@ -10,6 +10,7 @@ export default function TabsLayout() {
   return (
     <Tabs backBehavior="history" screenOptions={{ header: () => <Header /> }} tabBar={(p) => <Dock {...p} />}>
       <Tabs.Screen name="settings" options={{ href: null }} />
+      <Tabs.Screen name="import" options={{ href: null }} />
       <Tabs.Screen name="routines/index" options={{ href: null }} />
       <Tabs.Screen name="routines/[id]" options={{ href: null }} />
       <Tabs.Screen name="routines/edit/[id]" options={{ href: null }} />

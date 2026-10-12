@@ -541,6 +541,23 @@ function ExportSection() {
 }
 
 /**
+ * Import (R565, Pro): bring workouts, body measurements and food from another app. **Import data** opens its page,
+ * which on free says it is part of Pro, with See Pro; this says so too.
+ */
+function ImportSection() {
+  const { isPro } = useEntitlementsState();
+  return (
+    <Section title="Import">
+      <View style={{ gap: 8 }}>
+        <Body>Bring your workouts, body measurements and food from another app, in a CSV file.</Body>
+        <Button label="Import data" variant="secondary" onPress={() => router.push('/import')} />
+        {!isPro ? <Body muted>Part of GymHound Pro.</Body> : null}
+      </View>
+    </Section>
+  );
+}
+
+/**
  * GymHound Pro (§8.11, R138): whether Pro is on (from the store, or only for testing), or what it adds with **See Pro**
  * (the paywall, once per tap); and **Restore purchases**, always, saying what happened as the paywall does. With no
  * store in the build, Restore purchases is disabled under one line. A store subscription adds a quiet **Manage
@@ -647,6 +664,7 @@ export default function Settings() {
         <BackupsSection />
         <HealthSettings />
         <ExportSection />
+        <ImportSection />
         <ProSection />
         {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
