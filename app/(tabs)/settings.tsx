@@ -420,7 +420,7 @@ const readBackups = (db: Db) => {
 };
 
 /** Shown when the share sheet can't open, for a backup copy or an export. */
-const SHARE_FAILED = "Couldn't open the share sheet.";
+const SHARE_FAILED = "Couldn't open the share sheet. Try again.";
 
 /**
  * When the last good snapshot was written, and a way to save a copy of the newest one somewhere safe, with a line saying
@@ -461,7 +461,10 @@ function BackupsSection() {
                 variant="secondary"
                 onPress={() => {
                   setShareFailed(false);
-                  shareFile(latestPath).catch(() => setShareFailed(true));
+                  shareFile(latestPath).catch((error: unknown) => {
+                    console.warn('GymHound could not share the backup copy.', error);
+                    setShareFailed(true);
+                  });
                 }}
               />
               <Body muted>A backup file for restoring GymHound. Keep it in Files or iCloud Drive; it won't open in other apps.</Body>
@@ -510,7 +513,10 @@ function ExportSection() {
       .run(db, Date.now())
       .then(
         (result) => show(result === 'empty' ? EXPORTS[kind].empty : result === 'unavailable' ? SHARE_FAILED : null),
-        () => show(SHARE_FAILED),
+        (error: unknown) => {
+          console.warn('GymHound could not export the CSV.', error);
+          show(SHARE_FAILED);
+        },
       )
       .finally(() => {
         exporting.current = false;

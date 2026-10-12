@@ -28,6 +28,7 @@ export function useStartSaved(): { start: (savedId: string) => void; sheet: Reac
     try {
       startSavedWorkout(db, savedId, Date.now());
     } catch (error) {
+      if (!(error instanceof ActiveWorkoutExistsError)) console.warn('GymHound could not start the saved workout.', error);
       setOpen(error instanceof ActiveWorkoutExistsError ? 'blocked' : 'failed');
       return;
     }

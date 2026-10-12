@@ -211,6 +211,7 @@ describe('your own photos (R111)', () => {
   });
 
   it('deletes the saved file again if storing its name fails', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(pickPhoto).mockResolvedValue({ status: 'picked', uri: 'file:///cache/out.jpg' });
     jest.mocked(setOwnPhoto).mockImplementation(() => {
       throw new Error('disk I/O error');
@@ -220,7 +221,9 @@ describe('your own photos (R111)', () => {
     await choose(tree, 'Choose a photo');
 
     expect(deleteExercisePhotoFile).toHaveBeenCalledWith(`wall-sit-start-${savedAt()}.jpg`);
-    expect(texts(tree)).toContain("That photo couldn't be saved.");
+    expect(texts(tree)).toContain("That photo couldn't be saved. Try again.");
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'disk I/O error' }));
+    warn.mockRestore();
   });
 
   const removeSheet = (tree: ReactTestRenderer) => tree.root.findAllByType(ConfirmSheet).find((c) => c.props.title === 'Remove this photo?')!;
@@ -249,8 +252,8 @@ describe('your own photos (R111)', () => {
     act(() => removeSheet(tree).props.onConfirm());
 
     expect(removeSheet(tree).props.visible).toBe(false);
-    expect(texts(tree)).toContain("That photo couldn't be saved.");
-    expect(announce).toHaveBeenCalledWith("That photo couldn't be saved.");
+    expect(texts(tree)).toContain("That photo couldn't be saved. Try again.");
+    expect(announce).toHaveBeenCalledWith("That photo couldn't be saved. Try again.");
     expect(deleteExercisePhotoFile).not.toHaveBeenCalled();
     expect(buttonsLabelled(tree, 'Replace start photo')).toHaveLength(1);
   });

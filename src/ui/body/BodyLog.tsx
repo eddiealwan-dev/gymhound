@@ -53,7 +53,8 @@ export function BodyQuickEntry({
     }
     try {
       addBodyEntry(db, kind, parsed.value, unit, Date.now());
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not log the entry.', error);
       // Nothing was written: the number stays in the field for another go.
       setFailed(true);
       announce(LOG_FAILED);

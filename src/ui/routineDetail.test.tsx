@@ -291,4 +291,37 @@ describe('Routine detail: Edit and Delete (R89, R90)', () => {
     expect(bumpData).toHaveBeenCalled();
     expect(router.back).toHaveBeenCalled();
   });
+
+  it("a failed delete says Couldn't delete. Try again., logs it and stays, instead of throwing from the button", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(deleteRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    show(MINE);
+    const tree = mount();
+
+    press(tree, 'Delete routine');
+    expect(() => press(tree, 'Delete')).not.toThrow();
+
+    expect(shownText(tree)).toContain("Couldn't delete. Try again.");
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'disk I/O error' }));
+    expect(bumpData).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("a failed copy says Couldn't copy. Try again., logs it and opens nothing", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(duplicateRoutine).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount();
+
+    expect(() => press(tree, 'Duplicate')).not.toThrow();
+
+    expect(shownText(tree)).toContain("Couldn't copy. Try again.");
+    expect(warn).toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

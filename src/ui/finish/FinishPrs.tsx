@@ -66,7 +66,10 @@ function PrList({ prs, afterNext }: { prs: readonly PrHighlight[]; afterNext: bo
     if (sharePb === null || busy.current) return;
     busy.current = true;
     setFailed(null);
-    const result = await sharePb(prs[i]).catch(() => 'failed' as const);
+    const result = await sharePb(prs[i]).catch((error: unknown) => {
+      console.warn('GymHound could not share the personal best.', error);
+      return 'failed' as const;
+    });
     busy.current = false;
     if (result !== 'shared') {
       setFailed(i);

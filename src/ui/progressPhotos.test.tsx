@@ -303,6 +303,7 @@ describe('/photos (R181)', () => {
   });
 
   it('says a failed save failed, and stores no row', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(pickProgressPhoto).mockResolvedValue({ status: 'picked', uri: 'file:///cache/out.jpg' });
     jest.mocked(saveProgressPhoto).mockImplementationOnce(() => {
       throw new Error('disk full');
@@ -311,15 +312,20 @@ describe('/photos (R181)', () => {
     tap(tree, 'Add a photo');
     await choose(tree, 'Choose a photo');
     expect(texts(tree)).toContain(FAILED);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'disk full' }));
+    warn.mockRestore();
     expect(listProgressPhotos(mockDb)).toEqual([]);
   });
 
   it('says a failed pick failed', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(pickProgressPhoto).mockRejectedValue(new Error('no memory'));
     const tree = mount(<PhotosRoute />);
     tap(tree, 'Add a photo');
     await choose(tree, 'Choose a photo');
     expect(texts(tree)).toContain(FAILED);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'no memory' }));
+    warn.mockRestore();
   });
 
   it('on the web says the photos are in the phone app, with no Add a photo', () => {

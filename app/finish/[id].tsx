@@ -29,7 +29,9 @@ function readSummary(db: Db, id: string) {
   const { unit } = getSettings(db);
   try {
     return { summary: getFinishSummary(db, id, unit), unit, firstWorkout: finishedWorkoutCount(db) === 1 };
-  } catch {
+  } catch (error) {
+    // Logged: after a finish, "That workout isn't here." with nothing in the log would hide a real failure.
+    console.warn('GymHound could not read the finish summary.', error);
     return { summary: null, unit, firstWorkout: false };
   }
 }

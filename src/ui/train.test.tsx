@@ -489,6 +489,23 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     }
   });
 
+  it("any other failure says Couldn't start. Try again., logs it and opens nothing, instead of throwing from the button", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(startFromDay).mockImplementationOnce(() => {
+      throw new Error('disk I/O error');
+    });
+    const tree = mount();
+
+    expect(() => press(tree, 'Start Upper A')).not.toThrow();
+
+    expect(shownText(tree)).toContain("Couldn't start. Try again.");
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'disk I/O error' }));
+    expect(router.push).not.toHaveBeenCalled();
+    press(tree, 'OK');
+    expect(shownText(tree)).not.toContain("Couldn't start. Try again.");
+    warn.mockRestore();
+  });
+
   it('a long row wraps instead of squeezing the name', () => {
     const tree = mount();
     const name = tree.root.findAllByType(Body).find((b) => b.props.children === 'Barbell bench press')!;

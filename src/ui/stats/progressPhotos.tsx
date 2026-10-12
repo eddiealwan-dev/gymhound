@@ -53,7 +53,8 @@ export function AddProgressPhoto({ compact = false }: { compact?: boolean }) {
     let picked;
     try {
       picked = await pickProgressPhoto(source);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the progress photo.', error);
       say(FAILED);
       return;
     }
@@ -66,13 +67,15 @@ export function AddProgressPhoto({ compact = false }: { compact?: boolean }) {
     let name: string;
     try {
       name = saveProgressPhoto(picked.uri, now);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the progress photo.', error);
       say(FAILED);
       return;
     }
     try {
       addProgressPhoto(db, name, now);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the progress photo.', error);
       deleteProgressPhotoFile(name);
       say(FAILED);
       return;

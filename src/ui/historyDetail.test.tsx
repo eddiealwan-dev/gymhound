@@ -328,6 +328,7 @@ describe('Repeat (R171)', () => {
   });
 
   it('any other failure says "Couldn\'t start. Try again." and announces it', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(startRepeatWorkout).mockImplementation(() => {
       throw new Error('disk');
     });
@@ -335,6 +336,8 @@ describe('Repeat (R171)', () => {
     press(tree, 'Repeat');
     expect(shownText(tree)).toContain("Couldn't start. Try again.");
     expect(mockAnnounce).toHaveBeenCalledWith("Couldn't start. Try again.");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
     expect(router.push).not.toHaveBeenCalled();
     expect(bumpData).not.toHaveBeenCalled();
   });
@@ -373,6 +376,7 @@ describe('Delete workout', () => {
   });
 
   it('a failed delete says "Couldn\'t delete. Try again.", announces it and stays', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(deleteHistoryWorkout).mockImplementation(() => {
       throw new Error('disk');
     });
@@ -382,6 +386,8 @@ describe('Delete workout', () => {
     act(() => jest.runAllTimers());
     expect(shownText(tree)).toContain("Couldn't delete. Try again.");
     expect(mockAnnounce).toHaveBeenCalledWith("Couldn't delete. Try again.");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
     expect(router.back).not.toHaveBeenCalled();
   });
 });

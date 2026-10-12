@@ -24,6 +24,7 @@ import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Hint } from '../../src/ui/Hint';
 import { Screen } from '../../src/ui/Screen';
+import { Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
@@ -251,10 +252,15 @@ export default function Train() {
   const [blocked, setBlocked] = useState(false);
   /** Change routine was tapped while a workout runs (R80). */
   const [changeBlocked, setChangeBlocked] = useState(false);
+  /** A start failed for a reason other than a workout in progress. */
+  const [startFailed, setStartFailed] = useState(false);
 
   const streak = computeStreak(trainingDates, today);
 
-  /** Starts a workout and opens it, unless one is already active. Then a sheet says to finish or discard it first. */
+  /**
+   * Starts a workout and opens it, unless one is already active. Then a sheet says to finish or discard it first; any
+   * other failure says "Couldn't start. Try again.", as a saved workout and Repeat do.
+   */
   const begin = (start: () => void) => {
     if (active !== null) {
       setBlocked(true);
@@ -267,7 +273,10 @@ export default function Train() {
         setBlocked(true);
         return;
       }
-      throw error;
+      // Nothing was started; a press handler must not throw.
+      console.warn('GymHound could not start the workout.', error);
+      setStartFailed(true);
+      return;
     }
     openSession();
   };
@@ -324,6 +333,10 @@ export default function Train() {
       {/* The same question Routines, a saved workout and History ask, in the words spec 8.3 gives it. */}
       <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} body="Finish or discard the workout in progress first." />
       <WorkoutInProgressSheet visible={changeBlocked} onClose={() => setChangeBlocked(false)} />
+      <Sheet visible={startFailed} onClose={() => setStartFailed(false)}>
+        <Body style={{ marginBottom: 16 }}>Couldn't start. Try again.</Body>
+        <Button label="OK" onPress={() => setStartFailed(false)} />
+      </Sheet>
     </Screen>
   );
 }

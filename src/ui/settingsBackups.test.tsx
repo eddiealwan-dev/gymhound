@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
 import { formatDateTime } from '../domain/dates';
-import { snapshotListing } from '../state/backup';
+import { shareFile, snapshotListing } from '../state/backup';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -107,6 +107,20 @@ describe('Settings: Backups diagnostics (Task 25)', () => {
 
     expect(backupLines(tree)).toEqual([`Last snapshot: ${formatDateTime(SAVED)}`, SAVE, EXPLAINER]);
     expect(hasShare(tree)).toBe(true);
+  });
+
+  it("says the share sheet couldn't open, and logs why, when saving a backup copy fails", async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockStored.lastSnapshotAt = SAVED;
+    listing({ path: `${FOLDER}/gymhound-20261009-090000-000.db`, names: ['gymhound-20261009-090000-000.db'] });
+    jest.mocked(shareFile).mockRejectedValueOnce(new Error('share exploded'));
+    const tree = mount();
+
+    await act(async () => tree.root.findAll((n) => n.props.label === SAVE && typeof n.props.onPress === 'function')[0].props.onPress());
+
+    expect(backupLines(tree)).toContain("Couldn't open the share sheet. Try again.");
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'share exploded' }));
+    warn.mockRestore();
   });
 
   it('says why the last snapshot failed when the failure is newer than the last good one', () => {

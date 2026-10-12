@@ -6,7 +6,7 @@ import { BackHandler, Keyboard, Platform, Pressable, TextInput, View } from 'rea
 import { useDb } from '../../src/db/DbProvider';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
 import { getExercise, listExercises } from '../../src/db/repositories/exercisesRepo';
-import { normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
+import { CustomExerciseRefused, normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
 import { EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
 import type { LoggingType, Muscle } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
@@ -193,7 +193,9 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
         updateCustomExercise(db, exerciseId, { ...clean, equipment });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      // A refusal is already in plain words; anything else is logged, and the screen says only that it didn't save.
+      if (!(e instanceof CustomExerciseRefused)) console.warn('GymHound could not save the exercise.', e);
+      const message = e instanceof CustomExerciseRefused ? e.message : "Couldn't save. Try again.";
       setFailure(message);
       announce(message);
       return;
@@ -208,7 +210,8 @@ function ExerciseEditor({ exerciseId, prefill, fromPicker }: EditorProps) {
     try {
       // An unused exercise goes with its own photos: their files are deleted once the rows are (R109, R111).
       deleteCustomExercise(db, exerciseId, (names) => names.forEach(deleteExercisePhotoFile));
-    } catch {
+    } catch (e) {
+      console.warn('GymHound could not delete the exercise.', e);
       // The sheet closes and a muted line over Save says so; nothing was deleted, so the editor stays.
       const message = "Couldn't delete. Try again.";
       setAskDelete(false);

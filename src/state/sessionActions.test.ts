@@ -375,6 +375,37 @@ describe('a unit switch mid-workout: logged entries stay in the unit they were l
     tick(db, ex, row.set, reading.entered, reading.weightUnit);
     expect(reread(row.set.id)).toMatchObject({ done: true, weight: 60, weightUnit: 'kg' });
   });
+
+  it('finishes a bench logged half in lb and half in kg: next time is raised once, in the unit it ended in', () => {
+    startFromDay(db, PUSH_A);
+    db.update(workoutExercises).set({ plannedWeight: 135, plannedUnit: 'lb' }).where(eq(workoutExercises.id, bench().id)).run();
+    const repMax = bench().rule!.repMax;
+    const count = bench().sets.length;
+    const half = Math.ceil(count / 2);
+    for (let i = 0; i < half; i++) {
+      const { ex, row } = benchRow(i);
+      const reading = readRow(row, { reps: String(repMax) }, 'lb', 'mi');
+      tick(db, ex, row.set, reading.entered, reading.weightUnit);
+    }
+    switchDisplayUnit(db, 'kg');
+    for (let i = half; i < count; i++) {
+      const { ex, row } = benchRow(i);
+      const reading = readRow(row, { reps: String(repMax) }, 'kg', 'mi');
+      tick(db, ex, row.set, reading.entered, reading.weightUnit);
+    }
+    const sets = bench().sets.map((s) => [s.weight, s.weightUnit]);
+    expect(sets.slice(0, half).every(([w, u]) => w === 135 && u === 'lb')).toBe(true);
+    expect(sets.slice(half).every(([w, u]) => w === 60 && u === 'kg')).toBe(true);
+    const workoutId = getActiveWorkoutId(db)!;
+    const { routineExerciseId } = db.select().from(workoutExercises).where(eq(workoutExercises.id, bench().id)).get()!;
+
+    expect(finish(db, workoutId)).toBe('finished');
+
+    const slot = db.select().from(routineExercises).where(eq(routineExercises.id, routineExerciseId!)).get()!;
+    // Every set hit the top, so the plan is raised once from one working weight, never from a sum of mixed units.
+    // The working weight is the easiest set, compared in kg: 60 kg (135 lb is 61.2 kg). 5 lb on it is 62.27 kg; the next loadable is 62.5 kg.
+    expect(slot).toMatchObject({ nextWeight: 62.5, nextWeightUnit: 'kg' });
+  });
 });
 
 describe('untick', () => {

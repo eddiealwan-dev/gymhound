@@ -5,6 +5,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import ExerciseEditorScreen from '../../app/exercise/[id]';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../db/repositories/customExercisesRepo';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
+import { CustomExerciseRefused } from '../domain/customExercise';
 import { deleteExercisePhotoFile } from '../platform/exercisePhotoFiles';
 import { bumpData } from '../state/dataVersion';
 import { useCreatedExercise } from '../state/createdExercise';
@@ -312,6 +313,41 @@ describe('Delete exercise that fails', () => {
     expect(line).toHaveLength(1);
     expect(mockAnnounce).toHaveBeenCalledWith("Couldn't delete. Try again.");
     expect(bumpData).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+});
+
+describe('Save that fails', () => {
+  it("says Couldn't save. Try again. for a database error, logs it, and shows no raw error", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(createCustomExercise).mockImplementationOnce(() => {
+      throw new Error("Failed to run the query 'insert into \"exercises\"': database or disk is full");
+    });
+    const tree = mount();
+    typeName(tree, 'Landmine row');
+    tap(tree, 'Chest, primary muscle');
+    tap(tree, 'Machine');
+    tap(tree, 'Save');
+
+    expect(shows(tree, "Couldn't save. Try again.")).toBe(true);
+    expect(tree.root.findAll((n) => n.type === Text && /Failed to run/.test(String(n.props.children)))).toHaveLength(0);
+    expect(mockAnnounce).toHaveBeenCalledWith("Couldn't save. Try again.");
+    expect(warn).toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('shows what stopped it when the save is refused in plain words', () => {
+    jest.mocked(createCustomExercise).mockImplementationOnce(() => {
+      throw new CustomExerciseRefused('You already have an exercise called Landmine row.');
+    });
+    const tree = mount();
+    typeName(tree, 'Landmine row');
+    tap(tree, 'Chest, primary muscle');
+    tap(tree, 'Machine');
+    tap(tree, 'Save');
+
+    expect(shows(tree, 'You already have an exercise called Landmine row.')).toBe(true);
     expect(router.back).not.toHaveBeenCalled();
   });
 });

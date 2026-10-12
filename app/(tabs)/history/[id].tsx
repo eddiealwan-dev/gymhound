@@ -115,7 +115,10 @@ function WorkoutDetailScreen({ id }: { id: string }) {
     } catch (error) {
       starting.current = false;
       if (error instanceof ActiveWorkoutExistsError) setInProgress(true);
-      else fail(START_FAILED);
+      else {
+        console.warn('GymHound could not repeat the workout.', error);
+        fail(START_FAILED);
+      }
       return;
     }
     bumpData();
@@ -134,7 +137,8 @@ function WorkoutDetailScreen({ id }: { id: string }) {
       held.current = detail;
       try {
         deleteHistoryWorkout(db, id);
-      } catch {
+      } catch (error) {
+        console.warn('GymHound could not delete the workout.', error);
         // Nothing was deleted, so nothing is held, the screen stays and a muted line under the buttons says so.
         held.current = null;
         fail(DELETE_FAILED);

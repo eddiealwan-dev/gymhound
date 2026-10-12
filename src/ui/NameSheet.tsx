@@ -15,7 +15,9 @@ const PLAIN_ERRORS = ['Give the workout a name.', `Keep the name to ${MAX_SAVED_
 /** A refused save in plain words: the repository's own copy when it is one of ours, otherwise "Couldn't save. Try again.". */
 export function plainSaveError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
-  return PLAIN_ERRORS.includes(message) ? message : "Couldn't save. Try again.";
+  if (PLAIN_ERRORS.includes(message)) return message;
+  console.warn('GymHound could not save the name.', error);
+  return "Couldn't save. Try again.";
 }
 
 type Props = {

@@ -102,7 +102,7 @@ export function ProPitch({ context, onDone }: { context: 'screen' | 'tab'; onDon
               accessibilityRole="link"
               accessibilityLabel={link.label}
               onPress={() => {
-                Linking.openURL(link.url).catch(() => {});
+                Linking.openURL(link.url).catch((error: unknown) => console.warn('GymHound could not open the link.', error));
               }}
               style={{ minHeight: 44, justifyContent: 'center' }}
             >

@@ -55,7 +55,7 @@ jest.mock('./ThemeProvider', () => {
 const EXPORT = 'Export workouts (CSV)';
 const FOOD = 'Export food (CSV)';
 const BODY = 'Export body (CSV)';
-const SHARE_FAILED = "Couldn't open the share sheet.";
+const SHARE_FAILED = "Couldn't open the share sheet. Try again.";
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -163,12 +163,15 @@ describe('Settings: Export (Task 27)', () => {
   });
 
   it("says the share sheet couldn't open when the export throws, and clears the message on the next try", async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(exportWorkoutsCsv).mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce('shared');
     const tree = mount();
 
     await press(tree, EXPORT);
     expect(exportLines(tree)).toEqual([EXPORT, SHARE_FAILED, FOOD, BODY]);
     expect(announce).toHaveBeenCalledWith(SHARE_FAILED);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'disk full' }));
+    warn.mockRestore();
 
     await press(tree, EXPORT);
     expect(exportLines(tree)).toEqual([EXPORT, FOOD, BODY]);

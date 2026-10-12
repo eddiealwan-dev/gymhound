@@ -1,5 +1,11 @@
 import { and, eq, ne } from 'drizzle-orm';
-import { customPattern, normalizeCustomExercise, validateCustomExercise, type CustomExerciseInput } from '../../domain/customExercise';
+import {
+  CustomExerciseRefused,
+  customPattern,
+  normalizeCustomExercise,
+  validateCustomExercise,
+  type CustomExerciseInput,
+} from '../../domain/customExercise';
 import { newId } from '../ids';
 import {
   exerciseNotes,
@@ -27,7 +33,7 @@ function visibleNames(db: Db, exceptId: string | null): string[] {
 function checked(db: Db, input: CustomExerciseInput, exceptId: string | null): CustomExerciseInput {
   const clean = normalizeCustomExercise(input);
   const problems = validateCustomExercise(clean, visibleNames(db, exceptId));
-  if (problems.length > 0) throw new Error(problems[0]);
+  if (problems.length > 0) throw new CustomExerciseRefused(problems[0]);
   return clean;
 }
 
@@ -86,7 +92,7 @@ export function updateCustomExercise(db: Db, id: string, input: CustomExerciseIn
     const current = ownExercise(tx, id);
     const clean = checked(tx, input, id);
     if (clean.loggingType !== current.loggingType && isExerciseUsed(tx, id)) {
-      throw new Error("A used exercise's logging type can't change.");
+      throw new CustomExerciseRefused("A used exercise's logging type can't change.");
     }
     tx.update(exercises)
       .set({
