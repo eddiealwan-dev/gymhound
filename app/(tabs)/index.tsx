@@ -73,7 +73,8 @@ function ResumeCard({
   setsDone: number;
   onChangeRoutine: () => void;
 }) {
-  const now = useNow(1000);
+  // Read every 250 ms so no second is skipped or held; drawn again only when the time shown changes (R405).
+  const now = useNow(250, (t) => formatElapsed(t - startedAt));
   return (
     <Card>
       <Label>IN PROGRESS</Label>

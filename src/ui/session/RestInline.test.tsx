@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Profiler } from 'react';
+import { Animated, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
@@ -55,6 +56,15 @@ const advance = (ms: number) => act(() => void jest.advanceTimersByTime(ms));
 const track = () => tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true);
 
 const styleOf = (node: ReactTestInstance) => [node.props.style].flat(Infinity).reduce((all, s) => ({ ...all, ...s }), {});
+/**
+ * The share of the track drawn: its scale from the left edge (R404), read from the animated value itself, which the
+ * native driver moves on the phone and which here holds where the row last set it.
+ */
+const trackShare = (): number => {
+  expect(styleOf(track()).transformOrigin).toBe('left');
+  const animated = tree.root.find((n) => typeof n.type !== 'string' && n.props.accessibilityElementsHidden === true && n.type !== View);
+  return [animated.props.style].flat()[0].transform[0].scaleX.__getValue();
+};
 
 /** The time box: the button that reads "Rest, 1 minute 45 seconds left" and opens the rest choices. */
 const timerBox = () =>
@@ -103,7 +113,8 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
 
   it('drains a text-colour track', () => {
     const track = tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true);
-    expect(styleOf(track)).toMatchObject({ position: 'absolute', left: 0, bottom: 0, height: 3, width: '87.5%', backgroundColor: '#f1ece2' });
+    expect(styleOf(track)).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, backgroundColor: '#f1ece2' });
+    expect(trackShare()).toBe(0.875);
     expect(track.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
@@ -124,16 +135,49 @@ describe('the rest under its set is a live timer (spec 18.6)', () => {
   });
 
   it('keeps the length the rest started with: a new rest length chosen from the countdown does not rescale its track', () => {
-    expect(styleOf(track()).width).toBe('87.5%');
+    expect(trackShare()).toBe(0.875);
 
     rerender({ lengthSeconds: 210 });
 
-    expect(styleOf(track()).width).toBe('87.5%');
+    expect(trackShare()).toBe(0.875);
   });
 
   it('+15s may still fill the track', () => {
     rerender({ endsAt: endsAt + 15_000 });
-    expect(styleOf(track()).width).toBe('100%');
+    expect(trackShare()).toBe(1);
+  });
+
+  it('drains the track smoothly on the native driver, to empty at the end of the rest (R404)', () => {
+    act(() => tree.unmount());
+    const timing = jest.spyOn(Animated, 'timing');
+    mount(Date.now() + 90_000);
+    expect(timing).toHaveBeenCalledTimes(1);
+    expect(timing.mock.calls[0][1]).toMatchObject({ toValue: 0, duration: 90_000, useNativeDriver: true });
+
+    // +15s sets the track again from the clock and drains it over the new time left.
+    advance(10_000);
+    rerender({ endsAt: endsAt + 15_000 });
+    expect(timing).toHaveBeenCalledTimes(2);
+    expect(timing.mock.calls[1][1]).toMatchObject({ toValue: 0, duration: 95_000, useNativeDriver: true });
+    timing.mockRestore();
+  });
+
+  it('draws again once a second, when the time shown changes, not on every look at the clock (R405)', () => {
+    act(() => tree.unmount());
+    let draws = 0;
+    endsAt = Date.now() + 105_000;
+    act(() => {
+      tree = create(
+        <Profiler id="rest" onRender={() => void draws++}>
+          <RestInline workoutId="w1" endsAt={endsAt} lengthSeconds={120} upText="Rest's up" onOpenRest={onOpenRest} />
+        </Profiler>,
+      );
+    });
+    draws = 0;
+    // Each look at the clock in its own act, as on the phone, where nothing batches them.
+    for (let i = 0; i < 40; i++) advance(250);
+    expect(draws).toBe(10);
+    expect(shownText()).toContain('1:35');
   });
 
   it("keeps the running row's height through Rest's up, so the sets below do not jump at zero", () => {

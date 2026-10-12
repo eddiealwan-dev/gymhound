@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
-import { restRowPhase, restTrackFraction, spokenRest } from '../../domain/rest';
+import { restRowPhase, spokenRest } from '../../domain/rest';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
+import { useTicker } from '../../state/useNow';
 import { Button } from '../Button';
 import { Body, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -27,6 +28,47 @@ type Props = {
 /** How often the clock is read: the same as the rest bar, so the two show the same second. */
 const TICK_MS = 250;
 
+/** What the row shows at `now`: the seconds left, or its phase once the rest is up. It draws again only when this changes (R405). */
+const faceAt = (endsAt: number) => (now: number) => {
+  const phase = restRowPhase(endsAt, now);
+  return phase.kind === 'running' ? phase.remaining : phase.kind;
+};
+
+/**
+ * The share of the track still drawn, as an animated value that drains to 0 at `endsAt` on the native driver (R404):
+ * the track moves smoothly on the UI thread, at no cost to JavaScript, instead of stepping once a second. The value is
+ * the time left over the rest's length, unclamped (+15s may leave more than the length), and what is drawn is that
+ * clamped to 0–1. It is set again from the clock whenever the end or the length changes, so it never drifts from the
+ * countdown.
+ */
+function useDrain(endsAt: number, lengthSeconds: number, running: boolean): Animated.AnimatedInterpolation<number> {
+  const drain = useRef<Animated.Value | null>(null);
+  if (drain.current === null) drain.current = new Animated.Value(1);
+  const value = drain.current;
+  useEffect(() => {
+    if (!running) return;
+    const lengthMs = lengthSeconds * 1000;
+    if (!Number.isFinite(lengthMs) || lengthMs <= 0) {
+      // The length is unknown: the track stays full, as before.
+      value.setValue(1);
+      return;
+    }
+    const left = Math.max(0, endsAt - Date.now());
+    value.setValue(left / lengthMs);
+    const animation = Animated.timing(value, {
+      toValue: 0,
+      duration: left,
+      easing: Easing.linear,
+      useNativeDriver: true,
+      isInteraction: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [value, endsAt, lengthSeconds, running]);
+  // One node for the row's life, so a draw never hands the native driver a new one.
+  return useMemo(() => value.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }), [value]);
+}
+
 /**
  * The rest under the set that started it (spec 18.6): a big countdown under a REST label, which opens the exercise's rest
  * choices when tapped, then −15s, +15s and Skip, over a thin track that drains with the time left. At zero it holds a
@@ -39,24 +81,22 @@ const TICK_MS = 250;
 export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRest }: Props) {
   const db = useDb();
   const { colors } = useTheme();
-  const [now, setNow] = useState(() => Date.now());
   // The length this rest started with (the block draws a new row for a new rest).
   const [trackLength] = useState(lengthSeconds);
   /** The height of the row while it counts down, which "Rest's up" keeps so the sets below don't jump at zero. */
   const [runningHeight, setRunningHeight] = useState<number | undefined>(undefined);
+  /** Whether the row has gone: the clock then stops. Set by the draw that finds it gone. */
+  const [stopped, setStopped] = useState(false);
+  // Read every 250 ms so each second turns over on time; drawn again only when the shown second (or phase) changes.
+  const now = useTicker(TICK_MS, faceAt(endsAt), !stopped);
 
   const phase = restRowPhase(endsAt, now);
   const gone = phase.kind === 'gone';
-
-  // The clock stops once the row has gone.
-  useEffect(() => {
-    if (gone) return;
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, [gone]);
+  if (gone !== stopped) setStopped(gone);
+  const running = phase.kind === 'running';
+  const drain = useDrain(endsAt, trackLength, running);
 
   if (phase.kind === 'gone') return null;
-  const running = phase.kind === 'running';
 
   return (
     <View
@@ -137,15 +177,18 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               onPress={() => restSkip(db, workoutId, endsAt)}
             />
           </View>
-          <View
+          {/* The full width, scaled from its left edge to the share left: a transform runs on the native driver, a width can't. */}
+          <Animated.View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
             style={{
               position: 'absolute',
               left: 0,
+              right: 0,
               bottom: 0,
               height: 3,
-              width: `${restTrackFraction(phase.remaining, trackLength) * 100}%`,
+              transformOrigin: 'left',
+              transform: [{ scaleX: drain }],
               backgroundColor: colors.text,
             }}
           />

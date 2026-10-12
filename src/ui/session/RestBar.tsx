@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
 import { restRemainingSeconds, spokenRest } from '../../domain/rest';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
+import { useTicker } from '../../state/useNow';
 import { Button } from '../Button';
 import { Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -31,12 +31,8 @@ export function RestBar({ workoutId, endsAt, bottomInset }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, []);
+  // Read every 250 ms so each second turns over on time; drawn again only when the second shown changes (R405).
+  const now = useTicker(TICK_MS, (t) => restRemainingSeconds(endsAt, t));
 
   const remaining = restRemainingSeconds(endsAt, now);
   if (remaining === null) return null;

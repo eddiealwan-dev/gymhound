@@ -82,7 +82,8 @@ function SessionHeader({
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const now = useNow(1000);
+  // Read every 250 ms so no second is skipped or held; the header draws again only when the time shown changes (R405).
+  const now = useNow(250, (t) => formatElapsed(t - startedAt));
   const [musicOpen, setMusicOpen] = useState(false);
   const elapsed = formatElapsed(now - startedAt);
   const { done, total } = progress;
