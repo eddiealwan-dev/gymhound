@@ -288,6 +288,80 @@ describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
   });
 });
 
+describe('ExerciseBlock: a soft check for an unlikely number (R422)', () => {
+  beforeEach(() => mockAnnounce.mockClear());
+  const enter = (tree: ReactTestRenderer, label: string, text: string) => {
+    act(() => byLabel(tree, label).props.onChangeText(text));
+    act(() => byLabel(tree, label).props.onBlur());
+  };
+  const lines = (tree: ReactTestRenderer) => shownText(tree).filter((t) => t === 'Check this number');
+
+  it('shows "Check this number" above the row once a weight over 1,000 lb is left, saves it, and says it politely', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('1350'));
+    expect(lines(tree)).toHaveLength(0);
+
+    act(() => byLabel(tree, 'LB, set 1').props.onBlur());
+
+    expect(commitSetField).toHaveBeenCalledWith('db', 's0', expect.objectContaining({ weight: 1350 }));
+    const line = lineNode(tree, 'Check this number');
+    expect(line.props.accessibilityLiveRegion).toBe('polite');
+    expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
+    // Once the saved weight comes back, its field carries the heavier muted underline too.
+    act(() => tree.update(block(bench([set('s0', 0, { weight: 1350, weightUnit: 'lb' })]))));
+    expect(fieldStyle(tree, 'LB, set 1')).toMatchObject({ borderBottomWidth: 2, borderBottomColor: '#a39d90' });
+    expect(fieldStyle(tree, 'REPS, set 1').borderBottomWidth).toBeUndefined();
+  });
+
+  it('never blocks: the tick still logs what the row shows (R48)', async () => {
+    const tree = mount(bench([set('s0', 0)]));
+    enter(tree, 'LB, set 1', '1350');
+    // The saved weight comes back from the database.
+    act(() => tree.update(block(bench([set('s0', 0, { weight: 1350, weightUnit: 'lb' })]))));
+    expect(lines(tree)).toHaveLength(1);
+    act(() => byLabel(tree, 'REPS, set 1').props.onChangeText('5'));
+
+    await tapTick(tree, 'Set 1 done');
+
+    expect(tick).toHaveBeenCalledWith('db', expect.anything(), expect.objectContaining({ id: 's0' }), expect.objectContaining({ weight: 1350, reps: 5 }), 'lb', 'mi');
+  });
+
+  it("flags a weight more than 1.5 times the exercise's best and 20 lb more, and not one under that", () => {
+    const withBest = (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), bestWeight: { value: 135, unit: 'lb' } });
+    const tree = mount(withBest());
+    enter(tree, 'LB, set 1', '200');
+    expect(lines(tree)).toHaveLength(0);
+
+    enter(tree, 'LB, set 1', '225');
+    expect(lines(tree)).toHaveLength(1);
+  });
+
+  it('flags more than 100 reps', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    enter(tree, 'REPS, set 1', '100');
+    expect(lines(tree)).toHaveLength(0);
+    enter(tree, 'REPS, set 1', '150');
+    expect(lines(tree)).toHaveLength(1);
+  });
+
+  it('clears as soon as the value changes', () => {
+    const tree = mount(bench([set('s0', 0)]));
+    enter(tree, 'LB, set 1', '1350');
+    expect(lines(tree)).toHaveLength(1);
+
+    act(() => byLabel(tree, 'LB, set 1').props.onChangeText('135'));
+
+    expect(lines(tree)).toHaveLength(0);
+  });
+
+  it('never flags a warmup', () => {
+    const tree = mount(bench([set('s0', 0, { setType: 'warmup' })]));
+    enter(tree, 'LB, set W', '1350');
+    expect(lines(tree)).toHaveLength(0);
+    expect(mockAnnounce).not.toHaveBeenCalled();
+  });
+});
+
 /** Set 1 ticked at 135 x 8, set 2 not ticked yet. */
 const oneDone = () => bench([set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 1 }), set('s1', 1)]);
 

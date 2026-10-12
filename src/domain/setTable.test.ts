@@ -6,6 +6,7 @@ import {
   hintText,
   isComplete,
   isTargetValue,
+  looksUnlikely,
   parseField,
   readRow,
   tableColumns,
@@ -695,5 +696,54 @@ describe('isTargetValue and fieldLook (spec 18.6: suggested values look like sug
     expect(reading.tickable).toBe(true);
     const logged = resolveTick({ loggingType: r.loggingType, entered: reading.entered, target: r.target, placeholders: r.placeholders });
     expect(logged?.weight).toBe(135);
+  });
+});
+
+describe('looksUnlikely: the soft check on a set field once it is left (R422)', () => {
+  it('flags a weight above 1,000 lb or 450 kg, with no history', () => {
+    expect(looksUnlikely('weight', 1000, 'working', 'lb', null)).toBe(false);
+    expect(looksUnlikely('weight', 1000.5, 'working', 'lb', null)).toBe(true);
+    expect(looksUnlikely('weight', 450, 'working', 'kg', null)).toBe(false);
+    expect(looksUnlikely('weight', 451, 'working', 'kg', undefined)).toBe(true);
+  });
+
+  it("flags a weight more than 1.5 times the exercise's best and at least 20 lb more", () => {
+    const best = { value: 100, unit: 'lb' as const };
+    expect(looksUnlikely('weight', 150, 'working', 'lb', best)).toBe(false);
+    expect(looksUnlikely('weight', 151, 'working', 'lb', best)).toBe(true);
+    // 31 lb is over 1.5 times 20 lb, but only 11 lb more: a light lift moves in big steps.
+    expect(looksUnlikely('weight', 31, 'working', 'lb', { value: 20, unit: 'lb' })).toBe(false);
+    expect(looksUnlikely('weight', 40, 'working', 'lb', { value: 20, unit: 'lb' })).toBe(true);
+  });
+
+  it('needs at least 10 kg more in kg, and compares a best logged in the other unit', () => {
+    expect(looksUnlikely('weight', 16, 'working', 'kg', { value: 10, unit: 'kg' })).toBe(false);
+    expect(looksUnlikely('weight', 20, 'working', 'kg', { value: 10, unit: 'kg' })).toBe(true);
+    // 100 kg is 220.46 lb; 1.5 times that is 330.69 lb.
+    expect(looksUnlikely('weight', 330, 'working', 'lb', { value: 100, unit: 'kg' })).toBe(false);
+    expect(looksUnlikely('weight', 331, 'working', 'lb', { value: 100, unit: 'kg' })).toBe(true);
+  });
+
+  it('ignores a best of 0, as no history', () => {
+    expect(looksUnlikely('weight', 60, 'working', 'lb', { value: 0, unit: 'lb' })).toBe(false);
+  });
+
+  it('flags reps above 100', () => {
+    expect(looksUnlikely('reps', 100, 'working', 'lb', null)).toBe(false);
+    expect(looksUnlikely('reps', 101, 'working', 'lb', null)).toBe(true);
+  });
+
+  it('never flags a warmup, an empty field, or a time, distance or RPE', () => {
+    expect(looksUnlikely('weight', 2000, 'warmup', 'lb', null)).toBe(false);
+    expect(looksUnlikely('reps', 500, 'warmup', 'lb', null)).toBe(false);
+    expect(looksUnlikely('weight', null, 'working', 'lb', null)).toBe(false);
+    expect(looksUnlikely('durationS', 99999, 'working', 'lb', null)).toBe(false);
+    expect(looksUnlikely('distance', 5000, 'working', 'lb', null)).toBe(false);
+    expect(looksUnlikely('rpe', 10, 'working', 'lb', null)).toBe(false);
+  });
+
+  it('flags drop and failure sets like working sets', () => {
+    expect(looksUnlikely('weight', 1200, 'drop', 'lb', null)).toBe(true);
+    expect(looksUnlikely('reps', 150, 'failure', 'lb', null)).toBe(true);
   });
 });
