@@ -32,6 +32,8 @@ jest.mock('../platform/entitlements/select', () => {
   return { ...actual, entitlementsFor: (db: Db) => mockEntitlements ?? actual.entitlementsFor(db) };
 });
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
+let mockBuild: { commit: string; date: string } | null = { commit: '93912f2', date: '2026-10-12' };
+jest.mock('../platform/buildStamp', () => ({ buildStamp: () => mockBuild }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../platform/restTimer/bell', () => ({ playBell: jest.fn(() => Promise.resolve()) }));
 jest.mock('../state/backup', () => ({
@@ -128,6 +130,16 @@ describe('Settings: Developer (R126)', () => {
     expect(texts(tree)).toContain(UNLOCK);
     expect(unlock(tree)).toHaveLength(1);
     expect(unlock(tree)[0].props.value).toBe(false);
+  });
+
+  it('names the build the phone runs, to match the commit the PC printed (R540)', () => {
+    build(true);
+    let tree = mount();
+    expect(texts(tree)).toContain('Build 93912f2 · 2026-10-12');
+    mockBuild = null;
+    tree = mount();
+    expect(texts(tree)).toContain('Build: not known');
+    mockBuild = { commit: '93912f2', date: '2026-10-12' };
   });
 
   it('turning it on lets another screen make a routine of your own at once; off locks it again (§18.21)', () => {

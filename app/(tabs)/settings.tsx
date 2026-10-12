@@ -15,6 +15,7 @@ import type { TrialPreset } from '../../src/domain/trial';
 import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
 import { debugUnlockAllowed, entitlementsFor, useEntitlementsState, useTrialStatus } from '../../src/platform/entitlements';
+import { buildStamp } from '../../src/platform/buildStamp';
 import { exportBodyCsv, exportFoodCsv, exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
@@ -601,6 +602,7 @@ function DeveloperSection() {
   const unlocked = useDbQuery(getSettings).proDebugUnlock;
   return (
     <Section title="Developer">
+      <BuildLine />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
         <Body style={{ flexShrink: 1 }}>Unlock Pro for testing</Body>
         <Toggle
@@ -614,6 +616,19 @@ function DeveloperSection() {
       </View>
       <TrialDeveloperControls />
     </Section>
+  );
+}
+
+/**
+ * Which build the phone is running (R540): the commit and its date, to match against what the PC printed before a phone
+ * check. Selectable, so it can be copied into a note.
+ */
+function BuildLine() {
+  const build = buildStamp();
+  return (
+    <Body muted selectable testID="build-stamp">
+      {build === null ? 'Build: not known' : `Build ${build.commit} · ${build.date}`}
+    </Body>
   );
 }
 
