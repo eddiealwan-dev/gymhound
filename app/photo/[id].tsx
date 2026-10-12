@@ -11,6 +11,7 @@ import { deleteProgressPhotoFile, progressPhotoUri } from '../../src/platform/pr
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
+import { StepArrow } from '../../src/ui/StepArrow';
 import { PHONE_ONLY, useProgressPhotos } from '../../src/ui/stats/progressPhotos';
 import { Body } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -110,7 +111,8 @@ function Viewer() {
         <Shown photo={shown} date={dateOf(shown)} />
       )}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Button label="‹" variant="secondary" accessibilityLabel="Older photo" disabled={!older} onPress={() => go(older)} />
+        {/* The step arrow Fuel's day and History's month use: ‹ goes back in time. */}
+        <StepArrow glyph="‹" label="Older photo" disabled={!older} onPress={() => go(older)} />
         <View style={{ flex: 1 }}>
           <Button
             label="Side by side"
@@ -120,7 +122,7 @@ function Viewer() {
             onPress={() => setSideBySide((on) => !on)}
           />
         </View>
-        <Button label="›" variant="secondary" accessibilityLabel="Newer photo" disabled={!newer} onPress={() => go(newer)} />
+        <StepArrow glyph="›" label="Newer photo" disabled={!newer} onPress={() => go(newer)} />
       </View>
       {message !== null ? <Body muted>{message}</Body> : null}
       <View style={{ alignSelf: 'center' }}>

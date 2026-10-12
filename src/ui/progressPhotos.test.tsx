@@ -339,8 +339,8 @@ describe('/photo/[id] (R181)', () => {
     tap(tree, 'Newer photo');
     expect(images(tree)).toEqual(['file:///documents/progress-photos/progress-latest.jpg']);
     expect(control(tree, 'Newer photo').props.disabled).toBe(true);
-    expect(control(tree, 'Older photo').props.label).toBe('‹');
-    expect(control(tree, 'Newer photo').props.label).toBe('›');
+    expect(control(tree, 'Older photo').props.glyph).toBe('‹');
+    expect(control(tree, 'Newer photo').props.glyph).toBe('›');
   });
 
   it('‹ and › say the date of the photo now shown', () => {
