@@ -21,3 +21,11 @@ describe('shared Intl formatters (performance pass)', () => {
     expect(numberFormat('de-DE').format(12480)).toBe(new Intl.NumberFormat('de-DE').format(12480));
   });
 });
+
+describe('numberFormat as toLocaleString', () => {
+  it.each([undefined, 'en-US', 'de-DE'])('writes what toLocaleString writes for locale %s', (locale) => {
+    for (const n of [0, 1, 1.5, 0.333, 1840, -0, 12480.75]) {
+      expect(numberFormat(locale, { maximumFractionDigits: 1 }).format(n)).toBe(n.toLocaleString(locale, { maximumFractionDigits: 1 }));
+    }
+  });
+});

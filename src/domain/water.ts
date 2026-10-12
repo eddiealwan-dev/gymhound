@@ -1,3 +1,4 @@
+import { numberFormat } from './intl';
 import { parseDecimal } from './input';
 import type { WaterUnit, WeightUnit } from './types';
 
@@ -47,9 +48,9 @@ function waterNumber(ml: number, unit: WaterUnit, locale?: string): { text: stri
   const n = Number(value.toFixed(digits)) || 0;
   if (n === 0 && value > 0) {
     const step = unit === 'fl_oz' ? 0.1 : 1;
-    return { text: step.toLocaleString(locale, { maximumFractionDigits: 1 }), under: true, one: false };
+    return { text: numberFormat(locale, { maximumFractionDigits: 1 }).format(step), under: true, one: false };
   }
-  return { text: n.toLocaleString(locale, { maximumFractionDigits: digits }), under: false, one: n === 1 };
+  return { text: numberFormat(locale, { maximumFractionDigits: digits }).format(n), under: false, one: n === 1 };
 }
 
 /** An amount in ml as it is shown: "1,250 ml", "40 fl oz", "0.5 fl oz", or "<0.1 fl oz" for a sip. */

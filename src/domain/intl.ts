@@ -18,9 +18,12 @@ export function dateFormat(locale: string, options: Intl.DateTimeFormatOptions):
   return format;
 }
 
-/** `new Intl.NumberFormat(locale, options)`, kept for the next call with the same locale and options. */
-export function numberFormat(locale: string, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
-  const key = `${locale}|${JSON.stringify(options ?? {})}`;
+/**
+ * `new Intl.NumberFormat(locale, options)`, kept for the next call with the same locale and options. It writes what
+ * `n.toLocaleString(locale, options)` writes, without making a formatter each time; no locale is the device's.
+ */
+export function numberFormat(locale: string | undefined, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `${locale ?? ''}|${JSON.stringify(options ?? {})}`;
   let format = numberFormats.get(key);
   if (format === undefined) {
     format = new Intl.NumberFormat(locale, options);

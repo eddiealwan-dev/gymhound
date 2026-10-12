@@ -1,4 +1,4 @@
-import { dateFormat } from './intl';
+import { dateFormat, numberFormat } from './intl';
 import { fromLocalDate, shiftDay } from './dates';
 
 /**
@@ -38,7 +38,7 @@ export function stepsWindows(today: string, now: number): { start: Date; end: Da
 
 /** A count with the locale's separators ("8,214"). */
 export function stepsCount(n: number, locale: string): string {
-  return Math.round(n).toLocaleString(locale, { maximumFractionDigits: 0 });
+  return numberFormat(locale, { maximumFractionDigits: 0 }).format(Math.round(n));
 }
 
 /** The weekday's initial under a bar ("M"). */
