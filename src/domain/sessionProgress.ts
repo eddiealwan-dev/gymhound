@@ -97,7 +97,7 @@ const sets = (n: number) => (n === 1 ? 'set' : 'sets');
  * or no count and the time alone with no sets.
  */
 export function progressParts(p: Progress, elapsed: string): { count: string; time: string } {
-  return p.total === 0 ? { count: '', time: elapsed } : { count: `${p.done}/${p.total} ${sets(p.total)}`, time: ` · ${elapsed}` };
+  return p.total === 0 ? { count: '', time: elapsed } : { count: `${p.done}/${p.total} ${sets(p.total)}`, time: `\u00a0· ${elapsed}` };
 }
 
 /** A count in words for the screen reader: "1 of 4 sets done". */

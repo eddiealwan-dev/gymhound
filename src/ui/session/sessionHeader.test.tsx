@@ -146,12 +146,12 @@ describe('the session header (spec 18.6)', () => {
 
     // The line is two parts in a row, read as one: the count, then the time (Round 4, A2).
     const count = textWith(tree, '2/4 sets');
-    const time = textWith(tree, ' · 0:01');
+    const time = textWith(tree, '\u00a0· 0:01');
     expect(count).toHaveLength(1);
     expect(time).toHaveLength(1);
     const row = lineRow(tree);
     expect(row.props.accessible).toBe(true);
-    expect(row.findAll((n) => n.type === Text).map((n) => n.props.children)).toEqual(['2/4 sets', ' · 0:01']);
+    expect(row.findAll((n) => n.type === Text).map((n) => n.props.children)).toEqual(['2/4 sets', '\u00a0· 0:01']);
     for (const part of [count[0], time[0]]) expect(part.props).toMatchObject({ numberOfLines: 1, maxFontSizeMultiplier: 1.3 });
   });
 
@@ -259,7 +259,7 @@ describe('the session header (spec 18.6)', () => {
     it('the time is never cut: the count shrinks first', () => {
       const tree = mount();
       expect(flat(textWith(tree, '2/4 sets')[0].props.style)).toMatchObject({ flexShrink: 1 });
-      expect(flat(textWith(tree, ' · 0:01')[0].props.style)).toMatchObject({ flexShrink: 0 });
+      expect(flat(textWith(tree, '\u00a0· 0:01')[0].props.style)).toMatchObject({ flexShrink: 0 });
       expect(flat(lineRow(tree).props.style)).toMatchObject({ flexDirection: 'row', minWidth: 0 });
     });
 

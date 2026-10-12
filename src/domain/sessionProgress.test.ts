@@ -30,8 +30,8 @@ describe('exerciseProgress: the sets of one exercise', () => {
 
 describe('progressParts and progressLabel: the line under the session name', () => {
   it('reads done of total sets, then the time, in two parts so the count can give way first (Round 4)', () => {
-    expect(progressParts({ done: 5, total: 18 }, '24:10')).toEqual({ count: '5/18 sets', time: ' · 24:10' });
-    expect(progressParts({ done: 0, total: 1 }, '0:05')).toEqual({ count: '0/1 set', time: ' · 0:05' });
+    expect(progressParts({ done: 5, total: 18 }, '24:10')).toEqual({ count: '5/18 sets', time: '\u00a0· 24:10' });
+    expect(progressParts({ done: 0, total: 1 }, '0:05')).toEqual({ count: '0/1 set', time: '\u00a0· 0:05' });
   });
 
   it('is the time alone with no sets', () => {

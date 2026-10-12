@@ -213,6 +213,13 @@ describe('ConsistencyCalendar (R164)', () => {
     expect(disabled(button(tree, 'Next month'))).toBe(true);
     expect(disabled(button(tree, 'Previous month'))).toBe(true);
     expect(shownText(tree)).toContain('October');
+    // With no workouts at all, History's empty line speaks; the calendar's count would say it twice.
+    expect(shownText(tree)).not.toContain('No training in October');
+  });
+
+  it('says "No training in" a month once there is a workout in another month', () => {
+    trainOn('2026-08-20');
+    const tree = mount(<Harness initial="2026-10" />);
     expect(shownText(tree)).toContain('No training in October');
   });
 

@@ -178,9 +178,12 @@ export function ConsistencyCalendar({ month, today, onMonthChange }: { month: st
           </View>
         ))}
       </View>
-      <Body muted style={{ fontSize: 14, marginTop: 8 }}>
-        {trainedLine(days.length, title, streak)}
-      </Body>
+      {/* With no workouts at all, History's empty line says it; "No training in October" over it says it twice. */}
+      {first === null ? null : (
+        <Body muted style={{ fontSize: 14, marginTop: 8 }}>
+          {trainedLine(days.length, title, streak)}
+        </Body>
+      )}
     </View>
   );
 }
