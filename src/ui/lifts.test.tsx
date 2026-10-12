@@ -172,13 +172,18 @@ const chart = (tree: ReactTestRenderer): ReactTestInstance | undefined =>
 /** Every string in every prop below the root, so a colour anywhere is found. */
 function allPropValues(node: ReactTestInstance): string[] {
   const out: string[] = [];
+  const seen = new Set<object>();
   const walk = (v: unknown) => {
     if (typeof v === 'string') out.push(v);
     else if (Array.isArray(v)) v.forEach(walk);
-    else if (v && typeof v === 'object' && !('$$typeof' in (v as object))) Object.values(v as object).forEach(walk);
+    else if (v && typeof v === 'object' && !('$$typeof' in (v as object)) && !seen.has(v as object)) {
+      // A ref points back into the tree, so each object is walked once.
+      seen.add(v as object);
+      Object.values(v as object).forEach(walk);
+    }
   };
   for (const n of [node, ...node.findAll(() => true)]) {
-    const { children: _children, ...rest } = n.props;
+    const { children: _children, ref: _ref, ...rest } = n.props;
     walk(rest);
   }
   return out;

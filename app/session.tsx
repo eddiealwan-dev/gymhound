@@ -37,6 +37,7 @@ import { afterSheetCloses, ConfirmSheet, Sheet } from '../src/ui/Sheet';
 import { SheetTitle } from '../src/ui/SheetTitle';
 import { Body, Display } from '../src/ui/Text';
 import { useTheme } from '../src/ui/ThemeProvider';
+import { useSafeScroll } from '../src/ui/useSafeScroll';
 import { useCallbacksByKey } from '../src/ui/useCallbacksByKey';
 
 /**
@@ -194,6 +195,8 @@ function SessionHeader({
 /** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, Finish in the header, and Discard. */
 export default function Session() {
   const db = useDb();
+  // The picker's search keyboard opens over the session: only the screen in view adjusts, and nothing is left out of reach (R510).
+  const safeScroll = useSafeScroll();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Every write reads the workout again; what did not change keeps its objects, so only the blocks that changed draw again.
@@ -352,11 +355,12 @@ export default function Session() {
       <FoodOfferBanner workoutId={workout.id} />
       <SleepOfferBanner workoutId={workout.id} />
       <ScrollView
+        ref={safeScroll.ref}
+        {...safeScroll.scrollProps}
         style={{ flex: 1 }}
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
       >
         <View
           style={{
