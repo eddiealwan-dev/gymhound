@@ -22,6 +22,7 @@ import {
   clearRestEndsAtIf,
   discardWorkout,
   finishWorkout,
+  getActiveRest,
   getActiveWorkoutId,
   NothingTickedError,
   setRestEndsAt,
@@ -36,7 +37,7 @@ import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
-import type { DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
+import type { BellSound, DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
 import { announce } from '../platform/announce';
 import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTimer';
 import { takeSnapshotSafely } from './backup';
@@ -104,7 +105,7 @@ export function tick(
   if (view) {
     const length = restLengthFor(ex.restSeconds, settings.restSeconds);
     const change = restAfterTick(view.exercises, ex.id, now, length);
-    applyRest(db, view.id, change, settings.restBell, set.id);
+    applyRest(db, view.id, change, restAlert(settings), set.id);
     if (change.kind === 'start') restStarted = length;
     waitsFor = restWaitsFor(view.exercises, ex.id, settings.restSeconds);
   }
@@ -128,22 +129,30 @@ function onSurface(call: (surface: RestTimerSurface) => Promise<void>): void {
   }
 }
 
+/** How the rest's end sounds: the bell switch and, for a phase 7 build's lock screen, the bell chosen (R304). */
+type RestAlert = { withSound: boolean; sound: BellSound };
+
+function restAlert(settings: { restBell: boolean; restBellSound: BellSound }): RestAlert {
+  return { withSound: settings.restBell, sound: settings.restBellSound };
+}
+
 /**
  * Writes the rest change to the workout and tells the surface. Does not bump: the caller does, once. A start stores
  * `startedBy`, the ticked set, with its end, and the countdown shows under that set (R38); -15s and +15s move the
  * end and keep it, and a skip clears it.
  */
-function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boolean, startedBy?: string): void {
+function applyRest(db: Db, workoutId: string, change: RestChange, alert: RestAlert, startedBy?: string): void {
+  const { withSound, sound } = alert;
   switch (change.kind) {
     case 'start':
       if (startedBy === undefined) throw new Error('A rest is started only by a tick, which names its set.');
       startRest(db, workoutId, change.endsAt, startedBy);
-      onSurface((surface) => surface.start(change.endsAt, withSound));
+      onSurface((surface) => surface.start(change.endsAt, withSound, sound));
       break;
     case 'shorten':
     case 'extend':
       setRestEndsAt(db, workoutId, change.endsAt);
-      onSurface((surface) => surface.update(change.endsAt, withSound));
+      onSurface((surface) => surface.update(change.endsAt, withSound, sound));
       break;
     case 'skip':
       setRestEndsAt(db, workoutId, null);
@@ -160,13 +169,13 @@ function applyRest(db: Db, workoutId: string, change: RestChange, withSound: boo
  */
 export function restMinus15(db: Db, workoutId: string, endsAt: number): void {
   if (endsAt <= Date.now()) return;
-  applyRest(db, workoutId, restAfterMinus15(endsAt, Date.now()), getSettings(db).restBell);
+  applyRest(db, workoutId, restAfterMinus15(endsAt, Date.now()), restAlert(getSettings(db)));
   bumpData();
 }
 
 /** The +15s button: the running rest ends 15 seconds later, under the same set. A rest already over is left alone. */
 export function restPlus15(db: Db, workoutId: string, endsAt: number): void {
-  applyRest(db, workoutId, restAfterPlus15(endsAt, Date.now()), getSettings(db).restBell);
+  applyRest(db, workoutId, restAfterPlus15(endsAt, Date.now()), restAlert(getSettings(db)));
   bumpData();
 }
 
@@ -176,7 +185,7 @@ export function restPlus15(db: Db, workoutId: string, endsAt: number): void {
  */
 export function restSkip(db: Db, workoutId: string, endsAt: number): void {
   if (endsAt <= Date.now()) return;
-  applyRest(db, workoutId, { kind: 'skip' }, false);
+  applyRest(db, workoutId, { kind: 'skip' }, { withSound: false, sound: 'bell' });
   bumpData();
 }
 
@@ -186,7 +195,12 @@ export function restSkip(db: Db, workoutId: string, endsAt: number): void {
  * already fired, so it is left alone.
  */
 export function restEnded(db: Db, workoutId: string, endsAt: number): void {
+  const rest = getActiveRest(db);
+  const stillThisRest = rest !== null && rest.workoutId === workoutId && rest.restEndsAt === endsAt;
   clearRestEndsAtIf(db, workoutId, endsAt);
+  // Phase 7: the lock-screen countdown (Live Activity, ongoing notification) of this rest comes down; a newer rest keeps
+  // its own. The notification surface has no `ended`, so Expo Go does nothing here.
+  if (stillThisRest) onSurface((surface) => surface.ended?.() ?? Promise.resolve());
   bumpData();
 }
 

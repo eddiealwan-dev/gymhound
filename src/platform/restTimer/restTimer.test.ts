@@ -13,6 +13,10 @@ const mockNotifications = {
 };
 jest.mock('expo-notifications', () => mockNotifications);
 
+// Expo Go unless a test says otherwise. Phase 7 builds bundle the bells (R304) and add a lock-screen countdown (R301).
+let mockExpoGo = true;
+jest.mock('../runtime', () => ({ ...jest.requireActual('../runtime'), isExpoGo: () => mockExpoGo }));
+
 const NOW = 1_000_000_000_000;
 const ENDS_AT = NOW + 120_000;
 
@@ -40,6 +44,7 @@ async function microtasks(): Promise<void> {
 }
 
 beforeEach(() => {
+  mockExpoGo = true;
   jest.useFakeTimers().setSystemTime(NOW);
   Object.values(mockNotifications).forEach((fn) => typeof fn === 'function' && fn.mockReset());
   mockNotifications.getPermissionsAsync.mockResolvedValue(GRANTED);
@@ -379,5 +384,135 @@ describe('getRestTimerSurface (Task 15 Step 5)', () => {
     expect(mockNotifications.getPermissionsAsync).not.toHaveBeenCalled();
     expect(mockNotifications.scheduleNotificationAsync).not.toHaveBeenCalled();
     expect(mockNotifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('the chosen bell on the lock screen in a phase 7 build (R304)', () => {
+  beforeEach(() => {
+    mockExpoGo = false;
+  });
+
+  it('names the bundled bell on iOS', async () => {
+    const surface = load('ios');
+
+    await surface.start(ENDS_AT, true, 'chime');
+
+    expect(mockNotifications.scheduleNotificationAsync.mock.calls[0][0]).toEqual({
+      identifier: 'gymhound-rest',
+      content: { title: "Rest's up.", sound: 'chime.wav' },
+      trigger: { type: 'date', date: ENDS_AT },
+    });
+  });
+
+  it("makes a channel per bell on Android and rings on the chosen bell's channel", async () => {
+    const surface = load('android');
+
+    await surface.start(ENDS_AT, true, 'ding');
+
+    for (const sound of ['bell', 'chime', 'ding']) {
+      expect(mockNotifications.setNotificationChannelAsync).toHaveBeenCalledWith(`rest-${sound}`, {
+        name: `Rest timer (${sound})`,
+        importance: 6,
+        sound: `${sound}.wav`,
+        enableVibrate: true,
+      });
+    }
+    const request = mockNotifications.scheduleNotificationAsync.mock.calls[0][0];
+    expect(request.content).toEqual({ title: "Rest's up.", sound: 'ding.wav' });
+    expect(request.trigger.channelId).toBe('rest-ding');
+  });
+
+  it('stays quiet with the bell off, whatever bell is chosen', async () => {
+    const surface = load('android');
+
+    await surface.start(ENDS_AT, false, 'ding');
+
+    const request = mockNotifications.scheduleNotificationAsync.mock.calls[0][0];
+    expect(request.content.sound).toBe(false);
+    expect(request.trigger.channelId).toBe('rest-quiet');
+  });
+
+  it('keeps the system sound when no bell is named', async () => {
+    const surface = load('ios');
+
+    await surface.start(ENDS_AT, true);
+
+    expect(mockNotifications.scheduleNotificationAsync.mock.calls[0][0].content).toEqual({ title: "Rest's up.", sound: true });
+  });
+});
+
+describe('Expo Go keeps the system sound and two channels, whatever bell is chosen (R304)', () => {
+  it('ignores the bell on iOS and Android', async () => {
+    const ios = load('ios');
+    await ios.start(ENDS_AT, true, 'chime');
+    expect(mockNotifications.scheduleNotificationAsync.mock.calls[0][0].content).toEqual({ title: "Rest's up.", sound: true });
+
+    mockNotifications.setNotificationChannelAsync.mockClear();
+    const android = load('android');
+    await android.start(ENDS_AT, true, 'chime');
+    expect(mockNotifications.setNotificationChannelAsync).toHaveBeenCalledTimes(2);
+    expect(mockNotifications.scheduleNotificationAsync.mock.calls[1][0].trigger.channelId).toBe('rest');
+  });
+});
+
+// Phase 7 packages stand-ins: the Live Activity (expo-widgets) and notifee are not installed here.
+const mockActivity = { update: jest.fn(async () => {}), end: jest.fn(async () => {}) };
+const mockActivityFactory = { start: jest.fn(() => mockActivity), getInstances: jest.fn(() => []) };
+jest.mock('../../../widgets/restTimerActivity', () => ({ __esModule: true, default: mockActivityFactory }));
+const mockNotifee = {
+  createChannel: jest.fn(async () => 'rest-ongoing'),
+  displayNotification: jest.fn(async () => 'gymhound-rest-ongoing'),
+  cancelNotification: jest.fn(async () => {}),
+};
+jest.mock('@notifee/react-native', () => ({ __esModule: true, default: mockNotifee }), { virtual: true });
+
+describe('getRestTimerSurface in a phase 7 build (R301)', () => {
+  function surfaceOn(os: 'ios' | 'android'): import('./index').RestTimerSurface {
+    let surface!: import('./index').RestTimerSurface;
+    jest.isolateModules(() => {
+      jest.replaceProperty((require('react-native') as { Platform: typeof Platform }).Platform, 'OS', os);
+      surface = (require('./index') as typeof import('./index')).getRestTimerSurface();
+    });
+    return surface;
+  }
+
+  beforeEach(() => {
+    mockExpoGo = false;
+    jest.clearAllMocks();
+    mockNotifications.getPermissionsAsync.mockResolvedValue(GRANTED);
+    mockNotifications.scheduleNotificationAsync.mockResolvedValue('gymhound-rest');
+    mockNotifications.cancelScheduledNotificationAsync.mockResolvedValue(undefined);
+    mockNotifications.setNotificationChannelAsync.mockResolvedValue({});
+  });
+
+  it('on iOS schedules the notification and starts the Live Activity, and ends it when the rest is seen over', async () => {
+    const surface = surfaceOn('ios');
+
+    await surface.start(ENDS_AT, true, 'bell');
+    expect(mockNotifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    expect(mockActivityFactory.start).toHaveBeenCalledWith({ startedAt: NOW, endsAt: ENDS_AT }, 'gymhound://session', new Date(ENDS_AT));
+
+    await surface.ended!();
+    expect(mockActivity.end).toHaveBeenCalledWith('immediate');
+    expect(mockNotifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1); // only the start's own clear
+  });
+
+  it('on Android schedules the notification and shows the ongoing countdown', async () => {
+    const surface = surfaceOn('android');
+
+    await surface.start(ENDS_AT, true, 'bell');
+    expect(mockNotifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    expect(mockNotifee.displayNotification).toHaveBeenCalledWith(expect.objectContaining({ id: 'gymhound-rest-ongoing' }));
+
+    await surface.cancel();
+    expect(mockNotifee.cancelNotification).toHaveBeenCalledWith('gymhound-rest-ongoing');
+  });
+
+  it('in Expo Go never loads either', async () => {
+    mockExpoGo = true;
+    await surfaceOn('ios').start(ENDS_AT, true);
+    await surfaceOn('android').start(ENDS_AT, true);
+    expect(mockActivityFactory.start).not.toHaveBeenCalled();
+    expect(mockNotifee.displayNotification).not.toHaveBeenCalled();
   });
 });

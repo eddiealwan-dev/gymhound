@@ -54,9 +54,10 @@ jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 
 // The rest surface is the lock-screen notification. Tests watch the calls and never touch expo-notifications.
 const mockSurface = {
-  start: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
-  update: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
+  start: jest.fn((_endsAt: number, _withSound: boolean, _sound?: string) => Promise.resolve()),
+  update: jest.fn((_endsAt: number, _withSound: boolean, _sound?: string) => Promise.resolve()),
   cancel: jest.fn(() => Promise.resolve()),
+  ended: jest.fn(() => Promise.resolve()),
 };
 jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
@@ -79,6 +80,7 @@ beforeEach(() => {
   mockSurface.start.mockClear();
   mockSurface.update.mockClear();
   mockSurface.cancel.mockClear();
+  mockSurface.ended.mockClear();
   mockSnapshot.mockClear();
   mockAnnounce.mockClear();
 });
@@ -522,7 +524,7 @@ describe('tick starts the rest timer', () => {
 
     expect(restEndsAt()).toBe(NOW + 120_000);
     expect(mockSurface.start).toHaveBeenCalledTimes(1);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'bell');
   });
 
   it('bumps the data version once', () => {
@@ -542,7 +544,7 @@ describe('tick starts the rest timer', () => {
     tickSetOf(0, 0);
 
     expect(restEndsAt()).toBe(NOW + 90_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, false);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, false, 'bell');
   });
 
   it('restarts the rest from now when a later set is ticked', () => {
@@ -553,7 +555,7 @@ describe('tick starts the rest timer', () => {
     tickSetOf(0, 1);
 
     expect(restEndsAt()).toBe(NOW + 150_000);
-    expect(mockSurface.start).toHaveBeenLastCalledWith(NOW + 150_000, true);
+    expect(mockSurface.start).toHaveBeenLastCalledWith(NOW + 150_000, true, 'bell');
   });
 
   it('starts nothing in a superset until the last member of the round (bench with overhead press)', () => {
@@ -567,7 +569,7 @@ describe('tick starts the rest timer', () => {
 
     expect(tickSetOf(1, 0)).toBe(true);
     expect(restEndsAt()).toBe(NOW + 120_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'bell');
   });
 
   it('starts nothing when the tick is refused', () => {
@@ -657,7 +659,7 @@ describe('tick uses the rest of the exercise ticked', () => {
     tickSetOf(0, 0);
 
     expect(restEndsAt()).toBe(NOW + 90_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, true, 'bell');
   });
 
   it('starts no rest when the exercise is set to Off (0)', () => {
@@ -731,7 +733,7 @@ describe('restMinus15', () => {
     restMinus15(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBe(NOW + 105_000);
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, true);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, true, 'bell');
     expect(mockSurface.cancel).not.toHaveBeenCalled();
     expect(version()).toBe(before + 1);
   });
@@ -743,7 +745,7 @@ describe('restMinus15', () => {
 
     restMinus15(db, workoutId(), NOW + 120_000);
 
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, false);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, false, 'bell');
   });
 
   it('skips when 15 seconds or less are left', () => {
@@ -783,7 +785,7 @@ describe('restPlus15', () => {
     restPlus15(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBe(NOW + 135_000);
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true, 'bell');
     expect(mockSurface.cancel).not.toHaveBeenCalled();
     expect(version()).toBe(before + 1);
   });
@@ -795,7 +797,7 @@ describe('restPlus15', () => {
 
     restPlus15(db, workoutId(), NOW + 120_000);
 
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false, 'bell');
   });
 
   it('does nothing once the rest is over', () => {
@@ -899,6 +901,27 @@ describe('restEnded', () => {
 
     expect(restEndsAt()).toBe(NOW + 240_500);
     expect(mockSurface.cancel).not.toHaveBeenCalled();
+    // Phase 7: the newer rest's lock-screen countdown stays up.
+    expect(mockSurface.ended).not.toHaveBeenCalled();
+  });
+
+  it("takes down the rest's lock-screen countdown (phase 7, R301) once it has been seen over", () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restEnded(db, workoutId(), NOW + 120_000);
+
+    expect(mockSurface.ended).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the bell on the lock screen (phase 7, R304)', () => {
+  it('hands the surface the bell chosen in Settings', () => {
+    setSetting(db, 'restBellSound', 'chime');
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'chime');
   });
 });
 
@@ -1538,7 +1561,7 @@ describe("the ab roller rest: 'set a rest timer on ab roller, ticked a set, no r
     expect(ab.sets[0].done).toBe(true);
     expect(restEndsAt()).toBe(NOW + 60_000);
     expect(activeView().restSetId).toBe(ab.sets[0].id);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 60_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 60_000, true, 'bell');
     expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged. Rest 1 minute.');
   });
 
