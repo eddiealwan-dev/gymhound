@@ -7,14 +7,6 @@ import { Screen } from './Screen';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The footer's own look is not under test here, only where it is placed (spec 8.1, and Fuel since Task 26): Train, Fuel, History, Stats and Settings.
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 // The icon font loads after the test ends, which logs errors from a torn-down environment; the icons are not under test.
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));

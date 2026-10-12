@@ -11,8 +11,8 @@ import { afterSheetCloses, Sheet } from './Sheet';
 import { SheetTitle } from './SheetTitle';
 
 /**
- * The Pro gate (§18.21, R524): `when(allowed, reason, go)` runs `go` when `allowed` (read when tapped, so the trial
- * starting or Pro coming on counts at once); otherwise it opens one sheet saying why, in plain words, with **See Pro**
+ * The Pro gate (§18.21, R524): `when(allowed, reason, go)` runs `go` when `allowed` (read when tapped, so Pro coming
+ * on counts at once); otherwise it opens one sheet saying why, in plain words, with **See Pro**
  * (closes it, then opens the paywall once it has gone, R138) and **Not now**. Render `sheets` once.
  */
 export function useProGate(): { when: (allowed: boolean, reason: ProReason, go: () => void) => void; isPro: () => boolean; sheets: ReactNode } {
@@ -48,8 +48,8 @@ export function useProGate(): { when: (allowed: boolean, reason: ProReason, go: 
 
 /**
  * Making a routine of your own (§18.21, R521): New routine, Duplicate, the editor's Save of a new routine and Add from
- * code. `whenRoomFor(add)` runs `add` with Pro (or the trial); otherwise the Pro sheet says routines of your own are
- * part of Pro. Render `sheets` once.
+ * code. `whenRoomFor(add)` runs `add` with Pro (the App Store's free trial included); otherwise the Pro sheet says
+ * routines of your own are part of Pro. Render `sheets` once.
  */
 export function useRoutineLimit(): { whenRoomFor: (add: () => void) => void; sheets: ReactNode } {
   const db = useDb();

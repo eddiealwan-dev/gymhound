@@ -1372,23 +1372,6 @@ describe('finish and discard', () => {
     expect(mockNative.afterFinish).toHaveBeenCalledWith(db);
   });
 
-  it('starts the 7-day full access trial at the first finish only, never at a refused one (R480, R481)', () => {
-    startFromDay(db, PUSH_A);
-    expect(finish(db, workoutId())).toBe('nothing_ticked');
-    expect(getSettings(db).trialStartedAt).toBeNull();
-    tickSetOf(0, 0);
-    const first = workoutId();
-    jest.setSystemTime(NOW + 60_000);
-    expect(finish(db, first)).toBe('finished');
-    expect(getSettings(db)).toMatchObject({ trialStartedAt: NOW + 60_000, trialStartWorkoutId: first });
-
-    startFromDay(db, PUSH_A);
-    tickSetOf(0, 0);
-    jest.setSystemTime(NOW + 86_400_000);
-    expect(finish(db, workoutId())).toBe('finished');
-    expect(getSettings(db)).toMatchObject({ trialStartedAt: NOW + 60_000, trialStartWorkoutId: first });
-  });
-
   describe('finish', () => {
     it('finishes, cancels the rest surface, takes the snapshot, then bumps, in that order, once the finish has committed', () => {
       startFromDay(db, PUSH_A);

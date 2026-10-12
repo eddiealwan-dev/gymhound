@@ -22,7 +22,6 @@ import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Label, ScreenTitle } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
-import { TrialChip } from '../../src/ui/pro/TrialLines';
 import { useOnce } from '../../src/ui/useOnce';
 
 /**
@@ -110,7 +109,6 @@ export default function Fuel() {
       <View style={{ gap: 24 }}>
         <View style={{ gap: 8 }}>
           <ScreenTitle>Fuel</ScreenTitle>
-          <TrialChip />
           <DayHeader day={day} today={today} locale={locale} trainingDay={target === null ? null : trainingDay} onChange={goTo} />
         </View>
         <WaterCard localDate={day} today={today} />

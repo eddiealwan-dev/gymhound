@@ -32,14 +32,6 @@ let mockRead: Read;
 /** Whether Pro (or the trial) is on: the Up next card is usable either way for a free premade. */
 let mockPro = true;
 
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ useIsPro: () => mockPro }));
 jest.mock('./pro/openPaywall', () => ({ useOpenPaywall: () => jest.fn() }));

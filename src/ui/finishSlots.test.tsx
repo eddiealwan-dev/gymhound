@@ -13,15 +13,7 @@ import { SaveAsWorkout } from './finish/SaveAsWorkout';
 
 let mockRead: { summary: FinishSummary | null; unit: 'lb' | 'kg' };
 
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn(), navigate: jest.fn(), dismissTo: jest.fn() },
   useLocalSearchParams: () => ({ id: 'w1' }),

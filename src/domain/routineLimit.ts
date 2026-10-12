@@ -1,6 +1,6 @@
 /**
  * What free and Pro hold (§18.21, the owner's rules after Round 8). Free has four of the premade programs, logging,
- * history, Stats, plates, PRs, Something off, body measurements and water. Pro (and the 7-day full access trial) adds
+ * history, Stats, plates, PRs, Something off, body measurements and water. Pro (and the App Store's free trial, R563) adds
  * the other programs, routines of your own, saved workouts and Fuel. When Pro lapses nothing is deleted: routines of
  * your own and saved workouts stay, and can be used again with Pro.
  */

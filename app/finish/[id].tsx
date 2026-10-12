@@ -16,7 +16,6 @@ import { FinishPrs } from '../../src/ui/finish/FinishPrs';
 import { PbCardHost } from '../../src/ui/finish/PbCardHost';
 import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
-import { TrialStartedNotice } from '../../src/ui/pro/TrialLines';
 import { pbCardFor } from '../../src/db/repositories/shareCardsRepo';
 import { useDb } from '../../src/db/DbProvider';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -101,8 +100,6 @@ export default function FinishSummary() {
                   </View>
                 )}
                 <FinishPrs summary={summary} firstWorkout={firstWorkout} />
-                {/* The finish that started the 7-day full access trial says so, once (§18.19, R486). */}
-                <TrialStartedNotice workoutId={summary.id} />
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />

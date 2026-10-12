@@ -17,14 +17,6 @@ let mockState: EntitlementsState;
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
 const mockManage = jest.fn<Promise<boolean>, []>();
 
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -56,7 +48,7 @@ const FREE_LINE = 'Free includes four programs, Stats and logging. Pro adds ever
 const UNAVAILABLE = "Purchases aren't available in this build.";
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: [], subscribed: false, kind: 'revenuecat', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: [], subscribed: false, kind: 'revenuecat', ...over };
 }
 
 function mount(): ReactTestRenderer {

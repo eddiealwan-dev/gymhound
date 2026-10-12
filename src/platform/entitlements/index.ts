@@ -91,6 +91,5 @@ export { createFreeOnlyEntitlements } from './freeOnly';
 export { createRevenueCatEntitlements, DEFAULT_OFFERING, PRO_ENTITLEMENT } from './revenuecat';
 export { loadPurchasesSdk } from './revenuecatSdk';
 export { createEntitlements, entitlementsFor, selectKind } from './select';
-export { useEntitlementsState, useIsPro, useTrialStatus } from './useIsPro';
-export { withTrial, type TrialEntitlements, type TrialView } from './trial';
+export { useEntitlementsState, useIsPro } from './useIsPro';
 export { isExpoGo, revenueCatApiKey } from '../runtime';

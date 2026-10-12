@@ -166,7 +166,6 @@ describe('useIsPro and useEntitlementsState', () => {
       plans: [],
       subscribed: false,
       kind: 'debug',
-      trialOnly: false,
     });
     act(() => entitlementsFor(mockDb).setDebugUnlock(true));
     expect(JSON.parse(seen[seen.length - 1])).toMatchObject({ pro: true, isPro: true, isDebugPro: true });

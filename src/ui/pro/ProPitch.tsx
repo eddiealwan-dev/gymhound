@@ -9,7 +9,6 @@ import { Button } from '../Button';
 import { Body, Display, TITLE_MAX_SCALE } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { buyLabel, buyTerms, PLAN_TITLES, planBilling, planPrice, planTrial, PLANNED_PLANS, yearlySaving } from './plans';
-import { TrialPitchLine } from './TrialLines';
 import { PURCHASES_UNAVAILABLE, STORE_NOT_ANSWERING, useStoreAction } from './useStoreAction';
 
 /** What Pro adds (§8.12 with §18.1's macro graphs, R137), each led by a check. */
@@ -144,7 +143,6 @@ export function ProPitch({ context, onDone }: { context: 'screen' | 'tab'; onDon
   return (
     <View style={{ gap: 16 }}>
       <Display accessibilityRole="header">GymHound Pro</Display>
-      <TrialPitchLine />
       <View style={{ gap: 12 }}>
         {PRO_LINES.map((line) => (
           <View key={line} accessible accessibilityLabel={line} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>

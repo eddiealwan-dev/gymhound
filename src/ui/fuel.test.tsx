@@ -18,14 +18,6 @@ import { Sheet } from './Sheet';
 
 // A real database: the screen reads through the food log and settings, and every write bumps the data version.
 let mockDb: Db;
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 
 // Focus callbacks run on mount, as on the phone; `refocus()` runs them again, as returning to the tab does.

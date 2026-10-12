@@ -19,14 +19,6 @@ const mockPurchase = jest.fn<Promise<PurchaseResult>, [PlanKind]>();
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
 const mockRefreshOffer = jest.fn();
 
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: function Ionicons() { return null; } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }));
@@ -62,13 +54,13 @@ const START = 'Start your free trial';
 
 /** The store's plans, at the owner's prices (R556). */
 const PLANS: StorePlan[] = [
-  { kind: 'yearly', priceString: '$119.99', price: 119.99, perMonthString: '$9.99', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
+  { kind: 'yearly', priceString: '$119.88', price: 119.88, perMonthString: '$9.99', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
   { kind: 'monthly', priceString: '$19.99', price: 19.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
   { kind: 'lifetime', priceString: '$199', price: 199, perMonthString: null, period: null, freeTrialDays: null },
 ];
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: PLANS, subscribed: false, kind: 'revenuecat', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: PLANS, subscribed: false, kind: 'revenuecat', ...over };
 }
 
 const radios = (tree: ReactTestRenderer) => tree.root.findAll((n) => typeof n.type !== 'string' && n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function');
@@ -163,11 +155,11 @@ describe('ProPitch (§8.12, R137)', () => {
   it('offers Yearly, Monthly and Lifetime as radio buttons, Yearly chosen and marked with its saving (R556)', () => {
     const tree = render(<ProPitch context="screen" />);
     expect(radios(tree).map((r) => [r.props.accessibilityLabel, r.props.accessibilityState.checked])).toEqual([
-      ['Yearly, Save 50%, $9.99/mo, $119.99 billed yearly, 7 days free', true],
+      ['Yearly, Save 50%, $9.99/mo, $119.88 billed yearly, 7 days free', true],
       ['Monthly, $19.99/mo, Billed monthly, 7 days free', false],
       ['Lifetime, $199, One-time payment', false],
     ]);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$119.99 billed yearly', '$19.99/mo', '$199', 'One-time payment']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$119.88 billed yearly', '$19.99/mo', '$199', 'One-time payment']));
     expect(shownText(tree)).not.toContain(UNAVAILABLE);
     expect(button(tree, START).props.disabled).toBeFalsy();
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
@@ -176,7 +168,7 @@ describe('ProPitch (§8.12, R137)', () => {
   it('says what the free trial leads to, and that a subscription renews until cancelled (R159)', () => {
     const tree = render(<ProPitch context="screen" />);
     const shown = shownText(tree);
-    const terms = "7 days free, then $119.99 a year. Cancel before the trial ends and you won't be charged.";
+    const terms = "7 days free, then $119.88 a year. Cancel before the trial ends and you won't be charged.";
     expect(shown).toContain(terms);
     expect(shown).toContain(RENEWS);
     expect(shown.indexOf(RENEWS)).toBeGreaterThan(shown.indexOf(terms));

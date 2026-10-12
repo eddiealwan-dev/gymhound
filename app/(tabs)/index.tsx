@@ -27,7 +27,6 @@ import { Screen } from '../../src/ui/Screen';
 import { Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
-import { TrainTrialNotice } from '../../src/ui/pro/TrialLines';
 import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../src/domain/routineLimit';
 import { quoteFor } from '../../src/domain/quotes';
 import { useIsPro } from '../../src/platform/entitlements';
@@ -370,11 +369,6 @@ export default function Train() {
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
         <StatCard label="Streak" value={`${streak}`} caption={streak === 1 ? 'day' : 'days'} />
         <StatCard label="This week" value={volumeNumber(weekVolume, unit, locale)} caption={`${unit} moved`} />
-      </View>
-
-      {/* The full access trial's last two days, or once after it ended (§18.19, R487, R490); nothing on other days. */}
-      <View style={{ marginTop: 16 }}>
-        <TrainTrialNotice />
       </View>
 
       {active === null && upNext !== null ? (

@@ -14,14 +14,6 @@ import { Button } from './Button';
 let mockDb: Db;
 let mockState: EntitlementsState;
 
-// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
-jest.mock('./pro/TrialLines', () => ({
-  TrialSettingsLine: () => null,
-  TrialChip: () => null,
-  TrainTrialNotice: () => null,
-  TrialStartedNotice: () => null,
-  TrialPitchLine: () => null,
-}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -52,7 +44,7 @@ jest.mock('./ThemeProvider', () => {
 const LOCKED = 'Fuel targets are part of GymHound Pro.';
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: false, canRestore: false, plans: [], subscribed: false, kind: 'free', trialOnly: false, ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: false, canRestore: false, plans: [], subscribed: false, kind: 'free', ...over };
 }
 
 function mount(): ReactTestRenderer {

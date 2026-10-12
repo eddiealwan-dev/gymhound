@@ -17,7 +17,7 @@ import { useTheme } from '../src/ui/ThemeProvider';
 export default function Paywall() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { isPro, trialOnly } = useEntitlementsState();
+  const { isPro } = useEntitlementsState();
   const left = useRef(false);
   const done = () => {
     if (left.current) return;
@@ -32,8 +32,7 @@ export default function Paywall() {
         contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
         <View style={{ flexGrow: 1, width: '100%', maxWidth: 512, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 32, paddingBottom: 16 }}>
-          {/* During the full access trial Pro is on, but the pitch still shows, topped by the days left (R489). */}
-          {isPro && !trialOnly ? (
+          {isPro ? (
             <View style={{ gap: 16 }}>
               <Display accessibilityRole="header">GymHound Pro</Display>
               <Body>Pro is on.</Body>
