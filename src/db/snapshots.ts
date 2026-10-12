@@ -115,8 +115,13 @@ export function writeSnapshot(db: Db, files: SnapshotFiles, now: number): string
   return name;
 }
 
+/** A snapshot opened only to be checked, never written. `all` returns a query's rows. */
+export type SnapshotReader = { all(query: string): Record<string, unknown>[]; close(): void };
+
 export type StartupDeps = {
   files: SnapshotFiles;
+  /** Opens a snapshot by name to check it before a restore. Only called when a restore is needed. */
+  openSnapshot(name: string): SnapshotReader;
   /** Opens the live database without migrating it. */
   open(): Db;
   /** Closes the connection for real: the file may be renamed straight afterwards. */
@@ -148,48 +153,90 @@ function setAsideQuietly(files: SnapshotFiles, tag: string): void {
 }
 
 /**
- * The newest snapshot, or null when there is none.
+ * The snapshot names, newest first.
  *
  * With a live database that has data, a snapshot folder that cannot be listed is logged and treated as holding no
  * snapshots: a healthy database must still open, and the snapshots are only a second copy. With the live file missing or
  * empty the error is thrown instead (the startup error screen): opening now would create an empty database beside
  * snapshots that might hold the user's workouts.
  */
-function newestSnapshotOrNull(files: SnapshotFiles, liveIsGone: boolean): string | null {
+function snapshotsNewestFirst(files: SnapshotFiles, liveIsGone: boolean): string[] {
   try {
-    return newestSnapshot(files.list());
+    return snapshotsOldestFirst(files.list()).reverse();
   } catch (error) {
     if (liveIsGone) throw error;
     console.warn('GymHound could not list its snapshots, so it is starting without them.', error);
-    return null;
+    return [];
+  }
+}
+
+/** Tables every GymHound database has had since its first migration. A file without them is not GymHound's. */
+const GYMHOUND_TABLES = ['exercises', 'routines', 'settings', 'workouts', 'workout_exercises', 'sets'];
+
+/**
+ * True when a snapshot passes a quick integrity check: `PRAGMA quick_check` says ok and GymHound's tables are there.
+ * A file cut short when the phone died mid-copy, or one that is not a database at all, fails. Never throws; a failure is logged.
+ */
+function snapshotIsSound(open: StartupDeps['openSnapshot'], name: string): boolean {
+  let reader: SnapshotReader | null = null;
+  try {
+    reader = open(name);
+    const check = reader.all('PRAGMA quick_check');
+    const ok = check.length === 1 && Object.values(check[0])[0] === 'ok';
+    const tables = new Set(reader.all("SELECT name FROM sqlite_master WHERE type = 'table'").map((row) => row.name));
+    const missing = GYMHOUND_TABLES.filter((table) => !tables.has(table));
+    if (ok && missing.length === 0) return true;
+    console.warn(`GymHound skipped snapshot ${name}: it failed its check.`, ok ? `Missing tables: ${missing.join(', ')}` : check);
+    return false;
+  } catch (error) {
+    console.warn(`GymHound skipped snapshot ${name}: it could not be checked.`, error);
+    return false;
+  } finally {
+    try {
+      reader?.close();
+    } catch {
+      // The check's own result is what matters.
+    }
   }
 }
 
 /**
  * Opens and migrates the database. The app never starts empty while a snapshot exists, and the live file is never deleted.
  * 0. Whether the live file is missing or empty is read first. A snapshot folder that cannot be listed is then an error
- *    when it is (fail closed), and "no snapshots" when the live file has data (see `newestSnapshotOrNull`).
- * 1. Live file missing or empty, and a snapshot exists: copy the newest snapshot in.
+ *    when it is (fail closed), and "no snapshots" when the live file has data (see `snapshotsNewestFirst`).
+ * 1. Live file missing or empty, and a snapshot exists: copy the newest sound snapshot in (see `snapshotIsSound`). If
+ *    none is sound, fail without opening anything.
  * 2. Open and migrate. If that works, done.
- * 3. If it fails and there is no snapshot, report the failure and leave the file as it is.
- * 4. If it fails and there is a snapshot: set the failed file aside, copy the newest snapshot in, open and migrate again.
+ * 3. If it fails and there is no sound snapshot, report the failure and leave the file as it is.
+ * 4. If it fails and there is one: set the failed file aside, copy that snapshot in, open and migrate again.
  * 5. If the restored copy fails too, set it aside as well (under its own name) and report the failure, so the next launch restores again.
  *
+ * Snapshots are checked only when a restore is needed, never on a normal start: newest first, stopping at the first
+ * sound one, because a phone that died while a snapshot was being copied can leave the newest one damaged.
  * "Fails" includes a live file too corrupt to open: `open()` throwing is handled like a failed migration.
  */
 export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
   const { files, open, close, migrate } = deps;
   const liveIsGone = files.liveIsMissingOrEmpty();
-  const newest = newestSnapshotOrNull(files, liveIsGone);
+  const names = snapshotsNewestFirst(files, liveIsGone);
+  const newest = names[0] ?? null;
+  // Found once, and only when a restore is needed.
+  let sound: string | null | undefined;
+  const restoreSource = (): string | null => {
+    if (sound === undefined) sound = names.find((name) => snapshotIsSound(deps.openSnapshot, name)) ?? null;
+    return sound;
+  };
   let restoredFrom: string | null = null;
   if (newest && liveIsGone) {
+    const source = restoreSource();
+    // Opening now would create an empty database next to snapshots that may hold the user's workouts.
+    if (!source) return { kind: 'failed', error: new Error("None of GymHound's backups on this phone could be read."), newestSnapshot: newest, setAside: null };
     try {
-      files.copyToLive(newest);
+      files.copyToLive(source);
     } catch (error) {
-      // Opening now would create an empty database next to a snapshot that has the user's workouts.
-      return { kind: 'failed', error: asError(error), newestSnapshot: newest, setAside: null };
+      return { kind: 'failed', error: asError(error), newestSnapshot: source, setAside: null };
     }
-    restoredFrom = newest;
+    restoredFrom = source;
   }
 
   let first: Db | null = null;
@@ -202,25 +249,29 @@ export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
     firstError = asError(error);
     if (first) closeQuietly(close, first);
   }
-  if (!newest) return { kind: 'failed', error: firstError, newestSnapshot: null, setAside: null };
+  const source = newest ? restoreSource() : null;
+  if (!source) {
+    if (newest) console.warn('GymHound could not restore its data: no snapshot passed its check.', firstError);
+    return { kind: 'failed', error: firstError, newestSnapshot: newest, setAside: null };
+  }
 
   let setAside: string | null = null;
   let second: Db | null = null;
   let restoredCopyInPlace = false;
   try {
     setAside = files.setAsideLive(`failed-${stamp(deps.now)}`);
-    files.copyToLive(newest);
+    files.copyToLive(source);
     restoredCopyInPlace = true;
     second = open();
     await migrate(second);
-    console.warn('GymHound restored its data from the newest snapshot because the database would not open.', firstError);
-    return { kind: 'ok', db: second, restoredFrom: newest };
+    console.warn('GymHound restored its data from a snapshot because the database would not open.', firstError);
+    return { kind: 'ok', db: second, restoredFrom: source };
   } catch (secondError) {
     if (second) closeQuietly(close, second);
     // A restored copy that will not open either must not stay live: set it aside too, so the next launch finds no live
     // file, restores again (and says so), while the original failed file stays where the error screen exports it from.
     if (restoredCopyInPlace) setAsideQuietly(files, `restore-failed-${stamp(deps.now)}`);
-    console.warn('GymHound could not restore its data from the newest snapshot. The database first failed with:', firstError);
-    return { kind: 'failed', error: asError(secondError), newestSnapshot: newest, setAside };
+    console.warn('GymHound could not restore its data from a snapshot. The database first failed with:', firstError);
+    return { kind: 'failed', error: asError(secondError), newestSnapshot: source, setAside };
   }
 }

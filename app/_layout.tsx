@@ -20,7 +20,7 @@ import { ensureSettings } from '../src/db/repositories/settingsRepo';
 import { snapshotTime, startDatabase } from '../src/db/snapshots';
 import type { Db } from '../src/db/types';
 import { formatDateTime } from '../src/domain/dates';
-import { fileExists, getSnapshotFiles, setAsidePath } from '../src/platform/snapshots';
+import { fileExists, getSnapshotFiles, openSnapshotForCheck, setAsidePath } from '../src/platform/snapshots';
 import { runSeed } from '../src/seed/seed';
 import { latestSnapshotPath, recordRestoredSnapshot, shareFile } from '../src/state/backup';
 import { afterDatabaseStart, beforeDatabaseStart } from '../src/state/nativeServices';
@@ -68,7 +68,14 @@ async function startApp(): Promise<Started> {
     return { kind: 'ready', db, restoredFrom: null };
   }
   await beforeDatabaseStart(); // Phase 7: a new iPhone brings its newest iCloud snapshot first (no-op in Expo Go).
-  const result = await startDatabase({ files, open: openAppDb, close: closeAppDb, migrate: migrateApp, now: Date.now() });
+  const result = await startDatabase({
+    files,
+    open: openAppDb,
+    close: closeAppDb,
+    migrate: migrateApp,
+    openSnapshot: openSnapshotForCheck,
+    now: Date.now(),
+  });
   if (result.kind === 'ok') {
     afterDatabaseStart(result.db); // Phase 7: Health retries and the iCloud copy, in the background (no-op in Expo Go).
     return { kind: 'ready', db: result.db, restoredFrom: result.restoredFrom };

@@ -3,6 +3,7 @@ import type { SnapshotFiles } from '../../db/snapshots';
 import { expoSnapshotFiles } from './expoSnapshotFiles';
 
 export { describeSnapshotFolder, fileExists, setAsidePath } from './expoSnapshotFiles';
+export { openSnapshotForCheck } from './snapshotReader';
 
 /**
  * The phone's snapshot files, or null on web, where snapshots never run.

@@ -1,6 +1,7 @@
+import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { SnapshotFiles } from '../snapshots';
+import type { SnapshotFiles, SnapshotReader } from '../snapshots';
 
 /** SQLite's write-ahead-log files. The app runs in WAL mode, so they can hold committed data. */
 const SIDECARS = ['-wal', '-shm'];
@@ -89,5 +90,16 @@ export function nodeSnapshotFiles(dir: string, liveFile: string): SnapshotFiles 
         throw error;
       }
     },
+  };
+}
+
+/** `StartupDeps.openSnapshot` over better-sqlite3, for tests: opens a snapshot in `files`' folder read-only, to check it. */
+export function nodeSnapshotReader(files: SnapshotFiles): (name: string) => SnapshotReader {
+  return (name) => {
+    const sqlite = new Database(files.pathFor(name), { readonly: true, fileMustExist: true });
+    return {
+      all: (query) => sqlite.prepare(query).all() as Record<string, unknown>[],
+      close: () => sqlite.close(),
+    };
   };
 }

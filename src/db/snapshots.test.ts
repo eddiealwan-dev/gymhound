@@ -29,7 +29,7 @@ import {
   type StartupResult,
 } from './snapshots';
 import { createTestDb, migrateTestDb } from './testing/createTestDb';
-import { nodeSnapshotFiles } from './testing/nodeSnapshotFiles';
+import { nodeSnapshotFiles, nodeSnapshotReader } from './testing/nodeSnapshotFiles';
 import { openFileDb } from './testing/openFileDb';
 import { writeSeedV1 } from './testing/seedV1';
 import type { Db } from './types';
@@ -216,6 +216,7 @@ function makeDeps(overrides: Partial<StartupDeps> = {}) {
       count.closed += 1;
     },
     migrate: migrateTestDb,
+    openSnapshot: nodeSnapshotReader(files),
     now: NOW + 10 * DAY,
     ...overrides,
   };
@@ -1059,5 +1060,144 @@ describe('startDatabase when the snapshot folder cannot be listed (R32)', () => 
       armed.on = false;
       expect(files.list()).toHaveLength(2);
     });
+  });
+});
+
+describe('startDatabase when the newest snapshot is damaged', () => {
+  /** A copy cut short, as a phone that died mid-copy leaves it: the first half of the file only. */
+  function truncate(files: SnapshotFiles, name: string): void {
+    const file = files.pathFor(name);
+    const bytes = fs.readFileSync(file);
+    fs.writeFileSync(file, bytes.subarray(0, Math.floor(bytes.length / 2)));
+  }
+
+  /** A file with a snapshot's name that holds no database at all. */
+  function scramble(files: SnapshotFiles, name: string): void {
+    fs.writeFileSync(files.pathFor(name), Buffer.alloc(8192, 7));
+  }
+
+  /** A sound SQLite file under the snapshot's name that holds none of GymHound's tables. */
+  function replaceWithForeignDb(files: SnapshotFiles, name: string): void {
+    fs.rmSync(files.pathFor(name));
+    const other = new Database(files.pathFor(name));
+    other.exec('CREATE TABLE notes (id integer)');
+    other.close();
+  }
+
+  it.each([
+    ['cut short', truncate],
+    ['not a database', scramble],
+    ['missing GymHound tables', replaceWithForeignDb],
+  ])('restores the next newest sound snapshot when the newest is %s and the live file is missing', async (_name, damage) => {
+    const { deps, files } = makeDeps();
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    damage(files, newest);
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(oldest);
+    expect(finishedIds(result.db)).toHaveLength(1);
+    // The damaged file is kept: nothing in the snapshot folder is deleted.
+    expect(files.list()).toContain(newest);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('restores the next newest sound snapshot when the migration fails and the newest is damaged', async () => {
+    const { deps, files, count } = makeDeps({ migrate: migrateFailingOnce() });
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    truncate(files, newest);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(oldest);
+    expect(finishedIds(result.db)).toHaveLength(1);
+    expect(fs.readdirSync(dir).filter((n) => /^gymhound\.failed-.+\.db$/.test(n))).toHaveLength(1);
+    expect(count.opened).toBe(count.closed + 1);
+  });
+
+  it('fails closed, opening nothing, when the live file is missing and every snapshot is damaged', async () => {
+    const { deps, files, count } = makeDeps();
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    truncate(files, newest);
+    scramble(files, oldest);
+    fs.rmSync(liveFile);
+
+    const result = expectFailed(await startDatabase(deps));
+
+    expect(result.newestSnapshot).toBe(newest);
+    expect(result.setAside).toBeNull();
+    expect(count.opened).toBe(0);
+    expect(fs.existsSync(liveFile)).toBe(false);
+    expect(files.list().sort()).toEqual([oldest, newest].sort());
+  });
+
+  it('leaves the failed live file in place when the migration fails and every snapshot is damaged', async () => {
+    const { deps, files, count } = makeDeps({ migrate: migrateAlwaysFailing() });
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    truncate(files, newest);
+    truncate(files, oldest);
+    const original = fs.readFileSync(liveFile);
+
+    const result = expectFailed(await startDatabase(deps));
+
+    expect(result.error.message).toBe('migration exploded');
+    expect(result.setAside).toBeNull();
+    expect(fs.readdirSync(dir).sort()).toEqual(['gymhound.db', 'snapshots']);
+    expect(fs.readFileSync(liveFile).equals(original)).toBe(true);
+    expect(count.opened).toBe(count.closed);
+  });
+
+  it('never opens a snapshot to check it on a normal start', async () => {
+    const opened: string[] = [];
+    const { deps: base, files } = makeDeps();
+    const deps: StartupDeps = {
+      ...base,
+      openSnapshot: (name) => {
+        opened.push(name);
+        return base.openSnapshot(name);
+      },
+    };
+    liveWithTwoSnapshots(files);
+
+    expectOk(await startDatabase(deps));
+
+    expect(opened).toEqual([]);
+  });
+
+  it('checks only as far as the first sound snapshot, newest first', async () => {
+    const opened: string[] = [];
+    const { deps: base, files } = makeDeps();
+    const deps: StartupDeps = {
+      ...base,
+      openSnapshot: (name) => {
+        opened.push(name);
+        return base.openSnapshot(name);
+      },
+    };
+    const { newest } = liveWithTwoSnapshots(files);
+    fs.rmSync(liveFile);
+
+    expectOk(await startDatabase(deps));
+
+    expect(opened).toEqual([newest]);
+  });
+
+  it('treats a snapshot that cannot be opened to check as damaged, and logs it', async () => {
+    const { deps: base, files } = makeDeps();
+    const { oldest, newest } = liveWithTwoSnapshots(files);
+    const deps: StartupDeps = {
+      ...base,
+      openSnapshot: (name) => {
+        if (name === newest) throw new Error('open exploded');
+        return base.openSnapshot(name);
+      },
+    };
+    fs.rmSync(liveFile);
+
+    const result = expectOk(await startDatabase(deps));
+
+    expect(result.restoredFrom).toBe(oldest);
+    expect(warnedWithError('open exploded')).toBe(true);
   });
 });
