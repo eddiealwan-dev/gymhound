@@ -283,7 +283,7 @@ describe('libraryId', () => {
 });
 
 describe('LEGACY_SOURCE', () => {
-  it('links each of the 55 existing exercises, and nothing else', () => {
+  it('links each of the 56 existing exercises, and nothing else', () => {
     expect(Object.keys(LEGACY_SOURCE).sort()).toEqual(SEED_EXERCISES.map((e) => e.id).sort());
   });
 
@@ -374,9 +374,9 @@ describe('buildLibrary', () => {
     byId = new Map(library.map((e) => [e.id, e]));
   });
 
-  it('holds every free-exercise-db entry once: 876 − the legacy matches + the 55 existing', () => {
+  it('holds every free-exercise-db entry once: 876 − the legacy matches + the 56 existing', () => {
     expect(FEDB).toHaveLength(876);
-    expect(library).toHaveLength(876 - matches + 55);
+    expect(library).toHaveLength(876 - matches + 56);
     expect(new Set(library.map((e) => e.id)).size).toBe(library.length);
     const sources = library.map((e) => e.sourceId).filter((s) => s !== null);
     expect(new Set(sources).size).toBe(sources.length);
