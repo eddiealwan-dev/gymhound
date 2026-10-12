@@ -137,6 +137,12 @@ const photo = (tree: ReactTestRenderer, which: 'start' | 'end'): ReactTestInstan
   return found[0];
 };
 const photos = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === Image);
+/** The opaque view the end photo sits in: it fills the frame and flips between hidden and shown (Round 7). */
+const cover = (tree: ReactTestRenderer): ReactTestInstance => {
+  const found = tree.root.findAll((n) => typeof n.type !== 'string' && n.props.testID === 'form-demo-end-cover');
+  expect(found.length).toBeGreaterThan(0);
+  return found[0];
+};
 const opacity = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style).opacity;
 /** The labels of the photo frames the screen reader lands on. */
 const stopsIn = (tree: ReactTestRenderer) =>
@@ -210,18 +216,18 @@ describe('the form demo (R86)', () => {
 describe('the form demo: the photos (R86)', () => {
   it('starts on the start photo, then swaps to the end photo and back every 1.2 s, instantly', async () => {
     const tree = await open('barbell-bench-press');
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
 
     act(() => void jest.advanceTimersByTime(1199));
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
     act(() => void jest.advanceTimersByTime(1));
-    expect(opacity(photo(tree, END))).toBe(1);
+    expect(opacity(cover(tree))).toBe(1);
 
     act(() => void jest.advanceTimersByTime(1200));
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
 
     act(() => void jest.advanceTimersByTime(1200));
-    expect(opacity(photo(tree, END))).toBe(1);
+    expect(opacity(cover(tree))).toBe(1);
     // No fade in between: it is an instant flip, so both photos stay drawn and the start photo is never touched.
     expect(photos(tree)).toHaveLength(2);
     expect(opacity(photo(tree, START))).toBeUndefined();
@@ -230,9 +236,9 @@ describe('the form demo: the photos (R86)', () => {
   it('gives the end photo an opaque background, so nothing of the start photo shows around it', async () => {
     const tree = await open('barbell-bench-press');
 
-    expect(StyleSheet.flatten(photo(tree, END).props.style)).toMatchObject({ backgroundColor: '#232019' });
+    expect(StyleSheet.flatten(cover(tree).props.style)).toMatchObject({ backgroundColor: '#232019' });
     act(() => void jest.advanceTimersByTime(1200));
-    expect(StyleSheet.flatten(photo(tree, END).props.style)).toMatchObject({ backgroundColor: '#232019', opacity: 1 });
+    expect(StyleSheet.flatten(cover(tree).props.style)).toMatchObject({ backgroundColor: '#232019', opacity: 1 });
   });
 
   it('lays the end photo over the start photo in one 3:2 frame', async () => {
@@ -245,7 +251,9 @@ describe('the form demo: the photos (R86)', () => {
     );
     const frame = holdingBoth[holdingBoth.length - 1];
     expect(StyleSheet.flatten(frame.props.style)).toMatchObject({ aspectRatio: 3 / 2, overflow: 'hidden' });
-    expect(StyleSheet.flatten(end.props.style)).toMatchObject({ position: 'absolute' });
+    // The cover fills the whole frame and the end photo fills the cover, so none of the start photo shows (Round 7).
+    expect(StyleSheet.flatten(cover(tree).props.style)).toMatchObject({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 });
+    expect(StyleSheet.flatten(end.props.style)).toMatchObject({ width: '100%', height: '100%' });
   });
 
   it('stops when it closes', async () => {
@@ -288,7 +296,7 @@ describe('the form demo: the photos (R86)', () => {
   it('when Reduce Motion is turned on while it is open, stops and shows both side by side', async () => {
     const tree = await open('barbell-bench-press');
     act(() => void jest.advanceTimersByTime(1200));
-    expect(opacity(photo(tree, END))).toBe(1);
+    expect(opacity(cover(tree))).toBe(1);
 
     act(() => reduceMotionChanged!(true));
     act(() => void jest.advanceTimersByTime(5000));
@@ -305,16 +313,16 @@ describe('the form demo: the photos (R86)', () => {
     expect(jest.getTimerCount()).toBe(0);
 
     act(() => reduceMotionChanged!(false));
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
     act(() => void jest.advanceTimersByTime(1200));
-    expect(opacity(photo(tree, END))).toBe(1);
+    expect(opacity(cover(tree))).toBe(1);
 
     // Turned on while the end photo shows, then off again: back to the start photo, not the end photo.
     act(() => reduceMotionChanged!(true));
     act(() => reduceMotionChanged!(false));
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
     act(() => void jest.advanceTimersByTime(1199));
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
   });
 
   it('shows the start photo alone, and still, until the phone has said whether Reduce Motion is on', async () => {
@@ -325,7 +333,7 @@ describe('the form demo: the photos (R86)', () => {
 
     expect(jest.getTimerCount()).toBe(0);
     expect(photos(tree)).toHaveLength(2);
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
   });
 
   it('holds still, as with Reduce Motion, when the phone cannot say whether it is on', async () => {
@@ -438,9 +446,9 @@ describe('the form demo: your own photos (R111)', () => {
 
     expect(photo(tree, START).props.source).toEqual(ownStart);
     expect(photo(tree, END).props.source).toEqual(ownEnd);
-    expect(opacity(photo(tree, END))).toBe(0);
+    expect(opacity(cover(tree))).toBe(0);
     act(() => void jest.advanceTimersByTime(1200));
-    expect(opacity(photo(tree, END))).toBe(1);
+    expect(opacity(cover(tree))).toBe(1);
     expect(stopsIn(tree)).toEqual(['Wall sit, start and end positions']);
   });
 

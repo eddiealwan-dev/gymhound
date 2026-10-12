@@ -47,8 +47,7 @@ function useReduceMotion(): boolean | null {
  * The start and end photos in a 3:2 frame: every 1.2 s the shown photo flips, instantly, like a flipbook (R98: a blend of
  * two poses of the same person shows a ghost of the first). Both photos stay mounted, the end photo stacked over the
  * start photo, and only the end photo's opacity flips between 0 and 1, so iOS never shows a blank frame decoding a new
- * source. The end photo has an opaque background, so none of the start photo shows around it when their letterboxing
- * differs. With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while
+ * source. The end photo sits in an opaque view that fills the frame, so none of the start photo shows around it (Round 7). With Reduce Motion on (or until the phone says it is off) nothing moves: on, the two sit side by side; while
  * unknown, the start photo shows alone. With one photo only (your own, R111), it shows alone and still.
  */
 function Photos({ name, photos }: { name: string; photos: readonly [ImageSourcePropType, ImageSourcePropType | null] }) {
@@ -100,7 +99,14 @@ function Photos({ name, photos }: { name: string; photos: readonly [ImageSourceP
   return (
     <View {...described} style={frame}>
       <Image {...photo(0)} style={{ width: '100%', height: '100%' }} />
-      <Image {...photo(1)} style={[StyleSheet.absoluteFill, { opacity: endShown ? 1 : 0, backgroundColor: colors.surfaceRaised }]} />
+      {/*
+        The end photo sits in an opaque view that fills the frame, sized like the start photo. On the phone an Image given
+        only absoluteFill drew at its own size, smaller than the frame, so the start photo showed along the right and
+        bottom (Round 7).
+      */}
+      <View testID="form-demo-end-cover" style={[StyleSheet.absoluteFill, { opacity: endShown ? 1 : 0, backgroundColor: colors.surfaceRaised }]}>
+        <Image {...photo(1)} style={{ width: '100%', height: '100%' }} />
+      </View>
     </View>
   );
 }
