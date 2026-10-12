@@ -94,6 +94,14 @@ function indexed(item: SearchItem): Indexed {
   return index;
 }
 
+/**
+ * Works out every item's words now, so the first search does not (R401). The picker calls it once the phone is idle
+ * after opening. Items already worked out are skipped.
+ */
+export function warmSearch(items: readonly SearchItem[]): void {
+  for (const item of items) indexed(item);
+}
+
 /** Whether a two-word term matches two words in a row of some phrase: the first whole, the second as a start. */
 function matchesPhrase(index: Indexed, [first, second]: string[]): boolean {
   return index.phrases.some((p) => p.some((w, i) => w === first && i + 1 < p.length && p[i + 1].startsWith(second)));

@@ -1,5 +1,5 @@
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
-import { filterExercises, searchExercises } from './search';
+import { filterExercises, searchExercises, warmSearch } from './search';
 import type { SearchItem } from './search';
 
 /** In name order, as `listExercises` reads them. */
@@ -238,5 +238,25 @@ describe('filterExercises', () => {
     const before = items.map((i) => i.id);
     filterExercises(items, { muscle: 'chest' });
     expect(items.map((i) => i.id)).toEqual(before);
+  });
+});
+
+describe('warmSearch (R401)', () => {
+  it('works out the words ahead, and searching after it finds the same as before', () => {
+    const fresh = LIBRARY_EXERCISES.map((e) => ({ ...e }));
+    const cold = searchExercises(LIBRARY_EXERCISES.map((e) => ({ ...e })), 'dumbbell chest').map((e) => e.id);
+    warmSearch(fresh);
+    warmSearch(fresh);
+    expect(searchExercises(fresh, 'dumbbell chest').map((e) => e.id)).toEqual(cold);
+    expect(cold.length).toBeGreaterThan(0);
+  });
+
+  it('makes the first search over the whole library quick (under 50 ms on the phone, Review Focus 5)', () => {
+    const fresh = LIBRARY_EXERCISES.map((e) => ({ ...e }));
+    warmSearch(fresh);
+    const started = performance.now();
+    searchExercises(fresh, 'b');
+    // Warm, it takes well under 1 ms in Node; 25 ms leaves room for a busy test run.
+    expect(performance.now() - started).toBeLessThan(25);
   });
 });

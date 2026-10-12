@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useDb } from '../db/DbProvider';
 import type { Db } from '../db/types';
+import { shareEqual } from './shareEqual';
 
 type DataVersion = { version: number; bump(): void };
 
@@ -20,8 +21,12 @@ export function bumpData(): void {
 /**
  * Reads synchronously from the database and reads again when the data version changes or the screen
  * regains focus. Pass a module-level function (or a stable callback) so the read only repeats for those reasons.
+ *
+ * With `share`, a read again keeps every part of the last result that did not change (`shareEqual`, R400): a write to
+ * one set hands every other exercise, or every other library row, back as the same object, so memoized rows do not
+ * draw again. Only for results made of plain objects and arrays.
  */
-export function useDbQuery<T>(query: (db: Db) => T): T {
+export function useDbQuery<T>(query: (db: Db) => T, options?: { share?: boolean }): T {
   const db = useDb();
   const version = useDataVersion((state) => state.version);
   const [focusCount, setFocusCount] = useState(0);
@@ -38,8 +43,16 @@ export function useDbQuery<T>(query: (db: Db) => T): T {
     }, []),
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- version and focusCount are the triggers
-  return useMemo(() => query(db), [db, query, version, focusCount]);
+  const share = options?.share === true;
+  /** The last result handed out, which a shared read keeps the unchanged parts of. */
+  const last = useRef<T | undefined>(undefined);
+  const result = useMemo(
+    () => (share ? shareEqual(last.current, query(db)) : query(db)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version and focusCount are the triggers
+    [db, query, version, focusCount, share],
+  );
+  last.current = result;
+  return result;
 }
 
 /**

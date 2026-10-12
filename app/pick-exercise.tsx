@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
 import { FlatList, Image, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDb } from '../src/db/DbProvider';
 import { listExercises, type ExerciseRow } from '../src/db/repositories/exercisesRepo';
 import { EQUIPMENT_ORDER, equipmentLabel, MUSCLE_ORDER, muscleLabel, primaryMusclesLabel } from '../src/domain/labels';
-import { filterExercises, searchExercises } from '../src/domain/search';
+import { filterExercises, searchExercises, warmSearch } from '../src/domain/search';
 import type { Equipment, Muscle } from '../src/domain/types';
 import { useCreatedExercise } from '../src/state/createdExercise';
 import { useDbQuery } from '../src/state/dataVersion';
@@ -31,11 +32,34 @@ function close() {
   else router.replace('/');
 }
 
+/** The library is read again after any write; unchanged rows stay the same objects, so their rows do not draw again (R400). */
+const SHARED = { share: true } as const;
+
+/** Each row's key: the exercise's id. Module-level, so the list is never handed a new function. */
+const keyOf = (item: ExerciseRow) => item.id;
+
+/**
+ * Builds the search's word index for the whole library once the picker has opened and the phone is idle, so the first
+ * letter typed doesn't pay for it (R401).
+ */
+function useWarmSearch(items: readonly ExerciseRow[]) {
+  useEffect(() => {
+    const run = () => warmSearch(items);
+    if (typeof requestIdleCallback === 'function') {
+      const handle = requestIdleCallback(run);
+      return () => cancelIdleCallback(handle);
+    }
+    const timer = setTimeout(run, 0);
+    return () => clearTimeout(timer);
+  }, [items]);
+}
+
 /**
  * One row of chips that scrolls sideways. At most one is chosen: it is filled with ink, and tapping it again clears it.
- * Compact pills, 36pt tall with a 4pt hit slop; the row's 4pt padding keeps that reach inside it.
+ * Compact pills, 36pt tall with a 4pt hit slop; the row's 4pt padding keeps that reach inside it. Memoized: a letter
+ * typed in the search doesn't draw the chips again.
  */
-function ChipRow<T extends string>({
+const ChipRow = memo(function ChipRow<T extends string>({
   values,
   label,
   chosen,
@@ -67,7 +91,12 @@ function ChipRow<T extends string>({
       ))}
     </ScrollView>
   );
-}
+}) as <T extends string>(props: {
+  values: readonly T[];
+  label: (value: T) => string;
+  chosen: T | undefined;
+  onChoose: (value: T | undefined) => void;
+}) => ReactElement;
 
 /** The start photo at 44pt (bundled, else your own, R111), or the same tile without one, so every name lines up. */
 function Thumbnail({ exercise }: { exercise: ExerciseRow }) {
@@ -163,13 +192,18 @@ export default function PickExercise() {
   const { mode, workoutExerciseId } = useLocalSearchParams<{ mode?: string; workoutExerciseId?: string }>();
   const replacing = mode === 'replace' && typeof workoutExerciseId === 'string';
   const forRoutine = mode === 'routine';
-  const everything = useDbQuery(listExercises);
+  const everything = useDbQuery(listExercises, SHARED);
+  useWarmSearch(everything);
   const [query, setQuery] = useState('');
   const [muscle, setMuscle] = useState<Muscle | undefined>(undefined);
   const [equipment, setEquipment] = useState<Equipment | undefined>(undefined);
+  // The field and the chips answer at once; the list follows as soon as it can, so a fast typist never waits on it (R402).
+  const listQuery = useDeferredValue(query);
+  const listMuscle = useDeferredValue(muscle);
+  const listEquipment = useDeferredValue(equipment);
   const results = useMemo(
-    () => searchExercises(filterExercises(everything, { muscle, equipment }), query),
-    [everything, muscle, equipment, query],
+    () => searchExercises(filterExercises(everything, { muscle: listMuscle, equipment: listEquipment }), listQuery),
+    [everything, listMuscle, listEquipment, listQuery],
   );
 
   const choose = useCallback(
@@ -221,6 +255,7 @@ export default function PickExercise() {
     Keyboard.dismiss();
     setDemoFor(exerciseId);
   }, []);
+  const closeDemo = useCallback(() => setDemoFor(null), []);
 
   const renderItem = useCallback(
     ({ item }: { item: ExerciseRow }) => <ExerciseOption exercise={item} onChoose={choose} onShowForm={showForm} />,
@@ -276,7 +311,7 @@ export default function PickExercise() {
         <ChipRow values={EQUIPMENT_CHIPS} label={equipmentLabel} chosen={equipment} onChoose={setEquipment} />
         <FlatList
           data={results}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyOf}
           renderItem={renderItem}
           // Rows wrap at large text, so their heights are not known ahead: a screenful is drawn, the rest as it scrolls.
           initialNumToRender={12}
@@ -295,7 +330,7 @@ export default function PickExercise() {
         />
       </View>
       {/* A routine's unsaved draft may hold the exercise, so it is not edited from here (review of R110). */}
-      <FormDemo exerciseId={demoFor} onClose={() => setDemoFor(null)} canEdit={!forRoutine} />
+      <FormDemo exerciseId={demoFor} onClose={closeDemo} canEdit={!forRoutine} />
     </View>
   );
 }
