@@ -1,337 +1,176 @@
-// The DST cases need a zone with DST: pin America/Chicago for this file (restored after).
-const originalTz = process.env.TZ;
-process.env.TZ = 'America/Chicago';
-afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
-});
-
 import {
-  asleepMs,
-  healthWeightLine,
-  healthWeightOffer,
-  latestRestingHr,
-  RHR_BASELINE_DAYS,
-  RHR_MIN_DAYS,
-  RHR_RISE_BPM,
-  roughSleepOffer,
-  restingHrBaseline,
-  SHORT_SLEEP_MS,
-  sleepOfferLine,
-  sleepWindow,
+  healthWritesDue,
+  lastNightWindow,
+  MAX_HEALTH_WRITES_PER_PASS,
+  newerHealthBodyweight,
+  restingHeartRateRise,
+  roughSleepOfferLine,
+  roughSleepReason,
+  sleepMinutes,
   toHealthWorkout,
+  type HealthDueRow,
+  type SleepSample,
 } from './health';
 
+/** Local time, so the tests read the same in any time zone. */
+const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).getTime();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
-const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).getTime();
-const spaced = (text: string) => text.replace(/\s/g, ' '); // newer ICU puts a narrow no-break space before AM/PM
+const DAY = 24 * HOUR;
 
-describe('constants (§17.1, R210)', () => {
-  it('are the owner-confirmed thresholds', () => {
-    expect(SHORT_SLEEP_MS).toBe(6 * HOUR);
-    expect(RHR_RISE_BPM).toBe(10);
-    expect(RHR_BASELINE_DAYS).toBe(28);
-    expect(RHR_MIN_DAYS).toBe(7);
+describe('toHealthWorkout (§17.1)', () => {
+  it('is one strength session with the start and end times and the workout name', () => {
+    expect(toHealthWorkout({ id: 'w1', name: 'Push A', startedAt: at(12, 7), finishedAt: at(12, 8, 5) })).toEqual({
+      workoutId: 'w1',
+      title: 'Push A',
+      start: at(12, 7),
+      end: at(12, 8, 5),
+    });
+  });
+
+  it('is nothing for a workout still in progress', () => {
+    expect(toHealthWorkout({ id: 'w1', name: 'Workout', startedAt: 1, finishedAt: null })).toBeNull();
+  });
+
+  it('never ends at or before its start, which both stores refuse', () => {
+    expect(toHealthWorkout({ id: 'w1', name: 'Workout', startedAt: 5_000, finishedAt: 5_000 })?.end).toBe(6_000);
+    expect(toHealthWorkout({ id: 'w1', name: 'Workout', startedAt: 5_000, finishedAt: 4_000 })?.end).toBe(6_000);
   });
 });
 
-describe('sleepWindow (R210)', () => {
-  it('runs from 18:00 the day before to the start of a 07:00 workout', () => {
-    expect(sleepWindow('2026-10-11', at(2026, 10, 11, 7))).toEqual({ start: at(2026, 10, 10, 18), end: at(2026, 10, 11, 7) });
+describe('healthWritesDue (R308)', () => {
+  const row = (id: string, finishedAt: number | null, healthStatus: HealthDueRow['healthStatus'] = null): HealthDueRow => ({
+    id,
+    status: finishedAt === null ? 'active' : 'finished',
+    finishedAt,
+    healthStatus,
   });
 
-  it('runs from 18:00 the day before to the start of a 19:00 workout', () => {
-    expect(sleepWindow('2026-10-11', at(2026, 10, 11, 19))).toEqual({ start: at(2026, 10, 10, 18), end: at(2026, 10, 11, 19) });
+  it('is nothing while the write-out is off', () => {
+    expect(healthWritesDue([row('a', 10)], null)).toEqual([]);
   });
 
-  it('runs in America/Chicago, where the DST nights below are 23 h and 25 h long', () => {
-    expect(at(2026, 3, 9) - at(2026, 3, 8)).toBe(23 * HOUR);
-    expect(at(2026, 11, 2) - at(2026, 11, 1)).toBe(25 * HOUR);
+  it('writes workouts finished since it was turned on, not yet written, oldest first; a failed one is tried again', () => {
+    const rows = [row('old', 50), row('done', 200, 'done'), row('failed', 150, 'failed'), row('new', 120), row('active', null)];
+    expect(healthWritesDue(rows, 100)).toEqual(['new', 'failed']);
   });
 
-  it('starts at local 18:00 on the spring-forward night, a real 12 h to a 07:00 start', () => {
-    // 2026-03-08 02:00 CST jumps to 03:00 CDT
-    const w = sleepWindow('2026-03-08', at(2026, 3, 8, 7));
-    expect(w).toEqual({ start: at(2026, 3, 7, 18), end: at(2026, 3, 8, 7) });
-    expect(w.end - w.start).toBe(12 * HOUR);
+  it('counts a workout finished at the moment it was turned on', () => {
+    expect(healthWritesDue([row('a', 100)], 100)).toEqual(['a']);
   });
 
-  it('starts at local 18:00 on the fall-back night, a real 14 h to a 07:00 start', () => {
-    // 2026-11-01 02:00 CDT falls back to 01:00 CST
-    const w = sleepWindow('2026-11-01', at(2026, 11, 1, 7));
-    expect(w).toEqual({ start: at(2026, 10, 31, 18), end: at(2026, 11, 1, 7) });
-    expect(w.end - w.start).toBe(14 * HOUR);
-  });
-
-  it('crosses a month and a year end', () => {
-    expect(sleepWindow('2027-01-01', at(2027, 1, 1, 8)).start).toBe(at(2026, 12, 31, 18));
-  });
-
-  it('never ends before it starts', () => {
-    const w = sleepWindow('2026-10-11', at(2026, 10, 10, 12));
-    expect(w.end).toBeGreaterThanOrEqual(w.start);
+  it(`writes at most ${MAX_HEALTH_WRITES_PER_PASS} in one pass`, () => {
+    const rows = Array.from({ length: 30 }, (_, i) => row(`w${i}`, 1000 + i));
+    const due = healthWritesDue(rows, 0);
+    expect(due).toHaveLength(MAX_HEALTH_WRITES_PER_PASS);
+    expect(due[0]).toBe('w0');
   });
 });
 
-describe('asleepMs (R210)', () => {
-  const window = { start: at(2026, 10, 10, 18), end: at(2026, 10, 11, 7) };
-
-  it('is null (no data) with no intervals', () => {
-    expect(asleepMs([], window)).toBeNull();
+describe('lastNightWindow (R310)', () => {
+  it('runs from 6pm the day before to now, for a morning session', () => {
+    expect(lastNightWindow(at(12, 7, 30))).toEqual({ start: at(11, 18), end: at(12, 7, 30) });
   });
 
-  it('is null when no interval reaches into the window', () => {
-    expect(asleepMs([{ start: at(2026, 10, 10, 13), end: at(2026, 10, 10, 15) }], window)).toBeNull();
+  it('stops at 2pm for an evening session, so a nap after 2pm never counts', () => {
+    expect(lastNightWindow(at(12, 19))).toEqual({ start: at(11, 18), end: at(12, 14) });
   });
 
-  it('sums separate intervals', () => {
-    expect(
-      asleepMs(
-        [
-          { start: at(2026, 10, 10, 23), end: at(2026, 10, 11, 2) },
-          { start: at(2026, 10, 11, 3), end: at(2026, 10, 11, 5) },
-        ],
-        window,
-      ),
-    ).toBe(5 * HOUR);
-  });
-
-  it('counts overlapping watch and phone intervals once', () => {
-    const watch = [{ start: at(2026, 10, 10, 23), end: at(2026, 10, 11, 5) }];
-    const phone = [
-      { start: at(2026, 10, 10, 22, 30), end: at(2026, 10, 11, 1) },
-      { start: at(2026, 10, 11, 4), end: at(2026, 10, 11, 6) },
-    ];
-    expect(asleepMs([...watch, ...phone], window)).toBe(7.5 * HOUR);
-  });
-
-  it('counts a duplicate interval once and an interval inside another not at all', () => {
-    const night = { start: at(2026, 10, 10, 23), end: at(2026, 10, 11, 5) };
-    expect(asleepMs([night, { ...night }, { start: at(2026, 10, 11, 1), end: at(2026, 10, 11, 2) }], window)).toBe(6 * HOUR);
-  });
-
-  it('counts sleep across midnight', () => {
-    expect(asleepMs([{ start: at(2026, 10, 10, 22), end: at(2026, 10, 11, 6) }], window)).toBe(8 * HOUR);
-  });
-
-  it('clips intervals that cross the window edges and drops those outside it', () => {
-    expect(
-      asleepMs(
-        [
-          { start: at(2026, 10, 10, 17), end: at(2026, 10, 10, 19) }, // 1 h inside
-          { start: at(2026, 10, 11, 6), end: at(2026, 10, 11, 9) }, // 1 h inside
-          { start: at(2026, 10, 10, 13), end: at(2026, 10, 10, 15) }, // outside
-          { start: at(2026, 10, 11, 8), end: at(2026, 10, 11, 9) }, // outside
-        ],
-        window,
-      ),
-    ).toBe(2 * HOUR);
-  });
-
-  it('ignores an interval that ends before it starts', () => {
-    expect(asleepMs([{ start: at(2026, 10, 11, 5), end: at(2026, 10, 11, 1) }], window)).toBeNull();
-  });
-
-  it('measures the spring-forward night in real elapsed time: 23:00 to 06:00 local is 6 h', () => {
-    const w = sleepWindow('2026-03-08', at(2026, 3, 8, 7));
-    expect(asleepMs([{ start: at(2026, 3, 7, 23), end: at(2026, 3, 8, 6) }], w)).toBe(6 * HOUR);
-  });
-
-  it('measures the fall-back night in real elapsed time: 23:00 to 06:00 local is 8 h', () => {
-    const w = sleepWindow('2026-11-01', at(2026, 11, 1, 7));
-    expect(asleepMs([{ start: at(2026, 10, 31, 23), end: at(2026, 11, 1, 6) }], w)).toBe(8 * HOUR);
+  it('crosses a month', () => {
+    expect(lastNightWindow(new Date(2026, 10, 1, 8).getTime()).start).toBe(new Date(2026, 9, 31, 18).getTime());
   });
 });
 
-describe('latestRestingHr', () => {
-  const start = at(2026, 10, 11, 7);
+describe('sleepMinutes', () => {
+  const window = { start: at(11, 18), end: at(12, 9) };
+  const s = (kind: SleepSample['kind'], start: number, end: number): SleepSample => ({ kind, start, end });
 
-  it('is the newest sample in the 24 h before the start', () => {
-    expect(
-      latestRestingHr(
-        [
-          { at: start - 3 * HOUR, value: 58 },
-          { at: start - 1 * HOUR, value: 64 },
-          { at: start - 10 * HOUR, value: 55 },
-        ],
-        start,
-      ),
-    ).toBe(64);
+  it('adds the asleep stages and leaves out awake', () => {
+    const samples = [s('asleep', at(11, 23), at(12, 2)), s('awake', at(12, 2), at(12, 2, 30)), s('asleep', at(12, 2, 30), at(12, 6))];
+    expect(sleepMinutes(samples, window)).toBe(6.5 * 60);
   });
 
-  it('ignores samples after the start and older than 24 h', () => {
-    expect(latestRestingHr([{ at: start + MIN, value: 70 }, { at: start - 25 * HOUR, value: 60 }], start)).toBeNull();
+  it('counts overlaps once: the watch and the phone both logged the night', () => {
+    const samples = [s('asleep', at(11, 23), at(12, 5)), s('asleep', at(12, 0), at(12, 6))];
+    expect(sleepMinutes(samples, window)).toBe(7 * 60);
   });
 
-  it('is null with no samples', () => {
-    expect(latestRestingHr([], start)).toBeNull();
-  });
-});
-
-describe('restingHrBaseline', () => {
-  const day = (localDay: number, h: number, value: number) => ({ at: at(2026, 10, localDay, h), value });
-
-  it('is the mean of per-day means over the days before the workout date', () => {
-    const samples = [
-      day(1, 6, 50),
-      day(1, 20, 60), // day mean 55
-      day(2, 6, 56),
-      day(3, 6, 56),
-      day(4, 6, 56),
-      day(5, 6, 56),
-      day(6, 6, 56),
-      day(7, 6, 55),
-    ];
-    // (55 + 56*5 + 55) / 7 = 390 / 7
-    expect(restingHrBaseline(samples, '2026-10-11')).toBeCloseTo(390 / 7, 10);
+  it('only counts what falls inside the window', () => {
+    expect(sleepMinutes([s('asleep', at(11, 13), at(11, 20))], window)).toBe(120);
+    expect(sleepMinutes([s('asleep', at(12, 8), at(12, 11))], window)).toBe(60);
   });
 
-  it('is null with fewer than 7 days of samples', () => {
-    const samples = [1, 2, 3, 4, 5, 6].map((d) => day(d, 6, 55));
-    expect(restingHrBaseline(samples, '2026-10-11')).toBeNull();
+  it('falls back to time in bed when there are no asleep stages', () => {
+    expect(sleepMinutes([s('inBed', at(11, 23), at(12, 4))], window)).toBe(5 * 60);
+    expect(sleepMinutes([s('inBed', at(11, 22), at(12, 7)), s('asleep', at(11, 23), at(12, 4))], window)).toBe(5 * 60);
   });
 
-  it('leaves out the workout day itself and days older than 28 days', () => {
-    const samples = [
-      ...[4, 5, 6, 7, 8, 9, 10].map((d) => day(d, 6, 60)),
-      day(11, 5, 90), // the workout day
-      { at: at(2026, 9, 12, 6), value: 30 }, // 29 days before 2026-10-11
-    ];
-    expect(restingHrBaseline(samples, '2026-10-11')).toBe(60);
-  });
-
-  it('takes the 28th day before', () => {
-    const samples = [...[4, 5, 6, 7, 8, 9].map((d) => day(d, 6, 60)), { at: at(2026, 9, 13, 6), value: 53 }];
-    expect(restingHrBaseline(samples, '2026-10-11')).toBe(59);
+  it('is unknown with nothing logged for the night', () => {
+    expect(sleepMinutes([], window)).toBeNull();
+    expect(sleepMinutes([s('awake', at(11, 23), at(12, 1)), s('asleep', at(10, 23), at(11, 6))], window)).toBeNull();
   });
 });
 
-describe('roughSleepOffer (§17.1, R210)', () => {
-  const none = { asleepMs: null, latestBpm: null, baselineBpm: null };
+describe('restingHeartRateRise', () => {
+  const NOW = at(12, 8);
+  const baseline = (bpm: number, days = 10) => Array.from({ length: days }, (_, i) => ({ at: NOW - (i + 1) * DAY, bpm }));
 
-  it('offers short sleep under 6 h', () => {
-    expect(roughSleepOffer({ ...none, asleepMs: 5 * HOUR + 59 * MIN })).toEqual({ reason: 'short_sleep', asleepMs: 5 * HOUR + 59 * MIN });
+  it("is today's reading minus the 28-day average before it", () => {
+    expect(restingHeartRateRise([{ at: NOW - HOUR, bpm: 62 }, ...baseline(50)], NOW)).toBe(12);
+    expect(restingHeartRateRise([{ at: NOW - HOUR, bpm: 48 }, ...baseline(50)], NOW)).toBe(-2);
   });
 
-  it('offers nothing at 6 h', () => {
-    expect(roughSleepOffer({ ...none, asleepMs: 6 * HOUR })).toBeNull();
+  it('uses the newest reading of the last 36 hours, and nothing older', () => {
+    expect(restingHeartRateRise([{ at: NOW - 30 * HOUR, bpm: 60 }, ...baseline(50).slice(2)], NOW)).toBe(10);
+    expect(restingHeartRateRise([{ at: NOW - 40 * HOUR, bpm: 70 }, ...baseline(50).slice(2)], NOW)).toBeNull();
   });
 
-  it('offers nothing with no sleep data', () => {
-    expect(roughSleepOffer(none)).toBeNull();
+  it('leaves out readings older than 28 days and a second one the same day', () => {
+    const samples = [{ at: NOW - HOUR, bpm: 60 }, { at: NOW - 3 * HOUR, bpm: 90 }, ...baseline(50), { at: NOW - 40 * DAY, bpm: 100 }];
+    expect(restingHeartRateRise(samples, NOW)).toBe(10);
   });
 
-  it('treats 0 asleep as no data, never "You slept 0 min"', () => {
-    expect(roughSleepOffer({ ...none, asleepMs: 0 })).toBeNull();
-    expect(roughSleepOffer({ asleepMs: 0, latestBpm: 70, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 15 });
-  });
-
-  it('offers on a resting heart rate 10 above the baseline', () => {
-    expect(roughSleepOffer({ ...none, latestBpm: 65, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 10 });
-  });
-
-  it('offers nothing 9 above', () => {
-    expect(roughSleepOffer({ ...none, latestBpm: 64, baselineBpm: 55 })).toBeNull();
-  });
-
-  it('offers nothing 9.6 above, and rounds the rise it shows', () => {
-    expect(roughSleepOffer({ ...none, latestBpm: 64.6, baselineBpm: 55 })).toBeNull();
-    expect(roughSleepOffer({ ...none, latestBpm: 66.6, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 12 });
-  });
-
-  it('offers nothing without a baseline (fewer than 7 days) or a latest reading', () => {
-    expect(roughSleepOffer({ ...none, latestBpm: 80, baselineBpm: null })).toBeNull();
-    expect(roughSleepOffer({ ...none, latestBpm: null, baselineBpm: 55 })).toBeNull();
-  });
-
-  it('gives one short-sleep offer when both conditions hold', () => {
-    expect(roughSleepOffer({ asleepMs: 4 * HOUR, latestBpm: 70, baselineBpm: 55 })).toEqual({ reason: 'short_sleep', asleepMs: 4 * HOUR });
-  });
-
-  it('offers on heart rate when sleep was long enough', () => {
-    expect(roughSleepOffer({ asleepMs: 8 * HOUR, latestBpm: 70, baselineBpm: 55 })).toEqual({ reason: 'heart_rate', riseBpm: 15 });
+  it('has no average to trust with fewer than 7 readings before today', () => {
+    expect(restingHeartRateRise([{ at: NOW - HOUR, bpm: 70 }, ...baseline(50, 6)], NOW)).toBeNull();
+    expect(restingHeartRateRise([], NOW)).toBeNull();
   });
 });
 
-describe('sleepOfferLine', () => {
-  it('says hours and minutes', () => {
-    expect(sleepOfferLine({ reason: 'short_sleep', asleepMs: 5 * HOUR + 10 * MIN })).toBe('You slept 5 h 10 min last night. Mark this session Rough sleep?');
+describe('roughSleepReason (§17.1: the owner confirmed the thresholds)', () => {
+  it('offers on under 6 hours of sleep', () => {
+    expect(roughSleepReason({ sleepMinutes: 359, heartRateRise: null })).toBe('short_sleep');
+    expect(roughSleepReason({ sleepMinutes: 360, heartRateRise: null })).toBeNull();
   });
 
-  it('says whole hours alone', () => {
-    expect(sleepOfferLine({ reason: 'short_sleep', asleepMs: 5 * HOUR })).toBe('You slept 5 h last night. Mark this session Rough sleep?');
+  it('offers on resting heart rate 10 bpm or more above its average', () => {
+    expect(roughSleepReason({ sleepMinutes: null, heartRateRise: 10 })).toBe('resting_heart_rate');
+    expect(roughSleepReason({ sleepMinutes: 480, heartRateRise: 9.9 })).toBeNull();
   });
 
-  it('says minutes alone under an hour', () => {
-    expect(sleepOfferLine({ reason: 'short_sleep', asleepMs: 45 * MIN })).toBe('You slept 45 min last night. Mark this session Rough sleep?');
+  it('is one offer, not two, when both hold', () => {
+    expect(roughSleepReason({ sleepMinutes: 300, heartRateRise: 15 })).toBe('short_sleep');
   });
 
-  it('counts whole minutes down, so under 6 h never reads 6 h', () => {
-    expect(sleepOfferLine({ reason: 'short_sleep', asleepMs: 6 * HOUR - 1 })).toBe('You slept 5 h 59 min last night. Mark this session Rough sleep?');
+  it('offers nothing when neither read has anything', () => {
+    expect(roughSleepReason({ sleepMinutes: null, heartRateRise: null })).toBeNull();
   });
 
-  it('says the heart-rate rise', () => {
-    expect(sleepOfferLine({ reason: 'heart_rate', riseBpm: 11 })).toBe('Your resting heart rate is 11 beats a minute above your usual. Mark this session Rough sleep?');
-  });
-});
-
-describe('healthWeightOffer (R211)', () => {
-  const reading = { at: at(2026, 10, 11, 7, 2), value: 82.74 };
-
-  it('offers a reading from today newer than the app, in kg to 0.1', () => {
-    expect(healthWeightOffer({ reading, latestAppAt: at(2026, 10, 10, 7), today: '2026-10-11', unit: 'kg' })).toEqual({ value: 82.7, unit: 'kg', at: reading.at });
-  });
-
-  it('converts to lb, to 0.1', () => {
-    // 82.74 kg = 182.408... lb
-    expect(healthWeightOffer({ reading, latestAppAt: null, today: '2026-10-11', unit: 'lb' })).toEqual({ value: 182.4, unit: 'lb', at: reading.at });
-  });
-
-  it('offers nothing for a reading from yesterday', () => {
-    expect(healthWeightOffer({ reading: { ...reading, at: at(2026, 10, 10, 22) }, latestAppAt: null, today: '2026-10-11', unit: 'kg' })).toBeNull();
-  });
-
-  it('offers nothing when the app already has a newer or same-time entry', () => {
-    expect(healthWeightOffer({ reading, latestAppAt: at(2026, 10, 11, 8), today: '2026-10-11', unit: 'kg' })).toBeNull();
-    expect(healthWeightOffer({ reading, latestAppAt: reading.at, today: '2026-10-11', unit: 'kg' })).toBeNull();
-  });
-
-  it('offers nothing with no reading or a non-positive one', () => {
-    expect(healthWeightOffer({ reading: null, latestAppAt: null, today: '2026-10-11', unit: 'kg' })).toBeNull();
-    expect(healthWeightOffer({ reading: { ...reading, value: 0 }, latestAppAt: null, today: '2026-10-11', unit: 'kg' })).toBeNull();
+  it('words each reason as a question, like the Short on food offer', () => {
+    expect(roughSleepOfferLine('short_sleep')).toBe('Under 6 hours of sleep last night. Mark this session Rough sleep?');
+    expect(roughSleepOfferLine('resting_heart_rate')).toBe('Resting heart rate is up today. Mark this session Rough sleep?');
   });
 });
 
-describe('healthWeightLine', () => {
-  const when = at(2026, 10, 11, 7, 2);
-
-  it('names Apple Health and shows the time in the locale', () => {
-    expect(spaced(healthWeightLine('apple', { value: 182.4, unit: 'lb', at: when }, 'en-US'))).toBe('Apple Health: 182.4 lb at 7:02 AM.');
+describe('newerHealthBodyweight (R311)', () => {
+  it("offers a reading newer than the app's latest, in the display unit to 0.1", () => {
+    expect(newerHealthBodyweight(1_000, { at: 2_000, kg: 80 }, 'lb')).toEqual({ at: 2_000, weight: 176.4, unit: 'lb' });
+    expect(newerHealthBodyweight(null, { at: 2_000, kg: 80.04 }, 'kg')).toEqual({ at: 2_000, weight: 80, unit: 'kg' });
   });
 
-  it('names Health Connect, 24-hour in en-GB', () => {
-    expect(spaced(healthWeightLine('health_connect', { value: 82.7, unit: 'kg', at: when }, 'en-GB'))).toMatch(/^Health Connect: 82\.7 kg at 0?7:02\.$/);
-  });
-
-  it('drops a trailing .0', () => {
-    expect(spaced(healthWeightLine('apple', { value: 82, unit: 'kg', at: when }, 'en-US'))).toBe('Apple Health: 82 kg at 7:02 AM.');
-  });
-});
-
-describe('toHealthWorkout (R206, open question 11)', () => {
-  it('keeps the id, name and times', () => {
-    const w = { id: 'w1', name: 'Push A', startedAt: at(2026, 10, 11, 7), finishedAt: at(2026, 10, 11, 8) };
-    expect(toHealthWorkout(w)).toEqual(w);
-  });
-
-  it('ends a 10 s workout 60 s after its start', () => {
-    const start = at(2026, 10, 11, 7);
-    expect(toHealthWorkout({ id: 'w2', name: 'Test', startedAt: start, finishedAt: start + 10_000 })).toEqual({ id: 'w2', name: 'Test', startedAt: start, finishedAt: start + 60_000 });
-  });
-
-  it('writes a workout longer than a day as it is', () => {
-    const start = at(2026, 10, 10, 7);
-    expect(toHealthWorkout({ id: 'w3', name: 'Long', startedAt: start, finishedAt: start + 30 * HOUR }).finishedAt).toBe(start + 30 * HOUR);
+  it('offers nothing older than or as old as the latest entry, nothing at all, or a non-weight', () => {
+    expect(newerHealthBodyweight(2_000, { at: 2_000, kg: 80 }, 'kg')).toBeNull();
+    expect(newerHealthBodyweight(3_000, { at: 2_000, kg: 80 }, 'kg')).toBeNull();
+    expect(newerHealthBodyweight(null, null, 'kg')).toBeNull();
+    expect(newerHealthBodyweight(null, { at: 2_000, kg: 0 }, 'kg')).toBeNull();
   });
 });

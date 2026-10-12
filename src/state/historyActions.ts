@@ -3,6 +3,7 @@ import type { Db } from '../db/types';
 import type { WorkoutDraft } from '../domain/historyDraft';
 import { takeSnapshotSafely } from './backup';
 import { bumpData } from './dataVersion';
+import { afterHistoryDelete, healthRecordBeforeDelete } from './nativeServices';
 
 /**
  * What the History screens call to change a finished workout (spec 7.12). Each runs its one transaction, then, once it
@@ -28,7 +29,10 @@ export function saveHistoryEdit(db: Db, draft: WorkoutDraft): 'saved' | 'nothing
 
 /** Deletes a finished workout, its PRs and next weights worked out again from the workouts left. */
 export function deleteHistoryWorkout(db: Db, workoutId: string): void {
+  const healthRecordId = healthRecordBeforeDelete(db, workoutId);
   deleteFinishedWorkout(db, workoutId);
   takeSnapshotSafely(db, Date.now());
+  // Phase 7: the record GymHound wrote to Health goes too, best effort (§17.1); nothing in Expo Go.
+  afterHistoryDelete(db, healthRecordId);
   bumpData();
 }

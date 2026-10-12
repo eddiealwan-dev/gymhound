@@ -37,6 +37,17 @@ export type Settings = {
   prFlagsBackfilled: boolean;
   /** The daily water goal in ml, or null until the user sets one (R150: no health default). */
   waterGoalMl: number | null;
+  /** Phase 7 (§17.1, R307): finished workouts are written to Apple Health or Health Connect. Off until turned on. */
+  healthWorkouts: boolean;
+  /** When `healthWorkouts` was last turned on (epoch ms): workouts finished from then on are written (R308). */
+  healthWorkoutsSince: number | null;
+  /** Phase 7 (§17.1): the three reads, each switched on separately. Sleep and resting heart rate feed the Rough sleep offer. */
+  healthSleep: boolean;
+  healthHeartRate: boolean;
+  /** A newer body weight in Health than the app's latest is offered on the body-weight card. */
+  healthBodyweight: boolean;
+  /** Phase 7 (§17.2, R303): when the newest snapshot was last copied to iCloud, or null. */
+  lastCloudCopyAt: number | null;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -64,6 +75,12 @@ const KEYS: Record<keyof Settings, string> = {
   seedVersion: 'seed_version',
   prFlagsBackfilled: 'pr_flags_backfilled',
   waterGoalMl: 'water_goal_ml',
+  healthWorkouts: 'health_workouts',
+  healthWorkoutsSince: 'health_workouts_since',
+  healthSleep: 'health_sleep',
+  healthHeartRate: 'health_heart_rate',
+  healthBodyweight: 'health_bodyweight',
+  lastCloudCopyAt: 'last_cloud_copy_at',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -94,6 +111,12 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     seedVersion: 0,
     prFlagsBackfilled: false,
     waterGoalMl: null,
+    healthWorkouts: false,
+    healthWorkoutsSince: null,
+    healthSleep: false,
+    healthHeartRate: false,
+    healthBodyweight: false,
+    lastCloudCopyAt: null,
   };
 }
 

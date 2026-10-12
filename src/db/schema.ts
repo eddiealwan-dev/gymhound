@@ -18,6 +18,8 @@ import type {
 // Spec §6. IDs are text. Timestamps are epoch milliseconds. Booleans are integers 0/1.
 
 export type WorkoutStatus = 'active' | 'finished';
+/** Phase 7: whether the workout's copy in Apple Health or Health Connect was written (§17.1). */
+export type HealthStatus = 'done' | 'failed';
 export type WorkoutOutcome = 'raised' | 'held' | 'held_marked' | 'no_rule' | 'no_sets';
 export type FoodSource = 'bundled' | 'custom';
 
@@ -121,6 +123,12 @@ export const workouts = sqliteTable(
     // The saved workout this one was started from (R119), or null. Deliberately not a foreign key: history must
     // survive the saved workout being deleted. Added in 0006.
     savedWorkoutId: text('saved_workout_id'),
+    // Phase 7 (§17.1, R307): the copy written to Apple Health or Health Connect. Null status means not attempted;
+    // 'done' with the record's id, or 'failed' (retried at the next start and the next finish). Added in 0009.
+    healthStatus: text('health_status').$type<HealthStatus>(),
+    healthRecordId: text('health_record_id'),
+    // Phase 7 (§17.1, R309): the Rough sleep offer appears at most once per workout, like the Short on food offer.
+    sleepOfferShown: integer('sleep_offer_shown', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     index('workouts_status_idx').on(t.status),

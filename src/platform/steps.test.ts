@@ -13,6 +13,8 @@ const mockPedometer = {
   getStepCountAsync: jest.fn<Promise<{ steps: number }>, [Date, Date]>(),
 };
 jest.mock('expo-sensors', () => ({ Pedometer: mockPedometer }));
+// No Health Connect here, as in Expo Go (phase 7 adds it to a build: health/healthSteps.ts, R312).
+jest.mock('./health', () => ({ getHealthStore: () => null }));
 
 /** The web (and default) twin, by its file name: Jest resolves `./steps` to the native one, as an iPhone would. */
 const webSource = (): StepsSource => (jest.requireActual('./steps.ts') as { stepsSource: () => StepsSource }).stepsSource();
@@ -75,7 +77,7 @@ describe('on an iPhone', () => {
   });
 });
 
-describe('on Android (Health Connect, phase 7) and the web', () => {
+describe('on Android without Health Connect (Expo Go) and the web', () => {
   it('Android is unavailable and never touches the sensor', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
     const source = stepsSource();

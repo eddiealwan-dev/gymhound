@@ -16,6 +16,13 @@ jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 
 const order: string[] = [];
 const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
+// Phase 7's Health write-out and iCloud copy (nativeServices) are watched, never run: their own tests cover them.
+const mockNative = { afterFinish: jest.fn(), healthRecordBeforeDelete: jest.fn((_db: Db, _id: string): string | null => null), afterHistoryDelete: jest.fn() };
+jest.mock('./nativeServices', () => ({
+  afterFinish: (db: Db) => mockNative.afterFinish(db),
+  healthRecordBeforeDelete: (db: Db, id: string) => mockNative.healthRecordBeforeDelete(db, id),
+  afterHistoryDelete: (db: Db, id: string | null) => mockNative.afterHistoryDelete(db, id),
+}));
 jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -93,12 +100,25 @@ describe('deleteHistoryWorkout', () => {
     expect(version()).toBe(v + 1);
   });
 
+  it("reads the workout's Health record before the delete and hands it on after (phase 7, §17.1)", () => {
+    const id = finished(db);
+    mockNative.healthRecordBeforeDelete.mockClear().mockImplementation(() => 'HK-1');
+    mockNative.afterHistoryDelete.mockClear().mockImplementation(() => {
+      expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toBeUndefined();
+    });
+    deleteHistoryWorkout(db, id);
+    expect(mockNative.healthRecordBeforeDelete).toHaveBeenCalledWith(db, id);
+    expect(mockNative.afterHistoryDelete).toHaveBeenCalledWith(db, 'HK-1');
+  });
+
   it('throws for the active workout, with no snapshot and no bump', () => {
+    mockNative.afterHistoryDelete.mockClear();
     const id = startEmptyWorkout(db, NOW);
     const v = version();
     expect(() => deleteHistoryWorkout(db, id)).toThrow();
     expect(db.select().from(workouts).where(eq(workouts.id, id)).get()).toBeDefined();
     expect(mockSnapshot).not.toHaveBeenCalled();
+    expect(mockNative.afterHistoryDelete).not.toHaveBeenCalled();
     expect(version()).toBe(v);
   });
 });

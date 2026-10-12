@@ -64,6 +64,8 @@ jest.mock('./FoodOfferBanner', () => ({
     return <MockText testID="food-offer-slot">{`offer for ${props.workoutId}`}</MockText>;
   },
 }));
+// Phase 7: the Rough sleep offer shares the slot, right under the Short on food offer.
+jest.mock('../native/SleepOfferBanner', () => ({ SleepOfferBanner: (_props: { workoutId: string }) => null }));
 jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -310,7 +312,8 @@ describe('the Short on food offer slot (phase 5, §7.10)', () => {
     const screen = scroll.parent!;
     const kids = screen.children as unknown as { props: Record<string, unknown> }[];
     const at = kids.indexOf(scroll as unknown as (typeof kids)[number]);
-    expect(kids[at - 1].props.workoutId).toBe('w1');
-    expect(kids[at - 2].props).toMatchObject({ name: 'Push A', startedAt: 1_000 });
+    expect(kids[at - 1].props.workoutId).toBe('w1'); // the Rough sleep offer (phase 7)
+    expect(kids[at - 2].props.workoutId).toBe('w1');
+    expect(kids[at - 3].props).toMatchObject({ name: 'Push A', startedAt: 1_000 });
   });
 });

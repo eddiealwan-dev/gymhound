@@ -5,7 +5,7 @@ export type { StepsPermission, StepsSource } from '../domain/steps';
 
 type Pedometer = typeof import('expo-sensors').Pedometer;
 
-/** The source on a phone with no step counter GymHound reads: Android (Health Connect, phase 7) and an iPhone without one. */
+/** The source where GymHound has no step count to read: Android without Health Connect (Expo Go) and an iPhone without a counter. */
 const unavailable: StepsSource = {
   permission: async () => 'unavailable',
   request: async () => 'unavailable',
@@ -27,6 +27,11 @@ function toPermission(status: string): StepsPermission {
  * nothing and nothing throws. Motion access is asked only by `request()`; nothing is stored.
  */
 export function stepsSource(): StepsSource {
+  if (Platform.OS === 'android') {
+    // Phase 7 (R312): Android's steps come from Health Connect, in a development or store build. Expo Go has none.
+    const store = (require('./health') as typeof import('./health')).getHealthStore();
+    return store === null ? unavailable : (require('./health/healthSteps') as typeof import('./health/healthSteps')).healthConnectSteps(store);
+  }
   if (Platform.OS !== 'ios') return unavailable;
   let pedometer: Pedometer;
   try {

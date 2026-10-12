@@ -355,7 +355,11 @@ describe('migration 0007 (phase 5, R132, R158)', () => {
     migrateUpTo(db, 7);
 
     expect(tableNames(db).sort()).toEqual([...before, 'water_log'].sort());
-    expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
+    // Only the columns 0007 knows: later migrations (0009) add more to workouts.
+    expect(db.select({ name: workouts.name, status: workouts.status }).from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({
+      name: 'Push A',
+      status: 'finished',
+    });
     expect(db.select().from(schema.foodLog).all()).toEqual([
       expect.objectContaining({ id: 'f1', kcal: 500, proteinG: 40, servingLabel: null }),
     ]);
@@ -404,6 +408,42 @@ describe('migration 0008 (phase 6, R162)', () => {
     expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({ name: 'Push A', status: 'finished' });
     expect(db.select().from(schema.waterLog).all()).toEqual([{ id: 'wl1', localDate: '2026-10-10', loggedAt: 1, amountMl: 500 }]);
     expect(db.select().from(schema.progressPhotos).all()).toEqual([]);
+    close();
+  });
+});
+
+describe('migration 0009 (phase 7, R307, R309)', () => {
+  const columns = (db: Db) =>
+    db
+      .all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(sql`pragma table_info(workouts)`)
+      .map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, dflt: c.dflt_value }));
+
+  it('adds the Health columns and the Rough sleep offer flag to workouts', () => {
+    const { db } = createTestDb();
+    expect(columns(db)).toEqual(
+      expect.arrayContaining([
+        { name: 'health_status', type: 'TEXT', notnull: 0, dflt: null },
+        { name: 'health_record_id', type: 'TEXT', notnull: 0, dflt: null },
+        { name: 'sleep_offer_shown', type: 'INTEGER', notnull: 1, dflt: 'false' },
+      ]),
+    );
+  });
+
+  it('migrates a database at 0008 forward: its workouts are kept, never written to Health and never offered', () => {
+    const { db, close } = openFileDb(':memory:');
+    migrateUpTo(db, 8);
+    db.run(sql`
+      INSERT INTO workouts (id, name, status, day_mark, started_at, finished_at, local_date, food_offer_shown, saved_workout_id)
+      VALUES ('w1', 'Push A', 'finished', 'normal', 1, 2, '2026-10-10', 0, NULL)`);
+
+    migrateTestDb(db);
+
+    expect(db.select().from(workouts).where(eq(workouts.id, 'w1')).get()).toMatchObject({
+      name: 'Push A',
+      healthStatus: null,
+      healthRecordId: null,
+      sleepOfferShown: false,
+    });
     close();
   });
 });

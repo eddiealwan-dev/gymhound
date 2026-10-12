@@ -1,14 +1,18 @@
 import { PermissionStatus } from 'expo';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import type { BellSound } from '../../domain/types';
+import { isNativeBuild } from '../native/optional';
 import type { RestTimerSurface } from './index';
+import { BELL_SOUNDS, bellChannelId, bellFile, lockScreenSound, QUIET_CHANNEL_ID, REST_CHANNEL_ID } from './lockScreenSound';
 
 /**
  * The rest surface on the phone: one local notification, "Rest's up.", scheduled for the end of the timer.
  * The app's own bell and haptic cover the app being open; this covers it being in the background or the phone locked.
  *
- * In Expo Go `sound: true` is the system notification sound. The chosen bell on the lock screen arrives with the
- * phase 7 build. Whether the phone rings or vibrates is up to the phone's own sound settings.
+ * In Expo Go `sound: true` is the system notification sound. A development or store build bundles the bells, so there the
+ * notification rings the bell chosen in Settings (phase 7, R304, `lockScreenSound`). Whether the phone rings or vibrates
+ * is up to the phone's own sound settings.
  */
 
 // Loaded off web only (see `getRestTimerSurface`). While the app is open the notification is silent and unseen: the
@@ -37,9 +41,10 @@ const REST_NOTIFICATION_ID = 'gymhound-rest';
  * The phone's own settings can still turn either down. There are no channels on iOS or web. On iOS in Expo Go a silent
  * notification cannot vibrate, so with the bell off the iOS notification is silent.
  */
-const REST_CHANNEL_ID = 'rest';
-const QUIET_CHANNEL_ID = 'rest-quiet';
-const onAndroid = Platform.OS === 'android';
+const os = Platform.OS;
+const onAndroid = os === 'android';
+/** Phase 7: whether this build bundles the bells as notification sounds (never Expo Go). Read once, at load. */
+const customSounds = isNativeBuild();
 
 /**
  * With `sound: false` and no vibration pattern, expo-notifications marks the Android notification silent whatever its
@@ -63,6 +68,13 @@ async function makeRestChannels(): Promise<void> {
   await Promise.all([
     makeChannel(REST_CHANNEL_ID, { name: 'Rest timer', importance, enableVibrate: true }),
     makeChannel(QUIET_CHANNEL_ID, { name: 'Rest timer (no sound)', importance, sound: null, enableVibrate: true }),
+    // Phase 7 (R304): one channel per bundled bell, since a channel's sound is fixed once it is made. Only in a build
+    // that bundles them: in Expo Go the raw resources do not exist.
+    ...(customSounds
+      ? BELL_SOUNDS.map((sound) =>
+          makeChannel(bellChannelId(sound), { name: `Rest timer (${sound})`, importance, sound: bellFile(sound), enableVibrate: true }),
+        )
+      : []),
   ]);
 }
 
@@ -78,7 +90,7 @@ async function allowed(): Promise<boolean> {
   return permission.granted;
 }
 
-async function schedule(endsAt: number, withSound: boolean): Promise<void> {
+async function schedule(endsAt: number, withSound: boolean, sound?: BellSound): Promise<void> {
   // A timer started again replaces the one running, so there is never more than one notification.
   await Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID);
   if (!(await allowed())) return;
@@ -86,15 +98,16 @@ async function schedule(endsAt: number, withSound: boolean): Promise<void> {
   if (endsAt <= Date.now()) return;
   await restChannelsReady;
   const quiet = onAndroid && !withSound;
+  const chosen = lockScreenSound({ os, withSound, sound, customSounds });
   await Notifications.scheduleNotificationAsync({
     identifier: REST_NOTIFICATION_ID,
     content: quiet
       ? { title: "Rest's up.", sound: false, vibrate: QUIET_VIBRATION }
-      : { title: "Rest's up.", sound: withSound },
+      : { title: "Rest's up.", sound: chosen.sound },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
       date: endsAt,
-      ...(onAndroid ? { channelId: withSound ? REST_CHANNEL_ID : QUIET_CHANNEL_ID } : null),
+      ...(chosen.channelId !== null ? { channelId: chosen.channelId } : null),
     },
   });
 }
@@ -113,7 +126,7 @@ function inTurn(operation: () => Promise<void>): Promise<void> {
 }
 
 export const expoGoNotification: RestTimerSurface = {
-  start: (endsAt, withSound) => inTurn(() => schedule(endsAt, withSound)),
-  update: (endsAt, withSound) => inTurn(() => schedule(endsAt, withSound)),
+  start: (endsAt, withSound, sound) => inTurn(() => schedule(endsAt, withSound, sound)),
+  update: (endsAt, withSound, sound) => inTurn(() => schedule(endsAt, withSound, sound)),
   cancel: () => inTurn(() => Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID)),
 };

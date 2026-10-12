@@ -54,9 +54,10 @@ jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 
 // The rest surface is the lock-screen notification. Tests watch the calls and never touch expo-notifications.
 const mockSurface = {
-  start: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
-  update: jest.fn((_endsAt: number, _withSound: boolean) => Promise.resolve()),
+  start: jest.fn((_endsAt: number, _withSound: boolean, _sound?: string) => Promise.resolve()),
+  update: jest.fn((_endsAt: number, _withSound: boolean, _sound?: string) => Promise.resolve()),
   cancel: jest.fn(() => Promise.resolve()),
+  ended: jest.fn(() => Promise.resolve()),
 };
 jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
 
@@ -66,6 +67,13 @@ jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnou
 
 // The snapshot writes a file on the phone and does nothing on web. Tests watch the calls (its own tests are in backup.test.ts).
 const mockSnapshot = jest.fn((_db: Db, _now: number) => true);
+// Phase 7's Health write-out and iCloud copy (nativeServices) are watched, never run: their own tests cover them.
+const mockNative = { afterFinish: jest.fn(), healthRecordBeforeDelete: jest.fn((_db: Db, _id: string): string | null => null), afterHistoryDelete: jest.fn() };
+jest.mock('./nativeServices', () => ({
+  afterFinish: (db: Db) => mockNative.afterFinish(db),
+  healthRecordBeforeDelete: (db: Db, id: string) => mockNative.healthRecordBeforeDelete(db, id),
+  afterHistoryDelete: (db: Db, id: string | null) => mockNative.afterHistoryDelete(db, id),
+}));
 jest.mock('./backup', () => ({ takeSnapshotSafely: (db: Db, now: number) => mockSnapshot(db, now) }));
 
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
@@ -79,6 +87,7 @@ beforeEach(() => {
   mockSurface.start.mockClear();
   mockSurface.update.mockClear();
   mockSurface.cancel.mockClear();
+  mockSurface.ended.mockClear();
   mockSnapshot.mockClear();
   mockAnnounce.mockClear();
 });
@@ -522,7 +531,7 @@ describe('tick starts the rest timer', () => {
 
     expect(restEndsAt()).toBe(NOW + 120_000);
     expect(mockSurface.start).toHaveBeenCalledTimes(1);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'bell');
   });
 
   it('bumps the data version once', () => {
@@ -542,7 +551,7 @@ describe('tick starts the rest timer', () => {
     tickSetOf(0, 0);
 
     expect(restEndsAt()).toBe(NOW + 90_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, false);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, false, 'bell');
   });
 
   it('restarts the rest from now when a later set is ticked', () => {
@@ -553,7 +562,7 @@ describe('tick starts the rest timer', () => {
     tickSetOf(0, 1);
 
     expect(restEndsAt()).toBe(NOW + 150_000);
-    expect(mockSurface.start).toHaveBeenLastCalledWith(NOW + 150_000, true);
+    expect(mockSurface.start).toHaveBeenLastCalledWith(NOW + 150_000, true, 'bell');
   });
 
   it('starts nothing in a superset until the last member of the round (bench with overhead press)', () => {
@@ -567,7 +576,7 @@ describe('tick starts the rest timer', () => {
 
     expect(tickSetOf(1, 0)).toBe(true);
     expect(restEndsAt()).toBe(NOW + 120_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'bell');
   });
 
   it('starts nothing when the tick is refused', () => {
@@ -657,7 +666,7 @@ describe('tick uses the rest of the exercise ticked', () => {
     tickSetOf(0, 0);
 
     expect(restEndsAt()).toBe(NOW + 90_000);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 90_000, true, 'bell');
   });
 
   it('starts no rest when the exercise is set to Off (0)', () => {
@@ -731,7 +740,7 @@ describe('restMinus15', () => {
     restMinus15(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBe(NOW + 105_000);
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, true);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, true, 'bell');
     expect(mockSurface.cancel).not.toHaveBeenCalled();
     expect(version()).toBe(before + 1);
   });
@@ -743,7 +752,7 @@ describe('restMinus15', () => {
 
     restMinus15(db, workoutId(), NOW + 120_000);
 
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, false);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 105_000, false, 'bell');
   });
 
   it('skips when 15 seconds or less are left', () => {
@@ -783,7 +792,7 @@ describe('restPlus15', () => {
     restPlus15(db, workoutId(), NOW + 120_000);
 
     expect(restEndsAt()).toBe(NOW + 135_000);
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, true, 'bell');
     expect(mockSurface.cancel).not.toHaveBeenCalled();
     expect(version()).toBe(before + 1);
   });
@@ -795,7 +804,7 @@ describe('restPlus15', () => {
 
     restPlus15(db, workoutId(), NOW + 120_000);
 
-    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false);
+    expect(mockSurface.update).toHaveBeenCalledWith(NOW + 135_000, false, 'bell');
   });
 
   it('does nothing once the rest is over', () => {
@@ -899,6 +908,27 @@ describe('restEnded', () => {
 
     expect(restEndsAt()).toBe(NOW + 240_500);
     expect(mockSurface.cancel).not.toHaveBeenCalled();
+    // Phase 7: the newer rest's lock-screen countdown stays up.
+    expect(mockSurface.ended).not.toHaveBeenCalled();
+  });
+
+  it("takes down the rest's lock-screen countdown (phase 7, R301) once it has been seen over", () => {
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    restEnded(db, workoutId(), NOW + 120_000);
+
+    expect(mockSurface.ended).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the bell on the lock screen (phase 7, R304)', () => {
+  it('hands the surface the bell chosen in Settings', () => {
+    setSetting(db, 'restBellSound', 'chime');
+    startFromDay(db, PUSH_A);
+    tickSetOf(0, 0);
+
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 120_000, true, 'chime');
   });
 });
 
@@ -1299,6 +1329,18 @@ describe('finish and discard', () => {
 
   const FINISHED_ORDER = ['cancel (no active workout)', 'snapshot (no active workout)', 'bump (no active workout)'];
 
+  it('starts the phase 7 Health write-out and iCloud copy after the snapshot, and only for a finish (R307, R303)', () => {
+    mockNative.afterFinish.mockClear().mockImplementation(() => {
+      expect(mockSnapshot).toHaveBeenCalled();
+    });
+    startFromDay(db, PUSH_A);
+    expect(finish(db, workoutId())).toBe('nothing_ticked');
+    expect(mockNative.afterFinish).not.toHaveBeenCalled();
+    tickSetOf(0, 0);
+    expect(finish(db, workoutId())).toBe('finished');
+    expect(mockNative.afterFinish).toHaveBeenCalledWith(db);
+  });
+
   describe('finish', () => {
     it('finishes, cancels the rest surface, takes the snapshot, then bumps, in that order, once the finish has committed', () => {
       startFromDay(db, PUSH_A);
@@ -1538,7 +1580,7 @@ describe("the ab roller rest: 'set a rest timer on ab roller, ticked a set, no r
     expect(ab.sets[0].done).toBe(true);
     expect(restEndsAt()).toBe(NOW + 60_000);
     expect(activeView().restSetId).toBe(ab.sets[0].id);
-    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 60_000, true);
+    expect(mockSurface.start).toHaveBeenCalledWith(NOW + 60_000, true, 'bell');
     expect(mockAnnounce).toHaveBeenLastCalledWith('Set 1 logged. Rest 1 minute.');
   });
 

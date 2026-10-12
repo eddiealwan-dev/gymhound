@@ -27,6 +27,23 @@ if (real !== linked) {
       : context.resolveRequest(context, moduleName, platform);
 }
 
+// PHASE 7: the native-only packages (plugins/nativeConfig.js OPTIONAL_NATIVE_PACKAGES) are required only inside a guard
+// that never runs in Expo Go (src/platform/native/optional.ts). Metro still resolves every require when it bundles, so
+// one that is not installed yet resolves to a stub instead of failing the bundle. Once installed, the real package is
+// bundled and the guard keeps Expo Go from running it (R306).
+const { isInstalled, optionalPackageOf } = require('./plugins/nativeConfig');
+const missingNative = path.join(__dirname, 'src', 'platform', 'native', 'missingNativeModule.js');
+const installed = new Map();
+const resolveBefore = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const pkg = optionalPackageOf(moduleName);
+  if (pkg !== null) {
+    if (!installed.has(pkg)) installed.set(pkg, isInstalled(pkg, __dirname));
+    if (!installed.get(pkg)) return { type: 'sourceFile', filePath: missingNative };
+  }
+  return resolveBefore ? resolveBefore(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform);
+};
+
 // Hook 2: the headers. expo-sqlite on web needs SharedArrayBuffer, which needs the page to be cross-origin isolated
 // (COEP + COOP). `server.enhanceMiddleware` (the documented hook) runs after Expo's first middleware, which answers
 // `/`, `/manifest` and `/index.exp` itself, so the HTML at `/` never got the headers. The `expo-router` `headers`

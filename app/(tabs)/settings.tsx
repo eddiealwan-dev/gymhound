@@ -20,6 +20,7 @@ import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/stat
 import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
+import { HealthSettings } from '../../src/ui/native/HealthSettings';
 import { PlatesEditor } from '../../src/ui/PlatesEditor';
 import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
@@ -620,6 +621,7 @@ export default function Settings() {
         <RestTimerSection />
         <FuelSection />
         <BackupsSection />
+        <HealthSettings />
         <ExportSection />
         <ProSection />
         {debugUnlockAllowed() ? <DeveloperSection /> : null}
