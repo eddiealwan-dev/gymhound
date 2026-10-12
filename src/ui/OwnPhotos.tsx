@@ -19,7 +19,7 @@ const SLOTS: readonly { slot: PhotoSlot; label: string; spoken: string }[] = [
 
 
 const DENIED = 'Camera access is off. Turn it on in Settings to take a photo.';
-const FAILED = "That photo couldn't be saved.";
+const FAILED = "That photo couldn't be saved. Try again.";
 
 /**
  * Your own start and end photos for an exercise with none bundled (R111), in the form demo and the exercise editor.
@@ -54,7 +54,8 @@ export function OwnPhotos({ exerciseId }: { exerciseId: string }) {
     let picked;
     try {
       picked = await pickPhoto(source);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the exercise photo.', error);
       say(FAILED);
       return;
     }
@@ -68,13 +69,15 @@ export function OwnPhotos({ exerciseId }: { exerciseId: string }) {
     let replaced: string | null;
     try {
       name = saveExercisePhoto(picked.uri, exerciseId, slot, now);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the exercise photo.', error);
       say(FAILED);
       return;
     }
     try {
       replaced = setOwnPhoto(db, exerciseId, slot, name, now);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the exercise photo.', error);
       deleteExercisePhotoFile(name);
       say(FAILED);
       return;
@@ -100,7 +103,8 @@ export function OwnPhotos({ exerciseId }: { exerciseId: string }) {
     let replaced: string | null;
     try {
       replaced = setOwnPhoto(db, exerciseId, slot, null, Date.now());
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not save the exercise photo.', error);
       say(FAILED);
       return;
     }
