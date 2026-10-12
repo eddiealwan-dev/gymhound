@@ -6,6 +6,8 @@ import Train from '../../app/(tabs)/index';
 import type { UpNext, UpNextExercise } from '../db/repositories/routinesRepo';
 import { ActiveWorkoutExistsError } from '../db/repositories/workoutsRepo';
 import type { Gear } from '../domain/plates';
+import { setSetting } from '../db/repositories/settingsRepo';
+import { bumpData } from '../state/dataVersion';
 import { startEmpty, startFromDay } from '../state/sessionActions';
 import { Button } from './Button';
 import { Body } from './Text';
@@ -16,6 +18,8 @@ const NOW = new Date(2026, 9, 10, 9, 0).getTime();
 
 type Read = {
   unit: 'kg' | 'lb';
+  distanceUnit?: 'km' | 'mi';
+  unitsHint?: boolean;
   gear: Gear;
   active: { name: string; startedAt: number; setsDone: number } | null;
   upNext: UpNext | null;
@@ -30,12 +34,12 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-GB
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
-jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead }));
+jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead, bumpData: jest.fn() }));
 jest.mock('../state/sessionActions', () => ({ startEmpty: jest.fn(), startFromDay: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../state/useNow', () => ({ useNow: () => new Date(2026, 9, 10, 9, 0).getTime() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('../db/repositories/routinesRepo', () => ({ getUpNext: jest.fn() }));
-jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
+jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn(), setSetting: jest.fn() }));
 jest.mock('../db/repositories/workoutsRepo', () => ({
   ActiveWorkoutExistsError: class ActiveWorkoutExistsError extends Error {},
 }));
@@ -504,5 +508,45 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     expect(rightStyle.flex).toBeUndefined();
     expect(rightStyle.flexShrink).toBeUndefined();
     expect(rightStyle.flexGrow).toBeUndefined();
+  });
+});
+
+describe('Train: the first-run units line (R407)', () => {
+  const KG_LINE = "Weights are in kg and distances in km, from your phone's region. Change them in Settings.";
+  const dismiss = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.props.accessibilityLabel === 'Dismiss tip' && typeof n.props.onPress === 'function')[0];
+
+  beforeEach(() => {
+    jest.mocked(setSetting).mockClear();
+    jest.mocked(bumpData).mockClear();
+  });
+
+  it('says which units the phone chose, under the first card and over the stats, with a way to dismiss it', () => {
+    mockRead = { ...mockRead, upNext: null, unitsHint: true, distanceUnit: 'km' };
+    const tree = mount();
+    const all = lines(tree);
+    expect(all).toContain(KG_LINE);
+    expect(all.indexOf('No routine yet. Pick one and Train will line up your next workout.')).toBeLessThan(all.indexOf(KG_LINE));
+    expect(all.indexOf(KG_LINE)).toBeLessThan(all.indexOf('Streak'));
+    expect(dismiss(tree)).toBeDefined();
+  });
+
+  it('names lb and mi for a US phone', () => {
+    mockRead = { ...mockRead, unit: 'lb', distanceUnit: 'mi', unitsHint: true };
+    expect(lines(mount())).toContain("Weights are in lb and distances in mi, from your phone's region. Change them in Settings.");
+  });
+
+  it('dismissing it stores that for good and reads again', () => {
+    mockRead = { ...mockRead, unitsHint: true, distanceUnit: 'km' };
+    const tree = mount();
+    act(() => dismiss(tree).props.onPress());
+    expect(setSetting).toHaveBeenCalledWith('db', 'hintUnitsDismissed', true);
+    expect(bumpData).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not shown once dismissed or after the first workout (the read says no), nor while a workout runs', () => {
+    mockRead = { ...mockRead, unitsHint: false, distanceUnit: 'km' };
+    expect(lines(mount())).not.toContain(KG_LINE);
+    mockRead = { ...mockRead, unitsHint: true, active: { name: 'Upper A', startedAt: NOW - 60_000, setsDone: 0 } };
+    expect(lines(mount())).not.toContain(KG_LINE);
   });
 });

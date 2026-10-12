@@ -6,7 +6,7 @@ import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getUpNext } from '../../src/db/repositories/routinesRepo';
 import type { UpNext } from '../../src/db/repositories/routinesRepo';
-import { getSettings } from '../../src/db/repositories/settingsRepo';
+import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { ActiveWorkoutExistsError } from '../../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView, getTrainingDates, getVolumeSetsSince } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
@@ -14,14 +14,15 @@ import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } fr
 import { formatRepScheme } from '../../src/domain/labels';
 import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
-import type { WeightUnit } from '../../src/domain/types';
+import type { DistanceUnit, WeightUnit } from '../../src/domain/types';
 import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { deviceLocale } from '../../src/platform/locale';
-import { useDbQuery } from '../../src/state/dataVersion';
+import { bumpData, useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
+import { Hint } from '../../src/ui/Hint';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -29,13 +30,22 @@ import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
 
+/** Train's first-run line about units (R407): which ones the phone's region chose, and where to change them. */
+function unitsHintText(unit: WeightUnit, distanceUnit: DistanceUnit): string {
+  return `Weights are in ${unit} and distances in ${distanceUnit}, from your phone's region. Change them in Settings.`;
+}
+
 /** What Train shows from the database. `weekStart` is the Monday on or before today. `gear` is the display unit's bar and plates. */
 function readTrain(db: Db, weekStart: string) {
   const settings = getSettings(db);
   const { unit } = settings;
   const active = getActiveWorkoutView(db);
+  const trainingDates = getTrainingDates(db);
   return {
     unit,
+    distanceUnit: settings.distanceUnit,
+    // Before the first finished workout, until dismissed, Train says which units it uses (R407).
+    unitsHint: !settings.hintUnitsDismissed && trainingDates.length === 0,
     gear: gearFor(unit, settings),
     active:
       active === null
@@ -46,7 +56,7 @@ function readTrain(db: Db, weekStart: string) {
             setsDone: active.exercises.reduce((n, exercise) => n + exercise.sets.filter((set) => set.done).length, 0),
           },
     upNext: getUpNext(db),
-    trainingDates: getTrainingDates(db),
+    trainingDates,
     weekVolume: totalVolume(getVolumeSetsSince(db, weekStart), unit),
   };
 }
@@ -234,7 +244,7 @@ export default function Train() {
   const locale = deviceLocale();
   const weekStart = mondayOf(today);
   const read = useCallback((d: Db) => readTrain(d, weekStart), [weekStart]);
-  const { unit, gear, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
+  const { unit, distanceUnit, unitsHint, gear, active, upNext, trainingDates, weekVolume } = useDbQuery(read);
   const [blocked, setBlocked] = useState(false);
   /** Change routine was tapped while a workout runs (R80). */
   const [changeBlocked, setChangeBlocked] = useState(false);
@@ -285,6 +295,17 @@ export default function Train() {
           <NoRoutineCard onStartEmpty={startEmptyWorkout} />
         )}
       </View>
+
+      {unitsHint === true && active === null ? (
+        <Hint
+          style={{ marginTop: 16 }}
+          text={unitsHintText(unit, distanceUnit)}
+          onDismiss={() => {
+            setSetting(db, 'hintUnitsDismissed', true);
+            bumpData();
+          }}
+        />
+      ) : null}
 
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
         <StatCard label="Streak" value={`${streak}`} caption={streak === 1 ? 'day' : 'days'} />

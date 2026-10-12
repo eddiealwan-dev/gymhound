@@ -48,6 +48,10 @@ export type Settings = {
   healthBodyweight: boolean;
   /** Phase 7 (§17.2, R303): when the newest snapshot was last copied to iCloud, or null. */
   lastCloudCopyAt: number | null;
+  /** §18.15 (R407): Train's first-run line about units was dismissed. It only shows before the first finished workout. */
+  hintUnitsDismissed: boolean;
+  /** §18.15 (R408): the session's first-run tip (the name opens the form demo, ⋯ holds rest and plates) was dismissed. */
+  hintSessionDismissed: boolean;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -81,6 +85,8 @@ const KEYS: Record<keyof Settings, string> = {
   healthHeartRate: 'health_heart_rate',
   healthBodyweight: 'health_bodyweight',
   lastCloudCopyAt: 'last_cloud_copy_at',
+  hintUnitsDismissed: 'hint_units_dismissed',
+  hintSessionDismissed: 'hint_session_dismissed',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -117,6 +123,8 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     healthHeartRate: false,
     healthBodyweight: false,
     lastCloudCopyAt: null,
+    hintUnitsDismissed: false,
+    hintSessionDismissed: false,
   };
 }
 

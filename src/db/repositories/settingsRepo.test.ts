@@ -18,6 +18,8 @@ const SPEC_KEYS = [
   'health_sleep',
   'health_workouts',
   'health_workouts_since',
+  'hint_session_dismissed',
+  'hint_units_dismissed',
   'last_cloud_copy_at',
   'last_snapshot_at',
   'last_snapshot_error',
