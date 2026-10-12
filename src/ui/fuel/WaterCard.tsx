@@ -6,7 +6,7 @@ import { listWater, logWater } from '../../db/repositories/waterRepo';
 import type { Db } from '../../db/types';
 import { formatWater, formatWaterSpoken, quickAmounts, toMl, waterUnitFor, waterUnitLabel } from '../../domain/water';
 import { announce } from '../../platform/announce';
-import { bumpData, useDbQuery } from '../../state/dataVersion';
+import { bumpData, useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { deviceLocale } from '../../platform/locale';
 import { Button } from '../Button';
@@ -30,7 +30,7 @@ export function WaterCard({ localDate, today }: { localDate: string; today: stri
     },
     [localDate],
   );
-  const { entries, goalMl, unit } = useDbQuery(read);
+  const { entries, goalMl, unit } = useFocusedDbQuery(read);
   const [sheet, setSheet] = useState<WaterSheetMode | null>(null);
   const locale = deviceLocale();
   // Summed unrounded and rounded once for display (R156).

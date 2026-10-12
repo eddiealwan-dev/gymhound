@@ -7,7 +7,7 @@ import type { Db } from '../../db/types';
 import { chartSummary } from '../../domain/chart';
 import { formatTrendValue, trendPoints, trendSummary } from '../../domain/fuelTrends';
 import type { FuelRange } from '../../domain/fuelTrends';
-import { useDbQuery } from '../../state/dataVersion';
+import { useFocusedDbQuery } from '../../state/dataVersion';
 import { deviceLocale } from '../../platform/locale';
 import { LineChart } from '../charts/LineChart';
 import { Segmented } from '../Segmented';
@@ -37,7 +37,7 @@ export function FuelTrends({ today }: { today: string }): ReactElement | null {
   const [metric, setMetric] = useState<FuelMetric>('kcal');
   const [range, setRange] = useState<FuelRange>('1M');
   const read = useCallback((db: Db) => dailySeries(db, metric), [metric]);
-  const series = useDbQuery(read);
+  const series = useFocusedDbQuery(read);
   const locale = deviceLocale();
 
   // Every logged day has a point in every measure, so this is the same for all four.

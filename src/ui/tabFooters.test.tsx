@@ -24,6 +24,7 @@ let mockQueryResult: unknown = ROUTINES;
 jest.mock('../state/dataVersion', () => ({
   bumpData: jest.fn(),
   useDbQuery: () => mockQueryResult,
+  useFocusedDbQuery: () => mockQueryResult,
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: () => undefined }));
 // Fuel: locked (the footer shows in every Fuel state); its water card has its own tests.
