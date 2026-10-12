@@ -7,6 +7,7 @@ import { deleteExercisePhotoFile, pickPhoto, photoUri, saveExercisePhoto } from 
 import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
 import { useOwnPhotoNames } from './exercisePhotos';
+import { OpenSettingsButton } from './OpenSettingsButton';
 import { afterSheetCloses, ConfirmSheet, Sheet } from './Sheet';
 import { SheetTitle } from './SheetTitle';
 import { Body } from './Text';
@@ -148,6 +149,7 @@ export function OwnPhotos({ exerciseId }: { exerciseId: string }) {
       {message !== null ? (
         <Body muted>{message}</Body>
       ) : null}
+      {message === DENIED ? <OpenSettingsButton accessibilityLabel="Open Settings to turn on the camera" /> : null}
       <Sheet visible={choosingFor !== null} onClose={() => setChoosingFor(null)}>
         <SheetTitle>{SLOTS.find((s) => s.slot === sheetSlot)?.label ?? ''}</SheetTitle>
         <View style={{ gap: 8 }}>

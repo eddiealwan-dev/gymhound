@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { router } from 'expo-router';
-import { Image, Platform, Text } from 'react-native';
+import { Image, Linking, Platform, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import PhotosRoute from '../../app/(tabs)/photos';
@@ -276,6 +276,21 @@ describe('/photos (R181)', () => {
     expect(announce).toHaveBeenCalledWith(DENIED);
     expect(saveProgressPhoto).not.toHaveBeenCalled();
     expect(listProgressPhotos(mockDb)).toEqual([]);
+  });
+
+  it('offers Open Settings once the camera was refused, and only then (R409)', async () => {
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    try {
+      const tree = mount(<PhotosRoute />);
+      expect(controls(tree, 'Open Settings to turn on the camera')).toHaveLength(0);
+      jest.mocked(pickProgressPhoto).mockResolvedValue({ status: 'denied' });
+      tap(tree, 'Add a photo');
+      await choose(tree, 'Take photo');
+      tap(tree, 'Open Settings to turn on the camera');
+      expect(open).toHaveBeenCalledTimes(1);
+    } finally {
+      open.mockRestore();
+    }
   });
 
   it('says nothing when the picker is cancelled', async () => {

@@ -1,4 +1,4 @@
-import { AppState, StyleSheet, Text, type AppStateStatus } from 'react-native';
+import { AppState, Linking, StyleSheet, Text, type AppStateStatus } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import type { StepsPermission, StepsSource } from '../domain/steps';
 import { StepsCard } from './stats/StepsCard';
@@ -155,15 +155,29 @@ describe('StepsCard (R182)', () => {
     await act(async () => {
       button(tree, 'Show steps')!.props.onPress();
     });
-    expect(texts(tree)).toEqual(['Steps', 'Motion access is off. Turn it on in Settings to see your steps.']);
+    expect(texts(tree)).toEqual(['Steps', 'Motion access is off. Turn it on in Settings to see your steps.', 'Open Settings']);
     expect(mockAnnounce).toHaveBeenCalledWith('Motion access is off. Turn it on in Settings to see your steps.');
     expect(mockSource.stepsBetween).not.toHaveBeenCalled();
   });
 
-  it('denied: the Settings line, and no button', async () => {
+  it('denied: Open Settings opens the phone settings, where motion access is turned on (R409)', async () => {
+    phone.permission = 'denied';
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    try {
+      const tree = await render();
+      const settings = button(tree, 'Open Settings')!;
+      expect(settings.props.accessibilityLabel).toBe('Open Settings to turn on motion access');
+      act(() => settings.props.onPress());
+      expect(open).toHaveBeenCalledTimes(1);
+    } finally {
+      open.mockRestore();
+    }
+  });
+
+  it('denied: the Settings line, and no Show steps', async () => {
     phone.permission = 'denied';
     const tree = await render();
-    expect(texts(tree)).toEqual(['Steps', 'Motion access is off. Turn it on in Settings to see your steps.']);
+    expect(texts(tree)).toEqual(['Steps', 'Motion access is off. Turn it on in Settings to see your steps.', 'Open Settings']);
     expect(button(tree, 'Show steps')).toBeUndefined();
     expect(mockSource.request).not.toHaveBeenCalled();
   });

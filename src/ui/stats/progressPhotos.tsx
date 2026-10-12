@@ -8,6 +8,7 @@ import { deleteProgressPhotoFile, pickProgressPhoto, progressPhotoExists, savePr
 import { bumpData, useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { Button } from '../Button';
+import { OpenSettingsButton } from '../OpenSettingsButton';
 import { afterSheetCloses, Sheet } from '../Sheet';
 import { SheetTitle } from '../SheetTitle';
 import { Body } from '../Text';
@@ -34,7 +35,8 @@ export function useProgressPhotos(): ProgressPhoto[] {
 /**
  * **Add a photo** (filled, or compact and secondary) and its sheet: **Take photo**, **Choose a photo**, **Cancel**. The
  * camera or the library opens once the sheet has gone. The photo is saved into the app's folder and stored by name;
- * a refused camera or a failed save is said in a muted line under the button.
+ * a refused camera or a failed save is said in a muted line under the button, and a refused camera offers **Open
+ * Settings** (R409).
  */
 export function AddProgressPhoto({ compact = false }: { compact?: boolean }) {
   const db = useDb();
@@ -102,6 +104,7 @@ export function AddProgressPhoto({ compact = false }: { compact?: boolean }) {
         <Button label="Add a photo" onPress={open} />
       )}
       {message !== null ? <Body muted>{message}</Body> : null}
+      {message === DENIED ? <OpenSettingsButton accessibilityLabel="Open Settings to turn on the camera" /> : null}
       <Sheet visible={choosing} onClose={() => setChoosing(false)}>
         <SheetTitle>Add a photo</SheetTitle>
         <View style={{ gap: 8 }}>

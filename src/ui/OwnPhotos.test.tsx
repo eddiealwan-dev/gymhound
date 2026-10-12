@@ -1,4 +1,4 @@
-import { Image, Platform, Text } from 'react-native';
+import { Image, Linking, Platform, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { getOwnPhotos, setOwnPhoto } from '../db/repositories/exercisePhotosRepo';
@@ -193,6 +193,21 @@ describe('your own photos (R111)', () => {
     expect(announce).toHaveBeenCalledWith(DENIED);
     expect(line.props.accessibilityLiveRegion).toBeUndefined();
     expect(setOwnPhoto).not.toHaveBeenCalled();
+  });
+
+  it('offers Open Settings under the line when the camera is off (R409)', async () => {
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    try {
+      jest.mocked(pickPhoto).mockResolvedValue({ status: 'denied' });
+      const tree = mount();
+      expect(buttonsLabelled(tree, 'Open Settings to turn on the camera')).toHaveLength(0);
+      tap(tree, 'Add start photo');
+      await choose(tree, 'Take photo');
+      tap(tree, 'Open Settings to turn on the camera');
+      expect(open).toHaveBeenCalledTimes(1);
+    } finally {
+      open.mockRestore();
+    }
   });
 
   it('deletes the saved file again if storing its name fails', async () => {

@@ -17,6 +17,7 @@ import { deviceLocale } from '../../platform/locale';
 import { stepsSource } from '../../platform/steps';
 import { flushAll } from '../../state/draftFlush';
 import { Button } from '../Button';
+import { OpenSettingsButton } from '../OpenSettingsButton';
 import { Body, Label, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
@@ -37,7 +38,8 @@ type Shown =
 
 /**
  * Stats → Steps on iPhone (R182): today's steps and the last 7 days from the motion sensor, with a 7-day average. Before
- * motion access is asked it offers **Show steps**, the only place that asks; refused, it says where to turn it on.
+ * motion access is asked it offers **Show steps**, the only place that asks; refused, it says where to turn it on and
+ * offers **Open Settings** (R409).
  * Counts are read each time Stats comes into sight and when the app comes back to the front, and are never stored.
  * Android and the web draw nothing (Health Connect is phase 7). It takes no props (R187).
  */
@@ -139,7 +141,12 @@ export function StepsCard(): ReactElement | null {
           </View>
         </>
       ) : null}
-      {shown.kind === 'denied' ? <Body muted>{DENIED}</Body> : null}
+      {shown.kind === 'denied' ? (
+        <>
+          <Body muted>{DENIED}</Body>
+          <OpenSettingsButton accessibilityLabel="Open Settings to turn on motion access" />
+        </>
+      ) : null}
       {shown.kind === 'failed' ? <Body muted>{FAILED}</Body> : null}
       {shown.kind === 'granted' ? <StepsWeek days={shown.days} counts={shown.counts} locale={locale} /> : null}
     </View>
