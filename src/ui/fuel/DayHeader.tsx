@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { Pressable, View } from 'react-native';
-import { dayTitle, shiftDay } from '../../domain/dates';
+import { calendarDayTitle, shiftDay } from '../../domain/dates';
 import { Body, Display } from '../Text';
 
 /** A 44pt arrow; dimmed and ignored when it can't go further. */
@@ -45,7 +45,7 @@ export function DayHeader({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <Arrow glyph={'‹'} label="Previous day" disabled={false} onPress={() => onChange(shiftDay(day, -1))} />
         <Display accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
-          {dayTitle(day, today, locale)}
+          {calendarDayTitle(day, today, locale)}
         </Display>
         <Arrow glyph={'›'} label="Next day" disabled={atToday} onPress={() => onChange(shiftDay(day, 1) > today ? today : shiftDay(day, 1))} />
       </View>

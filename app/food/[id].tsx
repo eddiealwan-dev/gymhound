@@ -6,10 +6,12 @@ import { useDb } from '../../src/db/DbProvider';
 import { archiveCustomFood, createCustomFood, customFoodNames, getFood, listFoods, updateCustomFood } from '../../src/db/repositories/foodsRepo';
 import { type CustomFoodInput, validateCustomFood } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
+import { useIsPro } from '../../src/platform/entitlements';
 import { useCreatedFood } from '../../src/state/createdFood';
 import { bumpData } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { FuelField, MacroFields } from '../../src/ui/fuel/MacroFields';
+import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
 import { Body, Display } from '../../src/ui/Text';
@@ -239,12 +241,40 @@ function FoodEditor({ foodId, prefill, fromAdd }: EditorProps) {
   );
 }
 
+/** The editor's title and Close, over the pitch. */
+function Locked({ title }: { title: string }) {
+  const { colors } = useTheme();
+  return (
+    <Screen>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: -8, marginBottom: 24 }}>
+        <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
+          {title}
+        </Display>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          hitSlop={4}
+          onPress={goBack}
+          style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+        >
+          <Ionicons name="close" size={28} color={colors.text} />
+        </Pressable>
+      </View>
+      <ProPitch context="tab" />
+    </Screen>
+  );
+}
+
 /**
  * Your own food (R144, R154), a modal over the add screen: `/food/new` makes one, with `name` to start from and
  * `from=add` to hand it back to the add screen; `/food/{id}` edits one of yours. A bundled food can't be edited.
+ * Without Pro the pitch takes the editor's place (R151), with Close to leave: Pro lapsing while it is open locks it at
+ * once, and an address can't open it around the lock. Your foods are kept.
  */
 export default function FoodEditorScreen() {
   const { id, name, from } = useLocalSearchParams<{ id: string; name?: string; from?: string }>();
+  const pro = useIsPro();
+  if (!pro) return <Locked title={id === 'new' ? 'New food' : 'Edit food'} />;
   // A fresh editor for each food: what one held never shows in another's.
   return <FoodEditor key={id} foodId={id === 'new' ? null : id} prefill={typeof name === 'string' ? name : ''} fromAdd={from === 'add'} />;
 }

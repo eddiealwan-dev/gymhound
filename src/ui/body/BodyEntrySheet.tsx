@@ -11,7 +11,7 @@ import { Sheet } from '../Sheet';
 import { Body } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
-import { BodyField, CheckLine } from './BodyLog';
+import { BodyField, CheckLine } from '../fields';
 
 /** A sheet title as ConfirmSheet draws it (Display 700), as a header VoiceOver can be moved to. */
 function SheetTitle({ titleRef, children }: { titleRef: RefObject<Text | null>; children: string }) {

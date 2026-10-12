@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Keyboard, View } from 'react-native';
 import { getFuelTargets, isTrainingDay, listEntries } from '../../src/db/repositories/foodLogRepo';
 import type { Db } from '../../src/db/types';
-import { dayTitle, toLocalDate } from '../../src/domain/dates';
+import { calendarDayTitle, toLocalDate } from '../../src/domain/dates';
 import { dayTotals, targetsFor } from '../../src/domain/fuel';
 import { announce } from '../../src/platform/announce';
 import { useIsPro } from '../../src/platform/entitlements';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { flushAll } from '../../src/state/draftFlush';
-import { deviceLocale } from '../../src/ui/body/BodyLog';
+import { deviceLocale } from '../../src/platform/locale';
 import { Button } from '../../src/ui/Button';
 import { DayHeader } from '../../src/ui/fuel/DayHeader';
 import { FoodEntries } from '../../src/ui/fuel/FoodEntries';
@@ -22,6 +22,7 @@ import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { Body, Display, Label } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
+import { useOnce } from '../../src/ui/useOnce';
 
 /**
  * Today's date, read again whenever the tab regains focus or the app comes back to the foreground, so a Fuel left open
@@ -75,14 +76,17 @@ export default function Fuel() {
     Keyboard.dismiss();
     const clamped = next > today ? today : next;
     setDay(clamped);
-    announce(dayTitle(clamped, today, locale));
+    announce(calendarDayTitle(clamped, today, locale));
   };
 
-  const push = (go: () => void) => {
-    flushAll();
-    Keyboard.dismiss();
-    go();
-  };
+  // One guard for every screen Fuel opens: a double tap, or a tap on Add food and then Quick add, opens one.
+  const once = useOnce();
+  const push = (go: () => void) =>
+    once(() => {
+      flushAll();
+      Keyboard.dismiss();
+      go();
+    });
 
   const target = pro && targets !== null ? targetsFor(targets, trainingDay) : null;
   const totals = dayTotals(entries);
@@ -94,7 +98,7 @@ export default function Fuel() {
           <Display>Fuel</Display>
           <DayHeader day={day} today={today} locale={locale} trainingDay={target === null ? null : trainingDay} onChange={goTo} />
         </View>
-        <WaterCard localDate={day} />
+        <WaterCard localDate={day} today={today} />
         {!pro ? (
           <ProPitch context="tab" />
         ) : target === null ? (
@@ -106,7 +110,7 @@ export default function Fuel() {
           </View>
         ) : (
           <>
-            <FuelSummary target={target} totals={totals} trainingDay={trainingDay} locale={locale} />
+            <FuelSummary target={target} totals={totals} locale={locale} />
             <MacroBars target={target} totals={totals} locale={locale} />
             <FoodEntries entries={entries} totals={totals} locale={locale} />
             <View style={{ gap: 8 }}>

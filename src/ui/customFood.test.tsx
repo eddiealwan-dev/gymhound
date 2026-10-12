@@ -29,7 +29,33 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
+// Pro is a store the test flips, as the debug switch or a lapse would. On unless a test turns it off.
+let mockPro = true;
+const mockProListeners = new Set<() => void>();
+jest.mock('../platform/entitlements', () => {
+  const React = require('react');
+  return {
+    useIsPro: () =>
+      React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockProListeners.add(listener);
+          return () => mockProListeners.delete(listener);
+        },
+        () => mockPro,
+      ),
+  };
+});
+const setPro = (on: boolean) =>
+  act(() => {
+    mockPro = on;
+    mockProListeners.forEach((listener) => listener());
+  });
+// Its own tests cover the pitch; here, only where it shows.
+jest.mock('./pro/ProPitch', () => {
+  const { Text: T } = require('react-native');
+  return { ProPitch: ({ context }: { context: string }) => <T>{`PRO PITCH ${context}`}</T> };
+});
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -43,6 +69,7 @@ const SHAKE = { name: 'Gran shake', servingLabel: '1 bottle', servingGrams: 330,
 const mounted: ReactTestRenderer[] = [];
 
 beforeEach(() => {
+  mockPro = true;
   jest.useFakeTimers({ now: NOW });
   mockDb = seededDb();
   mockParams = { id: 'new' };
@@ -314,5 +341,26 @@ describe('leaving with changes (Discard changes?)', () => {
     });
     expect(handled).toBe(true);
     expect(confirm(tree, 'Discard changes?')!.props.visible).toBe(true);
+  });
+});
+
+describe('without Pro (R151)', () => {
+  it('opened by address, shows the pitch and no fields, and Close leaves', () => {
+    mockPro = false;
+    const tree = mount();
+    expect(allText(tree)).toContain('PRO PITCH tab');
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    press(tree, 'Close');
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('Pro lapsing while a food is edited locks it, and saves nothing', () => {
+    const id = createCustomFood(mockDb, SHAKE);
+    mockParams = { id };
+    const tree = mount();
+    setPro(false);
+    expect(allText(tree)).toContain('PRO PITCH tab');
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    expect(getFood(mockDb, id)).toMatchObject({ name: 'Gran shake' });
   });
 });

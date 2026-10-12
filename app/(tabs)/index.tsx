@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { getLocales } from 'expo-localization';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -18,6 +17,7 @@ import { computeStreak } from '../../src/domain/streak';
 import type { WeightUnit } from '../../src/domain/types';
 import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
+import { deviceLocale } from '../../src/platform/locale';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { startEmpty, startFromDay } from '../../src/state/sessionActions';
 import { useNow } from '../../src/state/useNow';
@@ -29,8 +29,6 @@ import { useTheme } from '../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
-
-const deviceLocale = () => getLocales()[0]?.languageTag ?? 'en-US';
 
 /** What Train shows from the database. `weekStart` is the Monday on or before today. `gear` is the display unit's bar and plates. */
 function readTrain(db: Db, weekStart: string) {

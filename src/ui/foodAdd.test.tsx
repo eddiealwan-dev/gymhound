@@ -10,6 +10,7 @@ import * as foodsRepo from '../db/repositories/foodsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { useCreatedFood } from '../state/createdFood';
+import { bumpData } from '../state/dataVersion';
 import { Footer } from './Footer';
 import { ConfirmSheet, Sheet } from './Sheet';
 
@@ -48,9 +49,35 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
 const mockAnnounce = jest.fn();
-jest.mock('../platform/announce', () => ({ announce: (text: string) => mockAnnounce(text) }));
+jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: (text: string) => mockAnnounce(text) }));
 const mockFlushAll = jest.fn();
 jest.mock('../state/draftFlush', () => ({ flushAll: () => mockFlushAll() }));
+// Pro is a store the test flips, as the debug switch or a lapse would. On unless a test turns it off.
+let mockPro = true;
+const mockProListeners = new Set<() => void>();
+jest.mock('../platform/entitlements', () => {
+  const React = require('react');
+  return {
+    useIsPro: () =>
+      React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockProListeners.add(listener);
+          return () => mockProListeners.delete(listener);
+        },
+        () => mockPro,
+      ),
+  };
+});
+const setPro = (on: boolean) =>
+  act(() => {
+    mockPro = on;
+    mockProListeners.forEach((listener) => listener());
+  });
+// Its own tests cover the pitch; here, only where it shows.
+jest.mock('./pro/ProPitch', () => {
+  const { Text: T } = require('react-native');
+  return { ProPitch: ({ context }: { context: string }) => <T>{`PRO PITCH ${context}`}</T> };
+});
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
@@ -65,6 +92,7 @@ const EGG = 'fdc-171287';
 const mounted: ReactTestRenderer[] = [];
 
 beforeEach(() => {
+  mockPro = true;
   jest.useFakeTimers({ now: NOW });
   mockDb = seededDb();
   mockParams = {};
@@ -157,13 +185,13 @@ describe('/food/add (R140, R141)', () => {
     const tree = mount();
     const text = allText(tree);
     expect(text).toContain('Add food');
-    expect(text).toContain('Logging for Today');
+    expect(text).toContain('Logging for today');
     expect(tree.root.findAllByType(Footer)).toHaveLength(0);
   });
 
   it('the date param wins over today', () => {
     mockParams = { date: YESTERDAY };
-    expect(allText(mount())).toContain('Logging for Yesterday');
+    expect(allText(mount())).toContain('Logging for yesterday');
     mockParams = { date: '2026-10-03' };
     expect(allText(mount())).toContain('Logging for Sat, Oct 3');
   });
@@ -210,7 +238,7 @@ describe('/food/add (R140, R141)', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
     const dismiss = jest.spyOn(Keyboard, 'dismiss');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     expect(dismiss).toHaveBeenCalled();
     expect(mockFlushAll).toHaveBeenCalled();
     const sheet = openSheet(tree)!;
@@ -237,7 +265,7 @@ describe('/food/add (R140, R141)', () => {
   it('the chips set the servings', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, '1 and a half servings');
     expect(field(tree, 'Servings').props.value).toBe('1.5');
     press(tree, 'Half a serving');
@@ -248,7 +276,7 @@ describe('/food/add (R140, R141)', () => {
   it('bad servings show "Check this number", say it, and log nothing', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     type(tree, 'Servings', '0');
     press(tree, 'Add');
     expect(allText(tree)).toContain('Check this number');
@@ -260,7 +288,7 @@ describe('/food/add (R140, R141)', () => {
   it('Cancel closes the servings without logging', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Cancel');
     expect(openSheet(tree)).toBeUndefined();
     expect(listEntries(mockDb, TODAY)).toHaveLength(0);
@@ -270,12 +298,12 @@ describe('/food/add (R140, R141)', () => {
     const id = createCustomFood(mockDb, { name: 'Gran shake', servingLabel: '1 bottle', servingGrams: null, kcal: 250, proteinG: 40, carbsG: 10, fatG: 5 });
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     expect(pressables(tree, 'Edit food')).toHaveLength(0);
     press(tree, 'Cancel');
 
     type(tree, 'Search foods', 'gran');
-    press(tree, 'Gran shake, 1 bottle, 250 kcal, 40 g protein, Yours');
+    press(tree, 'Gran shake, 1 bottle, 250 calories, 40 grams protein, Yours');
     expect(allText(tree)).not.toContain('1 bottle (');
     press(tree, 'Edit food');
     expect(openSheet(tree)).toBeUndefined();
@@ -289,6 +317,16 @@ describe('/food/add (R140, R141)', () => {
     type(tree, 'Search foods', ' Gran shake ');
     press(tree, 'New food');
     expect(router.push).toHaveBeenCalledWith({ pathname: '/food/[id]', params: { id: 'new', name: 'Gran shake', from: 'add' } });
+  });
+
+  it('New food opens one editor however fast a second tap lands', () => {
+    const tree = mount();
+    press(tree, 'New food');
+    press(tree, 'New food');
+    expect(router.push).toHaveBeenCalledTimes(1);
+    act(() => jest.advanceTimersByTime(1000));
+    press(tree, 'New food');
+    expect(router.push).toHaveBeenCalledTimes(2);
   });
 
   it('back in focus after a new food is saved, opens its servings', () => {
@@ -338,6 +376,22 @@ describe('quick add (R143)', () => {
     expect(field(tree, 'Calories')).toBeTruthy();
     press(tree, 'Search');
     expect(field(tree, 'Search foods')).toBeTruthy();
+  });
+
+  it('"Added {name}." goes when switching between Search and Quick add', () => {
+    mockParams = { mode: 'quick' };
+    const tree = mount();
+    type(tree, 'Protein (g)', '30');
+    press(tree, 'Add');
+    expect(allText(tree)).toContain('Added Quick add.');
+    press(tree, 'Search');
+    expect(allText(tree)).not.toContain('Added Quick add.');
+    type(tree, 'Search foods', 'egg');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
+    press(tree, 'Add');
+    expect(allText(tree)).toContain('Added Egg, large.');
+    press(tree, 'Quick add');
+    expect(allText(tree)).not.toContain('Added Egg, large.');
   });
 
   it('with only protein, logs "Quick add" for the day, clears and says so', () => {
@@ -440,7 +494,7 @@ describe('the food itself is untouched by logging', () => {
     const before = getFood(mockDb, EGG);
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     expect(getFood(mockDb, EGG)).toEqual(before);
   });
@@ -469,18 +523,30 @@ describe('review fixes', () => {
   it('reads the food list once per data version, not on every keystroke', () => {
     const list = jest.spyOn(foodsRepo, 'listFoods');
     const tree = mount();
-    const before = list.mock.calls.length;
     type(tree, 'Search foods', 'e');
+    const before = list.mock.calls.length;
+    expect(before).toBe(1);
     type(tree, 'Search foods', 'eg');
     type(tree, 'Search foods', 'egg');
     expect(list.mock.calls.length).toBe(before);
     expect(allText(tree)).toContain('Egg, large');
   });
 
+  it('searches through the food lookup, so a food saved since shows once the data version moves on', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'zzqx');
+    expect(allText(tree)).toContain('No food called zzqx.');
+    act(() => {
+      createCustomFood(mockDb, { name: 'Zzqx bar', servingLabel: '1 bar', servingGrams: null, kcal: 200, proteinG: 20, carbsG: 20, fatG: 5 });
+      bumpData();
+    });
+    expect(allText(tree)).toContain('Zzqx bar');
+  });
+
   it('a double tap on Add logs one serving', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     const [add] = pressables(tree, 'Add').slice(-1);
     act(() => {
       add.props.onPress();
@@ -492,10 +558,10 @@ describe('review fixes', () => {
   it('the same food opened again can be added again', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Add');
     expect(listEntries(mockDb, TODAY)).toHaveLength(2);
   });
@@ -515,11 +581,36 @@ describe('review fixes', () => {
   it('keeps the food drawn in the servings sheet while it closes', () => {
     const tree = mount();
     type(tree, 'Search foods', 'egg');
-    press(tree, 'Egg, large, 1 large, 72 kcal, 6 g protein');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
     press(tree, 'Cancel');
     // The closing sheet is still handed the egg, not an empty panel.
     const sheets = tree.root.findAllByType(Sheet).filter((s) => (s.props.children as { props?: { food?: { name: string } } } | null)?.props?.food?.name === 'Egg, large');
     expect(sheets).toHaveLength(1);
     expect(sheets[0].props.visible).toBe(false);
+  });
+});
+
+describe('without Pro (R151)', () => {
+  it('opened by address, shows the pitch and no search, and Done closes', () => {
+    mockPro = false;
+    jest.mocked(router.canGoBack).mockReturnValueOnce(false);
+    const tree = mount();
+    const text = allText(tree);
+    expect(text).toContain('Add food');
+    expect(text).toContain('PRO PITCH tab');
+    expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
+    press(tree, 'Done');
+    expect(router.replace).toHaveBeenCalledWith('/fuel');
+  });
+
+  it('Pro lapsing while it is open locks it at once, and logs nothing', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg');
+    setPro(false);
+    expect(allText(tree)).toContain('PRO PITCH tab');
+    expect(allText(tree)).not.toContain('Egg, large');
+    expect(listEntries(mockDb, TODAY)).toHaveLength(0);
+    setPro(true);
+    expect(field(tree, 'Search foods')).toBeTruthy();
   });
 });

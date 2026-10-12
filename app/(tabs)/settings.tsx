@@ -8,7 +8,7 @@ import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo'
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
 import type { Db } from '../../src/db/types';
 import { formatDateTime, formatRest } from '../../src/domain/dates';
-import { fuelNumber } from '../../src/domain/fuel';
+import { caloriesSpoken, gramsSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
 import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
@@ -403,14 +403,11 @@ const ONCE_MS = 1000;
 
 /** One day's targets as Settings shows them: calories and protein, whole numbers with separators (R156). */
 function TargetLine({ day, macros }: { day: 'Training day' | 'Rest day'; macros: Macros }) {
-  const kcal = fuelNumber(macros.kcal);
-  const protein = fuelNumber(macros.protein);
+  const amounts = { kcal: macros.kcal, proteinG: macros.protein };
   // Spoken in words, singular for exactly 1 as shown (rounded): "1 calorie", "1 gram of protein".
-  const calories = kcal === '1' ? 'calorie' : 'calories';
-  const grams = protein === '1' ? 'gram' : 'grams';
   return (
-    <Body accessibilityLabel={`${day}: ${kcal} ${calories}, ${protein} ${grams} of protein`}>
-      {`${day}: ${kcal} kcal · ${protein} g protein`}
+    <Body accessibilityLabel={`${day}: ${caloriesSpoken(amounts.kcal)}, ${gramsSpoken(amounts.proteinG)} of protein`}>
+      {`${day}: ${kcalProteinText(amounts)}`}
     </Body>
   );
 }

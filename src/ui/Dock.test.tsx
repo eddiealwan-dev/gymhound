@@ -26,6 +26,7 @@ const ROUTES = [
   'lifts',
   'lift/[id]',
   'photos',
+  'fuel-targets',
 ].map((name) => ({
   key: `${name}-key`,
   name,
@@ -56,6 +57,13 @@ describe('the dock', () => {
     // Its label is red, as the active tab's is.
     const label = tab(tree, 'Stats').findAll((n) => typeof n.type === 'string' && n.props.children === 'Stats')[0];
     expect(JSON.stringify(label.props.style)).toContain('#E10600');
+  });
+
+  it('highlights Fuel on its Targets, and Fuel there goes back to Fuel', () => {
+    const tree = mountOn('fuel-targets');
+    expect(selected(tree)).toEqual(['Fuel']);
+    act(() => tab(tree, 'Fuel').props.onPress());
+    expect(navigation.navigate).toHaveBeenCalledWith('fuel', undefined);
   });
 
   it('Stats on a body detail goes back to Stats', () => {

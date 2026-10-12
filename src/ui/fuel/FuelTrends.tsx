@@ -8,7 +8,7 @@ import { chartSummary } from '../../domain/chart';
 import { formatTrendValue, trendPoints, trendSummary } from '../../domain/fuelTrends';
 import type { FuelRange } from '../../domain/fuelTrends';
 import { useDbQuery } from '../../state/dataVersion';
-import { deviceLocale } from '../body/BodyLog';
+import { deviceLocale } from '../../platform/locale';
 import { LineChart } from '../charts/LineChart';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';

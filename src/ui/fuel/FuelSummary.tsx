@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { View } from 'react-native';
-import { type EntryTotals, fuelNumber, leftText } from '../../domain/fuel';
+import { type EntryTotals, kcalProteinText, leftSpoken, leftText } from '../../domain/fuel';
 import type { Macros } from '../../domain/types';
 import { Body, Label, Num } from '../Text';
 
@@ -19,30 +19,19 @@ function LeftNumber({ value, label, spoken }: { value: string; label: string; sp
 
 /**
  * Exactly two big numbers, Calories left and Protein left, counted down from the day's targets; past a target they read
- * "over" (§8.10, R147). Under them, muted, which targets apply. Nothing here is red.
+ * "over" (§8.10, R147). Under them, muted, the target they count from; the day header above already says whether it is
+ * a training or a rest day, so this line doesn't say it again. Nothing here is red.
  */
-export function FuelSummary({
-  target,
-  totals,
-  trainingDay,
-  locale,
-}: {
-  target: Macros;
-  totals: EntryTotals;
-  trainingDay: boolean;
-  locale: string;
-}): ReactElement {
+export function FuelSummary({ target, totals, locale }: { target: Macros; totals: EntryTotals; locale: string }): ReactElement {
   const kcal = leftText(target.kcal, totals.kcal, '', locale);
   const protein = leftText(target.protein, totals.proteinG, ' g', locale);
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 12 }}>
-        <LeftNumber value={kcal.value} label="Calories left" spoken={kcal.over ? kcal.value.replace(' over', ' calories over') : `${kcal.value} calories`} />
-        <LeftNumber value={protein.value} label="Protein left" spoken={protein.value.replace(' g', ' grams')} />
+        <LeftNumber value={kcal.value} label="Calories left" spoken={leftSpoken(target.kcal, totals.kcal, 'calories', locale)} />
+        <LeftNumber value={protein.value} label="Protein left" spoken={leftSpoken(target.protein, totals.proteinG, 'grams', locale)} />
       </View>
-      <Body muted>
-        {`${trainingDay ? 'Training' : 'Rest'} day target: ${fuelNumber(target.kcal, locale)} kcal · ${fuelNumber(target.protein, locale)} g protein`}
-      </Body>
+      <Body muted>{`Target: ${kcalProteinText({ kcal: target.kcal, proteinG: target.protein }, locale)}`}</Body>
     </View>
   );
 }
