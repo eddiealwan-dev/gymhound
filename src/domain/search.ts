@@ -103,24 +103,38 @@ function matchesPhrase(index: Indexed, [first, second]: string[]): boolean {
  * Exercise picker search (§8.7). Every word of the query must be the start of some word in the name, an alias, a
  * primary muscle's label ("Chest", "Upper back", "Shoulders") or the equipment's label ("Band", "EZ bar"); the words
  * may match different fields ("dumbbell chest"). "delts" finds any primary delt, and "front delt", "side delt" and
- * "rear delt" that one (or a name that says it). Names that start with the query come first, then the rest, each in
- * the order given: `items` comes sorted by name (`listExercises`), so nothing is sorted on each keystroke. An empty
- * query lists every item in order. Does not modify `items`.
+ * "rear delt" that one (or a name that says it). Names that hold the query's words in a row come first, then the rest
+ * (found by an alias, a muscle or the equipment). Among the names, the staples lead: the original exercises and the
+ * lifter's own (any id not from the imported library, `fedb-`), so "bench press" leads with Barbell bench press rather
+ * than the chains and bands variants; then within staples and within the library, a name that starts with the query
+ * comes before one that has it later. Otherwise the order given is kept: `items`
+ * comes sorted by name (`listExercises`), so nothing is sorted on each keystroke. An empty query lists every item in
+ * order. Does not modify `items`.
  */
 export function searchExercises<T extends SearchItem>(items: readonly T[], query: string): T[] {
   const queryTerms = terms(query);
   const queryText = queryTerms.flat().join(' ');
 
-  const first: T[] = [];
-  const rest: T[] = [];
+  if (queryText === '') return items.slice();
+  // Staple names (start, in a row), library names (start, in a row), then the rest (staples, library).
+  const buckets: T[][] = [[], [], [], [], [], []];
   for (const item of items) {
     const index = indexed(item);
     const matches = queryTerms.every((t) =>
       t.length === 1 ? index.searchable.some((w) => w.startsWith(t[0])) : matchesPhrase(index, t),
     );
-    if (matches) (index.nameText.startsWith(queryText) ? first : rest).push(item);
+    if (!matches) continue;
+    const staple = isStaple(item);
+    if (index.nameText.startsWith(queryText)) buckets[staple ? 0 : 2].push(item);
+    else if (` ${index.nameText}`.includes(` ${queryText}`)) buckets[staple ? 1 : 3].push(item);
+    else buckets[staple ? 4 : 5].push(item);
   }
-  return first.concat(rest);
+  return buckets.flat();
+}
+
+/** An original exercise or the lifter's own: anything not imported from free-exercise-db (R84 ids are `fedb-{slug}`). */
+function isStaple(item: SearchItem): boolean {
+  return !item.id.startsWith('fedb-');
 }
 
 /** The picker's chips: one muscle and one kind of equipment, either or both. */

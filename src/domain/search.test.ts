@@ -35,11 +35,31 @@ describe('searchExercises', () => {
     expect(ids('squat')).toEqual(['sq']);
   });
 
-  it('puts names that start with the query first, then the rest, each in name order', () => {
+  it('puts names with the query first (one that starts with it before one that has it later), then the rest, each in name order', () => {
     expect(ids('bench')).toEqual(['bd', 'ib']);
     expect(ids('press')).toEqual(['ib', 'ohp']);
     expect(ids('pull')).toEqual(['lat']);
-    expect(ids('b')).toEqual(['sq', 'bd', 'ht', 'ib', 'ohp', 'rdl']);
+    // "Incline bench press" has a word starting "b", so it comes before Hip thrust, found only by its equipment (Barbell).
+    expect(ids('b')).toEqual(['sq', 'bd', 'ib', 'ht', 'ohp', 'rdl']);
+  });
+
+  it('puts the staples (the original exercises and your own) before the imported library among the names', () => {
+    const lib: SearchItem[] = [
+      { id: 'barbell-bench-press', name: 'Barbell bench press', aliases: [], primaryMuscles: ['chest'], equipment: 'barbell' },
+      { id: 'fedb-bench-press-powerlifting', name: 'Bench press - powerlifting', aliases: [], primaryMuscles: ['triceps'], equipment: 'barbell' },
+      { id: 'fedb-bench-press-with-chains', name: 'Bench press with chains', aliases: [], primaryMuscles: ['triceps'], equipment: 'barbell' },
+      { id: 'fedb-close-grip-barbell-bench-press', name: 'Close-grip barbell bench press', aliases: [], primaryMuscles: ['triceps'], equipment: 'barbell' },
+      { id: 'my-bench', name: 'Paused bench press', aliases: [], primaryMuscles: ['chest'], equipment: 'barbell' },
+    ];
+    expect(searchExercises(lib, 'bench press').map((i) => i.id)).toEqual([
+      // The staples whose names hold it.
+      'barbell-bench-press',
+      'my-bench',
+      // Then the library: names that start with it, then names that have it later.
+      'fedb-bench-press-powerlifting',
+      'fedb-bench-press-with-chains',
+      'fedb-close-grip-barbell-bench-press',
+    ]);
   });
 
   it('keeps the order it is given within each group, without sorting again (the list comes sorted)', () => {
@@ -95,7 +115,8 @@ describe('searchExercises', () => {
 
       it('"delts" and "delt" find every exercise whose primary muscle is a delt, and a name that says "delt"', () => {
         expect(deltIds('delts')).toEqual(['arnold', 'face', 'fdr', 'lat']);
-        expect(deltIds('delt')).toEqual(['arnold', 'face', 'fdr', 'lat', 'rdf']);
+        // "Rear delt fly" says it in its name, so it leads; the others are found by their primary delt.
+        expect(deltIds('delt')).toEqual(['rdf', 'arnold', 'face', 'fdr', 'lat']);
         expect(deltIds('DELTS')).toEqual(['arnold', 'face', 'fdr', 'lat']);
       });
 
@@ -153,17 +174,27 @@ describe('searchExercises', () => {
     });
     const libraryIds = (q: string) => searchExercises(library, q).map((e) => e.id);
 
-    it('orders results as the old sort did: names that start with the query, then alphabetically (localeCompare)', () => {
-      const oldOrder = (q: string) => {
-        const start = q.toLowerCase();
+    it('orders results as staple names, library names, then the rest; starts-the-name first; then alphabetically', () => {
+      const expected = (q: string) => {
+        const text = q.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ');
         return searchExercises(library, q)
-          .map((e) => ({ id: e.id, name: e.name.toLowerCase(), first: e.name.toLowerCase().startsWith(start) }))
-          .sort((a, b) => Number(b.first) - Number(a.first) || a.name.localeCompare(b.name))
+          .map((e) => {
+            const name = e.name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ');
+            const staple = !e.id.startsWith('fedb-');
+            const rank = name.startsWith(text) ? (staple ? 0 : 2) : ` ${name}`.includes(` ${text}`) ? (staple ? 1 : 3) : staple ? 4 : 5;
+            return { id: e.id, name: e.name.toLowerCase(), rank };
+          })
+          .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
           .map((r) => r.id);
       };
-      for (const q of [...'abcdefghijklmnopqrstuvwxyz0123456789', '', 'bench', 'press', 'curl', 'row', 'squat', 'dumbbell', 'cable', 'chest', 'back', 'raise', 'fly', 'shoulders', 'band', 'leg', 'lat', 'hip thrust']) {
-        expect([q, libraryIds(q)]).toEqual([q, oldOrder(q)]);
+      for (const q of [...'abcdefghijklmnopqrstuvwxyz0123456789', 'bench', 'press', 'curl', 'row', 'squat', 'dumbbell', 'cable', 'chest', 'back', 'raise', 'fly', 'shoulders', 'band', 'leg', 'lat', 'hip thrust', 'bench press']) {
+        expect([q, libraryIds(q)]).toEqual([q, expected(q)]);
       }
+    });
+
+    it('leads "bench press" with Barbell bench press, before the chains and bands variants', () => {
+      const found = libraryIds('bench press');
+      expect(found.indexOf('barbell-bench-press')).toBeLessThan(found.indexOf('fedb-bench-press-with-chains'));
     });
 
     it('"delts" finds every exercise whose primary muscle is a delt, and "rear delt" the rear-delt ones', () => {
