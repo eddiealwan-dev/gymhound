@@ -25,7 +25,8 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
 /**
  * Stats → This week (R176–R179): sets per muscle from Monday to today against the 8–24 band, sessions (with the
  * average over the weeks before), personal bests this week and in the last 4 weeks, and the bodyweight trend. Under and
- * over are said in words, never in colour. It reads only while Stats is in sight (R185).
+ * over are said in words, never in colour. With no workout this week one line stands in for the sets; before the first
+ * workout ever, the card is one line. It reads only while Stats is in sight (R185).
  */
 export function WeekCard({ today }: { today: string }): ReactElement | null {
   const { colors } = useTheme();
@@ -34,20 +35,38 @@ export function WeekCard({ today }: { today: string }): ReactElement | null {
     return { unit, report: weekReport(db, today, unit) };
   }, [today]);
   const { unit, report } = useFocusedDbQuery(read);
+  const { sessions } = report;
+  const cardStyle = { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 16 };
+
+  // No average weeks and nothing this week means no finished workout at all: the first workout's week starts the count.
+  if (sessions.thisWeek === 0 && sessions.averageWeeks === 0) {
+    return (
+      <View style={cardStyle}>
+        <Label>This week</Label>
+        <Body muted>Your week shows here after your first workout.</Body>
+      </View>
+    );
+  }
 
   return (
-    <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, gap: 16 }}>
+    <View style={cardStyle}>
       <Label>This week</Label>
       <Part title="Sets per muscle">
-        <Body muted>{BAND_NOTE}</Body>
-        <View style={{ gap: 4, marginTop: 4 }}>
-          {report.muscles.map((g) => (
-            <Body key={g.group}>{groupWeekText(g)}</Body>
-          ))}
-        </View>
+        {sessions.thisWeek === 0 ? (
+          <Body muted>No workouts yet this week.</Body>
+        ) : (
+          <>
+            <Body muted>{BAND_NOTE}</Body>
+            <View style={{ gap: 4, marginTop: 4 }}>
+              {report.muscles.map((g) => (
+                <Body key={g.group}>{groupWeekText(g)}</Body>
+              ))}
+            </View>
+          </>
+        )}
       </Part>
       <Part title="Sessions">
-        <Body>{sessionsText(report.sessions)}</Body>
+        <Body>{sessionsText(sessions)}</Body>
       </Part>
       <Part title="Personal bests">
         <Body>{`${report.prsThisWeek} this week · ${report.prsLast4Weeks} in the last 4 weeks`}</Body>

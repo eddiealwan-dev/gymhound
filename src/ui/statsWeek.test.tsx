@@ -11,6 +11,7 @@ import { finishWorkout, startEmptyWorkout, tickSet } from '../db/repositories/wo
 import { progressPhotos, sets } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
+import Stats from '../../app/(tabs)/stats';
 import { bumpData } from '../state/dataVersion';
 import { CheckInCard } from './stats/CheckInCard';
 import { WeekCard } from './stats/WeekCard';
@@ -42,6 +43,12 @@ jest.mock('expo-file-system', () => ({
     }
   },
 }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('./Footer', () => ({ Footer: () => null }));
+// Stats' other sections are tested in their own files.
+jest.mock('./stats/LiftsSection', () => ({ LiftsSection: () => null }));
+jest.mock('./stats/StepsCard', () => ({ StepsCard: () => null }));
+jest.mock('./stats/PhotosRow', () => ({ PhotosRow: () => null }));
 const mockAnnounce = jest.fn();
 jest.mock('../platform/announce', () => ({
   ...jest.requireActual('../platform/announce'),
@@ -91,6 +98,15 @@ function logBench(start: number, n: number, weight = 100, reps = 5): string {
     const setId = i === 0 ? firstSetId(weId) : addSet(mockDb, weId);
     tickSet(mockDb, setId, { weight, reps, durationS: null, distance: null }, 'lb', start + (i + 1) * MINUTE, 'mi');
   }
+  finishWorkout(mockDb, id, start + 50 * MINUTE);
+  return id;
+}
+
+/** Logs and finishes a workout started at `start`: one done plank of 60 s (timed: no hard sets, no volume). */
+function logPlank(start: number): string {
+  const id = startEmptyWorkout(mockDb, start);
+  const weId = addExerciseToWorkout(mockDb, id, 'plank');
+  tickSet(mockDb, firstSetId(weId), { weight: null, reps: null, durationS: 60, distance: null }, 'lb', start + MINUTE, 'mi');
   finishWorkout(mockDb, id, start + 50 * MINUTE);
   return id;
 }
@@ -181,17 +197,32 @@ describe('WeekCard (R176–R179)', () => {
     expect(t[t.indexOf('Personal bests') + 1]).toBe('2 this week · 4 in the last 4 weeks');
   });
 
-  it('asks for bodyweight entries when there is no trend, and reads again after a write', () => {
-    const tree = mount(<WeekCard today={TODAY} />);
-    let t = lines(tree);
+  it('asks for bodyweight entries when there is no trend', () => {
+    logBench(at(10, 13), 2);
+    const t = lines(mount(<WeekCard today={TODAY} />));
     expect(t[t.indexOf('Bodyweight') + 1]).toBe('Log your weight a few times a week to see a trend.');
-    expect(t[t.indexOf('Sessions') + 1]).toBe('0 this week · 0 last week');
+  });
+
+  it('collapses to one line before the first workout, and reads again after a write', () => {
+    addBodyEntry(mockDb, 'bodyweight', 180, 'lb', NOW);
+    const tree = mount(<WeekCard today={TODAY} />);
+    expect(lines(tree)).toEqual(['This week', 'Your week shows here after your first workout.']);
     act(() => {
       logBench(at(10, 13), 2);
       bumpData();
     });
-    t = lines(tree);
+    const t = lines(tree);
     expect(t[t.indexOf('Sessions') + 1]).toBe('1 this week · 0 last week');
+    expect(t).toContain('Chest · 2 sets · under 8');
+  });
+
+  it('says no workouts yet this week in place of the band and the rows', () => {
+    logBench(at(10, 6), 3);
+    const t = lines(mount(<WeekCard today={TODAY} />));
+    expect(t.slice(0, 3)).toEqual(['This week', 'Sets per muscle', 'No workouts yet this week.']);
+    expect(t.some((line) => line.startsWith('Hard sets so far'))).toBe(false);
+    expect(t.filter((line) => / · (in range|under 8|over 24)$/.test(line))).toHaveLength(0);
+    expect(t[t.indexOf('Sessions') + 1]).toBe('0 this week · 1 last week');
   });
 
   it('says under and over in words only: nothing is red', () => {
@@ -257,20 +288,30 @@ describe('CheckInCard (R180)', () => {
     const t = lines(mount(<CheckInCard today={TODAY} />));
     expect(t).toContain('No workouts.');
     expect(t).toContain('Bodyweight 181 lb average, the same as the week before');
+    // With no workout, every group would read under: those lines are left out.
+    expect(t.some((line) => line.startsWith('Under 8 sets') || line.startsWith('Over 24 sets'))).toBe(false);
+  });
+
+  it('leaves zero hard sets and zero volume out of a cardio-only week', () => {
+    logPlank(at(10, 7));
+    const t = lines(mount(<CheckInCard today={TODAY} />));
+    expect(t).toContain('1 session');
+    expect(t.some((line) => /hard set|0 lb/.test(line))).toBe(false);
   });
 
   it("lists this week's three things, open, with the bodyweight entry inline", () => {
     const tree = mount(<CheckInCard today={TODAY} />);
     const t = lines(tree);
-    expect(t).toEqual(expect.arrayContaining(['This week', 'Log your bodyweight', 'Measure your waist', 'Take a progress photo']));
-    expect(tree.root.findAllByType(TextInput).map((n) => n.props.accessibilityLabel)).toEqual(['Bodyweight, lb']);
+    expect(t).toEqual(expect.arrayContaining(["This week's check-in", 'Log your bodyweight', 'Measure your waist', 'Take a progress photo']));
+    expect(tree.root.findAllByType(TextInput).map((n) => n.props.accessibilityLabel)).toEqual(["Bodyweight for this week's check-in, lb"]);
+    expect(lines(tree)).not.toContain('This week');
   });
 
   it('ticks bodyweight once it is logged here, with no live region (the entry announces)', () => {
     const tree = mount(<CheckInCard today={TODAY} />);
     const field = tree.root.findByType(TextInput);
     act(() => field.props.onChangeText('180.4'));
-    act(() => pressable(tree, 'Log bodyweight').props.onPress());
+    act(() => pressable(tree, 'Log bodyweight for the check-in').props.onPress());
     const t = lines(tree);
     expect(t).toContain('Bodyweight logged');
     expect(t).not.toContain('Log your bodyweight');
@@ -329,5 +370,18 @@ describe('CheckInCard (R180)', () => {
   it('uses no red', () => {
     logBench(at(10, 6), 26);
     expect(colours(mount(<CheckInCard today={TODAY} />))).not.toContain('#E10600');
+  });
+});
+
+describe('Stats with the check-in and Body', () => {
+  it("gives the check-in's bodyweight field and button their own VoiceOver labels", () => {
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    const tree = mount(<Stats />);
+    expect(tree.root.findAllByType(TextInput).map((n) => n.props.accessibilityLabel)).toEqual([
+      "Bodyweight for this week's check-in, lb",
+      'Bodyweight, lb',
+    ]);
+    expect(pressable(tree, 'Log bodyweight for the check-in')).toBeDefined();
+    expect(pressable(tree, 'Log bodyweight')).toBeDefined();
   });
 });

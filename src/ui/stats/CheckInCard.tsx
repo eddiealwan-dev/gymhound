@@ -53,16 +53,24 @@ function bodyweightLine(checkIn: CheckIn, unit: WeightUnit): string {
   return `${average}, ${change < 0 ? '−' : '+'}${formatBodyValue(shown, unit)} on the week before`;
 }
 
-/** Last week's lines (R180), each muted; empty parts are left out. */
+/** "2 sessions · 5 hard sets · 2,600 lb", leaving out a zero part: a cardio-only week reads "1 session". */
+function sessionsLine(checkIn: CheckIn, unit: WeightUnit, locale: string): string {
+  if (checkIn.sessions === 0) return 'No workouts.';
+  const parts = [count(checkIn.sessions, 'session', 'sessions')];
+  if (checkIn.hardSets > 0) parts.push(count(checkIn.hardSets, 'hard set', 'hard sets'));
+  if (checkIn.volume > 0) parts.push(formatVolume(checkIn.volume, unit, locale));
+  return parts.join(' · ');
+}
+
+/**
+ * Last week's lines (R180), each muted; empty parts are left out. With no workout the groups are left out too: every
+ * one would read under.
+ */
 function reviewLines(checkIn: CheckIn, unit: WeightUnit, locale: string): string[] {
-  const out: string[] = [];
-  out.push(
-    checkIn.sessions === 0
-      ? 'No workouts.'
-      : `${count(checkIn.sessions, 'session', 'sessions')} · ${count(checkIn.hardSets, 'hard set', 'hard sets')} · ${formatVolume(checkIn.volume, unit, locale)}`,
-  );
+  const out: string[] = [sessionsLine(checkIn, unit, locale)];
   if (checkIn.prs > 0) out.push(count(checkIn.prs, 'personal best', 'personal bests'));
   out.push(bodyweightLine(checkIn, unit));
+  if (checkIn.sessions === 0) return out;
   if (checkIn.under.length > 0) out.push(`Under 8 sets: ${checkIn.under.map((g) => GROUP_LABELS[g]).join(', ')}`);
   if (checkIn.over.length > 0) out.push(`Over 24 sets: ${checkIn.over.map((g) => GROUP_LABELS[g]).join(', ')}`);
   return out;
@@ -158,8 +166,9 @@ export function CheckInCard({ today }: { today: string }): ReactElement | null {
         <Body muted>{hasHistory ? 'No workouts or bodyweight logged last week.' : 'Your first check-in comes after a full week of training.'}</Body>
       )}
       <View>
+        {/* Not "This week": the This week card follows this one. */}
         <Body weight={600} accessibilityRole="header" style={{ marginBottom: 4 }}>
-          This week
+          This week's check-in
         </Body>
         {todo.bodyweight ? (
           <StaticRow done text="Bodyweight logged" />
@@ -168,7 +177,12 @@ export function CheckInCard({ today }: { today: string }): ReactElement | null {
             <StaticRow done={false} text="Log your bodyweight" />
             {/* Lined up with the row's words, past the mark. It announces "Logged …" itself, so the row needs no live region. */}
             <View style={{ marginLeft: 34 }}>
-              <BodyQuickEntry kind="bodyweight" unit={bodyUnit('bodyweight', unit)} />
+              <BodyQuickEntry
+                kind="bodyweight"
+                unit={bodyUnit('bodyweight', unit)}
+                fieldLabel={`Bodyweight for this week's check-in, ${bodyUnit('bodyweight', unit)}`}
+                buttonLabel="Log bodyweight for the check-in"
+              />
             </View>
           </View>
         )}
