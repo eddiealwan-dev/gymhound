@@ -10,6 +10,7 @@ import {
   fieldPatch,
   hintText,
   isComplete,
+  looksUnlikely,
   parseField,
   readRow,
   valueText,
@@ -168,6 +169,8 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
   const [left, setLeft] = useState<InputKey[]>([]);
   /** Whether the tick was tapped before it was ready. Typing clears it. */
   const [asked, setAsked] = useState(false);
+  /** Fields left holding a number that reads but is unlikely (R422). Typing in the field clears it; it never blocks the tick. */
+  const [unlikely, setUnlikely] = useState<InputKey[]>([]);
 
   const reading = readRow(row, drafts, unit, distanceUnit);
   const showHint = reading.invalid.some((key) => left.includes(key));
@@ -177,13 +180,19 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
    * since the tap (B10). A number to check wins over it.
    */
   const needed = asked && !set.done && !canTick && !showHint ? reading.missing : null;
-  /** The line above the row's inputs, where a keyboard already up for this row's field can't cover it (R82). */
-  const line = showHint ? 'Check this number' : needed !== null ? NEED_LINE[needed] : null;
+  /** The fields the soft check flags (R422). A warmup is never flagged, even one whose type changed since. */
+  const soft = set.setType === 'warmup' ? [] : unlikely;
+  /**
+   * The line above the row's inputs, where a keyboard already up for this row's field can't cover it (R82). A number
+   * that doesn't read wins, then the field a not-ready tick asks for, then the soft check (R422).
+   */
+  const line = showHint ? 'Check this number' : needed !== null ? NEED_LINE[needed] : soft.length > 0 ? 'Check this number' : null;
 
   const type = (key: InputKey, text: string) => {
     setDrafts((d) => ({ ...d, [key]: text }));
     // Typing again means it has not been left since: the hint waits until it is.
     setLeft((l) => l.filter((k) => k !== key));
+    setUnlikely((u) => (u.includes(key) ? u.filter((k) => k !== key) : u));
     setAsked(false);
   };
 
@@ -196,6 +205,13 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
       return;
     }
     commitSetField(db, set.id, fieldPatch(key, parsed.value, unit, distanceUnit));
+    // A number that reads but is unlikely gets a second look (R422). It is saved all the same, and the tick logs it.
+    if (looksUnlikely(key, parsed.value, set.setType, unit, latestEx().bestWeight)) {
+      setUnlikely((u) => (u.includes(key) ? u : [...u, key]));
+      say('Check this number');
+    } else {
+      setUnlikely((u) => (u.includes(key) ? u.filter((k) => k !== key) : u));
+    }
     // Clearing a field a ticked set needs takes the tick off, rather than leaving a ticked set with a hole in it.
     if (set.done && key !== 'rpe' && !isComplete(row.loggingType, { ...readRow(row, {}, unit, distanceUnit).entered, [key]: parsed.value })) {
       untick(db, set.id);
@@ -250,6 +266,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
       if (drafts.rpe !== undefined) commitSetField(db, set.id, fieldPatch('rpe', reading.rpe, unit, distanceUnit));
       setDrafts({});
       setLeft([]);
+      setUnlikely([]);
       setAsked(false);
       lightHaptic();
     }
@@ -274,7 +291,8 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
   };
 
   const input = (key: InputKey, header: string) => {
-    const invalid = reading.invalid.includes(key) && left.includes(key);
+    // A number that doesn't read, or one the soft check flags (R422), gets the heavier muted underline.
+    const invalid = (reading.invalid.includes(key) && left.includes(key)) || soft.includes(key);
     const look = fieldLook(row, key, drafts[key]);
     return (
       <TextInput

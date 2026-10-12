@@ -11,35 +11,32 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform } from 'react-native';
 import { closeAppDb, liveDbPath, openAppDb, openAppDbAsync } from '../src/db/client';
 import { DbProvider } from '../src/db/DbProvider';
 import migrations from '../src/db/migrations/migrations';
 import { tryBackfillPrFlags } from '../src/db/repositories/prRepo';
 import { ensureSettings } from '../src/db/repositories/settingsRepo';
-import { snapshotTime, startDatabase } from '../src/db/snapshots';
+import { setAsideDamaged, snapshotTime, startDatabase } from '../src/db/snapshots';
 import type { Db } from '../src/db/types';
 import { formatDateTime } from '../src/domain/dates';
 import { fileExists, getSnapshotFiles, openSnapshotForCheck, setAsidePath } from '../src/platform/snapshots';
 import { runSeed } from '../src/seed/seed';
-import { latestSnapshotPath, recordRestoredSnapshot, shareFile } from '../src/state/backup';
+import { latestSnapshotPath, recordRestoredSnapshot } from '../src/state/backup';
 import { afterDatabaseStart, beforeDatabaseStart } from '../src/state/nativeServices';
 // Loaded here, with the root layout, so its browser-history listener is added before the router's (see the module).
 import '../src/state/draftFlush';
 import { Button } from '../src/ui/Button';
 import { RestWatcher } from '../src/ui/session/RestWatcher';
 import { Sheet } from '../src/ui/Sheet';
+import { NO_EXPORTS, StartupError, type ExportFiles } from '../src/ui/StartupError';
 import { Body } from '../src/ui/Text';
-import { darkColors, fonts, lightColors, resolveScheme, type Colors } from '../src/ui/theme';
-import { ThemeProvider, useSystemScheme, useTheme } from '../src/ui/ThemeProvider';
+import { fonts } from '../src/ui/theme';
+import { ThemeProvider, useTheme } from '../src/ui/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const asError = (e: unknown) => (e instanceof Error ? e : new Error(String(e)));
-
-/** Files the error screen can hand to the share sheet, as absolute paths. Each is null unless that file exists. */
-type ExportFiles = { snapshot: string | null; failed: string | null };
-const NO_EXPORTS: ExportFiles = { snapshot: null, failed: null };
 
 /** A path from `find`, only if the file is there. Never throws. */
 function existing(find: () => string | null): string | null {
@@ -51,15 +48,22 @@ function existing(find: () => string | null): string | null {
   }
 }
 
-/** What the database startup came to: the app is ready, or the error screen shows with whatever export is possible. */
+/**
+ * What the database startup came to: the app is ready, or the error screen shows with whatever export is possible, and
+ * Start fresh when there is no data to lose (R421).
+ */
 type Started =
   | { kind: 'ready'; db: Db; restoredFrom: string | null }
-  | { kind: 'failed'; error: Error; exports: ExportFiles };
+  | { kind: 'failed'; error: Error; exports: ExportFiles; canStartFresh?: boolean };
 
 type MigrateTarget = Parameters<typeof migrate>[0];
 const migrateApp = (db: Db) => migrate(db as MigrateTarget, migrations);
 
-async function startApp(): Promise<Started> {
+/**
+ * Opens the database. `fresh` is Start fresh on the error screen (R421): the damaged snapshots and live file are set
+ * aside first (`setAsideDamaged`), and iCloud is not asked, so the start opens a new, empty database.
+ */
+async function startApp(fresh = false): Promise<Started> {
   const files = getSnapshotFiles();
   if (!files) {
     // Web has no snapshots, so it never restores.
@@ -67,7 +71,8 @@ async function startApp(): Promise<Started> {
     await migrateApp(db);
     return { kind: 'ready', db, restoredFrom: null };
   }
-  await beforeDatabaseStart(); // Phase 7: a new iPhone brings its newest iCloud snapshot first (no-op in Expo Go).
+  if (fresh) setAsideDamaged(files, Date.now());
+  else await beforeDatabaseStart(); // Phase 7: a new iPhone brings its newest iCloud snapshot first (no-op in Expo Go).
   const result = await startDatabase({
     files,
     open: openAppDb,
@@ -83,6 +88,7 @@ async function startApp(): Promise<Started> {
   return {
     kind: 'failed',
     error: result.error,
+    canStartFresh: result.allDamaged === true,
     exports: {
       snapshot: existing(() => (result.newestSnapshot === null ? null : files.pathFor(result.newestSnapshot))),
       // Set aside if the failed file was moved; otherwise it is still the live file.
@@ -94,11 +100,13 @@ async function startApp(): Promise<Started> {
 let starting: Promise<Started> | null = null;
 
 /**
- * Starts the database once per launch (a second call, such as a development remount, shares the first).
+ * Starts the database once per launch (a second call, such as a development remount, shares the first). `fresh` starts
+ * again from the error screen's Start fresh (R421), where nothing is open.
  * It never rejects: any throw at all becomes the error screen, with whatever can still be exported.
  */
-function start(): Promise<Started> {
-  starting ??= startApp().catch(
+function start(fresh = false): Promise<Started> {
+  if (fresh) starting = null;
+  starting ??= startApp(fresh).catch(
     (e): Started => ({
       kind: 'failed',
       error: asError(e),
@@ -106,66 +114,6 @@ function start(): Promise<Started> {
     }),
   );
   return starting;
-}
-
-/** The error screen's own button. It cannot use `Button`, which needs the theme, and the theme needs the database that just failed. */
-function ErrorButton({ label, onPress, primary, colors }: { label: string; onPress: () => void; primary: boolean; colors: Colors }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 48,
-        paddingHorizontal: 20,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: primary ? 'transparent' : colors.border,
-        backgroundColor: primary ? colors.text : 'transparent',
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: pressed ? 0.8 : 1,
-      })}
-    >
-      <Text style={{ fontFamily: fonts.body600, fontSize: 16, color: primary ? colors.bg : colors.text }}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/**
- * Shown instead of the app when the database cannot be opened, migrated or seeded. There is no stored theme to read, so it follows the device.
- * **Export my data** shares the newest snapshot and **Export the file that failed** shares the database file that did not work; each is shown only when its file exists.
- */
-function StartupError({ error, exports = NO_EXPORTS }: { error: Error; exports?: ExportFiles }) {
-  const colors = resolveScheme('system', useSystemScheme()) === 'dark' ? darkColors : lightColors;
-  const [shareFailed, setShareFailed] = useState(false);
-  useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-  const share = (path: string) => {
-    setShareFailed(false);
-    shareFile(path).catch((error: unknown) => {
-      console.warn('GymHound could not share the file.', error);
-      setShareFailed(true);
-    });
-  };
-  const { snapshot, failed } = exports;
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', padding: 24, gap: 8 }}>
-      <Text style={{ fontFamily: fonts.body600, fontSize: 18, color: colors.text }}>GymHound couldn't update its database.</Text>
-      <Text style={{ fontFamily: fonts.body400, fontSize: 14, color: colors.textMuted }}>{error.message}</Text>
-      {snapshot !== null || failed !== null ? (
-        <View style={{ gap: 8, marginTop: 16 }}>
-          {snapshot !== null ? <ErrorButton label="Export my data" primary colors={colors} onPress={() => share(snapshot)} /> : null}
-          {failed !== null ? (
-            <ErrorButton label="Export the file that failed" primary={false} colors={colors} onPress={() => share(failed)} />
-          ) : null}
-          {shareFailed ? (
-            <Text style={{ fontFamily: fonts.body400, fontSize: 14, color: colors.textMuted }}>Couldn't open the share sheet. Try again.</Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
 }
 
 /** Said once, on the launch that restored from a snapshot. */
@@ -260,7 +208,13 @@ export default function RootLayout() {
     start().then(setStarted);
   }, []);
   if (!started) return null;
-  if (started.kind === 'failed') return <StartupError error={started.error} exports={started.exports} />;
+  if (started.kind === 'failed') {
+    const startFresh = () => {
+      setStarted(null);
+      start(true).then(setStarted);
+    };
+    return <StartupError error={started.error} exports={started.exports} onStartFresh={started.canStartFresh ? startFresh : undefined} />;
+  }
   return (
     <DbProvider db={started.db}>
       <Boot db={started.db} restoredFrom={started.restoredFrom} />

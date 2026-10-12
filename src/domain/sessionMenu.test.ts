@@ -1,6 +1,7 @@
 import { canMoveBlock, hasDoneSets, joinsNextInSuperset, plateTarget, replaceNeedsConfirm, startsSuperset, supersetAction } from './sessionMenu';
+import type { Gear } from './plates';
 import type { PrevSet } from './setEntry';
-import type { SetType, WeightUnit } from './types';
+import type { Equipment, SetType, WeightUnit } from './types';
 
 const ex = (id: string, supersetGroup: number | null = null) => ({ id, supersetGroup });
 
@@ -123,7 +124,13 @@ describe('plateTarget: the weight the plate calculator starts from (Task 20, R35
     plannedWeight: p.plannedWeight ?? null,
     plannedUnit: p.plannedUnit ?? null,
   });
-  const exercise = (sets: Set[], p = plan(), previous: PrevSet[] = []) => ({ ...p, sets, previous });
+  const exercise = (sets: Set[], p = plan(), previous: PrevSet[] = [], equipment: Equipment = 'barbell') => ({ ...p, equipment, sets, previous });
+  /** The bar and plates in Settings for each unit, as the set rows round a converted plan to them. */
+  const GEAR: Record<WeightUnit, Gear> = {
+    lb: { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } },
+    kg: { bar: 20, plates: { '25': 4, '20': 1, '15': 1, '10': 1, '5': 1, '2.5': 1, '1.25': 1 } },
+  };
+  const target = (e: ReturnType<typeof exercise>, unit: WeightUnit) => plateTarget(e, unit, GEAR[unit]);
   /** A set from last time, as `getPreviousSets` returns it. */
   const prev = (position: number, weight: number, weightUnit: WeightUnit = 'lb', setType: SetType = 'working'): PrevSet => ({
     position,
@@ -138,67 +145,75 @@ describe('plateTarget: the weight the plate calculator starts from (Task 20, R35
 
   it("takes the first undone working set's own value, ahead of the override and the plan", () => {
     const ex = exercise([set(0, true, 185), set(1, false, 205), set(2, false, 225)], plan({ overrideWeight: 195, overrideUnit: 'lb', plannedWeight: 175, plannedUnit: 'lb' }));
-    expect(plateTarget(ex, 'lb')).toBe(205);
+    expect(target(ex, 'lb')).toBe(205);
   });
 
   it('skips warmups and done sets when looking for the first undone working set', () => {
     const ex = exercise([set(0, false, 95, 'lb', 'warmup'), set(1, true, 185), set(2, false, 190)]);
-    expect(plateTarget(ex, 'lb')).toBe(190);
+    expect(target(ex, 'lb')).toBe(190);
   });
 
   it('falls back to the override when the first undone working set has no value', () => {
     const ex = exercise([set(0, false, null, null), set(1, false, 250)], plan({ overrideWeight: 195, overrideUnit: 'lb', plannedWeight: 175, plannedUnit: 'lb' }));
-    expect(plateTarget(ex, 'lb')).toBe(195);
+    expect(target(ex, 'lb')).toBe(195);
   });
 
   it('falls back to the planned weight when there is no override', () => {
     const ex = exercise([set(0, false, null, null)], plan({ plannedWeight: 175, plannedUnit: 'lb' }));
-    expect(plateTarget(ex, 'lb')).toBe(175);
+    expect(target(ex, 'lb')).toBe(175);
   });
 
   it('falls back to the newest done working set: the last one in position order', () => {
     const ex = exercise([set(0, true, 185), set(1, true, 205), set(2, true, 135, 'lb', 'drop'), set(3, false, null, null)]);
-    expect(plateTarget(ex, 'lb')).toBe(205);
+    expect(target(ex, 'lb')).toBe(205);
   });
 
   it("falls back to last time's weight for the first undone working set, the placeholder its row shows (F8)", () => {
     const fresh = exercise([set(0, false, null, null), set(1, false, null, null)], plan(), [prev(0, 185), prev(1, 190)]);
-    expect(plateTarget(fresh, 'lb')).toBe(185);
+    expect(target(fresh, 'lb')).toBe(185);
   });
 
   it("matches last time's set by type and number, so a warmup's weight is never the working set's", () => {
     const ex = exercise([set(0, false, null, null, 'warmup'), set(1, false, null, null)], plan(), [prev(0, 95, 'lb', 'warmup'), prev(1, 185)]);
-    expect(plateTarget(ex, 'lb')).toBe(185);
+    expect(target(ex, 'lb')).toBe(185);
   });
 
   it("converts last time's weight into the display unit as the placeholder does, to the nearest 0.5", () => {
-    expect(plateTarget(exercise([set(0, false, null, null)], plan(), [prev(0, 185)]), 'kg')).toBe(84);
+    expect(target(exercise([set(0, false, null, null)], plan(), [prev(0, 185)]), 'kg')).toBe(84);
   });
 
   it("puts the newest done working set ahead of last time's weight", () => {
     const ex = exercise([set(0, true, 195), set(1, false, null, null)], plan(), [prev(0, 185), prev(1, 190)]);
-    expect(plateTarget(ex, 'lb')).toBe(195);
+    expect(target(ex, 'lb')).toBe(195);
   });
 
   it('is null with no value anywhere', () => {
-    expect(plateTarget(exercise([]), 'lb')).toBeNull();
-    expect(plateTarget(exercise([set(0, false, null, null), set(1, true, 60, 'lb', 'warmup')]), 'lb')).toBeNull();
+    expect(target(exercise([]), 'lb')).toBeNull();
+    expect(target(exercise([set(0, false, null, null), set(1, true, 60, 'lb', 'warmup')]), 'lb')).toBeNull();
     // Last time had a warmup only: nothing to match the working set with.
-    expect(plateTarget(exercise([set(0, false, null, null)], plan(), [prev(0, 95, 'lb', 'warmup')]), 'lb')).toBeNull();
+    expect(target(exercise([set(0, false, null, null)], plan(), [prev(0, 95, 'lb', 'warmup')]), 'lb')).toBeNull();
   });
 
-  it('converts kg values to lb, rounded to 2 decimals', () => {
-    expect(plateTarget(exercise([set(0, false, 100, 'kg')]), 'lb')).toBe(220.46);
-    expect(plateTarget(exercise([], plan({ overrideWeight: 60, overrideUnit: 'kg' })), 'lb')).toBe(132.28);
-    expect(plateTarget(exercise([], plan({ plannedWeight: 80, plannedUnit: 'kg' })), 'lb')).toBe(176.37);
-    expect(plateTarget(exercise([set(0, true, 102.5, 'kg')]), 'lb')).toBe(225.97);
+  it("converts a set's own kg value to lb, rounded to 2 decimals", () => {
+    expect(target(exercise([set(0, false, 100, 'kg')]), 'lb')).toBe(220.46);
+    expect(target(exercise([set(0, true, 102.5, 'kg')]), 'lb')).toBe(225.97);
+  });
+
+  it('opens at a plan or override in the other unit as the row shows it: the nearest weight the plates load (R423)', () => {
+    // A 135 lb plan after a switch to kg is 61.23 kg; the row shows 60, so the calculator opens at 60.
+    expect(target(exercise([set(0, false, null, null)], plan({ plannedWeight: 135, plannedUnit: 'lb' })), 'kg')).toBe(60);
+    // 60 kg is 132.28 lb and 80 kg is 176.37 lb: the lb plates load 130 and 175.
+    expect(target(exercise([], plan({ overrideWeight: 60, overrideUnit: 'kg' })), 'lb')).toBe(130);
+    expect(target(exercise([], plan({ plannedWeight: 80, plannedUnit: 'kg' })), 'lb')).toBe(175);
+    // Not a barbell: the nearest 0.5, as the row rounds it.
+    expect(target(exercise([], plan({ overrideWeight: 60, overrideUnit: 'kg' }), [], 'dumbbell'), 'lb')).toBe(132.5);
   });
 
   it('converts lb values to kg', () => {
-    expect(plateTarget(exercise([set(0, false, 225, 'lb')]), 'kg')).toBe(102.06);
+    expect(target(exercise([set(0, false, 225, 'lb')]), 'kg')).toBe(102.06);
   });
 
   it('reads a value with no stored unit as the display unit', () => {
-    expect(plateTarget(exercise([set(0, false, 100, null)]), 'kg')).toBe(100);
+    expect(target(exercise([set(0, false, 100, null)]), 'kg')).toBe(100);
   });
 });

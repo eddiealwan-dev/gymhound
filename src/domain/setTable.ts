@@ -13,7 +13,8 @@ import {
   type PrevSet,
   type TickValues,
 } from './setEntry';
-import type { DistanceUnit, Equipment, LoggingType, WeightUnit } from './types';
+import type { DistanceUnit, Equipment, LoggingType, SetType, WeightUnit } from './types';
+import { convertWeight } from './units';
 
 /**
  * What the session screen shows for an exercise's set table, as plain functions: the columns, the text in each
@@ -388,4 +389,37 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit, distanc
 export function isComplete(loggingType: LoggingType, values: TickValues): boolean {
   const none = { weight: null, reps: null, durationS: null, distance: null };
   return resolveTick({ loggingType, entered: values, target: null, placeholders: none }) !== null;
+}
+
+/** The heaviest weight an exercise has logged, in the unit it was logged in (`WorkoutExerciseView.bestWeight`). */
+export type BestWeight = { value: number; unit: WeightUnit };
+
+/** R422: a weight above this, in its unit, is unlikely whatever the history. */
+const UNLIKELY_WEIGHT: Record<WeightUnit, number> = { lb: 1000, kg: 450 };
+/** R422: a jump past 1.5 times the best must also be at least this much heavier, so a light lift's normal step is not flagged. */
+const UNLIKELY_JUMP: Record<WeightUnit, number> = { lb: 20, kg: 10 };
+const UNLIKELY_RATIO = 1.5;
+/** R422: more reps than this in one set is unlikely. */
+const UNLIKELY_REPS = 100;
+
+/**
+ * Whether a value left in a set field is unlikely enough to ask for a second look (R422): a weight above 1,000 lb or
+ * 450 kg, or one more than 1.5 times the exercise's best and at least 20 lb or 10 kg heavier than it; or more than 100
+ * reps. `value` is in `unit` (the display unit, as typed). A warmup is never flagged, nor a time, a distance or RPE.
+ * It only adds the "Check this number" line: the tick still logs what the row shows (R48).
+ */
+export function looksUnlikely(
+  key: InputKey,
+  value: number | null,
+  setType: SetType,
+  unit: WeightUnit,
+  best: BestWeight | null | undefined,
+): boolean {
+  if (value === null || setType === 'warmup') return false;
+  if (key === 'reps') return value > UNLIKELY_REPS;
+  if (key !== 'weight') return false;
+  if (value > UNLIKELY_WEIGHT[unit]) return true;
+  if (!best || best.value <= 0) return false;
+  const bestInUnit = convertWeight(best.value, best.unit, unit);
+  return value > UNLIKELY_RATIO * bestInUnit && value - bestInUnit >= UNLIKELY_JUMP[unit];
 }

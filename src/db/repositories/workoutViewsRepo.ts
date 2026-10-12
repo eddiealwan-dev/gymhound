@@ -1,8 +1,10 @@
-import { and, asc, desc, eq, gte, inArray, ne, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, max, ne, type SQL } from 'drizzle-orm';
 import type { PrHighlight } from '../../domain/prs';
 import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
+import type { BestWeight } from '../../domain/setTable';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
+import { convertWeight } from '../../domain/units';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -40,6 +42,11 @@ export type WorkoutExerciseView = {
   mark: ExerciseMark | null;
   sets: SetView[];
   previous: PrevSet[];
+  /**
+   * The heaviest done set, warmups left out, the exercise has in a finished workout, in the unit it was logged in; null
+   * with none (R422). Optional so a view built by hand reads as no history.
+   */
+  bestWeight?: BestWeight | null;
 };
 
 export type ActiveWorkoutView = {
@@ -108,6 +115,37 @@ export function getPreviousSets(db: Db, exerciseId: string, excludeWorkoutId: st
     .all();
 }
 
+/**
+ * Each exercise's heaviest done set in finished workouts, warmups left out, in the unit it was logged in (R422). One
+ * query for the whole workout: the heaviest per unit, then the heavier of the two compared in kg.
+ */
+function bestWeights(db: Db, exerciseIds: string[]): Map<string, BestWeight> {
+  const rows = db
+    .select({ exerciseId: workoutExercises.exerciseId, unit: sets.weightUnit, weight: max(sets.weight) })
+    .from(sets)
+    .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
+    .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
+    .where(
+      and(
+        inArray(workoutExercises.exerciseId, exerciseIds),
+        eq(workouts.status, 'finished'),
+        eq(sets.done, true),
+        ne(sets.setType, 'warmup'),
+        isNotNull(sets.weight),
+        isNotNull(sets.weightUnit),
+      ),
+    )
+    .groupBy(workoutExercises.exerciseId, sets.weightUnit)
+    .all();
+  const best = new Map<string, BestWeight>();
+  for (const { exerciseId, unit, weight } of rows) {
+    if (unit === null || weight === null) continue;
+    const held = best.get(exerciseId);
+    if (!held || convertWeight(weight, unit, 'kg') > convertWeight(held.value, held.unit, 'kg')) best.set(exerciseId, { value: weight, unit });
+  }
+  return best;
+}
+
 /** The active workout with its exercises, sets, sticky notes, rest prefs and previous sets. Null when none is active. */
 export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
   const workout = db.select().from(workouts).where(eq(workouts.status, 'active')).get();
@@ -134,6 +172,10 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     )
     .orderBy(asc(sets.position))
     .all();
+  const best = bestWeights(
+    db,
+    rows.map((r) => r.we.exerciseId),
+  );
   const setsByExercise = new Map<string, SetView[]>();
   for (const s of setRows) {
     const view: SetView = {
@@ -180,6 +222,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       mark: we.mark,
       sets: setsByExercise.get(we.id) ?? [],
       previous: getPreviousSets(db, we.exerciseId, workout.id),
+      bestWeight: best.get(we.exerciseId) ?? null,
     })),
   };
 }

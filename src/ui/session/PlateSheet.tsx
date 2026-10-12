@@ -26,12 +26,13 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
   const { colors } = useTheme();
   const { unit, barLb, barKg, platesLb, platesKg } = useDbQuery(getSettings);
   const bar = unit === 'lb' ? barLb : barKg;
+  const plates = unit === 'lb' ? platesLb : platesKg;
   const [text, setText] = useState(() => {
-    const target = plateTarget(ex, unit);
+    const target = plateTarget(ex, unit, { bar, plates });
     return target === null ? '' : String(target);
   });
   const { valid, value: target } = parseField('weight', text);
-  const load = valid && target !== null ? { target, ...loadPlates(target, bar, unit === 'lb' ? platesLb : platesKg) } : null;
+  const load = valid && target !== null ? { target, ...loadPlates(target, bar, plates) } : null;
 
   return (
     <>

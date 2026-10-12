@@ -374,3 +374,28 @@ describe('getActiveWorkoutView: rest per exercise and tick times (Task 21)', () 
     expect(getActiveWorkoutView(db)!.exercises[0].restSeconds).toBe(0);
   });
 });
+
+describe("getActiveWorkoutView: each exercise's best logged weight, for the soft check (R422)", () => {
+  it('is the heaviest done set of finished workouts, leaving out warmups and the active workout', () => {
+    const db = seededDb();
+    buildHistory(db);
+    const view = getActiveWorkoutView(db)!;
+    // Oct 1 at 100 and Oct 6 at 135 (its 45 lb warm-up is left out); today's 140 is not history.
+    expect(view.exercises[0].bestWeight).toEqual({ value: 135, unit: 'lb' });
+    // The plank logs no weight.
+    expect(view.exercises.at(-1)!.bestWeight).toBeNull();
+    // Push A's other exercises have no finished sets.
+    expect(view.exercises[1].bestWeight).toBeNull();
+  });
+
+  it('compares across units and keeps the unit the best was logged in', () => {
+    const db = seededDb();
+    runPushA(db, OCT_1, [[135, 5]]);
+    const oct6 = startWorkoutFromDay(db, PUSH_A, OCT_6);
+    // 70 kg is 154.32 lb, heavier than 135 lb.
+    tickSet(db, setIds(db)[0], { weight: 70, reps: 5, durationS: null, distance: null }, 'kg', OCT_6 + MINUTE, 'mi');
+    finishWorkout(db, oct6, OCT_6 + 60 * MINUTE);
+    startWorkoutFromDay(db, PUSH_A, OCT_9);
+    expect(getActiveWorkoutView(db)!.exercises[0].bestWeight).toEqual({ value: 70, unit: 'kg' });
+  });
+});

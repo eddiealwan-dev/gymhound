@@ -115,6 +115,33 @@ export function writeSnapshot(db: Db, files: SnapshotFiles, now: number): string
   return name;
 }
 
+/** The suffix Start fresh adds to a damaged snapshot: it is then no snapshot name, so nothing restores, trims or lists it as one. */
+export const DAMAGED_SUFFIX = '.damaged';
+
+/**
+ * Start fresh, from the startup error screen (R421), when the live file is missing or empty and every snapshot failed
+ * its check (`StartupResult.allDamaged`). Every snapshot is renamed `{name}.damaged` in the snapshot folder, and the
+ * live file (with its -wal and -shm), if there is one, is set aside as `gymhound.damaged-{time}.db`. Nothing is deleted,
+ * in case the files can be recovered. The next `startDatabase` finds no snapshot and opens a new, empty database.
+ * A file that won't move is logged and left: the live file holds no data here, and a snapshot left in place fails its
+ * check again.
+ */
+export function setAsideDamaged(files: SnapshotFiles, now: number): void {
+  for (const name of snapshotsOldestFirst(files.list())) {
+    try {
+      files.rename(name, `${name}${DAMAGED_SUFFIX}`);
+    } catch (error) {
+      console.warn(`GymHound could not set aside the damaged snapshot ${name}.`, error);
+    }
+  }
+  try {
+    files.setAsideLive(`damaged-${stamp(now)}`);
+  } catch (error) {
+    // Usually there is no live file at all, which is fine.
+    console.warn('GymHound did not set aside the live database file.', error);
+  }
+}
+
 /** A snapshot opened only to be checked, never written. `all` returns a query's rows. */
 export type SnapshotReader = { all(query: string): Record<string, unknown>[]; close(): void };
 
@@ -132,7 +159,17 @@ export type StartupDeps = {
 
 export type StartupResult =
   | { kind: 'ok'; db: Db; restoredFrom: string | null }
-  | { kind: 'failed'; error: Error; newestSnapshot: string | null; setAside: string | null };
+  | {
+      kind: 'failed';
+      error: Error;
+      newestSnapshot: string | null;
+      setAside: string | null;
+      /**
+       * True only when the live file was missing or empty and no snapshot passed its check: there is no data to lose, so
+       * the error screen offers Start fresh (R421, `setAsideDamaged`).
+       */
+      allDamaged?: true;
+    };
 
 /** Closes a connection, ignoring a failure: the caller is already handling a bigger one. */
 function closeQuietly(close: StartupDeps['close'], db: Db): void {
@@ -230,7 +267,9 @@ export async function startDatabase(deps: StartupDeps): Promise<StartupResult> {
   if (newest && liveIsGone) {
     const source = restoreSource();
     // Opening now would create an empty database next to snapshots that may hold the user's workouts.
-    if (!source) return { kind: 'failed', error: new Error("None of GymHound's backups on this phone could be read."), newestSnapshot: newest, setAside: null };
+    if (!source) {
+      return { kind: 'failed', error: new Error("None of GymHound's backups on this phone could be read."), newestSnapshot: newest, setAside: null, allDamaged: true };
+    }
     try {
       files.copyToLive(source);
     } catch (error) {
