@@ -2,25 +2,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useDb } from '../../../src/db/DbProvider';
-import { listRoutines, setActiveRoutine } from '../../../src/db/repositories/routinesRepo';
+import { listRoutines } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineSummary } from '../../../src/db/repositories/routinesRepo';
 import { listSavedWorkouts } from '../../../src/db/repositories/savedWorkoutsRepo';
 import type { SavedWorkoutSummary } from '../../../src/db/repositories/savedWorkoutsRepo';
-import { getActiveWorkoutId } from '../../../src/db/repositories/workoutsRepo';
-import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
+import { useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
 import { EmptyState } from '../../../src/ui/EmptyState';
-import { useProGate, useRoutineLimit } from '../../../src/ui/RoutineLimit';
-import { canUseRoutine, lockedRoutineReason } from '../../../src/domain/routineLimit';
+import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
+import { RoutineOptionsSheet, useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
+import { canUseRoutine } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
 import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
-import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
 /** Back to where Routines was opened from (Train). With nothing to go back to (opened by address, or reloaded), it lands on Train. */
 function leave() {
@@ -40,8 +38,19 @@ const dayCount = (n: number) => (n === 1 ? '1 day' : `${n} days`);
  * A routine: its name and days, which open its detail (the chevron says so), and Set active as a compact pill (36pt
  * with a 4pt hit slop, a 44pt target), the size of a row's own action elsewhere (the rest pills, Finish); the routine
  * in use shows the Active mark instead. The pill is beside the name, never inside it, so the screen reader reaches both.
+ * ⋯ at the end opens the routine's options (R542).
  */
-function RoutineRow({ routine, locked, onSetActive }: { routine: RoutineSummary; locked: boolean; onSetActive: () => void }) {
+function RoutineRow({
+  routine,
+  locked,
+  onSetActive,
+  onOptions,
+}: {
+  routine: RoutineSummary;
+  locked: boolean;
+  onSetActive: () => void;
+  onOptions: () => void;
+}) {
   const { colors } = useTheme();
   const days = dayCount(routine.dayCount);
   return (
@@ -83,6 +92,16 @@ function RoutineRow({ routine, locked, onSetActive }: { routine: RoutineSummary;
           onPress={onSetActive}
         />
       )}
+      {/* Everything the routine's page offers, without opening it or holding the row (Round 9, R542). */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Options for ${routine.name}`}
+        onPress={onOptions}
+        hitSlop={4}
+        style={({ pressed }) => ({ width: 36, height: 44, marginRight: -8, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.8 : 1 })}
+      >
+        <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 }
@@ -135,31 +154,28 @@ function SavedRow({ saved, onStart }: { saved: SavedWorkoutSummary; onStart: () 
  * don't count toward the limit (R118); Start waits for a workout in progress too.
  */
 export default function Routines() {
-  const db = useDb();
   const routines = useDbQuery(listRoutines);
   const premade = routines.filter((routine) => routine.isPremade);
   const yours = routines.filter((routine) => !routine.isPremade);
   const noneActive = !routines.some((routine) => routine.isActive);
-  const [blocked, setBlocked] = useState(false);
   const limit = useRoutineLimit();
   const saved = useDbQuery(listSavedWorkouts);
   const starter = useStartSaved();
-
   const pro = useIsPro();
-  const gate = useProGate();
-
-  const setActive = (routine: RoutineSummary) =>
-    gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => {
-      if (getActiveWorkoutId(db) !== null) {
-        setBlocked(true);
-        return;
-      }
-      setActiveRoutine(db, routine.id);
-      bumpData();
-    });
+  const actions = useRoutineActions();
+  /** The routine whose ⋯ sheet is open. */
+  const [options, setOptions] = useState<RoutineSummary | null>(null);
 
   const row = (routine: RoutineSummary) => (
-    <RoutineRow key={routine.id} routine={routine} locked={!canUseRoutine(routine, pro)} onSetActive={() => setActive(routine)} />
+    <View key={routine.id} style={{ gap: 4 }}>
+      <RoutineRow
+        routine={routine}
+        locked={!canUseRoutine(routine, pro)}
+        onSetActive={() => actions.setActive(routine)}
+        onOptions={() => setOptions(routine)}
+      />
+      {actions.failed?.routineId === routine.id ? <Body muted>{actions.failed.text}</Body> : null}
+    </View>
   );
 
 
@@ -194,10 +210,10 @@ export default function Routines() {
           ))}
         </View>
       )}
-      <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />
+      <RoutineOptionsSheet routine={options} actions={actions} onClose={() => setOptions(null)} />
+      {actions.sheets}
       {starter.sheet}
       {limit.sheets}
-      {gate.sheets}
     </Screen>
   );
 }

@@ -1,29 +1,23 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { View } from 'react-native';
-import { useDb } from '../../../src/db/DbProvider';
-import { deleteRoutine, duplicateRoutine, getRoutineDetail, setActiveRoutine } from '../../../src/db/repositories/routinesRepo';
+import { getRoutineDetail } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
-import { getActiveWorkoutId } from '../../../src/db/repositories/workoutsRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
-import { announce } from '../../../src/platform/announce';
-import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
-import { shareRoutine } from '../../../src/state/routineShare';
+import { useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
-import { useProGate, useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { useOpenPaywall } from '../../../src/ui/pro/openPaywall';
+import { useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
 import { Screen } from '../../../src/ui/Screen';
-import { ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
-import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
 /** Back to Routines. With nothing to go back to (opened by address, or reloaded), it lands on Routines. */
 function toRoutines() {
@@ -63,21 +57,14 @@ function DayCard({ day }: { day: RoutineDetail['days'][number] }) {
 
 /**
  * A routine (§8.6): its days and exercises, with **Set active** and **Duplicate**, and for your own **Edit** and
- * **Delete**. Premades are read-only but still progress when run. Set active waits for a workout in progress (R80);
- * Duplicate keeps to the free limit (R88) and opens the copy; Delete asks first, keeps the history and, for the active
- * routine, leaves none active (R90).
+ * **Delete**. Premades are read-only but still progress when run. The actions are `useRoutineActions`, shared with the
+ * ⋯ sheet on Routines (R542); Delete leaves for Routines.
  */
 export default function RoutineDetailScreen() {
-  const db = useDb();
   const { id } = useLocalSearchParams<{ id: string }>();
   const read = useCallback((d: Db) => getRoutineDetail(d, id), [id]);
   const routine = useDbQuery(read);
-  const [blocked, setBlocked] = useState(false);
-  const [askDelete, setAskDelete] = useState(false);
-  /** What a failed Duplicate or Delete says, muted, under the button pressed. Nothing was changed. */
-  const [failed, setFailed] = useState<{ action: 'copy' | 'delete' | 'share'; text: string } | null>(null);
-  const limit = useRoutineLimit();
-  const gate = useProGate();
+  const actions = useRoutineActions(toRoutines);
   const pro = useIsPro();
   const openPaywall = useOpenPaywall();
 
@@ -93,59 +80,7 @@ export default function RoutineDetailScreen() {
   }
 
   const locked = !canUseRoutine(routine, pro);
-  const setActive = () =>
-    gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => {
-      if (getActiveWorkoutId(db) !== null) {
-        setBlocked(true);
-        return;
-      }
-      setActiveRoutine(db, routine.id);
-      bumpData();
-    });
-  /** A routine of your own kept after Pro ends can be read and deleted, not changed, until Pro is back (R523). */
-  const edit = () => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => router.push(`/routines/edit/${routine.id}`));
-
-  const fail = (action: 'copy' | 'delete' | 'share', text: string, error: unknown) => {
-    if (error !== null) console.warn(`GymHound could not ${action} the routine.`, error);
-    setFailed({ action, text });
-    announce(text);
-  };
-
-  const duplicate = () =>
-    limit.whenRoomFor(() => {
-      setFailed(null);
-      let copyId: string;
-      try {
-        copyId = duplicateRoutine(db, routine.id, Date.now());
-      } catch (error) {
-        fail('copy', "Couldn't copy. Try again.", error);
-        return;
-      }
-      bumpData();
-      router.push(`/routines/${copyId}`);
-    });
-
-  /** Share routine (§18.18): the link and the code through the share sheet. Closing the sheet says nothing. */
-  const share = () => {
-    setFailed(null);
-    void shareRoutine(db, routine.id).then((result) => {
-      // shareRoutine has logged the error already.
-      if (result === 'failed') fail('share', "Couldn't open the share sheet. Try again.", null);
-    });
-  };
-
-  const remove = () => {
-    setAskDelete(false);
-    setFailed(null);
-    try {
-      deleteRoutine(db, routine.id);
-    } catch (error) {
-      fail('delete', "Couldn't delete. Try again.", error);
-      return;
-    }
-    bumpData();
-    toRoutines();
-  };
+  const failed = actions.failed?.routineId === routine.id ? actions.failed : null;
 
   return (
     <Screen>
@@ -156,15 +91,15 @@ export default function RoutineDetailScreen() {
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>
         {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : null}
-        {routine.isActive && !locked ? <ActiveBadge /> : <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : setActive} />}
+        {routine.isActive && !locked ? <ActiveBadge /> : <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />}
         {/* Side by side when both fit; at a large text size the second drops under the first. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <View style={{ flexGrow: 1 }}>
-            <Button label="Duplicate" variant="secondary" onPress={duplicate} />
+            <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} />
           </View>
           {routine.isPremade ? null : (
             <View style={{ flexGrow: 1 }}>
-              <Button label="Edit" variant="secondary" onPress={edit} />
+              <Button label="Edit" variant="secondary" onPress={() => actions.edit(routine)} />
             </View>
           )}
         </View>
@@ -172,8 +107,8 @@ export default function RoutineDetailScreen() {
         <Button
           label="Share routine"
           variant="quiet"
-          accessibilityLabel={`Share ${routine.name} as a link and a code`}
-          onPress={share}
+          accessibilityLabel={`Share ${routine.name}`}
+          onPress={() => actions.share(routine)}
         />
         {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
       </View>
@@ -185,22 +120,11 @@ export default function RoutineDetailScreen() {
       {routine.isPremade ? null : (
         // At the foot of the page, quiet and centred, as Delete workout is on a workout and Discard workout in the session.
         <View style={{ marginTop: 24 }}>
-          <Button label="Delete routine" variant="quiet" onPress={() => setAskDelete(true)} />
+          <Button label="Delete routine" variant="quiet" onPress={() => actions.askDelete(routine)} />
           {failed?.action === 'delete' ? <Body muted style={{ textAlign: 'center' }}>{failed.text}</Body> : null}
         </View>
       )}
-      <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />
-      <ConfirmSheet
-        visible={askDelete}
-        title="Delete this routine?"
-        body="Workouts you finished with it stay in History."
-        confirmLabel="Delete"
-        cancelLabel="Keep"
-        onConfirm={remove}
-        onCancel={() => setAskDelete(false)}
-      />
-      {limit.sheets}
-      {gate.sheets}
+      {actions.sheets}
     </Screen>
   );
 }

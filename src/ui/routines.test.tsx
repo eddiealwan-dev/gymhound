@@ -4,7 +4,8 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Routines from '../../app/(tabs)/routines/index';
 import type { RoutineSummary } from '../db/repositories/routinesRepo';
-import { setActiveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
+import { deleteRoutine, duplicateRoutine, setActiveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
+import { shareRoutine } from '../state/routineShare';
 import { getActiveWorkoutId } from '../db/repositories/workoutsRepo';
 import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
@@ -22,7 +23,14 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: string) => unknown) => query('db'), bumpData: jest.fn() }));
-jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(() => mockRoutines), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
+jest.mock('../db/repositories/routinesRepo', () => ({
+  listRoutines: jest.fn(() => mockRoutines),
+  setActiveRoutine: jest.fn(),
+  userRoutineCount: jest.fn(),
+  deleteRoutine: jest.fn(),
+  duplicateRoutine: jest.fn(() => 'copy-1'),
+}));
+jest.mock('../state/routineShare', () => ({ shareRoutine: jest.fn(() => Promise.resolve('shared')) }));
 // The saved workouts group has its own tests (savedWorkouts.test.tsx).
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
@@ -66,6 +74,8 @@ beforeEach(() => {
   mockRoutines = [routine('fb', 'Full body', true), routine('ppl', 'Push/pull/legs', false)];
   jest.mocked(router.push).mockClear();
   jest.mocked(setActiveRoutine).mockClear();
+  jest.mocked(duplicateRoutine).mockClear();
+  jest.mocked(deleteRoutine).mockClear();
   jest.mocked(bumpData).mockClear();
   jest.mocked(getActiveWorkoutId).mockReturnValue(null);
   jest.mocked(userRoutineCount).mockReturnValue(0);
@@ -283,5 +293,80 @@ describe('Routines: first run and empty groups (R401, R403)', () => {
     const t = shownText(mount());
     expect(t).not.toContain(YOURS_EMPTY);
     expect(t).toContain('My split');
+  });
+});
+
+describe('Routines: ⋯ on each row (Round 9, R542)', () => {
+  /** Opens the ⋯ sheet of the routine named `name`. */
+  const options = (tree: ReactTestRenderer, name: string) =>
+    act(() => tree.root.findByProps({ accessibilityLabel: `Options for ${name}` }).props.onPress());
+  /** Taps a button in the open sheet, then lets the sheet go so its action runs. */
+  const choose = (tree: ReactTestRenderer, label: string) => {
+    press(tree, label, buttons(tree, label).length - 1);
+    act(() => jest.runAllTimers());
+  };
+
+  it('every routine has one, read as "Options for {name}"', () => {
+    mockRoutines = [routine('fb', 'Full body', true), routine('mine', 'Mine', false, false)];
+    const tree = mount();
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Options for Full body' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Options for Mine' }).length).toBeGreaterThan(0);
+  });
+
+  it("a program's sheet: Set active, Duplicate, Share routine; no Edit or Delete", () => {
+    const tree = mount();
+    options(tree, 'Push/pull/legs');
+    const shown = shownText(tree);
+    expect(shown).toEqual(expect.arrayContaining(['Push/pull/legs', 'Duplicate', 'Share routine', 'Cancel']));
+    expect(shown).not.toContain('Edit');
+    expect(shown).not.toContain('Delete routine');
+    choose(tree, 'Set active');
+    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'ppl');
+  });
+
+  it('the routine in use has no Set active in its sheet', () => {
+    const tree = mount();
+    options(tree, 'Full body');
+    expect(buttons(tree, 'Set active')).toHaveLength(1); // the other row's pill only
+  });
+
+  it('your own: Edit opens the editor, Duplicate opens the copy, Share opens the share sheet', () => {
+    mockRoutines = [routine('mine', 'Mine', false, false)];
+    const tree = mount();
+    options(tree, 'Mine');
+    choose(tree, 'Edit');
+    expect(router.push).toHaveBeenLastCalledWith('/routines/edit/mine');
+    options(tree, 'Mine');
+    choose(tree, 'Duplicate');
+    expect(duplicateRoutine).toHaveBeenCalledWith('db', 'mine', expect.any(Number));
+    expect(router.push).toHaveBeenLastCalledWith('/routines/copy-1');
+    options(tree, 'Mine');
+    choose(tree, 'Share routine');
+    expect(shareRoutine).toHaveBeenCalledWith('db', 'mine');
+  });
+
+  it('Delete routine asks first; Keep keeps it, Delete deletes it', () => {
+    mockRoutines = [routine('mine', 'Mine', false, false)];
+    const tree = mount();
+    options(tree, 'Mine');
+    choose(tree, 'Delete routine');
+    expect(shownText(tree)).toContain('Delete this routine?');
+    press(tree, 'Keep');
+    expect(deleteRoutine).not.toHaveBeenCalled();
+    options(tree, 'Mine');
+    choose(tree, 'Delete routine');
+    press(tree, 'Delete');
+    expect(deleteRoutine).toHaveBeenCalledWith('db', 'mine');
+    expect(bumpData).toHaveBeenCalled();
+  });
+
+  it('free: a Pro program shows See Pro in place of Set active, and Duplicate explains Pro', () => {
+    mockPro = false;
+    const tree = mount();
+    options(tree, 'Push/pull/legs');
+    expect(buttons(tree, 'See Pro').length).toBeGreaterThan(0);
+    choose(tree, 'Duplicate');
+    expect(duplicateRoutine).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain('Routines of your own are part of GymHound Pro.');
   });
 });
