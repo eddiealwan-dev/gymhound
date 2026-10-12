@@ -97,7 +97,7 @@ export function BodySection(): ReactElement {
               <Body muted>{formatEntryDate(lastWeight.localDate, today, locale)}</Body>
             </View>
           ) : (
-            <Body muted>No entries yet.</Body>
+            <Body muted>No entries yet. Log your weight here and the chart starts.</Body>
           )}
         </View>
         <BodyQuickEntry kind="bodyweight" unit={weightUnit} />

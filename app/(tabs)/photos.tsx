@@ -6,6 +6,7 @@ import { deviceLocale } from '../../src/platform/locale';
 import { progressPhotoUri } from '../../src/platform/progressPhotoFiles';
 import { flushAll } from '../../src/state/draftFlush';
 import { BackLink } from '../../src/ui/BackLink';
+import { EmptyState } from '../../src/ui/EmptyState';
 import { Screen } from '../../src/ui/Screen';
 import { AddProgressPhoto, PHONE_ONLY, useProgressPhotos } from '../../src/ui/stats/progressPhotos';
 import { Body, ScreenTitle } from '../../src/ui/Text';
@@ -16,6 +17,9 @@ function leave() {
   if (router.canGoBack()) router.back();
   else router.navigate('/stats');
 }
+
+/** Under Add a photo while there are none (R401). */
+const NO_PHOTOS = 'No photos yet. Each one you add shows here, newest first.';
 
 function openPhoto(id: string) {
   flushAll();
@@ -53,6 +57,7 @@ function PhotosOnPhone() {
         They stay on this phone. They aren't in backups.
       </Body>
       <AddProgressPhoto />
+      {photos.length === 0 ? <EmptyState style={{ marginTop: 20 }} text={NO_PHOTOS} /> : null}
       {/* Each cell's 4pt padding makes an 8pt gutter; the row steps out by 4 so the squares line up with the edges. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, marginTop: 20 }}>
         {photos.map((photo) => (

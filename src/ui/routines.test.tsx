@@ -256,3 +256,31 @@ describe('Routines: the free limit (R88)', () => {
     expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
   });
 });
+
+describe('Routines: first run and empty groups (R401, R403)', () => {
+  const PICK_ONE = 'Set one active and Train lines up its next workout.';
+  const YOURS_EMPTY = 'Routines you make or duplicate show here.';
+
+  it('says what Set active does while no routine is in use, under the title', () => {
+    mockRoutines = [routine('fb', 'Full body', false), routine('ppl', 'Push/pull/legs', false)];
+    const t = shownText(mount());
+    expect(t.slice(t.indexOf('Routines'), t.indexOf('Routines') + 2)).toEqual(['Routines', PICK_ONE]);
+  });
+
+  it('drops that line once a routine is in use', () => {
+    expect(shownText(mount())).not.toContain(PICK_ONE);
+  });
+
+  it('says how Yours fills while you have none, over New routine', () => {
+    const t = shownText(mount());
+    const yours = t.indexOf('Yours');
+    expect(t.slice(yours, yours + 3)).toEqual(['Yours', YOURS_EMPTY, 'New routine']);
+  });
+
+  it('shows your routines instead of the line once you have one', () => {
+    mockRoutines = [routine('fb', 'Full body', true), routine('mine', 'My split', false, false)];
+    const t = shownText(mount());
+    expect(t).not.toContain(YOURS_EMPTY);
+    expect(t).toContain('My split');
+  });
+});

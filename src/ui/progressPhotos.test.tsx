@@ -180,6 +180,12 @@ describe('/photos (R181)', () => {
     expect(tree.root.findAllByType(Footer)).toHaveLength(0);
   });
 
+  it('says what the grid will hold while there are no photos, and drops the line once there are (R401)', () => {
+    expect(texts(mount(<PhotosRoute />))).toContain('No photos yet. Each one you add shows here, newest first.');
+    threePhotos();
+    expect(texts(mount(<PhotosRoute />))).not.toContain('No photos yet. Each one you add shows here, newest first.');
+  });
+
   it('goes back to Stats, or to /stats when opened with nothing to go back to', () => {
     const tree = mount(<PhotosRoute />);
     tap(tree, 'Back to Stats');

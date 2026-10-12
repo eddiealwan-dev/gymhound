@@ -7,7 +7,8 @@ import { deviceLocale } from '../../src/platform/locale';
 import { useFocusedDbQuery } from '../../src/state/dataVersion';
 import { BackLink } from '../../src/ui/BackLink';
 import { Screen } from '../../src/ui/Screen';
-import { LiftRow, liftNameMatches } from '../../src/ui/stats/LiftsSection';
+import { EmptyState } from '../../src/ui/EmptyState';
+import { LIFTS_EMPTY, LiftRow, liftNameMatches } from '../../src/ui/stats/LiftsSection';
 import { Body, ScreenTitle } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -59,7 +60,7 @@ export default function Lifts() {
       />
       <View style={{ marginTop: 16 }}>
         {lifts.length === 0 ? (
-          <Body muted>Finish a workout and your lifts show here.</Body>
+          <EmptyState text={LIFTS_EMPTY} />
         ) : shown.length === 0 ? (
           <Body muted>{`No lift called ${query.trim()}.`}</Body>
         ) : (

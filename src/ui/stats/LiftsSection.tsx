@@ -10,8 +10,12 @@ import { deviceLocale } from '../../platform/locale';
 import { useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
 import { Button } from '../Button';
+import { EmptyState } from '../EmptyState';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
+
+/** What Stats → Lifts and the Lifts screen say before the first finished workout (R401). */
+export const LIFTS_EMPTY = 'Finish a workout and each lift you log shows here, with its chart and records.';
 
 /** How many lifts Stats shows before **All lifts ›** (R172). */
 const SECTION_LIMIT = 5;
@@ -111,7 +115,7 @@ export function LiftsSection({ today }: { today: string }): ReactElement | null 
     <View>
       <Label style={{ marginBottom: 8 }}>Lifts</Label>
       {lifts.length === 0 ? (
-        <Body muted>Finish a workout and your lifts show here.</Body>
+        <EmptyState text={LIFTS_EMPTY} />
       ) : (
         <View>
           {lifts.slice(0, SECTION_LIMIT).map((lift) => (

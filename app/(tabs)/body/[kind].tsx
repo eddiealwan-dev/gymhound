@@ -13,6 +13,7 @@ import { flushAll } from '../../../src/state/draftFlush';
 import { BackLink } from '../../../src/ui/BackLink';
 import { BodyEntrySheet } from '../../../src/ui/body/BodyEntrySheet';
 import { BodyChart, BodyQuickEntry } from '../../../src/ui/body/BodyLog';
+import { EmptyState } from '../../../src/ui/EmptyState';
 import { Screen } from '../../../src/ui/Screen';
 import { Body, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
@@ -78,7 +79,7 @@ function KindDetail({ kind }: { kind: BodyKind }) {
       </View>
       <View style={{ marginTop: 32 }}>
         {entries.length === 0 ? (
-          <Body muted>No entries yet.</Body>
+          <EmptyState text="No entries yet. Log one above and it shows here." />
         ) : (
           entries.map((entry) => <EntryRow key={entry.id} entry={entry} date={dateOf(entry)} onPress={() => open(entry)} />)
         )}

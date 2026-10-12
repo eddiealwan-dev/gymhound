@@ -23,7 +23,7 @@ jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
 const mockFocusCallbacks = new Set<() => void>();
 const mockCalls: string[] = [];
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn((href: string) => mockCalls.push(`push ${href}`)) },
+  router: { push: jest.fn((href: string) => mockCalls.push(`push ${href}`)), navigate: jest.fn((href: string) => mockCalls.push(`navigate ${href}`)) },
   useFocusEffect: (cb: () => void) => mockFocusCallbacks.add(cb),
 }));
 jest.mock('../state/draftFlush', () => ({
@@ -131,11 +131,13 @@ describe('History (R163)', () => {
     expect(tree.root.findAllByType(Footer)).toHaveLength(1);
   });
 
-  it('says how to fill it when there is nothing yet', () => {
+  it('says how to fill it when there is nothing yet, with Go to Train as the one action (R401)', () => {
     const tree = mount();
-    expect(shownText(tree)).toContain('Finish a workout and it shows here.');
+    expect(shownText(tree)).toContain('No workouts yet. Finish one on Train and it shows here, with its day marked on the calendar.');
     expect(cards(tree)).toHaveLength(0);
     expect(pressable(tree, 'Show earlier months')).toBeUndefined();
+    act(() => pressable(tree, 'Go to Train')!.props.onPress());
+    expect(mockCalls).toContain('navigate /');
   });
 
   it('groups the cards by month, newest first, and leaves out the active workout', () => {
@@ -146,7 +148,8 @@ describe('History (R163)', () => {
     const tree = mount();
     expect(monthLabels(tree)).toEqual(['October', 'September']);
     expect(cards(tree)).toHaveLength(3);
-    expect(shownText(tree)).not.toContain('Finish a workout and it shows here.');
+    expect(shownText(tree)).not.toContain('No workouts yet. Finish one on Train and it shows here, with its day marked on the calendar.');
+    expect(pressable(tree, 'Go to Train')).toBeUndefined();
   });
 
   it('shows the date, the name, the card line and the marks line', () => {

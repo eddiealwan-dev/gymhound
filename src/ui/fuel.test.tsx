@@ -367,7 +367,7 @@ describe('the entries', () => {
   it('says nothing is logged on an empty day', () => {
     const tree = mount();
     expect(shownText(tree)).toContain('Food');
-    expect(shownText(tree)).toContain('Nothing logged on this day.');
+    expect(shownText(tree)).toContain('Nothing logged on this day. Food you add shows here and counts down from your targets.');
     expect(allText(tree)).not.toContain('Total ·');
   });
 
@@ -631,7 +631,7 @@ describe('editing an entry (R142)', () => {
     press(tree, 'Delete');
     expect(listEntries(mockDb, TODAY)).toHaveLength(0);
     expect(mockAnnounce).toHaveBeenCalledWith('Deleted Lunch.');
-    expect(shownText(tree)).toContain('Nothing logged on this day.');
+    expect(shownText(tree)).toContain('Nothing logged on this day. Food you add shows here and counts down from your targets.');
     expect(shownText(tree)).not.toContain('Delete this entry?');
   });
 

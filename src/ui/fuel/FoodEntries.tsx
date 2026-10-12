@@ -3,6 +3,7 @@ import { Keyboard, Pressable, View } from 'react-native';
 import type { FoodEntry } from '../../db/repositories/foodLogRepo';
 import { caloriesSpoken, type EntryTotals, fuelNumber, gramsSpoken, kcalProteinSpoken, kcalProteinText, servingsText } from '../../domain/fuel';
 import { flushAll } from '../../state/draftFlush';
+import { EmptyState } from '../EmptyState';
 import { Body, Label } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { FoodEntrySheet } from './FoodEntrySheet';
@@ -53,9 +54,8 @@ export function FoodEntries({ entries, totals, locale }: { entries: readonly Foo
     <View style={{ gap: 4 }}>
       <Label>Food</Label>
       {entries.length === 0 ? (
-        <Body muted style={{ paddingVertical: 8 }}>
-          Nothing logged on this day.
-        </Body>
+        // Add food and Quick add follow right under the list, so the line names them and needs no action of its own (R401).
+        <EmptyState style={{ paddingVertical: 8 }} text="Nothing logged on this day. Food you add shows here and counts down from your targets." />
       ) : (
         <View>
           {entries.map((entry, i) => (

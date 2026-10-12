@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { listHistory } from '../../../src/db/repositories/historyRepo';
@@ -10,10 +10,11 @@ import { focusOn } from '../../../src/platform/announce';
 import { deviceLocale } from '../../../src/platform/locale';
 import { useFocusedDbQuery } from '../../../src/state/dataVersion';
 import { Button } from '../../../src/ui/Button';
+import { EmptyState } from '../../../src/ui/EmptyState';
 import { ConsistencyCalendar } from '../../../src/ui/history/ConsistencyCalendar';
 import { HistoryCard } from '../../../src/ui/history/HistoryCard';
 import { Screen } from '../../../src/ui/Screen';
-import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
+import { Label, ScreenTitle } from '../../../src/ui/Text';
 
 /** Months shown at first, and how many more each Show earlier months adds (R163). */
 const FIRST_MONTHS = 3;
@@ -29,7 +30,7 @@ function readHistory(db: Db) {
  * History (§8.8, R163, R164): the consistency calendar for the month shown (the current month at first; moving it does
  * not move the list), then finished workouts grouped by month, newest first, each a card that opens the workout. The 3
  * newest months with workouts show; a quiet Show earlier months adds 6 more each tap and goes when none are left. With
- * no workouts, a muted line says how History fills. The footer closes the page. It reads only while in sight (R185);
+ * no workouts, a muted line says how History fills and Go to Train is the one action. The footer closes the page. It reads only while in sight (R185);
  * `today` is read again each time it comes into sight, so a screen left open past midnight moves on a day.
  */
 export default function History() {
@@ -75,9 +76,11 @@ export default function History() {
         <ConsistencyCalendar month={month} today={today} onMonthChange={setMonth} />
       </View>
       {months.length === 0 ? (
-        <Body muted style={{ marginTop: 24 }}>
-          Finish a workout and it shows here.
-        </Body>
+        <EmptyState
+          style={{ marginTop: 24 }}
+          text="No workouts yet. Finish one on Train and it shows here, with its day marked on the calendar."
+          action={{ label: 'Go to Train', onPress: () => router.navigate('/') }}
+        />
       ) : (
         <View style={{ marginTop: 32, gap: 32 }}>
           {visible.map((group) => (

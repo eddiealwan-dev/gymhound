@@ -12,6 +12,7 @@ import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
+import { EmptyState } from '../../../src/ui/EmptyState';
 import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
@@ -24,6 +25,12 @@ function leave() {
   if (router.canGoBack()) router.back();
   else router.navigate('/');
 }
+
+/** Under the title while no routine is in use (R403). */
+const PICK_ONE = 'Set one active and Train lines up its next workout.';
+
+/** Over New routine while you have none of your own (R401). */
+const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
 const dayCount = (n: number) => (n === 1 ? '1 day' : `${n} days`);
 
@@ -119,6 +126,7 @@ export default function Routines() {
   const routines = useDbQuery(listRoutines);
   const premade = routines.filter((routine) => routine.isPremade);
   const yours = routines.filter((routine) => !routine.isPremade);
+  const noneActive = !routines.some((routine) => routine.isActive);
   const [blocked, setBlocked] = useState(false);
   const limit = useRoutineLimit();
   const saved = useDbQuery(listSavedWorkouts);
@@ -140,17 +148,23 @@ export default function Routines() {
       {/* Routines is not on the dock, so this is the way back. */}
       <BackLink label="Train" onPress={leave} />
       <ScreenTitle>Routines</ScreenTitle>
+      {/* Until one is in use, say what Set active does (R403): the first run arrives here from Train's Choose a routine. */}
+      {noneActive ? (
+        <Body muted style={{ marginTop: 4 }}>
+          {PICK_ONE}
+        </Body>
+      ) : null}
       {/* The group heading Settings uses, so "Premade" reads as a heading and not as a routine's name. */}
       <Label style={{ marginTop: 24, marginBottom: 8 }}>Premade</Label>
       <View style={{ gap: 8 }}>{premade.map(row)}</View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Yours</Label>
       <View style={{ gap: 8 }}>
-        {yours.map(row)}
+        {yours.length === 0 ? <EmptyState text={YOURS_EMPTY} /> : yours.map(row)}
         <Button label="New routine" variant="secondary" onPress={() => limit.whenRoomFor(() => router.push('/routines/edit/new'))} />
       </View>
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Saved workouts</Label>
       {saved.length === 0 ? (
-        <Body muted>Finish a workout and tap Save as a workout to keep it here.</Body>
+        <EmptyState text="Finish a workout and tap Save as a workout to keep it here." />
       ) : (
         <View style={{ gap: 8 }}>
           {saved.map((w) => (
