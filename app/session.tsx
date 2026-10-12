@@ -52,7 +52,7 @@ function readSession(db: Db) {
 }
 
 /** The question open over the session, if any. Only one at a time. */
-type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed';
+type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed' | 'discard_failed';
 
 /** Back and Music: a 44pt target that never shrinks. */
 const ICON_BUTTON = { width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' } as const;
@@ -299,7 +299,14 @@ export default function Session() {
   const discardNow = () => {
     if (finishing.current) return;
     setAsk(null);
-    discard(db, workout.id);
+    try {
+      discard(db, workout.id);
+    } catch (error) {
+      // As for a failed finish: nothing was deleted, the workout is still active, and a press handler must not throw.
+      console.warn('GymHound could not discard the workout.', error);
+      setAsk('discard_failed');
+      return;
+    }
     toTrain();
   };
 
@@ -401,6 +408,10 @@ export default function Session() {
       {/* An error the finish did not expect: nothing was lost, and the workout is still active. */}
       <Sheet visible={ask === 'finish_failed'} onClose={() => setAsk(null)}>
         <SheetTitle>GymHound couldn't finish this workout. It's still here — try again.</SheetTitle>
+        <Button label="OK" onPress={() => setAsk(null)} />
+      </Sheet>
+      <Sheet visible={ask === 'discard_failed'} onClose={() => setAsk(null)}>
+        <SheetTitle>GymHound couldn't discard this workout. It's still here. Try again.</SheetTitle>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
       {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer.

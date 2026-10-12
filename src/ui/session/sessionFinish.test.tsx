@@ -409,4 +409,22 @@ describe('Discard workout (R78)', () => {
     expect(router.replace).not.toHaveBeenCalled();
     expect(router.back).not.toHaveBeenCalled();
   });
+
+  it('catches an unexpected error: logs it, says the workout is still here, and stays on the session', () => {
+    const boom = new Error('disk I/O error');
+    jest.mocked(discard).mockImplementationOnce(() => {
+      throw boom;
+    });
+    const tree = mount();
+    press(tree, 'Discard workout');
+
+    expect(() => press(tree, 'Discard')).not.toThrow();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toContain(boom);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(["GymHound couldn't discard this workout. It's still here. Try again.", 'OK']));
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    press(tree, 'OK');
+    expect(shownText(tree)).not.toContain("GymHound couldn't discard this workout. It's still here. Try again.");
+  });
 });
