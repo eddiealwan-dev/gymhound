@@ -248,7 +248,7 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
       </View>
       {index < count - 1 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
-          <Body>Superset with next</Body>
+          <Body style={{ flexShrink: 1 }}>Superset with next</Body>
           <Toggle
             accessibilityLabel={`Superset ${name} with next`}
             value={exercise.supersetWithNext}
