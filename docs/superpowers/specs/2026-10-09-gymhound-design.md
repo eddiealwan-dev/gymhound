@@ -252,6 +252,9 @@ A key/value table with JSON values.
 | water_goal_ml | null. Phase 5 (R150): the daily water goal in ml, unset until the user sets one (no health default); 8 fl oz (236.6 ml) to 10,000 ml, checked in ml in both units. An existing install gets the key as null |
 | hint_units_dismissed | false. §18.15 (R407): Train's first-run units line was dismissed. An existing install gets it as false but has a finished workout, so never sees the line |
 | hint_session_dismissed | false. §18.15 (R408): the session's first-run tip was dismissed |
+| trial_started_at | null. §18.19 (R480): when the 7-day full access trial started (epoch ms), set once at a finish |
+| trial_start_workout_id | null. §18.19 (R486): the workout whose finish started the trial |
+| trial_ended_seen | false. §18.19 (R490): Train's "Your full access trial has ended" line was answered |
 
 Indexes: `workouts(status)`, `workouts(local_date)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, `workout_exercises(routine_exercise_id)`, `sets(workout_exercise_id)`, `food_log(local_date)`, `bodyweight(local_date)`, from phase 4 `measurements(kind, local_date)` and `saved_workout_exercises(saved_workout_id)`, and from phase 5 `water_log(local_date)`.
 
@@ -1385,3 +1388,29 @@ The owner asked for a pass so that a new lifter opening an empty app knows what 
 - Empty pills outlined rather than filled, and History's Go to Train.
 - The Rest timer notification line in Settings before and after answering the question, and Open Settings landing on Expo Go's page.
 - Streak and This week at 0 under the first-run card (R400).
+
+### 18.16 Edge-case follow-ups (2026-10-12)
+Four questions the edge-case pass raised. The owner had asked for the work to continue without waiting, so these are the coordinator's rulings for the owner to check on the phone.
+
+- **R420 (open):** a late iCloud copy should never be lost. When a new phone's start gives up waiting for iCloud after 15 seconds, the copy that lands later is a local snapshot nobody restores, and later trims can delete it and the old phone's copies. The ruling is to keep it, pause the trims, and offer a restore in Settings → Backups. It was not built this round (the work was interrupted), and it matters only for a new phone with a slow iCloud, which needs the native build (phase 7). Cost if wrong: a new phone with a slow iCloud starts empty, and the old copy is trimmed after 3 finishes.
+- **R421:** with every snapshot damaged and no live data, the startup error screen offers **Start fresh**. It asks first, renames each damaged snapshot to `.damaged`, sets the empty live file aside, and opens a new empty database. Nothing is deleted, and the error text stays on screen (§12). The screen is `src/ui/StartupError.tsx`. Cost if wrong: someone who could have recovered the files starts again (the files are still on the phone).
+- **R422:** after a field is left, a set row asks for a second look ("Check this number") at an unlikely number: a working weight over 1,000 lb or 450 kg, more than 1.5 times the exercise's best and at least 20 lb or 10 kg heavier, or more than 100 reps. Warmups are never flagged, typing clears it, VoiceOver hears it, and the tick still logs what the row shows (R48). Cost if wrong: a rare honest PR gets a second look.
+- **R423:** after a unit switch, the plate calculator opens at the weight the row shows: a barbell rounds to the nearest weight the plates load, anything else to the nearest 0.5. Before, a 135 lb plan opened at 61.23 kg while the row showed 60 kg. Cost if wrong: none for the log.
+
+### 18.19 Full access trial (2026-10-12)
+The owner asked for a 7-day full-access trial that starts after the first finished workout, with a clear days-left indicator. The rulings are Claude's, for the owner to check.
+
+- **R480:** the trial starts at the first finish after it ships, once per install. It is kept in the database, so a restore keeps it and deleting history doesn't restart it. People who already had workouts get it at their next finish rather than never. Cost if wrong: a lifter with history gets seven more days of Fuel.
+- **R481:** a refused finish ("nothing ticked") and a discard never start it. `startTrialIfDue` runs after the finish has committed, and a failure there is logged and never stops the finish.
+- **R482:** it ends at the same clock time 7 calendar days later. Days left are counted in calendar days as a person reads them: 7 on the day it starts, 1 the day before it ends, and the last day reads "Last day of your trial".
+- **R483:** it grants everything Pro grants. `withTrial` wraps the build's entitlements (free, debug or RevenueCat), so every Pro gate follows with no change of its own, and a timer tells open screens the moment it ends. Cost if wrong: none; a store purchase still wins.
+- **R484:** a clock set back before the start reads as the first day. The trial is always measured from its stored start, so moving the clock can't make it longer.
+- **R485:** Settings → GymHound Pro reads "Full access trial · 5 days left", then "Fuel and as many routines as you like, free until it ends. Nothing is charged.", and **See Pro**. Before the trial, the free text gains "Your next finished workout starts a 7-day full access trial. Nothing to set up."
+- **R486:** Fuel's header shows a small muted chip, "Trial · 5 days left", which VoiceOver reads in full. The summary of the finish that started the trial says "Your 7-day full access trial starts now: Fuel and as many routines as you like. Nothing to set up." with **See what's included** (the paywall).
+- **R487:** Train says nothing about the trial until its last two days, then shows one muted line: "Your full access trial ends tomorrow." or "… ends today at 6:40 PM.", followed by "Then Fuel locks and you can't add more routines. Your routines and food log stay." No red and no countdown pressure.
+- **R488:** it is an in-app unlock, not a store trial. There is no StoreKit or Play introductory offer and no auto-renew, and no line says it will charge or renew. A store introductory offer can be added in RevenueCat later. Cost if wrong: none; App Review allows a free in-app unlock.
+- **R489:** during the trial the paywall still pitches, topped by "5 days left in your full access trial", instead of "Pro is on."
+- **R490:** after it ends, with no Pro, Train shows once: "Your full access trial has ended. Your routines and food log are kept. GymHound Pro brings back Fuel and more routines." with **See Pro** and **Not now**. Either answers it for good (`trial_ended_seen`). The ending itself is the existing lapse (§9): nothing is deleted, and Fuel locks with its data kept.
+- **R491:** the trial's lines are calm. They are muted text, never red, and shown only while the trial is what gives Pro. A purchase or the debug unlock hides them.
+- **R492:** Settings → Developer (shown only where the Pro debug switch is) gains a "Full access trial" control: Off, Day 1, Last day, Ended. Each sets the stored start from now, so every state can be checked on the phone.
+

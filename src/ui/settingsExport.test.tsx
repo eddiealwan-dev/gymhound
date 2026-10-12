@@ -22,6 +22,14 @@ const mockStored = {
   lastSnapshotError: null,
 };
 
+// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
+jest.mock('./pro/TrialLines', () => ({
+  TrialSettingsLine: () => null,
+  TrialChip: () => null,
+  TrainTrialNotice: () => null,
+  TrialStartedNotice: () => null,
+  TrialPitchLine: () => null,
+}));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: () => ({ ...mockStored }), setSetting: jest.fn() }));
 jest.mock('../db/repositories/unitsRepo', () => ({ switchDisplayUnit: jest.fn() }));

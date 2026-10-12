@@ -52,6 +52,12 @@ export type Settings = {
   hintUnitsDismissed: boolean;
   /** §18.15 (R408): the session's first-run tip (the name opens the form demo, ⋯ holds rest and plates) was dismissed. */
   hintSessionDismissed: boolean;
+  /** §18.19 (R480): when the 7-day full access trial started (epoch ms): the first finish once it ships. Null before. */
+  trialStartedAt: number | null;
+  /** §18.19 (R486): the workout whose finish started the trial; its summary says so. */
+  trialStartWorkoutId: string | null;
+  /** §18.19 (R490): Train's one-time "Your full access trial has ended" line was answered. */
+  trialEndedSeen: boolean;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -87,6 +93,9 @@ const KEYS: Record<keyof Settings, string> = {
   lastCloudCopyAt: 'last_cloud_copy_at',
   hintUnitsDismissed: 'hint_units_dismissed',
   hintSessionDismissed: 'hint_session_dismissed',
+  trialStartedAt: 'trial_started_at',
+  trialStartWorkoutId: 'trial_start_workout_id',
+  trialEndedSeen: 'trial_ended_seen',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -125,6 +134,9 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     lastCloudCopyAt: null,
     hintUnitsDismissed: false,
     hintSessionDismissed: false,
+    trialStartedAt: null,
+    trialStartWorkoutId: null,
+    trialEndedSeen: false,
   };
 }
 

@@ -11,19 +11,22 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { caloriesSpoken, gramsSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
+import type { TrialPreset } from '../../src/domain/trial';
 import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
-import { debugUnlockAllowed, entitlementsFor, useEntitlementsState } from '../../src/platform/entitlements';
+import { debugUnlockAllowed, entitlementsFor, useEntitlementsState, useTrialStatus } from '../../src/platform/entitlements';
 import { exportBodyCsv, exportFoodCsv, exportWorkoutsCsv } from '../../src/platform/exportFiles';
 import { playBell } from '../../src/platform/restTimer/bell';
 import { shareFile, snapshotFolderReport, snapshotListing } from '../../src/state/backup';
 import { bumpData, useDataVersion, useDbQuery } from '../../src/state/dataVersion';
+import { setTrialPreset } from '../../src/state/trial';
 import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { HealthSettings } from '../../src/ui/native/HealthSettings';
 import { PlatesEditor } from '../../src/ui/PlatesEditor';
 import { RestNotificationAccess } from '../../src/ui/RestNotificationAccess';
 import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
+import { TrialPitchLine, TrialSettingsLine } from '../../src/ui/pro/TrialLines';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
 import { Segmented } from '../../src/ui/Segmented';
@@ -547,16 +550,19 @@ function ExportSection() {
  */
 function ProSection() {
   const db = useDb();
-  const { isPro, isDebugPro, canRestore, offer, kind } = useEntitlementsState();
+  const { isPro, isDebugPro, canRestore, offer, kind, trialOnly } = useEntitlementsState();
   const { busy, status, run } = useStoreAction();
   const openPaywall = useOpenPaywall();
   const subscribed = kind === 'revenuecat' && canRestore && isPro && !isDebugPro && offer !== null && offer.period !== null;
   return (
     <Section title="GymHound Pro">
-      {isPro ? (
+      {trialOnly ? (
+        <TrialSettingsLine />
+      ) : isPro ? (
         <Body>{isDebugPro ? 'Pro is on for testing.' : 'Pro is on.'}</Body>
       ) : (
         <View style={{ gap: 8 }}>
+          <TrialPitchLine />
           <Body>Free holds one routine of your own. Pro adds more routines and Fuel.</Body>
           <Button label="See Pro" onPress={openPaywall} />
         </View>
@@ -606,7 +612,37 @@ function DeveloperSection() {
           }}
         />
       </View>
+      <TrialDeveloperControls />
     </Section>
+  );
+}
+
+/** The trial's place for phone testing (R492): not started, first day, last day or ended, set from now. */
+const TRIAL_PRESETS: readonly { label: string; value: TrialPreset }[] = [
+  { label: 'Off', value: 'not_started' },
+  { label: 'Day 1', value: 'first_day' },
+  { label: 'Last day', value: 'last_day' },
+  { label: 'Ended', value: 'ended' },
+];
+
+function TrialDeveloperControls() {
+  const db = useDb();
+  const status = useTrialStatus();
+  const current: TrialPreset =
+    status.phase === 'not_started' ? 'not_started' : status.phase === 'ended' ? 'ended' : status.daysLeft === 0 ? 'last_day' : 'first_day';
+  return (
+    <View style={{ gap: 8 }}>
+      <Body>Full access trial</Body>
+      <Segmented
+        label="Full access trial for testing"
+        options={TRIAL_PRESETS}
+        value={current}
+        onChange={(value) => {
+          setTrialPreset(db, value, Date.now());
+          bumpData();
+        }}
+      />
+    </View>
   );
 }
 

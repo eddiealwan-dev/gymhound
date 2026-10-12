@@ -5,6 +5,7 @@ import { createFreeOnlyEntitlements } from './freeOnly';
 import type { AppEntitlements, EntitlementsKind, PurchasesSdk } from './index';
 import { createRevenueCatEntitlements } from './revenuecat';
 import { loadPurchasesSdk } from './revenuecatSdk';
+import { withTrial, type TrialEntitlements } from './trial';
 
 type Env = { expoGo: boolean; apiKey: string | null; debugAllowed: boolean };
 
@@ -47,17 +48,17 @@ export function createEntitlements(
 }
 
 /** The app's one entitlements object and the database it reads, made on first use. */
-let shared: { db: Db; entitlements: AppEntitlements } | null = null;
+let shared: { db: Db; entitlements: TrialEntitlements } | null = null;
 
 /**
  * The app's entitlements, one per app (R126): every screen gets the same object, so when Settings' "Unlock Pro for
  * testing" calls `setDebugUnlock`, what subscribed on another screen hears it. The app opens one database; another one
- * (a test's) gets a fresh object.
+ * (a test's) gets a fresh object. It carries the 7-day full access trial (§18.19), so every Pro gate counts it.
  */
-export function entitlementsFor(db: Db): AppEntitlements {
+export function entitlementsFor(db: Db): TrialEntitlements {
   if (shared === null || shared.db !== db) {
     shared?.entitlements.dispose();
-    shared = { db, entitlements: createEntitlements(db) };
+    shared = { db, entitlements: withTrial(db, createEntitlements(db)) };
   }
   return shared.entitlements;
 }

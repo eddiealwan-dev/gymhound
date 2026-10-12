@@ -7,8 +7,8 @@ import { getSettings, setSetting } from '../db/repositories/settingsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { draftReducer, newDraft } from '../domain/routineDraft';
-import { createRevenueCatEntitlements } from '../platform/entitlements';
-import type { AppEntitlements, PurchasesSdk } from '../platform/entitlements';
+import { createRevenueCatEntitlements, withTrial } from '../platform/entitlements';
+import type { PurchasesSdk, TrialEntitlements } from '../platform/entitlements';
 import { useRoutineLimit } from './RoutineLimit';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,8 +16,16 @@ import { useRoutineLimit } from './RoutineLimit';
 /** A real seeded database, so Settings and the routine limit share what they read. */
 let mockDb: Db;
 /** When set, the app's entitlements object (a store build); otherwise the real one for `mockDb`. */
-let mockEntitlements: AppEntitlements | null = null;
+let mockEntitlements: TrialEntitlements | null = null;
 
+// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
+jest.mock('./pro/TrialLines', () => ({
+  TrialSettingsLine: () => null,
+  TrialChip: () => null,
+  TrainTrialNotice: () => null,
+  TrialStartedNotice: () => null,
+  TrialPitchLine: () => null,
+}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../platform/entitlements/select', () => {
   const actual = jest.requireActual('../platform/entitlements/select');
@@ -157,7 +165,7 @@ describe('Settings: Developer (R126)', () => {
       restore: async () => ({ activeEntitlements: ['pro'] }),
       showManageSubscriptions: async () => {},
     };
-    mockEntitlements = createRevenueCatEntitlements(mockDb, sdk, 'key', true);
+    mockEntitlements = withTrial(mockDb, createRevenueCatEntitlements(mockDb, sdk, 'key', true));
     const tree = mount();
     await act(async () => {});
 

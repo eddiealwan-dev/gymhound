@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { useDb } from '../../db/DbProvider';
 import type { EntitlementsKind, StoreOffer } from './index';
 import { entitlementsFor } from './select';
+import type { TrialView } from './trial';
 
 export type EntitlementsState = {
   isPro: boolean;
@@ -10,6 +11,8 @@ export type EntitlementsState = {
   canRestore: boolean;
   offer: StoreOffer | null;
   kind: EntitlementsKind;
+  /** Pro is on only because of the 7-day full access trial (§18.19). */
+  trialOnly: boolean;
 };
 
 /** Whether Pro is on, from the app's one entitlements object; re-renders when it changes (debug switch, store, lapse). */
@@ -30,7 +33,15 @@ export function useEntitlementsState(): EntitlementsState {
       canRestore: entitlements.canRestore(),
       offer: entitlements.offer(),
       kind: entitlements.kind,
+      trialOnly: entitlements.isTrialOnly(),
     }),
   );
   return useMemo(() => JSON.parse(snapshot) as EntitlementsState, [snapshot]);
+}
+
+/** The full access trial (§18.19), re-read whenever entitlements change: the trial starting, ending or moved for testing. */
+export function useTrialStatus(): TrialView {
+  const entitlements = entitlementsFor(useDb());
+  const snapshot = useSyncExternalStore(entitlements.subscribe, () => JSON.stringify(entitlements.trialStatus()));
+  return useMemo(() => JSON.parse(snapshot) as TrialView, [snapshot]);
 }

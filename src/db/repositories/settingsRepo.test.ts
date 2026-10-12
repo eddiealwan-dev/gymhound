@@ -35,6 +35,9 @@ const SPEC_KEYS = [
   'rest_seconds',
   'seed_version',
   'theme',
+  'trial_ended_seen',
+  'trial_start_workout_id',
+  'trial_started_at',
   'unit',
   'water_goal_ml',
 ];

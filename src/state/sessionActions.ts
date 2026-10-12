@@ -43,6 +43,7 @@ import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTime
 import { takeSnapshotSafely } from './backup';
 import { afterFinish } from './nativeServices';
 import { bumpData } from './dataVersion';
+import { startTrialIfDue } from './trial';
 
 /**
  * What a screen calls to change the session. Each one writes, then bumps the data version so screens read again.
@@ -215,12 +216,15 @@ export function restEnded(db: Db, workoutId: string, endsAt: number): void {
  * Only a finished routine day moves Up next (that is `finishWorkout`'s own rule), so an empty workout never does.
  */
 export function finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked' {
+  const now = Date.now();
   try {
-    finishWorkout(db, workoutId, Date.now());
+    finishWorkout(db, workoutId, now);
   } catch (e) {
     if (e instanceof NothingTickedError) return 'nothing_ticked';
     throw e;
   }
+  // The first finish starts the 7-day full access trial (§18.19); later finishes leave it alone.
+  startTrialIfDue(db, workoutId, now);
   onSurface((surface) => surface.cancel());
   takeSnapshotSafely(db, Date.now());
   // Phase 7: the Health write-out and the iCloud copy, in the background. Nothing in Expo Go (R307, R303).

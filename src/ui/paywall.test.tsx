@@ -19,6 +19,14 @@ const mockPurchase = jest.fn<Promise<PurchaseResult>, []>();
 const mockRestore = jest.fn<Promise<RestoreResult>, []>();
 const mockRefreshOffer = jest.fn();
 
+// The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
+jest.mock('./pro/TrialLines', () => ({
+  TrialSettingsLine: () => null,
+  TrialChip: () => null,
+  TrainTrialNotice: () => null,
+  TrialStartedNotice: () => null,
+  TrialPitchLine: () => null,
+}));
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: function Ionicons() { return null; } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }));
@@ -51,7 +59,7 @@ const RESTORE_FAILED = "Couldn't reach the store. Try again.";
 const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
-  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: MONTHLY, kind: 'revenuecat', ...over };
+  return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, offer: MONTHLY, kind: 'revenuecat', trialOnly: false, ...over };
 }
 
 function render(element: React.ReactElement): ReactTestRenderer {
