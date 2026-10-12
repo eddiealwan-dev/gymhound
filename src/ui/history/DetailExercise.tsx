@@ -1,30 +1,39 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactElement } from 'react';
 import { View } from 'react-native';
-import type { WorkoutDetailExercise } from '../../db/repositories/historyRepo';
+import type { WorkoutDetailExercise, WorkoutDetailSet } from '../../db/repositories/historyRepo';
+import { formatRest } from '../../domain/dates';
 import { historySetText } from '../../domain/history';
 import { MARK_LABELS } from '../../domain/labels';
 import { finishLine, type NextTime } from '../../domain/ruleLine';
-import { setLabels, setName } from '../../domain/setEntry';
-import type { WeightUnit } from '../../domain/types';
+import { spokenRest } from '../../domain/rest';
+import { formatDuration, setLabels, setName } from '../../domain/setEntry';
+import type { LoggingType, WeightUnit } from '../../domain/types';
 import { Body, Display } from '../Text';
 import { useTheme } from '../ThemeProvider';
 
-/**
- * Each exercise's next-time line (`finishLine`), or null. The summary's lines come in workout order, one for each
- * exercise the rule left a weight for, so each is matched to the next exercise of its name.
- */
-export function nextLinesFor(exercises: readonly { name: string }[], next: readonly NextTime[]): (string | null)[] {
-  let k = 0;
+/** Each block's next-time line (`finishLine`), or null when the rule left it none: matched by the block, not the name. */
+export function nextLinesFor(exercises: readonly { workoutExerciseId: string }[], next: readonly NextTime[]): (string | null)[] {
+  const byBlock = new Map(next.map((n) => [n.workoutExerciseId, n]));
   return exercises.map((e) => {
-    if (k < next.length && next[k].name === e.name) return finishLine(next[k++]);
-    return null;
+    const n = byBlock.get(e.workoutExerciseId);
+    return n === undefined ? null : finishLine(n);
   });
 }
 
-/** A set as the screen reader says it: "185 by 5", "Bodyweight by 12", ", RPE 8" for " @ 8". */
-function spokenSet(text: string): string {
-  return text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replace(' @ ', ', RPE ');
+/**
+ * A set as the screen reader says it: "185 by 5", "Bodyweight by 12", "40 seconds", "70 lb by 1 minute 30 seconds",
+ * "2 km, 12 minutes 30 seconds", then ", RPE 8" when it has one.
+ */
+export function spokenSet(set: WorkoutDetailSet, position: number, loggingType: LoggingType, unit: WeightUnit): string {
+  let text = historySetText({ ...set, position, rpe: null }, loggingType, unit);
+  if (set.durationS !== null) {
+    const seconds = Math.max(0, Math.floor(set.durationS));
+    const shown = [formatDuration(seconds), formatRest(seconds)].find((d) => text.endsWith(d));
+    if (shown !== undefined) text = `${text.slice(0, -shown.length)}${spokenRest(seconds)}`;
+  }
+  text = text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replace(' · ', ', ');
+  return set.rpe === null ? text : `${text}, RPE ${set.rpe}`;
 }
 
 /**
@@ -38,7 +47,7 @@ export function DetailExercise({ exercise, unit, nextLine }: { exercise: Workout
   const labels = setLabels(exercise.sets.map((s) => s.setType));
   return (
     <View style={{ paddingVertical: 8, gap: 4 }}>
-      <Display weight={700} style={{ fontSize: 22 }}>
+      <Display weight={700} accessibilityRole="header" style={{ fontSize: 22 }}>
         {exercise.name}
       </Display>
       {exercise.mark !== null && <Body muted style={{ fontSize: 14 }}>{`Something off: ${MARK_LABELS[exercise.mark]}`}</Body>}
@@ -54,7 +63,7 @@ export function DetailExercise({ exercise, unit, nextLine }: { exercise: Workout
         {exercise.sets.map((s, i) => {
           const text = historySetText({ ...s, position: i }, exercise.loggingType, unit);
           const pr = s.prFlags !== 0;
-          const said = [setName(labels[i]), spokenSet(text), ...(pr ? ['personal best'] : [])].join(', ');
+          const said = [setName(labels[i]), spokenSet(s, i, exercise.loggingType, unit), ...(pr ? ['personal best'] : [])].join(', ');
           return (
             <View key={s.id} accessible accessibilityLabel={said} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
               <Body weight={600} muted style={{ minWidth: 24, fontVariant: ['tabular-nums'] }}>

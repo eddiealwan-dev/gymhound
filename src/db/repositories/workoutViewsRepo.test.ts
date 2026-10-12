@@ -151,7 +151,7 @@ describe('getFinishSummary', () => {
       volume: 675,
       setCount: 2,
       // One working set of the four missed: the bench holds at what was lifted.
-      next: [{ name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
+      next: [{ workoutExerciseId: expect.any(String), name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
       // 135 x 5 beats Oct 1's 100 x 5: the heaviest set and the best estimated 1RM.
       prs: [
         { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', kind: 'heaviest', weight: 135, weightUnit: 'lb', reps: 5, durationS: null, localDate: '2026-10-06' },
@@ -205,7 +205,7 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
       .run();
   }
 
-  it('lists each exercise with a rule and a next weight, in workout order, after a real finish', () => {
+  it('lists each exercise with a rule and a next weight, in workout order, with its block, after a real finish', () => {
     const db = seededDb();
     plan(db, 'barbell-overhead-press', 95);
     plan(db, 'cable-triceps-pushdown', 40);
@@ -230,10 +230,10 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     finishWorkout(db, id, OCT_9 + 60 * MINUTE);
 
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
-      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
-      { name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
-      { name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
-      { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
+      { workoutExerciseId: bench.id, name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
+      { workoutExerciseId: ohp.id, name: 'Overhead press', loggingType: 'weighted', outcome: 'held_marked', nextWeight: 95, nextUnit: 'lb', mark: 'pain' },
+      { workoutExerciseId: incline.id, name: 'Incline dumbbell press', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+      { workoutExerciseId: pushdown.id, name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'no_sets', nextWeight: 40, nextUnit: 'lb', mark: null },
     ]);
   });
 
@@ -263,7 +263,7 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     finishWorkout(db, id, OCT_9 + 60 * MINUTE);
 
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
-      { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
+      { workoutExerciseId: expect.any(String), name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', mark: null },
     ]);
   });
 
@@ -277,7 +277,7 @@ describe('getFinishSummary: next time for each exercise (8.5, R64)', () => {
     finishWorkout(db, id, OCT_9 + 60 * MINUTE);
 
     expect(getFinishSummary(db, id, 'lb').next).toEqual([
-      { name: 'Triceps pushdown', loggingType: 'assisted', outcome: 'raised', nextWeight: 35, nextUnit: 'lb', mark: null },
+      { workoutExerciseId: expect.any(String), name: 'Triceps pushdown', loggingType: 'assisted', outcome: 'raised', nextWeight: 35, nextUnit: 'lb', mark: null },
     ]);
   });
 });

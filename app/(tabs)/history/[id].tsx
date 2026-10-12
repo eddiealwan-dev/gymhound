@@ -1,5 +1,5 @@
 import { getLocales } from 'expo-localization';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
@@ -47,11 +47,31 @@ const setCount = (n: number) => (n === 1 ? '1 set' : `${n} sets`);
  * with it and the next-time line, a superset under one bar; then the personal bests (with Share). Actions: **Repeat**
  * (filled, R171), **Edit**, **Save as a workout** and a quiet **Delete workout**. A hidden tab route under History, with
  * no footer (§18.4). It reads on focus only (R185). Opened for an id that isn't a finished workout, it says so.
+ *
+ * A hidden tab stays mounted when it opens another workout, so the screen is keyed by the id: a sheet, a failure line,
+ * "Saved as …" or a held workout never carries over to the next one.
  */
-export default function WorkoutDetailScreen() {
+export default function WorkoutDetailRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <WorkoutDetailScreen key={id} id={id} />;
+}
+
+function WorkoutDetailScreen({ id }: { id: string }) {
   const db = useDb();
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  /** Shown and focused: a delete that finishes after the screen has gone or lost focus doesn't navigate. */
+  const here = useRef(true);
+  /** A Repeat is starting (or has started and opened the session): a second tap does nothing until the screen is back. */
+  const starting = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      here.current = true;
+      starting.current = false;
+      return () => {
+        here.current = false;
+      };
+    }, []),
+  );
   const read = useCallback((d: Db) => {
     const { unit } = getSettings(d);
     return { detail: getWorkoutDetail(d, id, unit), unit };
@@ -83,15 +103,19 @@ export default function WorkoutDetailScreen() {
   };
 
   const repeat = () => {
+    if (starting.current) return;
+    starting.current = true;
     flushAll();
     setFailed(null);
     if (getActiveWorkoutId(db) !== null) {
+      starting.current = false;
       setInProgress(true);
       return;
     }
     try {
       startRepeatWorkout(db, id, Date.now());
     } catch (error) {
+      starting.current = false;
       if (error instanceof ActiveWorkoutExistsError) setInProgress(true);
       else fail(START_FAILED);
       return;
@@ -108,16 +132,19 @@ export default function WorkoutDetailScreen() {
   const remove = () => {
     setAskDelete(false);
     afterSheetCloses(() => {
+      // Held before the delete, whose bump reads again and finds nothing.
+      held.current = detail;
       try {
         deleteHistoryWorkout(db, id);
       } catch {
-        // Nothing was deleted, so the screen stays and a muted line under the buttons says so.
+        // Nothing was deleted, so nothing is held, the screen stays and a muted line under the buttons says so.
+        held.current = null;
         fail(DELETE_FAILED);
         return;
       }
-      held.current = detail;
       announce('Workout deleted.');
-      leave();
+      // Asked for, so it is deleted; but a screen that has gone or been left meanwhile doesn't pull the lifter back.
+      if (here.current) leave();
     });
   };
 

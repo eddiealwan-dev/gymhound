@@ -23,10 +23,21 @@ import { SupersetBar } from './SupersetBar';
 
 let mockId: string;
 let mockCanGoBack: boolean;
+/** Blurs the screen, as leaving it for another does: the focus effect's cleanup. */
+let mockBlur: (() => void) | undefined;
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn(() => mockCanGoBack) },
-  useFocusEffect: jest.fn(),
+  // Focus on mount, blur on unmount, as a screen the navigator shows and then removes.
+  useFocusEffect: (effect: () => (() => void) | undefined) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- inside a mock factory
+    const { useEffect } = require('react') as typeof import('react');
+    useEffect(() => {
+      const cleanup = effect();
+      mockBlur = cleanup;
+      return cleanup;
+    }, [effect]);
+  },
   useLocalSearchParams: () => ({ id: mockId }),
 }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US' }] }));
@@ -68,8 +79,8 @@ function pushA(): WorkoutDetail {
       volume: 12340,
       setCount: 6,
       next: [
-        { name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 190, nextUnit: 'lb', mark: null },
-        { name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we1', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 190, nextUnit: 'lb', mark: null },
+        { workoutExerciseId: 'we3', name: 'Triceps pushdown', loggingType: 'weighted', outcome: 'held', nextWeight: 50, nextUnit: 'lb', mark: null },
       ],
       prs: [
         { exerciseId: 'bench', name: 'Barbell bench press', loggingType: 'weighted', kind: 'heaviest', weight: 185, weightUnit: 'lb', reps: 5, durationS: null, localDate: '2026-10-09' },
@@ -387,13 +398,169 @@ describe('a workout that is not in the history', () => {
 });
 
 describe('nextLinesFor', () => {
-  it("matches the summary's lines to exercises in order, leaving out those without one", () => {
-    const line = (name: string) => ({ name, loggingType: 'weighted' as const, outcome: 'held' as const, nextWeight: 100, nextUnit: 'lb' as const, mark: null });
-    expect(nextLinesFor([{ name: 'Squat' }, { name: 'Plank' }, { name: 'Squat' }], [line('Squat'), line('Squat')])).toEqual([
-      'Squat — holds at 100 lb',
-      null,
-      'Squat — holds at 100 lb',
-    ]);
-    expect(nextLinesFor([{ name: 'Plank' }], [])).toEqual([null]);
+  const line = (workoutExerciseId: string, name: string) => ({ workoutExerciseId, name, loggingType: 'weighted' as const, outcome: 'held' as const, nextWeight: 100, nextUnit: 'lb' as const, mark: null });
+
+  it("puts each of the summary's lines under its own block, leaving out those without one", () => {
+    expect(nextLinesFor([{ workoutExerciseId: 'a' }, { workoutExerciseId: 'b' }], [line('b', 'Plank')])).toEqual([null, 'Plank — holds at 100 lb']);
+    expect(nextLinesFor([{ workoutExerciseId: 'a' }], [])).toEqual([null]);
+  });
+
+  it('with the same exercise twice, a line only the second block has goes under the second', () => {
+    expect(nextLinesFor([{ workoutExerciseId: 'a' }, { workoutExerciseId: 'b' }], [line('b', 'Squat')])).toEqual([null, 'Squat — holds at 100 lb']);
+  });
+});
+
+describe('the same exercise twice in one workout', () => {
+  it('shows the next-time line under the block it belongs to', () => {
+    const detail = pushA();
+    const second = { ...detail.exercises[0], workoutExerciseId: 'we4', note: null, sets: [set({ id: 's7', weight: 135, weightUnit: 'lb', reps: 12 })] };
+    detail.exercises = [detail.exercises[0], detail.exercises[1], second];
+    detail.summary.next = [{ workoutExerciseId: 'we4', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }];
+    jest.mocked(getWorkoutDetail).mockReturnValue(detail);
+    const shown = shownText(mount());
+    const at = shown.indexOf('Barbell bench press — holds at 135 lb');
+    expect(at).toBeGreaterThan(shown.indexOf('135 × 12'));
+    expect(at).toBeGreaterThan(shown.indexOf('Cable fly'));
+  });
+});
+
+describe('VoiceOver', () => {
+  it('says a timed set in words, and each exercise name is a heading', () => {
+    const detail = pushA();
+    detail.exercises = [
+      {
+        workoutExerciseId: 'we9',
+        exerciseId: 'plank',
+        name: 'Plank',
+        loggingType: 'timed',
+        supersetGroup: null,
+        mark: null,
+        note: null,
+        showRpe: false,
+        sets: [set({ id: 't1', durationS: 40 }), set({ id: 't2', durationS: 90, rpe: 9 })],
+      },
+      {
+        workoutExerciseId: 'we10',
+        exerciseId: 'carry',
+        name: 'Farmer carry',
+        loggingType: 'weighted_time',
+        supersetGroup: null,
+        mark: null,
+        note: null,
+        showRpe: false,
+        sets: [set({ id: 't3', weight: 70, weightUnit: 'lb', durationS: 60 })],
+      },
+    ];
+    jest.mocked(getWorkoutDetail).mockReturnValue(detail);
+    const tree = mount();
+    expect(spoken(tree, 'Set 1, 40 seconds')).toHaveLength(1);
+    expect(spoken(tree, 'Set 2, 1 minute 30 seconds, RPE 9')).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 70 lb by 1 minute')).toHaveLength(1);
+    for (const name of ['Plank', 'Farmer carry']) {
+      expect(textNodes(tree, name)[0].props.accessibilityRole).toBe('header');
+    }
+  });
+});
+
+describe('the screen stays mounted across workouts', () => {
+  beforeEach(() => {
+    jest.mocked(getWorkoutDetail).mockImplementation((_db, id) => (id === 'w1' || id === 'w9' ? pushA() : null));
+  });
+
+  it('a new id after a save shows the button again, with no "Saved as" line', () => {
+    const tree = mount();
+    press(tree, 'Save as a workout');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain('Saved as Push A.');
+    mockId = 'w9';
+    act(() => tree.update(<WorkoutDetailRoute />));
+    expect(shownText(tree)).not.toContain('Saved as Push A.');
+    expect(buttons(tree, 'Save as a workout')).toHaveLength(1);
+  });
+
+  it('a failed delete holds nothing, and a new id shows no failure line', () => {
+    jest.mocked(deleteHistoryWorkout).mockImplementation(() => {
+      throw new Error('disk');
+    });
+    const tree = mount();
+    press(tree, 'Delete workout');
+    press(tree, 'Delete');
+    act(() => jest.runAllTimers());
+    expect(shownText(tree)).toContain("Couldn't delete. Try again.");
+    // Nothing was deleted, so nothing is held: a read that finds no workout says so.
+    jest.mocked(getWorkoutDetail).mockImplementation((_db, id) => (id === 'w9' ? pushA() : null));
+    act(() => tree.update(<WorkoutDetailRoute />));
+    expect(shownText(tree)).toContain("This workout isn't in your history.");
+    mockId = 'w9';
+    act(() => tree.update(<WorkoutDetailRoute />));
+    expect(shownText(tree)).toContain('Push A');
+    expect(shownText(tree)).not.toContain("Couldn't delete. Try again.");
+  });
+
+  it('an open sheet does not follow to a new id', () => {
+    const tree = mount();
+    press(tree, 'Delete workout');
+    expect(shownText(tree)).toContain('Delete this workout?');
+    mockId = 'w9';
+    act(() => tree.update(<WorkoutDetailRoute />));
+    expect(shownText(tree)).not.toContain('Delete this workout?');
+  });
+});
+
+describe('leaving during the wait for the sheet to close', () => {
+  it('unmounted: the workout is still deleted, but nothing navigates', () => {
+    const tree = mount();
+    press(tree, 'Delete workout');
+    press(tree, 'Delete');
+    act(() => tree.unmount());
+    act(() => jest.runAllTimers());
+    expect(deleteHistoryWorkout).toHaveBeenCalledWith('db', 'w1');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('out of focus: the workout is still deleted, but nothing navigates', () => {
+    const tree = mount();
+    press(tree, 'Delete workout');
+    press(tree, 'Delete');
+    act(() => mockBlur?.());
+    act(() => jest.runAllTimers());
+    expect(deleteHistoryWorkout).toHaveBeenCalledWith('db', 'w1');
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('Repeat starts once', () => {
+  it('a second tap while it starts does nothing', () => {
+    const tree = mount();
+    const repeatButton = buttons(tree, 'Repeat')[0];
+    act(() => {
+      repeatButton.props.onPress();
+      repeatButton.props.onPress();
+    });
+    expect(startRepeatWorkout).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(shownText(tree)).not.toContain('Workout in progress');
+  });
+
+  it('after a failure it can be tried again', () => {
+    jest.mocked(startRepeatWorkout).mockImplementationOnce(() => {
+      throw new Error('disk');
+    });
+    const tree = mount();
+    press(tree, 'Repeat');
+    press(tree, 'Repeat');
+    expect(startRepeatWorkout).toHaveBeenCalledTimes(2);
+    expect(router.push).toHaveBeenCalledWith('/session');
+  });
+
+  it('after the in-progress sheet it can be tried again', () => {
+    jest.mocked(getActiveWorkoutId).mockReturnValueOnce('active');
+    const tree = mount();
+    press(tree, 'Repeat');
+    press(tree, 'Not now');
+    press(tree, 'Repeat');
+    expect(startRepeatWorkout).toHaveBeenCalledTimes(1);
   });
 });
