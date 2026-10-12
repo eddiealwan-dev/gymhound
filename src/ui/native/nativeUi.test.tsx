@@ -76,6 +76,14 @@ describe('SleepOfferBanner (§17.1, R309)', () => {
     jest.mocked(roughSleepOfferFor).mockResolvedValueOnce(null);
     expect((await mount(<SleepOfferBanner workoutId="w1" />)).toJSON()).toBeNull();
   });
+
+  it('shows nothing, and logs it, when asking Health fails outright', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(roughSleepOfferFor).mockRejectedValueOnce(new Error('database is locked'));
+    expect((await mount(<SleepOfferBanner workoutId="w1" />)).toJSON()).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'database is locked' }));
+    warn.mockRestore();
+  });
 });
 
 describe('HealthSettings (§17.1, R307)', () => {
@@ -93,5 +101,17 @@ describe('HealthSettings (§17.1, R307)', () => {
     expect(sleep.props.value).toBe(false);
     await act(async () => sleep.props.onValueChange(true));
     expect(setHealthSwitch).toHaveBeenCalledWith('db', 'sleep', true, STORE);
+  });
+
+  it('logs a switch that fails outright, and lets it be tried again', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.mocked(setHealthSwitch).mockRejectedValueOnce(new Error('database is locked'));
+    const tree = await mount(<HealthSettings />);
+    const sleep = () => tree.root.find((n) => n.props.accessibilityLabel === 'Read sleep' && typeof n.props.onValueChange === 'function');
+    await act(async () => sleep().props.onValueChange(true));
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'database is locked' }));
+    await act(async () => sleep().props.onValueChange(true));
+    expect(setHealthSwitch).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
   });
 });

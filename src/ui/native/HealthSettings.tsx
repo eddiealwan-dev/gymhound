@@ -39,7 +39,9 @@ export function HealthSettings(): ReactElement | null {
   const onChange = (key: Row['key'], on: boolean) => {
     if (busy) return;
     setBusy(true);
-    void setHealthSwitch(db, key, on, store).finally(() => setBusy(false));
+    setHealthSwitch(db, key, on, store)
+      .catch((error: unknown) => console.warn(`GymHound: the ${store.name} switch could not be changed.`, error))
+      .finally(() => setBusy(false));
   };
 
   return (

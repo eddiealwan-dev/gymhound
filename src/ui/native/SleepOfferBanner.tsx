@@ -31,9 +31,13 @@ export function SleepOfferBanner({ workoutId }: { workoutId: string }): ReactEle
     const store = getHealthStore();
     if (store === null) return;
     let live = true;
-    void roughSleepOfferFor(db, workoutId, store).then((r) => {
-      if (live) setReason(r);
-    });
+    roughSleepOfferFor(db, workoutId, store).then(
+      (r) => {
+        if (live) setReason(r);
+      },
+      // The offer is a nicety: a failure shows none.
+      (error: unknown) => console.warn('GymHound: the Rough sleep offer could not be worked out.', error),
+    );
     return () => {
       live = false;
     };
