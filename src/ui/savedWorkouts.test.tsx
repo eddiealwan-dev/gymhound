@@ -320,6 +320,7 @@ describe('a saved workout: review round 1', () => {
   });
 
   it("Delete with an unexpected error says Couldn't delete. Try again. in a muted line, tells the screen reader and stays", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(deleteSavedWorkout).mockImplementation(() => {
       throw new Error('SQLITE_BUSY');
     });
@@ -333,12 +334,15 @@ describe('a saved workout: review round 1', () => {
     expect(line).toHaveLength(1);
     expect(StyleSheet.flatten(line[0].props.style)).toMatchObject({ color: '#a39d90' });
     expect(mockAnnounce).toHaveBeenCalledWith("Couldn't delete. Try again.");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
     expect(bumpData).not.toHaveBeenCalled();
     expect(router.back).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain('Push A');
   });
 
   it('Rename with an unexpected error says "Couldn\'t save. Try again."', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(renameSavedWorkout).mockImplementation(() => {
       throw new Error('SQLITE_BUSY');
     });
@@ -346,9 +350,12 @@ describe('a saved workout: review round 1', () => {
     press(tree, 'Rename');
     press(tree, 'Save');
     expect(shownText(tree)).toContain("Couldn't save. Try again.");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('Start with an unexpected error says "Couldn\'t start. Try again." and opens nothing', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.mocked(startSavedWorkout).mockImplementation(() => {
       throw new Error('SQLITE_BUSY');
     });
@@ -356,6 +363,8 @@ describe('a saved workout: review round 1', () => {
     expect(() => press(tree, 'Start')).not.toThrow();
     expect(shownText(tree)).toContain("Couldn't start. Try again.");
     expect(router.push).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
     press(tree, 'OK');
     expect(shownText(tree)).not.toContain("Couldn't start. Try again.");
   });

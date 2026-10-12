@@ -94,7 +94,8 @@ export default function SavedWorkoutScreen() {
     setAskDelete(false);
     try {
       deleteSavedWorkout(db, saved.id);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not delete the saved workout.', error);
       // Nothing was deleted, so the screen stays and a muted line under the buttons says so.
       setDeleteFailed(true);
       announce(DELETE_FAILED);

@@ -162,6 +162,7 @@ describe('Stats: Body (R114)', () => {
   });
 
   it("says Couldn't log. Try again. in a muted line when the write fails, tells the screen reader, and keeps the number", () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const tree = mount(<Stats />);
     type(tree, 'Bodyweight, lb', '182.5');
     const insert = jest.spyOn(mockDb, 'insert').mockImplementation(() => {
@@ -173,6 +174,8 @@ describe('Stats: Body (R114)', () => {
     expect(listBodyEntries(mockDb, 'bodyweight')).toEqual([]);
     expect(shownText(tree)).toContain("Couldn't log. Try again.");
     expect(mockAnnounce).toHaveBeenCalledWith("Couldn't log. Try again.");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
     expect(mockAnnounce).not.toHaveBeenCalledWith(expect.stringMatching(/^Logged/));
     expect(field(tree, 'Bodyweight, lb').props.value).toBe('182.5');
     // Typing again clears it.

@@ -80,7 +80,8 @@ function Viewer() {
     let fileName: string | null;
     try {
       fileName = deleteProgressPhoto(db, shown.id);
-    } catch {
+    } catch (error) {
+      console.warn('GymHound could not delete the photo.', error);
       setMessage(DELETE_FAILED);
       announce(DELETE_FAILED);
       return;
