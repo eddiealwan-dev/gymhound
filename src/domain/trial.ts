@@ -118,7 +118,14 @@ export const TRIAL_STARTED_LINE = 'Your 7-day full access trial starts now: ever
 export const TRIAL_ENDED_LINE = 'Your full access trial has ended. Your routines, saved workouts and food log are kept. GymHound Pro brings them back.';
 
 /** The developer controls' presets (R492). */
-export type TrialPreset = 'not_started' | 'first_day' | 'last_day' | 'ended';
+export type TrialPreset = 'free' | 'not_started' | 'first_day' | 'last_day' | 'ended';
+
+/**
+ * The stored start for the Developer control's **Free** (R551): a trial used up long ago (the epoch), so the phone
+ * acts as free from now on and no finished workout starts a trial. Round 10 tested free with "Off", which only meant
+ * "not started", and the next finish started the trial.
+ */
+export const FREE_PRESET_START = 0;
 
 /**
  * The stored start that puts the trial in `preset` at `now`: null (not started); now (the first day, 7 days left); a
@@ -126,6 +133,7 @@ export type TrialPreset = 'not_started' | 'first_day' | 'last_day' | 'ended';
  * (ended).
  */
 export function trialStartForPreset(preset: TrialPreset, now: number): number | null {
+  if (preset === 'free') return FREE_PRESET_START;
   if (preset === 'not_started') return null;
   if (preset === 'first_day') return now;
   if (preset === 'ended') {

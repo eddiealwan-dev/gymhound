@@ -25,7 +25,8 @@ export function startTrialIfDue(db: Db, workoutId: string, now: number): boolean
 export function setTrialPreset(db: Db, preset: TrialPreset, now: number): void {
   setSetting(db, 'trialStartedAt', trialStartForPreset(preset, now));
   setSetting(db, 'trialStartWorkoutId', null);
-  setSetting(db, 'trialEndedSeen', false);
+  // Free acts as a free phone after its trial: the ended notice is already answered.
+  setSetting(db, 'trialEndedSeen', preset === 'free');
   entitlementsFor(db).refreshTrial();
 }
 

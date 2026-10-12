@@ -2,7 +2,7 @@ import { useRef, useState, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { logFood } from '../../db/repositories/foodLogRepo';
-import { entryTotals, type FoodPerServing, kcalProteinText, parseServings, SERVING_CHIPS, servingsFromGrams, servingsText } from '../../domain/fuel';
+import { entryTotals, type FoodPerServing, kcalProteinText, GRAMS_PER_OUNCE, parseServings, SERVING_CHIPS, servingsFromWeight, servingsText } from '../../domain/fuel';
 import { announce } from '../../platform/announce';
 import { deviceLocale } from '../../platform/locale';
 import { bumpData } from '../../state/dataVersion';
@@ -28,12 +28,13 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
   const locale = deviceLocale();
   const [draft, setDraft] = useState(() => servingsText(1, locale));
   const [invalid, setInvalid] = useState(false);
-  /** By servings, or by weight in grams when the serving's weight is known (R548). */
-  const [by, setBy] = useState<'servings' | 'grams'>('servings');
+  /** By servings, or by weight in grams or ounces when the serving's weight is known (R548, R552). */
+  const [by, setBy] = useState<'servings' | 'grams' | 'ounces'>('servings');
   const weighable = food.servingGrams !== null && food.servingGrams > 0;
   /** Logged already: a second tap before the sheet closes logs nothing more. */
   const addedRef = useRef(false);
-  const servings = by === 'grams' ? servingsFromGrams(draft, food.servingGrams) : parseServings(draft);
+  const servings =
+    by === 'grams' ? servingsFromWeight(draft, food.servingGrams, 'g') : by === 'ounces' ? servingsFromWeight(draft, food.servingGrams, 'oz') : parseServings(draft);
   const grams = food.servingGrams === null ? '' : ` (${food.servingGrams.toLocaleString(locale, { maximumFractionDigits: 1 })} g)`;
 
   const change = (text: string) => {
@@ -65,19 +66,27 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
             options={[
               { value: 'servings', label: 'Servings' },
               { value: 'grams', label: 'Grams' },
+              { value: 'ounces', label: 'Ounces' },
             ]}
             value={by}
             onChange={(next) => {
               if (next === by) return;
-              // The same amount, said the other way: 1.5 servings of 85 g reads 127.5 g.
+              // The same amount, said the other way: 1.5 servings of 85 g reads 127.5 g, or 4.5 oz.
               const now = servings ?? 1;
+              const grams = now * (food.servingGrams ?? 0);
               setBy(next);
-              change(next === 'grams' ? servingsText(round1(now * (food.servingGrams ?? 0)), locale) : servingsText(now, locale));
+              change(
+                next === 'grams'
+                  ? servingsText(round1(grams), locale)
+                  : next === 'ounces'
+                    ? servingsText(round1(grams / GRAMS_PER_OUNCE), locale)
+                    : servingsText(now, locale),
+              );
             }}
           />
         ) : null}
         <FuelField
-          label={by === 'grams' ? 'Grams' : 'Servings'}
+          label={by === 'grams' ? 'Grams' : by === 'ounces' ? 'Ounces' : 'Servings'}
           value={draft}
           onChangeText={change}
           onSubmit={add}
@@ -85,7 +94,7 @@ function ServingsContent({ food, localDate, onClose, onAdded, onEdit }: ContentP
           error={invalid ? 'Check this number' : undefined}
         />
         {/* 4pt inset keeps each pill's 4pt hit slop inside the row. */}
-        {by === 'grams' ? null : (
+        {by !== 'servings' ? null : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, margin: -4 }}>
             {SERVING_CHIPS.map((chip) => {
               const chosen = servings === chip.value;

@@ -257,7 +257,7 @@ describe('CheckInCard (R180)', () => {
 
     const t = lines(mount(<CheckInCard today={TODAY} />));
     expect(t).toContain('Week of Oct 5');
-    expect(t).toContain('2 sessions · 5 hard sets · 2,600 lb');
+    expect(t).toContain('2 sessions · 5 sets · 2,600 lb');
     expect(t).toContain('2 personal records'); // the first bench session sets none (R103); the second beats it twice
     expect(t).toContain('Bodyweight 180.8 lb average, −1.2 lb on the week before');
     expect(t).toContain('Under 8 sets: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes');
@@ -268,7 +268,7 @@ describe('CheckInCard (R180)', () => {
     logBench(at(9, 28), 1, 200); // the PRs are set the week before
     logBench(at(10, 6), 1, 100);
     const t = lines(mount(<CheckInCard today={TODAY} />));
-    expect(t).toContain('1 session · 1 hard set · 500 lb');
+    expect(t).toContain('1 session · 1 set · 500 lb');
     expect(t.some((line) => /personal record/.test(line))).toBe(false);
     expect(t).toContain('No bodyweight logged.');
     expect(t).toContain('Under 8 sets: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes');
@@ -296,7 +296,7 @@ describe('CheckInCard (R180)', () => {
     logPlank(at(10, 7));
     const t = lines(mount(<CheckInCard today={TODAY} />));
     expect(t).toContain('1 session');
-    expect(t.some((line) => /hard set|0 lb/.test(line))).toBe(false);
+    expect(t.some((line) => /· \d+ sets?\b|0 lb/.test(line))).toBe(false);
   });
 
   it("lists this week's three things, open, with the bodyweight entry inline", () => {

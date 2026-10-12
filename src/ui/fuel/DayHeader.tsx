@@ -27,7 +27,9 @@ export function DayHeader({
     <View style={{ gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         <StepArrow glyph={'‹'} label="Previous day" disabled={false} onPress={() => onChange(shiftDay(day, -1))} />
-        <Display accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }}>
+        {/* A line height of its own, which grows with the text size: at the largest size the tight metrics of the
+            display face left the foot of "Today" cut off (Round 10). */}
+        <Display accessibilityRole="header" style={{ flex: 1, textAlign: 'center', lineHeight: 36 }}>
           {calendarDayTitle(day, today, locale)}
         </Display>
         <StepArrow glyph={'›'} label="Next day" disabled={atToday} onPress={() => onChange(shiftDay(day, 1) > today ? today : shiftDay(day, 1))} />

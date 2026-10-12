@@ -25,7 +25,7 @@ import { useTheme } from '../ThemeProvider';
  */
 const progressPhotoOnPhone = (fileName: string) => Platform.OS !== 'web' && progressPhotoExists(fileName);
 
-/** "1 session", "2 hard sets": a count and its noun, singular for one. */
+/** "1 session", "2 sets": a count and its noun, singular for one. */
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -41,11 +41,11 @@ function bodyweightLine(checkIn: CheckIn, unit: WeightUnit): string {
   return `${average}, ${change < 0 ? '−' : '+'}${formatBodyValue(shown, unit)} on the week before`;
 }
 
-/** "2 sessions · 5 hard sets · 2,600 lb", leaving out a zero part: a cardio-only week reads "1 session". */
+/** "2 sessions · 5 sets · 2,600 lb", leaving out a zero part: a cardio-only week reads "1 session". The owner asked for "sets", not "hard sets" (Round 10); they are still the done sets that aren't warm-ups. */
 function sessionsLine(checkIn: CheckIn, unit: WeightUnit, locale: string): string {
   if (checkIn.sessions === 0) return 'No workouts.';
   const parts = [count(checkIn.sessions, 'session', 'sessions')];
-  if (checkIn.hardSets > 0) parts.push(count(checkIn.hardSets, 'hard set', 'hard sets'));
+  if (checkIn.hardSets > 0) parts.push(count(checkIn.hardSets, 'set', 'sets'));
   if (checkIn.volume > 0) parts.push(formatVolume(checkIn.volume, unit, locale));
   return parts.join(' · ');
 }

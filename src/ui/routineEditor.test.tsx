@@ -408,7 +408,7 @@ describe('the routine editor: your own routine', () => {
 
     press(tree, 'Back to My split');
     press(tree, 'Discard');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     leaveAndReturn();
 
     expect(shownText(tree)).not.toContain("Couldn't save. Try again.");
@@ -641,7 +641,7 @@ describe('the routine editor: leaving with unsaved changes (R89)', () => {
     expect(androidBack()).toBe(true);
     expect(shownText(tree)).toContain('Discard changes?');
     press(tree, 'Discard');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 
@@ -679,13 +679,13 @@ describe('the routine editor: leaving with unsaved changes (R89)', () => {
     press(tree, 'Keep editing');
     expect(shownText(tree)).not.toContain('Discard changes?');
     expect(field(tree, 'Routine name').props.value).toBe('My new split');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.back).not.toHaveBeenCalled();
 
     press(tree, 'Back to My split');
     press(tree, 'Discard');
     expect(router.back).not.toHaveBeenCalled();
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.back).toHaveBeenCalledTimes(1);
     // The editor stays behind in the tabs: it no longer holds the changes it discarded.
     expect(field(tree, 'Routine name').props.value).toBe('My split');
@@ -714,7 +714,7 @@ describe('the routine editor: leaving with unsaved changes (R89)', () => {
     expect(shownText(tree)).toContain('Discard changes?');
 
     press(tree, 'Discard');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(toTrain).toHaveBeenCalledTimes(2);
   });
 
@@ -892,7 +892,7 @@ describe('the routine editor: re-reading on focus (review round 1)', () => {
     press(tree, 'Back to My split');
     expect(shownText(tree)).toContain('Discard changes?');
     press(tree, 'Discard');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(field(tree, 'Bench reps from').props.value).toBe('5');
 
     jest.mocked(router.back).mockClear();

@@ -10,12 +10,38 @@ type SheetProps = { visible: boolean; onClose: () => void; children: ReactNode }
 /** The backdrop that always stays above a sheet, however tall its content, so a tap outside it can still close it. */
 const BACKDROP_STRIP = 48;
 
+/** The longest a sheet is waited for, should iOS not say it has gone. */
+const SHEET_GONE_MS = 1000;
+
+/** What waits for a sheet to finish going away. */
+let waiting: (() => void)[] = [];
+
+/** A sheet has finished going away (iOS's `onDismiss`): what waited for it runs now. */
+function sheetGone(): void {
+  const run = waiting;
+  waiting = [];
+  for (const go of run) go();
+}
+
 /**
- * iOS cannot present a screen or another sheet while a sheet is still going away, so the next one opens a moment
- * after the first closes. Elsewhere there is nothing to wait for.
+ * iOS cannot present a screen, another sheet or the share sheet while a sheet is still going away: tried too soon,
+ * nothing appears and nothing says so (Round 10: Share routine from ⋯ did nothing). So `go` runs once iOS says the
+ * sheet has gone, or after a second should it not say. Elsewhere there is nothing to wait for.
  */
 export function afterSheetCloses(go: () => void): void {
-  setTimeout(go, Platform.OS === 'ios' ? 400 : 0);
+  if (Platform.OS !== 'ios') {
+    setTimeout(go, 0);
+    return;
+  }
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    waiting = waiting.filter((w) => w !== once);
+    go();
+  };
+  waiting.push(once);
+  setTimeout(once, SHEET_GONE_MS);
 }
 
 /**
@@ -36,7 +62,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
   }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={sheetGone} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
         <Pressable accessible accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ flex: 1 }} />
         <View

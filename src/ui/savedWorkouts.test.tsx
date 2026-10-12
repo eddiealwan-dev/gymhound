@@ -39,6 +39,9 @@ jest.mock('../db/repositories/savedWorkoutsRepo', () => ({
 }));
 /** Saved workouts are Pro (§18.21, R522): Pro by default here; the free gate has its own test. */
 let mockPro = true;
+afterEach(() => {
+  mockPro = true;
+});
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
@@ -170,10 +173,13 @@ describe('Routines: Saved workouts (R122)', () => {
     expect(router.push).toHaveBeenCalledWith('/session');
   });
 
-  it('free: Start says saved workouts are Pro and starts nothing (§18.21, R522)', () => {
+  it('free: the pill says Pro, and tapping it says saved workouts are Pro and starts nothing (§18.21, R522, Round 10)', () => {
     mockPro = false;
     const tree = mount(<Routines />);
-    press(tree, 'Start Push A');
+    const pills = tree.root.findAllByType(Button).filter((b) => /^(Legs|Push A) is part of GymHound Pro$/.test(b.props.accessibilityLabel ?? ''));
+    expect(pills.map((b) => b.props.label)).toEqual(['Pro', 'Pro']);
+    expect(buttons(tree, 'Start')).toHaveLength(0);
+    press(tree, 'Push A is part of GymHound Pro');
     expect(startSavedWorkout).not.toHaveBeenCalled();
     expect(JSON.stringify(tree.toJSON())).toContain('Saved workouts are part of GymHound Pro.');
     mockPro = true;
@@ -190,7 +196,7 @@ describe('Routines: Saved workouts (R122)', () => {
     expect(shown).toContain('Workout in progress');
     expect(shown).toContain('Finish or discard the workout in progress before starting another.');
     press(tree, 'Resume');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledWith('/session');
   });
 
@@ -292,7 +298,7 @@ describe('a saved workout (R122)', () => {
     press(tree, 'Delete', 1);
     expect(deleteSavedWorkout).toHaveBeenCalledWith('db', 'push-a');
     expect(bumpData).toHaveBeenCalled();
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.back).toHaveBeenCalled();
   });
 
@@ -326,7 +332,7 @@ describe('a saved workout: review round 1', () => {
     const shown = shownText(tree);
     expect(shown).not.toContain("That saved workout isn't here.");
     expect(shown).toContain('Push A');
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 
@@ -338,7 +344,7 @@ describe('a saved workout: review round 1', () => {
     const tree = mount(<SavedWorkoutScreen />);
     press(tree, 'Delete');
     press(tree, 'Delete', 1);
-    act(() => void jest.advanceTimersByTime(400));
+    act(() => void jest.advanceTimersByTime(1000));
 
     expect(shownText(tree)).not.toContain('Delete Push A?');
     const line = tree.root.findAll((n) => n.type === Text && n.props.children === "Couldn't delete. Try again.");

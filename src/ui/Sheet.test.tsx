@@ -1,8 +1,8 @@
-import { Keyboard, ScrollView, Text, View } from 'react-native';
+import { Keyboard, Modal, ScrollView, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { Button } from './Button';
-import { ConfirmSheet, Sheet } from './Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from './Sheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -165,5 +165,37 @@ describe('ConfirmSheet: which answer is the primary one', () => {
     act(() => backdrop(tree).props.onPress());
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('afterSheetCloses (Round 10: the share sheet after ⋯)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('runs once iOS says the sheet has gone, and only once', () => {
+    const go = jest.fn();
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <Sheet visible onClose={() => {}}>
+          <Text>Hi</Text>
+        </Sheet>,
+      );
+    });
+    afterSheetCloses(go);
+    expect(go).not.toHaveBeenCalled();
+    act(() => tree.root.findByType(Modal).props.onDismiss());
+    expect(go).toHaveBeenCalledTimes(1);
+    act(() => void jest.advanceTimersByTime(1000));
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs after a second when iOS doesn't say", () => {
+    const go = jest.fn();
+    afterSheetCloses(go);
+    act(() => void jest.advanceTimersByTime(999));
+    expect(go).not.toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(1));
+    expect(go).toHaveBeenCalledTimes(1);
   });
 });

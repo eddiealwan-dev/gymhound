@@ -14,6 +14,7 @@ import {
   rescaleEntry,
   SERVING_CHIPS,
   servingsFromGrams,
+  servingsFromWeight,
   servingsText,
   targetsFor,
   validateCustomFood,
@@ -373,5 +374,14 @@ describe('servingsFromGrams (R548)', () => {
     expect(servingsFromGrams('abc', 85)).toBeNull();
     expect(servingsFromGrams('100', null)).toBeNull();
     expect(servingsFromGrams('100000', 85)).toBeNull();
+  });
+});
+
+describe('servingsFromWeight (R552)', () => {
+  it('takes ounces too: 6 oz of a 3 oz (85 g) serving is 2 servings', () => {
+    expect(servingsFromWeight('6', 85, 'oz')).toBe(2);
+    expect(servingsFromWeight('1', 28.35, 'oz')).toBe(1);
+    expect(servingsFromWeight('170', 85, 'g')).toBe(2);
+    expect(servingsFromWeight('0', 85, 'oz')).toBeNull();
   });
 });

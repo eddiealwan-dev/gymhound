@@ -60,9 +60,20 @@ export function parseServings(text: string): number | null {
  * servings are, then within the same bounds. Null when it isn't a weight, or the food has no serving weight.
  */
 export function servingsFromGrams(text: string, servingGrams: number | null): number | null {
+  return servingsFromWeight(text, servingGrams, 'g');
+}
+
+/** Grams in an ounce (avoirdupois). */
+export const GRAMS_PER_OUNCE = 28.349523125;
+
+/**
+ * Servings from a typed weight in grams or ounces (R548, R552: the owner asked for ounces too), as `servingsFromGrams`.
+ */
+export function servingsFromWeight(text: string, servingGrams: number | null, unit: 'g' | 'oz'): number | null {
   if (servingGrams === null || !(servingGrams > 0)) return null;
-  const grams = parseDecimal(text);
-  if (grams === null || grams <= 0) return null;
+  const amount = parseDecimal(text);
+  if (amount === null || amount <= 0) return null;
+  const grams = unit === 'oz' ? amount * GRAMS_PER_OUNCE : amount;
   const servings = round2(grams / servingGrams);
   return servings > 0 && servings <= MAX_SERVINGS ? servings : null;
 }

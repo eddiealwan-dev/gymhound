@@ -13,7 +13,7 @@ import { Button } from '../../../src/ui/Button';
 import { EmptyState } from '../../../src/ui/EmptyState';
 import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { RoutineOptionsSheet, useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
-import { canUseRoutine } from '../../../src/domain/routineLimit';
+import { canUseRoutine, canUseSavedWorkouts } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
@@ -112,7 +112,7 @@ const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`)
  * A saved workout (R122): its name and how many exercises, which open its detail, and Start as a compact pill beside
  * it, as Set active is on a routine.
  */
-function SavedRow({ saved, onStart }: { saved: SavedWorkoutSummary; onStart: () => void }) {
+function SavedRow({ saved, locked, onStart }: { saved: SavedWorkoutSummary; locked: boolean; onStart: () => void }) {
   const { colors } = useTheme();
   const count = exerciseCount(saved.exerciseCount);
   return (
@@ -142,7 +142,14 @@ function SavedRow({ saved, onStart }: { saved: SavedWorkoutSummary; onStart: () 
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
-      <Button label="Start" variant="secondary" size="compact" accessibilityLabel={`Start ${saved.name}`} onPress={onStart} />
+      {/* Saved workouts are Pro (R521): without it the pill says so, as a Pro program's does (Round 10 note). */}
+      <Button
+        label={locked ? 'Pro' : 'Start'}
+        variant="secondary"
+        size="compact"
+        accessibilityLabel={locked ? `${saved.name} is part of GymHound Pro` : `Start ${saved.name}`}
+        onPress={onStart}
+      />
     </View>
   );
 }
@@ -206,7 +213,7 @@ export default function Routines() {
       ) : (
         <View style={{ gap: 8 }}>
           {saved.map((w) => (
-            <SavedRow key={w.id} saved={w} onStart={() => starter.start(w.id)} />
+            <SavedRow key={w.id} saved={w} locked={!canUseSavedWorkouts(pro)} onStart={() => starter.start(w.id)} />
           ))}
         </View>
       )}

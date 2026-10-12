@@ -693,4 +693,16 @@ describe('Servings by weight (R548)', () => {
     press(tree, 'Add');
     expect(listEntries(mockDb, TODAY)[0]).toMatchObject({ foodId: EGG, servings: 2 });
   });
+
+  it('and in ounces: switching keeps the amount (R552)', () => {
+    const tree = mount();
+    type(tree, 'Search foods', 'egg, large');
+    press(tree, 'Egg, large, 1 large, 72 calories, 6 grams protein');
+    press(tree, 'Ounces');
+    expect(field(tree, 'Ounces').props.value).toBe('1.8');
+    type(tree, 'Ounces', '3.53');
+    expect(allText(tree)).toContain('144 kcal · 13 g protein');
+    press(tree, 'Add');
+    expect(listEntries(mockDb, TODAY)[0]).toMatchObject({ foodId: EGG, servings: 2 });
+  });
 });

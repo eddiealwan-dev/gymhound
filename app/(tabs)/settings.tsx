@@ -11,7 +11,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { caloriesSpoken, gramsSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
-import type { TrialPreset } from '../../src/domain/trial';
+import { FREE_PRESET_START, type TrialPreset } from '../../src/domain/trial';
 import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
 import { debugUnlockAllowed, entitlementsFor, useEntitlementsState, useTrialStatus } from '../../src/platform/entitlements';
@@ -632,9 +632,11 @@ function BuildLine() {
   );
 }
 
-/** The trial's place for phone testing (R492): not started, first day, last day or ended, set from now. */
+/** The trial's place for phone testing (R492, R551): free (never starts), not started, first day, last day or ended, set from now. */
 const TRIAL_PRESETS: readonly { label: string; value: TrialPreset }[] = [
-  { label: 'Off', value: 'not_started' },
+  // Free never starts a trial (R551); Not started starts it at the next finished workout, as a new install does.
+  { label: 'Free', value: 'free' },
+  { label: 'Not started', value: 'not_started' },
   { label: 'Day 1', value: 'first_day' },
   { label: 'Last day', value: 'last_day' },
   { label: 'Ended', value: 'ended' },
@@ -644,7 +646,15 @@ function TrialDeveloperControls() {
   const db = useDb();
   const status = useTrialStatus();
   const current: TrialPreset =
-    status.phase === 'not_started' ? 'not_started' : status.phase === 'ended' ? 'ended' : status.daysLeft === 0 ? 'last_day' : 'first_day';
+    status.phase === 'not_started'
+      ? 'not_started'
+      : status.startedAt === FREE_PRESET_START
+        ? 'free'
+        : status.phase === 'ended'
+          ? 'ended'
+          : status.daysLeft === 0
+            ? 'last_day'
+            : 'first_day';
   return (
     <View style={{ gap: 8 }}>
       <Body>Full access trial</Body>
