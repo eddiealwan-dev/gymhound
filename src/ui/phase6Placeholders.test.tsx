@@ -1,12 +1,12 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import TabsLayout from '../../app/(tabs)/_layout';
-import { ConsistencyCalendar } from './history/ConsistencyCalendar';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * Phase 6 Task 1 (R172, R187): the stubs later tasks fill draw nothing; the placeholder routes have all been filled.
+ * Phase 6 Task 1 (R172, R186, R187): the routes and permissions Task 1 set up. Its stubs and placeholder routes have all
+ * been filled by later tasks, which test them.
  */
 
 /** The screens each `Tabs.Screen` registered, by name, with its options. */
@@ -40,14 +40,6 @@ function render(element: React.ReactElement): ReactTestRenderer {
   });
   return tree;
 }
-
-describe('the stubs draw nothing until their task fills them', () => {
-  it.each([
-    ['ConsistencyCalendar', <ConsistencyCalendar key="k" month="2026-10" today="2026-10-11" onMonthChange={() => {}} />],
-  ])('%s', (_name, element) => {
-    expect(render(element).toJSON()).toBeNull();
-  });
-});
 
 describe('the tabs layout', () => {
   it.each(['history/[id]', 'history/edit/[id]', 'lifts', 'lift/[id]', 'photos'])(
