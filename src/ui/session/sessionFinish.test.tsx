@@ -38,7 +38,8 @@ jest.mock('../ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const FAILED = "GymHound couldn't finish this workout. It's still here — try again.";
+const FAILED = "Couldn't finish";
+const STILL_HERE = 'Your workout is still here, as you left it. Try again.';
 
 function mount() {
   let tree!: ReturnType<typeof create>;
@@ -121,7 +122,7 @@ describe('the session screen when Finish is pressed (R32)', () => {
 
     press(tree, 'Finish');
 
-    expect(shownText(tree)).toContain('Nothing is ticked yet.');
+    expect(shownText(tree)).toContain('No sets completed yet');
     expect(router.replace).not.toHaveBeenCalled();
   });
 
@@ -380,7 +381,7 @@ describe('the session screen after Finish anyway, while the finish waits for the
     const finishAnyway = askAndGetFinishAnyway(tree);
     act(() => finishAnyway());
     act(() => void jest.runAllTimers());
-    expect(shownText(tree)).toContain('Nothing is ticked yet.');
+    expect(shownText(tree)).toContain('No sets completed yet');
 
     // The sheet's own Discard workout (the page's is quiet).
     const sheetDiscard = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Discard workout' && b.props.variant === 'secondary');
@@ -422,9 +423,9 @@ describe('Discard workout (R78)', () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]).toContain(boom);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(["GymHound couldn't discard this workout. It's still here. Try again.", 'OK']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(["Couldn't discard", STILL_HERE, 'OK']));
     expect(router.dismissTo).not.toHaveBeenCalled();
     press(tree, 'OK');
-    expect(shownText(tree)).not.toContain("GymHound couldn't discard this workout. It's still here. Try again.");
+    expect(shownText(tree)).not.toContain("Couldn't discard");
   });
 });

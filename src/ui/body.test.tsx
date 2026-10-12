@@ -422,7 +422,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
   it('says "That isn\'t here." for a kind that is not one', () => {
     mockKind = 'ankles';
     const tree = mount(<BodyDetail />);
-    expect(shownText(tree)).toContain("That isn't here.");
+    expect(shownText(tree)).toContain("That measurement isn't here.");
     expect(tree.root.findAllByType(TextInput)).toHaveLength(0);
     press(tree, 'Back to Stats');
     expect(router.back).toHaveBeenCalled();

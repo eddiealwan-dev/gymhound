@@ -74,7 +74,7 @@ function PlateCalculator({ ex, onClose }: { ex: WorkoutExerciseView; onClose: ()
         ) : (
           <View style={{ gap: 4 }}>
             {load.target < bar ? (
-              <Body weight={600}>Below the bar: just the bar.</Body>
+              <Body weight={600}>That's less than the bar. Load no plates.</Body>
             ) : (
               <Body weight={600} style={{ fontVariant: ['tabular-nums'] }}>
                 {load.perSide.length > 0 ? `Per side: ${load.perSide.join(' · ')}` : 'Just the bar.'}

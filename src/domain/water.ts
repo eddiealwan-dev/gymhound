@@ -70,7 +70,7 @@ export function waterAmountText(ml: number, unit: WaterUnit): string {
   return `${Number(fromMl(ml, unit).toFixed(unit === 'fl_oz' ? 1 : 0))}`;
 }
 
-/** A typed amount, in ml: 1–3,000 ml or 0.1–100 fl oz. Anything else is null ("Check this number"). */
+/** A typed amount, in ml: 1â€“3,000 ml or 0.1â€“100 fl oz. Anything else is null ("Check this number"). */
 export function parseWaterAmount(text: string, unit: WaterUnit): number | null {
   const n = parseDecimal(text);
   if (n === null) return null;
@@ -84,7 +84,7 @@ const GOAL_MAX_ML = 10000;
 
 /**
  * A typed daily goal, in ml: 8 fl oz to 10,000 ml, checked in ml in both units, so a goal set in one unit is accepted
- * again as the field shows it in the other (237–10,000 ml, 8–338.1 fl oz). Anything else is null ("Check this number").
+ * again as the field shows it in the other (237â€“10,000 ml, 8â€“338.1 fl oz). Anything else is null ("Check this number").
  */
 export function parseWaterGoal(text: string, unit: WaterUnit): number | null {
   const n = parseDecimal(text);

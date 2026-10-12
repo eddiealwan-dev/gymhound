@@ -396,7 +396,7 @@ describe('a workout that is not in the history', () => {
   it('says so, with the way back and no actions', () => {
     mockId = 'gone';
     const tree = mount();
-    expect(shownText(tree)).toContain("This workout isn't in your history.");
+    expect(shownText(tree)).toContain("That workout isn't here.");
     expect(spoken(tree, 'Back to History')).toHaveLength(1);
     expect(buttons(tree, 'Repeat')).toHaveLength(0);
     expect(buttons(tree, 'Delete workout')).toHaveLength(0);
@@ -496,7 +496,7 @@ describe('the screen stays mounted across workouts', () => {
     // Nothing was deleted, so nothing is held: a read that finds no workout says so.
     jest.mocked(getWorkoutDetail).mockImplementation((_db, id) => (id === 'w9' ? pushA() : null));
     act(() => tree.update(<WorkoutDetailRoute />));
-    expect(shownText(tree)).toContain("This workout isn't in your history.");
+    expect(shownText(tree)).toContain("That workout isn't here.");
     mockId = 'w9';
     act(() => tree.update(<WorkoutDetailRoute />));
     expect(shownText(tree)).toContain('Push A');

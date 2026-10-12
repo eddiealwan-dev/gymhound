@@ -46,7 +46,7 @@ const SET_TYPES: { type: SetType; label: string }[] = [
 const MARKS = Object.keys(MARK_LABELS) as ExerciseMark[];
 
 /** Said, and shown over Save, when a ticked set lacks a value its type needs. */
-const SETS_NEED_VALUES = 'Some ticked sets need a value.';
+const SETS_NEED_VALUES = 'Some completed sets need a value.';
 
 /**
  * What Save would drop that may have been meant (R195), in plain words: an unticked set holding a value ("Bench press set
@@ -57,13 +57,13 @@ export function droppedLines(draft: WorkoutDraft): string[] {
   const lines: string[] = [];
   for (const e of draft.exercises) {
     if (!e.sets.some((s) => s.done)) {
-      lines.push(`${e.name} has no ticked sets, so it leaves this workout.`);
+      lines.push(`${e.name} has no completed sets, so it leaves this workout.`);
       continue;
     }
     const labels = setLabels(e.sets.map((s) => s.setType));
     e.sets.forEach((s, i) => {
       const holds = [s.weight, s.reps, s.rpe, s.durationS, s.distance].some((v) => v !== null);
-      if (!s.done && holds) lines.push(`${e.name} ${setName(labels[i]).toLowerCase()} isn't ticked.`);
+      if (!s.done && holds) lines.push(`${e.name} ${setName(labels[i]).toLowerCase()} isn't complete.`);
     });
   }
   return lines;
@@ -199,7 +199,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
         <BackLink label="Cancel" accessibilityLabel="Cancel" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/history'))} />
         <ScreenTitle>Edit workout</ScreenTitle>
         <Body muted style={{ marginTop: 4 }}>
-          This workout isn&apos;t in your history.
+          That workout isn&apos;t here.
         </Body>
       </Screen>
     );
@@ -426,7 +426,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
       <ConfirmSheet
         visible={nothingLeft}
         title="Nothing would be left"
-        body="Untick fewer sets, or delete the workout."
+        body="Keep at least one set complete, or delete the workout."
         confirmLabel="Delete workout"
         cancelLabel="Keep editing"
         primary="cancel"

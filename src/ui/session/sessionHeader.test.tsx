@@ -188,7 +188,7 @@ describe('the session header (spec 18.6)', () => {
     viewWith([{ done: false }]);
     const tree = mount();
     pressFinish(tree);
-    expect(shownText(tree)).toContain('Nothing is ticked yet.');
+    expect(shownText(tree)).toContain('No sets completed yet');
     expect(router.replace).not.toHaveBeenCalled();
 
     viewWith([{ done: true }]);

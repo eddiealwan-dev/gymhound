@@ -107,7 +107,7 @@ const NEED_HINT: Record<FieldKey, string> = {
 };
 
 /** The VoiceOver hint on a field showing a suggestion (a target or last time's value) rather than a value. */
-export const SUGGESTED_HINT = 'Suggested. Tick the set to log it.';
+export const SUGGESTED_HINT = 'Suggested. Complete the set to log it.';
 
 /**
  * How a set field looks (spec 18.6): a suggestion is faint, light and dashed on no fill; a typed or saved value (or an

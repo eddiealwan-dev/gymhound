@@ -1448,3 +1448,12 @@ The owner asked for a 7-day full-access trial that starts after the first finish
 - **R491:** the trial's lines are calm. They are muted text, never red, and shown only while the trial is what gives Pro. A purchase or the debug unlock hides them.
 - **R492:** Settings → Developer (shown only where the Pro debug switch is) gains a "Full access trial" control: Off, Day 1, Last day, Ended. Each sets the stored start from now, so every state can be checked on the phone.
 
+### 18.20 Microcopy pass (2026-10-12)
+A read of every on-screen sentence, button label, confirmation sheet and error line, against PRODUCT.md's voice (plain short sentences, straight apostrophes, say what will happen).
+
+- **R500:** "tick" is gone from the words people see, following the owner's Round 4 and Round 7 notes ("Use incomplete sets"; "Add weight to complete set"). A set is "complete". The Finish sheet reads "No sets completed yet"; History's editor reads "Some completed sets need a value.", "{name} has no completed sets, so it leaves this workout." and "Keep at least one set complete, or delete the workout."; History's not-ready lines match the session ("Add weight to complete set"); Replace says "Its completed sets will be cleared."; removing a done set says "It's complete. What it logged will be deleted."; a suggested field tells VoiceOver "Suggested. Complete the set to log it." The code keeps its own word for it (`tick`).
+- **R501:** a failure sheet is a short title with what to do under it, like every other sheet: "Couldn't finish" or "Couldn't discard", then "Your workout is still here, as you left it. Try again." Before, the whole sentence was the title, and the two used different punctuation.
+- **R502:** a missing item says "That {thing} isn't here.": the workout in History and its editor, and a body measurement (which said only "That isn't here.").
+- **R503:** the plate calculator, for a weight under the bar, says "That's less than the bar. Load no plates." (it said "Below the bar: just the bar.").
+- **Checked, unchanged:** button labels are consistent (Delete / Keep, Discard / Keep editing, Remove / Keep, Resume / Not now). Every failure line reads "Couldn't {verb}. Try again." There are no curly quotes or exclamation marks in on-screen text. "OK" stays only where a sheet just reports something.
+

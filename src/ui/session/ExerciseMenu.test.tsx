@@ -155,7 +155,7 @@ describe('ExerciseMenu: Replace asks first when the exercise has ticked sets (R3
     afterSheetCloses();
 
     const text = shownText(tree);
-    expect(text).toEqual(expect.arrayContaining(['Replace Bench Press?', 'Its ticked sets will be cleared.', 'Replace', 'Keep']));
+    expect(text).toEqual(expect.arrayContaining(['Replace Bench Press?', 'Its completed sets will be cleared.', 'Replace', 'Keep']));
     expect(router.push).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -257,7 +257,7 @@ describe('ExerciseMenu: the plate calculator (Task 20)', () => {
     expect(shownText(tree)).toEqual(expect.arrayContaining(['Per side: 45 · 25 · 2.5', 'Loads 190 lb']));
 
     act(() => field().props.onChangeText('30'));
-    expect(shownText(tree)).toContain('Below the bar: just the bar.');
+    expect(shownText(tree)).toContain("That's less than the bar. Load no plates.");
   });
 });
 

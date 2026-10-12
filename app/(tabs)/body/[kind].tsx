@@ -97,7 +97,7 @@ export default function BodyDetail() {
       <Screen>
         <BackLink label="Stats" onPress={toStats} />
         <Body muted style={{ marginTop: 8 }}>
-          That isn't here.
+          That measurement isn't here.
         </Body>
       </Screen>
     );

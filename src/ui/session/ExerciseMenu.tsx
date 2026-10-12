@@ -391,7 +391,7 @@ export function ExerciseMenu({ exercises, exerciseId, initialPanel, onClose }: P
       <ConfirmSheet
         visible={ex !== null && panel === 'confirmReplace'}
         title={`Replace ${ex?.name ?? ''}?`}
-        body="Its ticked sets will be cleared."
+        body="Its completed sets will be cleared."
         confirmLabel="Replace"
         cancelLabel="Keep"
         onConfirm={openReplacePicker}

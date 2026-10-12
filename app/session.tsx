@@ -59,6 +59,9 @@ function readSession(db: Db) {
 type Ask = 'nothing_ticked' | 'confirm_finish' | 'discard' | 'finish_failed' | 'discard_failed';
 
 /** Back and Music: a 44pt target that never shrinks. */
+/** Under a short "Couldn't finish" or "Couldn't discard" title: nothing was lost, and what to do. */
+const STILL_HERE = 'Your workout is still here, as you left it. Try again.';
+
 /** What an empty workout says over Add exercise (R406). */
 const NO_EXERCISES = 'No exercises yet. Add one and it shows here, ready to log.';
 
@@ -429,7 +432,7 @@ export default function Session() {
       />
       {/* Nothing ticked: the finish is refused. Keep logging is the safe answer, so it is the primary button. */}
       <Sheet visible={ask === 'nothing_ticked'} onClose={() => setAsk(null)}>
-        <SheetTitle>Nothing is ticked yet.</SheetTitle>
+        <SheetTitle>No sets completed yet</SheetTitle>
         <View style={{ gap: 8 }}>
           <Button label="Keep logging" onPress={() => setAsk(null)} />
           {/* Discarding deletes what was typed, so it still asks first. */}
@@ -438,11 +441,11 @@ export default function Session() {
       </Sheet>
       {/* An error the finish did not expect: nothing was lost, and the workout is still active. */}
       <Sheet visible={ask === 'finish_failed'} onClose={() => setAsk(null)}>
-        <SheetTitle>GymHound couldn't finish this workout. It's still here — try again.</SheetTitle>
+        <SheetTitle subtitle={STILL_HERE}>Couldn't finish</SheetTitle>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
       <Sheet visible={ask === 'discard_failed'} onClose={() => setAsk(null)}>
-        <SheetTitle>GymHound couldn't discard this workout. It's still here. Try again.</SheetTitle>
+        <SheetTitle subtitle={STILL_HERE}>Couldn't discard</SheetTitle>
         <Button label="OK" onPress={() => setAsk(null)} />
       </Sheet>
       {/* Finish drops unticked sets, so it asks first. With a whole exercise untouched, Keep logging is the safe answer.

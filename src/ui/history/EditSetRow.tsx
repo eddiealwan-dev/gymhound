@@ -22,10 +22,10 @@ const KEYBOARD: Record<InputKey, KeyboardTypeOptions> = {
 
 /** The line over a row whose ticked set lacks a value on Save: the session's copy (spec 18.6). */
 const NEED_LINE: Record<DraftProblem['need'], string> = {
-  weight: 'Add a weight to tick',
-  reps: 'Add reps to tick',
-  time: 'Add a time to tick',
-  distance: 'Add a distance to tick',
+  weight: 'Add weight to complete set',
+  reps: 'Add reps to complete set',
+  time: 'Add time to complete set',
+  distance: 'Add distance to complete set',
 };
 
 /** The input a problem points at. */

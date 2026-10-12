@@ -121,7 +121,7 @@ describe('the session screen closes the keyboard (Task 24)', () => {
       exercises: [{ name: 'Barbell bench press', sets: [{ done: false }] }],
     } as unknown as ReturnType<typeof getActiveWorkoutView>);
     const tree = mount();
-    const shown = () => JSON.stringify(tree.toJSON()).includes('Nothing is ticked yet.');
+    const shown = () => JSON.stringify(tree.toJSON()).includes('No sets completed yet');
     const sheetWhenDismissed: boolean[] = [];
     dismiss.mockImplementation(() => void sheetWhenDismissed.push(shown()));
 

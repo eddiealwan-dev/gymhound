@@ -88,7 +88,7 @@ function WorkoutDetailScreen({ id }: { id: string }) {
     return (
       <Screen>
         <BackLink label="History" onPress={leave} />
-        <Body style={{ marginTop: 8 }}>This workout isn't in your history.</Body>
+        <Body style={{ marginTop: 8 }}>That workout isn't here.</Body>
       </Screen>
     );
   }

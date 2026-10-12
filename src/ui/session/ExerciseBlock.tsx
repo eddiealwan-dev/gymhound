@@ -545,7 +545,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       <ConfirmSheet
         visible={confirmFor !== null && rows.some((r) => r.set.id === confirmFor)}
         title={`Remove set ${confirmLabel}?`}
-        body="It's ticked. What it logged will be deleted."
+        body="It's complete. What it logged will be deleted."
         confirmLabel="Remove"
         cancelLabel="Keep"
         onConfirm={() => {

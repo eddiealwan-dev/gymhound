@@ -184,13 +184,13 @@ describe('the history editor', () => {
 
   it('a missing or unfinished id says it is not in your history', () => {
     const tree = mount('nope');
-    expect(shownText(tree)).toContain("This workout isn't in your history.");
+    expect(shownText(tree)).toContain("That workout isn't here.");
     jest.mocked(router.canGoBack).mockReturnValue(false);
     press(tree, 'Cancel');
     expect(router.navigate).toHaveBeenCalledWith('/history');
     const active = startEmptyWorkout(mockDb, NOW);
     const tree2 = mount(active);
-    expect(shownText(tree2)).toContain("This workout isn't in your history.");
+    expect(shownText(tree2)).toContain("That workout isn't here.");
   });
 
   it('changing reps and saving writes them, re-runs the PR check, announces Saved. and goes back', () => {
@@ -258,20 +258,20 @@ describe('the history editor', () => {
     expect(mockAnnounce).toHaveBeenCalledWith('Check this number');
   });
 
-  it('a ticked set without reps shows "Add reps to tick" and the muted line, announced, and saves nothing', () => {
+  it('a ticked set without reps shows "Add reps to complete set" and the muted line, announced, and saves nothing', () => {
     const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
     const tree = mount(id);
     typeInto(tree, `${BENCH_NAME}, set 1, reps`, '');
-    expect(shownText(tree)).not.toContain('Add reps to tick');
+    expect(shownText(tree)).not.toContain('Add reps to complete set');
     press(tree, 'Save');
-    expect(shown(tree)).toContain('Add reps to tick');
-    expect(shownText(tree)).toContain('Some ticked sets need a value.');
-    expect(mockAnnounce).toHaveBeenCalledWith('Some ticked sets need a value.');
+    expect(shown(tree)).toContain('Add reps to complete set');
+    expect(shownText(tree)).toContain('Some completed sets need a value.');
+    expect(mockAnnounce).toHaveBeenCalledWith('Some completed sets need a value.');
     expect(setsOf(mockDb, id, BENCH)[0].reps).toBe(5);
     // Filling it in clears the line.
     typeInto(tree, `${BENCH_NAME}, set 1, reps`, '6');
-    expect(shown(tree)).not.toContain('Add reps to tick');
-    expect(shownText(tree)).not.toContain('Some ticked sets need a value.');
+    expect(shown(tree)).not.toContain('Add reps to complete set');
+    expect(shownText(tree)).not.toContain('Some completed sets need a value.');
   });
 
   it('unticking every set opens "Nothing would be left"; Delete workout deletes it and goes to History', () => {
@@ -281,7 +281,7 @@ describe('the history editor', () => {
     press(tree, `${BENCH_NAME}, set 1 done`);
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Nothing would be left');
-    expect(shownText(tree)).toContain('Untick fewer sets, or delete the workout.');
+    expect(shownText(tree)).toContain('Keep at least one set complete, or delete the workout.');
     expect(mockDb.select().from(workouts).where(eq(workouts.id, id)).get()).toBeDefined();
     press(tree, 'Delete workout');
     afterSheet();
@@ -419,7 +419,7 @@ describe('the history editor', () => {
     press(tree, `${BENCH_NAME}, set 2 done`);
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Some sets will be dropped');
-    expect(shownText(tree)).toContain(`${BENCH_NAME} set 2 isn't ticked.`);
+    expect(shownText(tree)).toContain(`${BENCH_NAME} set 2 isn't complete.`);
     expect(tree.root.findAllByType(Button).find((b) => b.props.label === 'Keep editing')!.props.variant).toBe('primary');
     press(tree, 'Keep editing');
     expect(shownText(tree)).not.toContain('Some sets will be dropped');
@@ -449,7 +449,7 @@ describe('the history editor', () => {
     const tree = mount(id);
     press(tree, 'Plank, set 1 done');
     press(tree, 'Save');
-    expect(shownText(tree)).toContain('Plank has no ticked sets, so it leaves this workout.');
+    expect(shownText(tree)).toContain('Plank has no completed sets, so it leaves this workout.');
     press(tree, 'Save anyway');
     afterSheet();
     expect(blockOf(mockDb, id, PLANK)).toBeUndefined();
