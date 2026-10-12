@@ -12,6 +12,9 @@ export type CustomExerciseInput = {
 /** The editor's draft: a new exercise starts with no equipment chosen, so none is ever turned on unseen (R128). */
 export type CustomExerciseDraft = Omit<CustomExerciseInput, 'equipment'> & { equipment: Equipment | null };
 
+/** A save refused for a reason the editor can show as it is ("You already have an exercise called …"). */
+export class CustomExerciseRefused extends Error {}
+
 /** The longest name, in characters, once trimmed. */
 export const MAX_NAME_LENGTH = 60;
 
