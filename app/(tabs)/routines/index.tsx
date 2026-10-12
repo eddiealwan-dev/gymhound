@@ -15,7 +15,7 @@ import { Button } from '../../../src/ui/Button';
 import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
-import { Body, Display, Label } from '../../../src/ui/Text';
+import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
@@ -139,7 +139,7 @@ export default function Routines() {
     <Screen>
       {/* Routines is not on the dock, so this is the way back. */}
       <BackLink label="Train" onPress={leave} />
-      <Display>Routines</Display>
+      <ScreenTitle>Routines</ScreenTitle>
       {/* The group heading Settings uses, so "Premade" reads as a heading and not as a routine's name. */}
       <Label style={{ marginTop: 24, marginBottom: 8 }}>Premade</Label>
       <View style={{ gap: 8 }}>{premade.map(row)}</View>

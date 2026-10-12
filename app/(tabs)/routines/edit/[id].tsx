@@ -28,7 +28,7 @@ import { Screen } from '../../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../../src/ui/SupersetBar';
 import { SheetTitle } from '../../../../src/ui/SheetTitle';
-import { Body, Display, Label, Num } from '../../../../src/ui/Text';
+import { Body, Label, Num, ScreenTitle } from '../../../../src/ui/Text';
 import { fonts } from '../../../../src/ui/theme';
 import { useTheme } from '../../../../src/ui/ThemeProvider';
 import { Toggle } from '../../../../src/ui/Toggle';
@@ -568,7 +568,7 @@ function RoutineEditor({ routineId }: { routineId: string | null }) {
   return (
     <Screen>
       <BackLink label={routineId === null ? 'Routines' : saved.name} onPress={leave} />
-      <Display>{routineId === null ? 'New routine' : 'Edit routine'}</Display>
+      <ScreenTitle>{routineId === null ? 'New routine' : 'Edit routine'}</ScreenTitle>
       <View style={{ marginTop: 24 }}>
         <Field label="Name">
           <View style={{ flexDirection: 'row' }}>

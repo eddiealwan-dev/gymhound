@@ -11,7 +11,7 @@ import { TargetsForm } from '../../src/ui/fuel/TargetsForm';
 import { ProPitch } from '../../src/ui/pro/ProPitch';
 import { Screen } from '../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../src/ui/Sheet';
-import { Body, Display } from '../../src/ui/Text';
+import { Body, ScreenTitle } from '../../src/ui/Text';
 
 /**
  * Fuel → Targets, a hidden tab route so the header and dock stay (R145, R154): the training-day and rest-day targets.
@@ -68,10 +68,10 @@ export default function FuelTargets() {
     <Screen>
       {/* Opened from Fuel or from Settings (a hidden tab keeps no reliable "from"), so it names neither. */}
       <BackLink label="Back" accessibilityLabel="Back" onPress={leave} />
-      <Display>Targets</Display>
+      <ScreenTitle>Targets</ScreenTitle>
       {isPro ? (
         <>
-          <Body muted style={{ marginTop: 8 }}>
+          <Body muted style={{ marginTop: 4 }}>
             Training days are days you finish a workout. Every other day uses the rest day targets.
           </Body>
           <View style={{ marginTop: 24 }}>

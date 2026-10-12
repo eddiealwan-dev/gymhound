@@ -18,7 +18,7 @@ import { useStartSaved } from '../../../src/ui/StartSaved';
 import { Screen } from '../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to Routines. With nothing to go back to (opened by address, or reloaded), it lands on Routines. */
@@ -110,8 +110,8 @@ export default function SavedWorkoutScreen() {
   return (
     <Screen>
       <BackLink label="Routines" onPress={toRoutines} />
-      <Display>{saved.name}</Display>
-      <Body muted style={{ fontSize: 14 }}>
+      <ScreenTitle>{saved.name}</ScreenTitle>
+      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
         {exerciseCount(saved.exercises.length)}
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>

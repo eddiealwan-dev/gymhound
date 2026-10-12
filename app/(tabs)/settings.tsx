@@ -25,7 +25,7 @@ import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
 import { Segmented } from '../../src/ui/Segmented';
-import { Body, Display, Label } from '../../src/ui/Text';
+import { Body, Label, ScreenTitle } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { Toggle } from '../../src/ui/Toggle';
 
@@ -607,7 +607,7 @@ function DeveloperSection() {
 export default function Settings() {
   return (
     <Screen footer>
-      <Display>Settings</Display>
+      <ScreenTitle>Settings</ScreenTitle>
       {/* 24pt under the title, then 32pt between groups: more room above a heading than under it. */}
       <View style={{ gap: 32, marginTop: 24 }}>
         <Section title="Appearance">

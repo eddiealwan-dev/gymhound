@@ -231,7 +231,7 @@ export default function PickExercise() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ width: '100%', maxWidth: 512, alignSelf: 'center', flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, minHeight: 56 }}>
-          <Display weight={700} style={{ flex: 1 }}>
+          <Display weight={700} accessibilityRole="header" style={{ flex: 1 }}>
             {replacing ? 'Replace exercise' : 'Add exercise'}
           </Display>
           <Pressable

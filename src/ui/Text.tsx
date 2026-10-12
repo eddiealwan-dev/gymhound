@@ -22,6 +22,15 @@ export function Display({ weight = 700, upper = false, style, ...rest }: Display
   );
 }
 
+/**
+ * A screen's title (Display 700, 28): Train's date aside, every page opens with one, under its BackLink when it has one.
+ * It is a VoiceOver heading, so a screen-reader user lands on where they are (R355). The page puts 24pt under it, or
+ * 4pt over a muted line about it (a routine's days, a workout's date).
+ */
+export function ScreenTitle(props: TextProps) {
+  return <Display accessibilityRole="header" {...props} />;
+}
+
 /** Inter, for everything that reads as a sentence. */
 export function Body({ weight = 400, muted = false, style, ...rest }: BodyProps) {
   const { colors } = useTheme();

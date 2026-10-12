@@ -16,7 +16,7 @@ import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
 import { Screen } from '../../../src/ui/Screen';
 import { ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
-import { Body, Display } from '../../../src/ui/Text';
+import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 import { WorkoutInProgressSheet } from '../../../src/ui/WorkoutInProgressSheet';
 
@@ -108,8 +108,8 @@ export default function RoutineDetailScreen() {
   return (
     <Screen>
       <BackLink label="Routines" onPress={toRoutines} />
-      <Display>{routine.name}</Display>
-      <Body muted style={{ fontSize: 14 }}>
+      <ScreenTitle>{routine.name}</ScreenTitle>
+      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
         {routine.days.length === 1 ? '1 day' : `${routine.days.length} days`}
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>

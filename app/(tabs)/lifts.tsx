@@ -8,7 +8,7 @@ import { useFocusedDbQuery } from '../../src/state/dataVersion';
 import { BackLink } from '../../src/ui/BackLink';
 import { Screen } from '../../src/ui/Screen';
 import { LiftRow, liftNameMatches } from '../../src/ui/stats/LiftsSection';
-import { Body, Display } from '../../src/ui/Text';
+import { Body, ScreenTitle } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
@@ -33,7 +33,7 @@ export default function Lifts() {
   return (
     <Screen>
       <BackLink label="Stats" onPress={leave} />
-      <Display>Lifts</Display>
+      <ScreenTitle>Lifts</ScreenTitle>
       <TextInput
         value={query}
         onChangeText={setQuery}

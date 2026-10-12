@@ -9,7 +9,7 @@ import { LiftsSection } from '../../src/ui/stats/LiftsSection';
 import { PhotosRow } from '../../src/ui/stats/PhotosRow';
 import { StepsCard } from '../../src/ui/stats/StepsCard';
 import { WeekCard } from '../../src/ui/stats/WeekCard';
-import { Display, Label } from '../../src/ui/Text';
+import { Label, ScreenTitle } from '../../src/ui/Text';
 
 /**
  * Stats (§8.9, R172), top to bottom: the weekly check-in, This week, Lifts, Steps (iPhone), Body and Progress photos,
@@ -26,7 +26,7 @@ export default function Stats() {
 
   return (
     <Screen footer>
-      <Display>Stats</Display>
+      <ScreenTitle>Stats</ScreenTitle>
       <View style={{ gap: 32, marginTop: 24 }}>
         <CheckInCard today={today} />
         <WeekCard today={today} />

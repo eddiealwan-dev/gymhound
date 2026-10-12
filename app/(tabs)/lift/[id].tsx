@@ -22,7 +22,7 @@ import { Button } from '../../../src/ui/Button';
 import { LineChart } from '../../../src/ui/charts/LineChart';
 import { Screen } from '../../../src/ui/Screen';
 import { spokenLift as spoken } from '../../../src/ui/stats/LiftsSection';
-import { Body, Display, Label } from '../../../src/ui/Text';
+import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Sessions listed before **Show all**. */
@@ -160,7 +160,7 @@ function LiftDetail({ id }: { id: string }) {
   return (
     <Screen>
       <BackLink label="Back" accessibilityLabel="Back" onPress={leave} />
-      <Display>{lift.name}</Display>
+      <ScreenTitle>{lift.name}</ScreenTitle>
       {metric === 'none' ? (
         <Body muted style={{ marginTop: 4 }}>
           Distance and time show records only.

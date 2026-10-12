@@ -33,7 +33,7 @@ import { EditExercise } from '../../../../src/ui/history/EditExercise';
 import { Screen } from '../../../../src/ui/Screen';
 import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../../src/ui/Sheet';
 import { SheetTitle } from '../../../../src/ui/SheetTitle';
-import { Body, Display } from '../../../../src/ui/Text';
+import { Body, ScreenTitle } from '../../../../src/ui/Text';
 
 const SET_TYPES: { type: SetType; label: string }[] = [
   { type: 'working', label: 'Working' },
@@ -197,8 +197,8 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
     return (
       <Screen>
         <BackLink label="Cancel" accessibilityLabel="Cancel" onPress={() => (router.canGoBack() ? router.back() : router.navigate('/history'))} />
-        <Display>Edit workout</Display>
-        <Body muted style={{ marginTop: 8 }}>
+        <ScreenTitle>Edit workout</ScreenTitle>
+        <Body muted style={{ marginTop: 4 }}>
           This workout isn&apos;t in your history.
         </Body>
       </Screen>
@@ -311,7 +311,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
   return (
     <Screen>
       <BackLink label="Cancel" accessibilityLabel="Cancel" onPress={leave} />
-      <Display>Edit workout</Display>
+      <ScreenTitle>Edit workout</ScreenTitle>
       <Body muted style={{ marginTop: 4, marginBottom: 24 }}>
         {line}
       </Body>
