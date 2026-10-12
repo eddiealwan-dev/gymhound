@@ -34,6 +34,13 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../state/dataVersion', () => ({ useDbQuery: () => mockRead, bumpData: jest.fn() }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
+/** Saving a workout is Pro (§18.21, R522): Pro by default here; the free gate has its own test. */
+let mockPro = true;
+jest.mock('../platform/entitlements', () => ({
+  ...jest.requireActual('../platform/entitlements'),
+  entitlementsFor: () => ({ isPro: () => mockPro }),
+  useIsPro: () => mockPro,
+}));
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ savedWorkoutOf: jest.fn(() => null), saveWorkoutAs: jest.fn(), hasDoneSets: jest.fn(() => true) }));
 jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
@@ -541,6 +548,15 @@ describe('Save as a workout on the finish summary (R118, R120)', () => {
   const buttonsLabelled = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).filter((b) => b.props.label === label);
   const pressButton = (tree: ReactTestRenderer, label: string) => act(() => buttonsLabelled(tree, label)[0].props.onPress());
   const nameField = (tree: ReactTestRenderer) => tree.root.findAllByType(TextInput).find((t) => t.props.accessibilityLabel === 'Workout name')!;
+
+  it('free: Save as a workout says saved workouts are Pro and opens no sheet (§18.21, R522)', () => {
+    mockPro = false;
+    const tree = mount();
+    pressButton(tree, 'Save as a workout');
+    expect(nameField(tree)).toBeUndefined();
+    expect(JSON.stringify(tree.toJSON())).toContain('Saved workouts are part of GymHound Pro.');
+    mockPro = true;
+  });
 
   it('is a secondary button just above Done, with room between them', () => {
     const tree = mount();

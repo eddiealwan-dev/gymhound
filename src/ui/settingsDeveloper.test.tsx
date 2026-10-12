@@ -130,7 +130,7 @@ describe('Settings: Developer (R126)', () => {
     expect(unlock(tree)[0].props.value).toBe(false);
   });
 
-  it('turning it on lifts the one-routine limit on another screen at once; off brings it back', () => {
+  it('turning it on lets another screen make a routine of your own at once; off locks it again (§18.21)', () => {
     build(true);
     oneRoutineOfYourOwn(mockDb);
     const tree = mount();
@@ -138,7 +138,7 @@ describe('Settings: Developer (R126)', () => {
 
     act(() => limit.whenRoomFor(add));
     expect(add).not.toHaveBeenCalled();
-    expect(texts(tree)).toContain('Free holds one routine of your own. GymHound Pro holds as many as you like.');
+    expect(texts(tree)).toContain('Routines of your own are part of GymHound Pro.');
 
     act(() => unlock(tree)[0].props.onValueChange(true));
     expect(getSettings(mockDb).proDebugUnlock).toBe(true);

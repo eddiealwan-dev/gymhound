@@ -5,7 +5,9 @@ import { ActiveWorkoutExistsError } from '../db/repositories/activeWorkout';
 import { startSavedWorkout } from '../db/repositories/savedWorkoutsRepo';
 import { getActiveWorkoutId } from '../db/repositories/workoutsRepo';
 import { bumpData } from '../state/dataVersion';
+import { canUseSavedWorkouts } from '../domain/routineLimit';
 import { Button } from './Button';
+import { useProGate } from './RoutineLimit';
 import { Sheet } from './Sheet';
 import { Body } from './Text';
 import { WorkoutInProgressSheet } from './WorkoutInProgressSheet';
@@ -17,10 +19,14 @@ import { WorkoutInProgressSheet } from './WorkoutInProgressSheet';
  */
 export function useStartSaved(): { start: (savedId: string) => void; sheet: ReactNode } {
   const db = useDb();
+  const gate = useProGate();
   const [open, setOpen] = useState<'blocked' | 'failed' | null>(null);
   const close = () => setOpen(null);
 
-  const start = (savedId: string) => {
+  // Saved workouts are Pro (§18.21, R522): without it, the Pro sheet says so and nothing starts.
+  const start = (savedId: string) => gate.when(canUseSavedWorkouts(gate.isPro()), { kind: 'saved_workout' }, () => startNow(savedId));
+
+  const startNow = (savedId: string) => {
     if (getActiveWorkoutId(db) !== null) {
       setOpen('blocked');
       return;
@@ -47,6 +53,7 @@ export function useStartSaved(): { start: (savedId: string) => void; sheet: Reac
         <Body style={{ marginBottom: 16 }}>Couldn't start. Try again.</Body>
         <Button label="OK" onPress={close} />
       </Sheet>
+      {gate.sheets}
     </>
   );
 

@@ -16,7 +16,10 @@ const mockReplace = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { replace: (...a: unknown[]) => mockReplace(...a), push: jest.fn(), back: jest.fn() } }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => mockDb }));
-jest.mock('../platform/announce', () => ({ announce: jest.fn() }));
+jest.mock('../platform/announce', () => ({ announce: jest.fn(), focusOn: jest.fn() }));
+/** Adding a routine of your own is Pro (§18.21, R521). */
+let mockPro = true;
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../state/dataVersion', () => ({ bumpData: jest.fn() }));
 jest.mock('./pro/openPaywall', () => ({ useOpenPaywall: () => jest.fn() }));
@@ -72,13 +75,15 @@ describe('Add from code (§18.18)', () => {
     expect(addButton(tree).props.disabled).toBe(true);
   });
 
-  it('keeps to the free limit: with one routine of your own, Add routine opens the limit sheet instead (R471)', () => {
+  it('free: Add routine opens the Pro sheet instead, and adds nothing (R471, R521)', () => {
+    mockPro = false;
     oneOfYourOwn(mockDb);
     const code = encodeRoutine(sharedRoutineFor(mockDb, 'premade-ppl-6')!);
     const tree = render(code);
     act(() => addButton(tree).props.onPress());
     expect(userRoutineCount(mockDb)).toBe(1);
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(allText(tree)).toContain('Free holds one routine of your own.');
+    expect(allText(tree)).toContain('Routines of your own are part of GymHound Pro.');
+    mockPro = true;
   });
 });

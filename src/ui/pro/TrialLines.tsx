@@ -34,7 +34,7 @@ export function TrialSettingsLine(): ReactElement | null {
   return (
     <View style={{ gap: 8 }}>
       <Body>{line}</Body>
-      <Body muted>Fuel and as many routines as you like, free until it ends. Nothing is charged.</Body>
+      <Body muted>Every program, your own routines, saved workouts and Fuel, free until it ends. Nothing is charged.</Body>
       <Button label="See Pro" onPress={openPaywall} />
     </View>
   );

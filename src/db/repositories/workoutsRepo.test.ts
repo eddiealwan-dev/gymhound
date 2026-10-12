@@ -451,11 +451,11 @@ describe('finishWorkout', () => {
     expect(getUpNext(db)!.dayName).toBe('A');
   });
 
-  it('a retired premade still runs and rotates for whoever has it active: 5×5 alternates A, B, A (§18.8)', () => {
+  it('5×5, retired in phase 3 and back after Round 8 (§18.21), runs and rotates from a version 1 database: A, B, A', () => {
     const db = seededV1Db();
     runSeed(db, NOW);
     setActiveRoutine(db, 'premade-5x5-3');
-    expect(db.select().from(routines).where(eq(routines.id, 'premade-5x5-3')).get()).toMatchObject({ retired: true });
+    expect(db.select().from(routines).where(eq(routines.id, 'premade-5x5-3')).get()).toMatchObject({ retired: false });
     expect(getUpNext(db)!.dayName).toBe('A');
 
     runDay(db, 'premade-5x5-3:a', NOW, 95, 5);

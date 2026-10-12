@@ -43,10 +43,11 @@ jest.mock('./ThemeProvider', () => {
 });
 
 const TITLE = 'GymHound Pro';
-const ROUTINES = 'Unlimited routines';
+const ROUTINES = 'All nine programs';
 const FUEL = 'Fuel: calories and protein, with training and rest day targets, and macro graphs';
+const OWN = 'Routines of your own and saved workouts';
 const FREE =
-  'Everything else stays free: logging, history, premade routines, your first routine, saved workouts, timer, plates, PRs, Something off, body measurements and water.';
+  'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
 const UNAVAILABLE = "Purchases aren't available in this build.";
 const NOT_ANSWERING = "The store isn't answering. Try again later.";
 const RENEWS = 'Renews automatically until you cancel in your App Store or Google Play account.';
@@ -122,13 +123,13 @@ describe('priceLine (§8.12, R157)', () => {
 });
 
 describe('ProPitch (§8.12, R137)', () => {
-  it('shows the title, the two Pro lines each with a check, the free list, Unlock, Restore purchases and Not now', () => {
+  it('shows the title, the three Pro lines each with a check, the free list, Unlock, Restore purchases and Not now', () => {
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
     const shown = shownText(tree);
 
-    expect(shown).toEqual(expect.arrayContaining([TITLE, ROUTINES, FUEL, FREE]));
+    expect(shown).toEqual(expect.arrayContaining([TITLE, ROUTINES, OWN, FUEL, FREE]));
     const checks = tree.root.findAllByType(Ionicons);
-    expect(checks).toHaveLength(2);
+    expect(checks).toHaveLength(3);
     for (const check of checks) {
       expect(check.props).toMatchObject({ name: 'checkmark', size: 20, color: '#f1ece2' });
     }
@@ -361,7 +362,7 @@ describe('/paywall (§8.12, R154)', () => {
   it('shows the pitch with Not now, which goes back; no footer', () => {
     const tree = render(<PaywallRoute />);
 
-    expect(shownText(tree)).toEqual(expect.arrayContaining([TITLE, ROUTINES, FUEL, FREE]));
+    expect(shownText(tree)).toEqual(expect.arrayContaining([TITLE, ROUTINES, OWN, FUEL, FREE]));
     expect(tree.root.findAllByType(Footer)).toHaveLength(0);
     act(() => button(tree, 'Not now').props.onPress());
     expect(router.back).toHaveBeenCalledTimes(1);

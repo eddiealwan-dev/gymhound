@@ -14,7 +14,10 @@ import { shareRoutine } from '../../../src/state/routineShare';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
-import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
+import { useProGate, useRoutineLimit } from '../../../src/ui/RoutineLimit';
+import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/domain/routineLimit';
+import { useIsPro } from '../../../src/platform/entitlements';
+import { useOpenPaywall } from '../../../src/ui/pro/openPaywall';
 import { Screen } from '../../../src/ui/Screen';
 import { ConfirmSheet } from '../../../src/ui/Sheet';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
@@ -74,6 +77,9 @@ export default function RoutineDetailScreen() {
   /** What a failed Duplicate or Delete says, muted, under the button pressed. Nothing was changed. */
   const [failed, setFailed] = useState<{ action: 'copy' | 'delete' | 'share'; text: string } | null>(null);
   const limit = useRoutineLimit();
+  const gate = useProGate();
+  const pro = useIsPro();
+  const openPaywall = useOpenPaywall();
 
   if (routine === null) {
     return (
@@ -86,14 +92,18 @@ export default function RoutineDetailScreen() {
     );
   }
 
-  const setActive = () => {
-    if (getActiveWorkoutId(db) !== null) {
-      setBlocked(true);
-      return;
-    }
-    setActiveRoutine(db, routine.id);
-    bumpData();
-  };
+  const locked = !canUseRoutine(routine, pro);
+  const setActive = () =>
+    gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => {
+      if (getActiveWorkoutId(db) !== null) {
+        setBlocked(true);
+        return;
+      }
+      setActiveRoutine(db, routine.id);
+      bumpData();
+    });
+  /** A routine of your own kept after Pro ends can be read and deleted, not changed, until Pro is back (R523). */
+  const edit = () => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => router.push(`/routines/edit/${routine.id}`));
 
   const fail = (action: 'copy' | 'delete' | 'share', text: string, error: unknown) => {
     if (error !== null) console.warn(`GymHound could not ${action} the routine.`, error);
@@ -145,7 +155,8 @@ export default function RoutineDetailScreen() {
         {routine.days.length === 1 ? '1 day' : `${routine.days.length} days`}
       </Body>
       <View style={{ gap: 8, marginTop: 24 }}>
-        {routine.isActive ? <ActiveBadge /> : <Button label="Set active" onPress={setActive} />}
+        {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : null}
+        {routine.isActive && !locked ? <ActiveBadge /> : <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : setActive} />}
         {/* Side by side when both fit; at a large text size the second drops under the first. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <View style={{ flexGrow: 1 }}>
@@ -153,7 +164,7 @@ export default function RoutineDetailScreen() {
           </View>
           {routine.isPremade ? null : (
             <View style={{ flexGrow: 1 }}>
-              <Button label="Edit" variant="secondary" onPress={() => router.push(`/routines/edit/${routine.id}`)} />
+              <Button label="Edit" variant="secondary" onPress={edit} />
             </View>
           )}
         </View>
@@ -189,6 +200,7 @@ export default function RoutineDetailScreen() {
         onCancel={() => setAskDelete(false)}
       />
       {limit.sheets}
+      {gate.sheets}
     </Screen>
   );
 }

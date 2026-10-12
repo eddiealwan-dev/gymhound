@@ -16,7 +16,7 @@ export { PREMADE_ORDER } from './routines';
  * Bump this when the bundled data changes. `runSeed` re-applies the seed once per version.
  * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`). 5: about 300 foods from USDA FoodData Central (R139).
  */
-export const SEED_VERSION = 6;
+export const SEED_VERSION = 7;
 
 /** The library is about 800 KB of data, so it is loaded only when the seed has to run, never at every start. */
 function loadLibrary(): readonly LibraryExercise[] {

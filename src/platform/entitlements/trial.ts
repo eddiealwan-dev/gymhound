@@ -20,7 +20,7 @@ export type TrialEntitlements = AppEntitlements & {
 
 /**
  * Wraps the build's entitlements with the 7-day full access trial (§18.19, R483): Pro is on while the store, the debug
- * unlock or the trial says so, so every Pro gate (more routines, Fuel) follows with no change of its own. The stored
+ * unlock or the trial says so, so every Pro gate (the Pro programs, your own routines, saved workouts, Fuel) follows with no change of its own. The stored
  * start is read once and again on `refreshTrial`; a timer tells subscribers the moment the trial ends, so a screen that
  * is open then locks without waiting for a restart. `now` is injectable for tests.
  */

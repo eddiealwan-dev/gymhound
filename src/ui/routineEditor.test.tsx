@@ -64,7 +64,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   userRoutineCount: jest.fn(),
 }));
 jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
-jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
@@ -95,7 +95,7 @@ const MINE: RoutineDraft = {
   ],
 };
 
-const LIMIT = 'Free holds one routine of your own. GymHound Pro holds as many as you like.';
+const LIMIT = 'Routines of your own are part of GymHound Pro.';
 
 function mount(id: string): ReactTestRenderer {
   mockId = id;
@@ -189,7 +189,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(NOW);
   jest.clearAllMocks();
-  mockPro = false;
+  // Pro by default: the free rules (§18.21) have their own tests, which set it to false.
+  mockPro = true;
   mockLibrary = LIBRARY();
   mockSaved = [];
   usePendingPick.setState({ exerciseId: null });
@@ -292,8 +293,8 @@ describe('the routine editor: a new routine (R89)', () => {
     expect(usePendingPick.getState().exerciseId).toBeNull();
   });
 
-  it('a new routine over the free limit shows the limit sheet on Save and saves nothing', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+  it('free: a new routine shows the Pro sheet on Save and saves nothing (R521)', () => {
+    mockPro = false;
     const tree = mount('new');
     type(tree, 'Routine name', 'Second');
     press(tree, '+ Add day');
@@ -817,8 +818,8 @@ describe('the routine editor: Add a saved workout (R121)', () => {
     ]);
   });
 
-  it('a new routine made from a saved workout still keeps to the free limit', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+  it('free: a new routine made from a saved workout is Pro too', () => {
+    mockPro = false;
     const tree = mount('new');
     type(tree, 'Routine name', 'Mine');
     press(tree, 'Add a saved workout');

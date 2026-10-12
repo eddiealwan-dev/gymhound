@@ -37,7 +37,9 @@ jest.mock('../db/repositories/savedWorkoutsRepo', () => ({
   renameSavedWorkout: jest.fn(),
   deleteSavedWorkout: jest.fn(),
 }));
-jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => false }) }));
+/** Saved workouts are Pro (§18.21, R522): Pro by default here; the free gate has its own test. */
+let mockPro = true;
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 const mockAnnounce = jest.fn();
@@ -166,6 +168,15 @@ describe('Routines: Saved workouts (R122)', () => {
     expect(startSavedWorkout).toHaveBeenCalledWith('db', 'push-a', expect.any(Number));
     expect(bumpData).toHaveBeenCalled();
     expect(router.push).toHaveBeenCalledWith('/session');
+  });
+
+  it('free: Start says saved workouts are Pro and starts nothing (§18.21, R522)', () => {
+    mockPro = false;
+    const tree = mount(<Routines />);
+    press(tree, 'Start Push A');
+    expect(startSavedWorkout).not.toHaveBeenCalled();
+    expect(JSON.stringify(tree.toJSON())).toContain('Saved workouts are part of GymHound Pro.');
+    mockPro = true;
   });
 
   it('while a workout is active, Start opens "Workout in progress" and starts nothing', () => {

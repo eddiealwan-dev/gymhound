@@ -13,7 +13,9 @@ import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
 import { EmptyState } from '../../../src/ui/EmptyState';
-import { useRoutineLimit } from '../../../src/ui/RoutineLimit';
+import { useProGate, useRoutineLimit } from '../../../src/ui/RoutineLimit';
+import { canUseRoutine, lockedRoutineReason } from '../../../src/domain/routineLimit';
+import { useIsPro } from '../../../src/platform/entitlements';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
 import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
@@ -39,7 +41,7 @@ const dayCount = (n: number) => (n === 1 ? '1 day' : `${n} days`);
  * with a 4pt hit slop, a 44pt target), the size of a row's own action elsewhere (the rest pills, Finish); the routine
  * in use shows the Active mark instead. The pill is beside the name, never inside it, so the screen reader reaches both.
  */
-function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetActive: () => void }) {
+function RoutineRow({ routine, locked, onSetActive }: { routine: RoutineSummary; locked: boolean; onSetActive: () => void }) {
   const { colors } = useTheme();
   const days = dayCount(routine.dayCount);
   return (
@@ -69,7 +71,18 @@ function RoutineRow({ routine, onSetActive }: { routine: RoutineSummary; onSetAc
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
-      {routine.isActive ? <ActiveBadge /> : <Button label="Set active" variant="secondary" size="compact" onPress={onSetActive} />}
+      {/* A program outside free, or a routine of your own kept after Pro ends, says Pro where Set active would be (R525). */}
+      {routine.isActive && !locked ? (
+        <ActiveBadge />
+      ) : (
+        <Button
+          label={locked ? 'Pro' : 'Set active'}
+          variant="secondary"
+          size="compact"
+          accessibilityLabel={locked ? `${routine.name} is part of GymHound Pro` : undefined}
+          onPress={onSetActive}
+        />
+      )}
     </View>
   );
 }
@@ -132,16 +145,23 @@ export default function Routines() {
   const saved = useDbQuery(listSavedWorkouts);
   const starter = useStartSaved();
 
-  const setActive = (id: string) => {
-    if (getActiveWorkoutId(db) !== null) {
-      setBlocked(true);
-      return;
-    }
-    setActiveRoutine(db, id);
-    bumpData();
-  };
+  const pro = useIsPro();
+  const gate = useProGate();
 
-  const row = (routine: RoutineSummary) => <RoutineRow key={routine.id} routine={routine} onSetActive={() => setActive(routine.id)} />;
+  const setActive = (routine: RoutineSummary) =>
+    gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => {
+      if (getActiveWorkoutId(db) !== null) {
+        setBlocked(true);
+        return;
+      }
+      setActiveRoutine(db, routine.id);
+      bumpData();
+    });
+
+  const row = (routine: RoutineSummary) => (
+    <RoutineRow key={routine.id} routine={routine} locked={!canUseRoutine(routine, pro)} onSetActive={() => setActive(routine)} />
+  );
+
 
   return (
     <Screen>
@@ -177,6 +197,7 @@ export default function Routines() {
       <WorkoutInProgressSheet visible={blocked} onClose={() => setBlocked(false)} />
       {starter.sheet}
       {limit.sheets}
+      {gate.sheets}
     </Screen>
   );
 }

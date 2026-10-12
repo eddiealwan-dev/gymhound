@@ -5,7 +5,9 @@ import { hasDoneSets, savedWorkoutOf, saveWorkoutAs } from '../../db/repositorie
 import { validateSavedName } from '../../domain/savedWorkout';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
+import { canUseSavedWorkouts } from '../../domain/routineLimit';
 import { Button } from '../Button';
+import { useProGate } from '../RoutineLimit';
 import { NameSheet, plainSaveError } from '../NameSheet';
 import { Body } from '../Text';
 
@@ -28,6 +30,7 @@ export function SaveAsWorkout({
   inHistory?: boolean;
 }): ReactElement | null {
   const db = useDb();
+  const gate = useProGate();
   // Read once: the workout is finished, and saving it here makes a new saved workout, not the one it came from.
   const [from] = useState(() => (inHistory ? null : savedWorkoutOf(db, workoutId)));
   const [canSave] = useState(() => hasDoneSets(db, workoutId));
@@ -62,7 +65,12 @@ export function SaveAsWorkout({
       {line !== null ? (
         <Body muted>{line}</Body>
       ) : (
-        <Button label="Save as a workout" variant="secondary" onPress={() => setOpen(true)} />
+        // Saving is Pro (§18.21, R522): without it, the Pro sheet says so.
+        <Button
+          label="Save as a workout"
+          variant="secondary"
+          onPress={() => gate.when(canUseSavedWorkouts(gate.isPro()), { kind: 'saved_workout' }, () => setOpen(true))}
+        />
       )}
       <NameSheet
         visible={open}
@@ -72,6 +80,7 @@ export function SaveAsWorkout({
         onSave={save}
         onCancel={() => setOpen(false)}
       />
+      {gate.sheets}
     </View>
   );
 }

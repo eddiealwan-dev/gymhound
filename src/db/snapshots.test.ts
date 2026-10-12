@@ -714,8 +714,9 @@ describe('startDatabase', () => {
       nextDayIndex: 1,
       retired: false,
     });
-    // The retired 5×5 is still the active routine, so it stays listed after the eight programs.
-    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, 'premade-5x5-3']);
+    // 5×5 is one of the nine programs again (§18.21), and still the active routine.
+    expect(listRoutines(db).map((r) => r.id)).toEqual(PREMADE_ORDER);
+    expect(listRoutines(db).find((r) => r.isActive)?.id).toBe('premade-5x5-3');
   });
 
   it('leaves a healthy live database alone', async () => {

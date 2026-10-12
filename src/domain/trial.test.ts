@@ -127,10 +127,10 @@ describe('the words', () => {
   it("Train's line shows only on the last two days", () => {
     for (const d of [12, 13, 14, 15, 16, 17]) expect(trialEndingLine(day(d), 'en-US')).toBeNull();
     expect(trialEndingLine(day(18), 'en-US')).toBe(
-      "Your full access trial ends tomorrow. Then Fuel locks and you can't add more routines. Your routines and food log stay.",
+      "Your full access trial ends tomorrow. Then Fuel, the Pro programs, your own routines and saved workouts lock. Everything you made stays.",
     );
     expect(trialEndingLine(day(19, 9), 'en-US')).toBe(
-      "Your full access trial ends today at 6:40 PM. Then Fuel locks and you can't add more routines. Your routines and food log stay.".replace(
+      "Your full access trial ends today at 6:40 PM. Then Fuel, the Pro programs, your own routines and saved workouts lock. Everything you made stays.".replace(
         ' ',
         new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(START).includes(' ') ? ' ' : ' ',
       ),

@@ -85,7 +85,7 @@ describe('listRoutines', () => {
     const db = seededDb();
     const list = listRoutines(db);
     expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
-    expect(list.map((r) => r.dayCount)).toEqual([6, 4, 3, 4, 5, 3, 3, 3]);
+    expect(list.map((r) => r.dayCount)).toEqual([3, 2, 3, 3, 6, 4, 4, 5, 3]);
     expect(list.every((r) => r.isPremade)).toBe(true);
     expect(list.every((r) => !r.isActive)).toBe(true);
     expect(list.find((r) => r.id === PPL)).toEqual({
@@ -113,7 +113,7 @@ describe('listRoutines', () => {
   });
 });
 
-describe('listRoutines after an upgrade retired 5×5 and No equipment (§18.8)', () => {
+describe('listRoutines after an upgrade retired No equipment (§18.8; 5×5 is back, §18.21)', () => {
   const FIVE = 'premade-5x5-3';
   const NO_EQUIPMENT = 'premade-noequipment-3';
 
@@ -140,22 +140,23 @@ describe('listRoutines after an upgrade retired 5×5 and No equipment (§18.8)',
       .run();
   };
 
-  it('lists the eight programs in the spec order, and hides the retired premades nobody uses', () => {
+  it("lists the nine programs, free's four first, and hides the retired premade nobody uses", () => {
     const list = listRoutines(upgradedDb());
     expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
     expect(list.map((r) => r.name)).toEqual([
+      'Beginner full body',
+      '5×5',
+      'Dumbbell full body',
+      'Mobility',
       'Push/pull/legs',
       '4-day upper/lower',
-      'Beginner full body',
       'Advanced full body',
       'Bro split',
-      'Dumbbell full body',
       'Calisthenics',
-      'Mobility',
     ]);
   });
 
-  it('keeps showing a retired premade while it is the active routine, after the eight', () => {
+  it('keeps showing a retired premade while it is the active routine, after the nine', () => {
     const db = upgradedDb();
     setActiveRoutine(db, NO_EQUIPMENT);
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT]);
@@ -170,17 +171,19 @@ describe('listRoutines after an upgrade retired 5×5 and No equipment (§18.8)',
 
   it('keeps showing a retired premade a finished workout was run from, but not one only an unfinished workout uses', () => {
     const db = upgradedDb();
-    workoutFrom(db, FIVE, 'finished');
-    workoutFrom(db, NO_EQUIPMENT, 'active');
-    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, FIVE]);
+    workoutFrom(db, NO_EQUIPMENT, 'finished');
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT]);
+    const other = upgradedDb();
+    workoutFrom(other, NO_EQUIPMENT, 'active');
+    expect(listRoutines(other).map((r) => r.id)).toEqual(PREMADE_ORDER);
   });
 
-  it('puts the retired premades it keeps after the eight, in their old order, and the routines of your own last', () => {
+  it('puts a retired premade it keeps after the nine, and the routines of your own last; 5×5 is one of the nine again', () => {
     const db = upgradedDb();
     insertUserRoutine(db, 'user-r', 1_000);
     workoutFrom(db, NO_EQUIPMENT, 'finished');
     setActiveRoutine(db, FIVE);
-    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, FIVE, NO_EQUIPMENT, 'user-r']);
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT, 'user-r']);
     expect(listRoutines(db).filter((r) => r.isActive).map((r) => r.id)).toEqual([FIVE]);
   });
 
@@ -545,7 +548,7 @@ describe('duplicateRoutine', () => {
     expect(rowsOf(db, PPL)).toEqual(before);
   });
 
-  it('copies your own routine too, and the copy counts toward the free limit', () => {
+  it('copies your own routine too, and the copy is one of your own (Pro, R521)', () => {
     const db = seededDb();
     const first = duplicateRoutine(db, 'premade-fullbody-3', NOW);
     expect(userRoutineCount(db)).toBe(1);
@@ -582,7 +585,6 @@ describe('deleteRoutine (R90)', () => {
     expect(db.select().from(routineDays).where(eq(routineDays.routineId, id)).all()).toEqual([]);
     expect(db.select().from(routineExercises).where(inArray(routineExercises.routineDayId, dayIds)).all()).toEqual([]);
     expect(userRoutineCount(db)).toBe(0);
-    expect(canAddRoutine(userRoutineCount(db), false)).toBe(true);
     // The premade it was copied from is untouched.
     expect(rowsOf(db, PPL)).toHaveLength(6);
   });
@@ -769,9 +771,9 @@ describe('saveRoutine (R89)', () => {
     }
   });
 
-  it('a new routine counts toward the free limit', () => {
+  it('a new routine is one of your own, which only Pro makes (§18.21, R521)', () => {
     const db = seededDb();
-    expect(canAddRoutine(userRoutineCount(db), false)).toBe(true);
+    expect(canAddRoutine(userRoutineCount(db), false)).toBe(false);
     const id = saveRoutine(db, mySplit(), NOW);
     expect(listRoutines(db).find((r) => r.id === id)).toMatchObject({ name: 'My split', isPremade: false, dayCount: 2 });
     expect(userRoutineCount(db)).toBe(1);

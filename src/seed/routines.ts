@@ -34,13 +34,13 @@ const lowerBarbell = (exercise: string, sets: number, repMin: number, repMax: nu
 const reps = (exercise: string, sets: number, repMin: number, repMax: number) => ex(exercise, sets, repMin, repMax, 'none');
 
 /**
- * The eight built-in programs (§18.3, §18.8 R87), in display order, written as a coach would: compounds first, a real
+ * The nine built-in programs (§18.3, §18.8 R87, §18.21 R520), in display order, written as a coach would: compounds first, a real
  * press on every pressing day. Each is built on current evidence: about 10–20 working sets per major muscle a week
  * (held to 8–24, shoulders capped on side and rear delts, R93) and each trained at least twice (the bro split once;
  * Mobility is stretches), checked by `routines.test.ts` with `src/domain/programVolume.ts`. Main lifts work 5–8
  * reps, accessories 8–12 or 10–15, calves and lateral raises 12–20. Programs that continue keep their ids, day slugs and exercise ids, so their
  * next weights survive: Push/pull/legs, Upper/lower (now 4-day upper/lower), Full body (now Beginner full body) and
- * Dumbbell only (now Dumbbell full body). 5×5 and No equipment are retired (`runSeed`).
+ * Dumbbell only (now Dumbbell full body). No equipment is retired (`runSeed`); 5×5 came back after Round 8 (R520).
  */
 export const SEED_ROUTINES: SeedRoutine[] = [
   {
@@ -331,6 +331,25 @@ export const SEED_ROUTINES: SeedRoutine[] = [
     ],
   },
   {
+    // The classic 5×5 (§18.21, R520): back by the owner's choice after Round 8 as one of free's four programs, with its
+    // first ids, so a lifter who ran it before phase 3 picks up where they left off. Three main lifts a day, A and B
+    // alternating; it is exempt from the volume check (R527), being the program people know by name.
+    id: 'premade-5x5-3',
+    name: '5×5',
+    days: [
+      {
+        slug: 'a',
+        name: 'A',
+        exercises: [lowerBarbell('barbell-back-squat', 5, 5, 5), ex('barbell-bench-press', 5, 5, 5), ex('barbell-row', 5, 5, 5)],
+      },
+      {
+        slug: 'b',
+        name: 'B',
+        exercises: [lowerBarbell('barbell-back-squat', 5, 5, 5), ex('barbell-overhead-press', 5, 5, 5), lowerBarbell('barbell-deadlift', 1, 5, 5)],
+      },
+    ],
+  },
+  {
     id: 'premade-dumbbell-3',
     name: 'Dumbbell full body',
     days: [
@@ -462,4 +481,18 @@ export const SEED_ROUTINES: SeedRoutine[] = [
 ];
 
 /** The premade routine ids in display order. */
-export const PREMADE_ORDER: string[] = SEED_ROUTINES.map((r) => r.id);
+/**
+ * The order Routines lists the premades (§18.21): free's four first (Beginner full body, 5×5, Dumbbell full body,
+ * Mobility), then the Pro programs.
+ */
+export const PREMADE_ORDER: string[] = [
+  'premade-fullbody-3',
+  'premade-5x5-3',
+  'premade-dumbbell-3',
+  'premade-mobility-3',
+  'premade-ppl-6',
+  'premade-upperlower-4',
+  'premade-advancedfullbody-4',
+  'premade-brosplit-5',
+  'premade-calisthenics-3',
+];

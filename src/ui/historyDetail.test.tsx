@@ -44,6 +44,13 @@ jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-US
 jest.mock('@expo/vector-icons', () => ({ Ionicons: function Ionicons() { return null; } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
+/** Saving a workout is Pro (§18.21, R522): Pro by default here; the free gate has its own test. */
+let mockPro = true;
+jest.mock('../platform/entitlements', () => ({
+  ...jest.requireActual('../platform/entitlements'),
+  entitlementsFor: () => ({ isPro: () => mockPro }),
+  useIsPro: () => mockPro,
+}));
 jest.mock('../state/dataVersion', () => ({ useFocusedDbQuery: (query: (db: string) => unknown) => query('db'), bumpData: jest.fn() }));
 jest.mock('../state/draftFlush', () => ({ flushAll: jest.fn() }));
 jest.mock('../state/historyActions', () => ({ deleteHistoryWorkout: jest.fn() }));

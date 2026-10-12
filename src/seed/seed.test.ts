@@ -74,18 +74,19 @@ describe('seed data', () => {
     }
   });
 
-  it('lists the eight premade programs in display order', () => {
+  it("lists the nine premade programs in display order, free's four first (§18.21)", () => {
     expect(PREMADE_ORDER).toEqual([
+      'premade-fullbody-3',
+      'premade-5x5-3',
+      'premade-dumbbell-3',
+      'premade-mobility-3',
       'premade-ppl-6',
       'premade-upperlower-4',
-      'premade-fullbody-3',
       'premade-advancedfullbody-4',
       'premade-brosplit-5',
-      'premade-dumbbell-3',
       'premade-calisthenics-3',
-      'premade-mobility-3',
     ]);
-    expect(SEED_ROUTINES.map((r) => r.id)).toEqual(PREMADE_ORDER);
+    expect(SEED_ROUTINES.map((r) => r.id).sort()).toEqual([...PREMADE_ORDER].sort());
   });
 });
 
@@ -123,7 +124,7 @@ describe('runSeed', () => {
     });
   });
 
-  it('inserts the eight premade programs, each starting at day 0 and none retired', () => {
+  it('inserts the nine premade programs, each starting at day 0 and none retired', () => {
     const { db } = createTestDb();
     runSeed(db, 1234);
     const rows = db.select().from(routines).all();
@@ -135,14 +136,15 @@ describe('runSeed', () => {
   it('gives each premade routine its days', () => {
     const db = seededDb('us');
     expect(PREMADE_ORDER.map((id) => [id, days(db, id).length])).toEqual([
+      ['premade-fullbody-3', 3],
+      ['premade-5x5-3', 2],
+      ['premade-dumbbell-3', 3],
+      ['premade-mobility-3', 3],
       ['premade-ppl-6', 6],
       ['premade-upperlower-4', 4],
-      ['premade-fullbody-3', 3],
       ['premade-advancedfullbody-4', 4],
       ['premade-brosplit-5', 5],
-      ['premade-dumbbell-3', 3],
       ['premade-calisthenics-3', 3],
-      ['premade-mobility-3', 3],
     ]);
     expect(days(db, 'premade-ppl-6').map((d) => d.name)).toEqual([
       'Push A',
@@ -267,7 +269,7 @@ describe('runSeed', () => {
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(6);
+    expect(SEED_VERSION).toBe(7);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
@@ -276,8 +278,8 @@ describe('runSeed', () => {
     const before = rowCounts(db);
     expect(before).toEqual({
       exercises: LIBRARY_EXERCISES.length,
-      routines: 8,
-      routineDays: 31,
+      routines: 9,
+      routineDays: 33,
       routineExercises: SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises)).length,
       foods: loadSeedFoods().length,
     });
@@ -354,7 +356,7 @@ describe('runSeed', () => {
     reseed(db);
     expect(exercise(db, 'custom-1')).toMatchObject({ name: 'My lift', isCustom: true });
     expect(db.select().from(routines).where(eq(routines.id, 'mine')).get()).toMatchObject({ name: 'Mine', isPremade: false });
-    expect(rowCounts(db)).toMatchObject({ exercises: LIBRARY_EXERCISES.length + 1, routines: 9 });
+    expect(rowCounts(db)).toMatchObject({ exercises: LIBRARY_EXERCISES.length + 1, routines: 10 });
   });
 
   it('leaves your own exercises untouched, an archived one included (R108, R109)', () => {
@@ -530,7 +532,7 @@ describe('seed version 2 over a version 1 database', () => {
     expect(PREMADE_ORDER.map((id) => routine(db, id).retired)).toEqual(PREMADE_ORDER.map(() => false));
   });
 
-  it('turns the six premades into the eight programs: four continue by id, 5×5 and No equipment retire whole', () => {
+  it('turns the six premades into the nine programs: five continue by id (5×5 back since §18.21), No equipment retires whole', () => {
     const db = seededV1Db();
     db.update(routines).set({ nextDayIndex: 4 }).where(eq(routines.id, 'premade-ppl-6')).run();
     const kept = ['premade-ppl-6:push-a:barbell-bench-press', 'premade-ppl-6:legs-a:barbell-back-squat', 'premade-fullbody-3:a:plank'];
@@ -541,11 +543,11 @@ describe('seed version 2 over a version 1 database', () => {
 
     runSeed(db, NOW);
 
-    expect(PREMADE_ORDER.map((id) => routine(db, id).name)).toEqual(SEED_ROUTINES.map((r) => r.name));
+    expect(PREMADE_ORDER.map((id) => routine(db, id).name)).toEqual(PREMADE_ORDER.map((id) => SEED_ROUTINES.find((r) => r.id === id)!.name));
     expect(routine(db, 'premade-ppl-6')).toMatchObject({ retired: false, nextDayIndex: 4, createdAt: V1_SEEDED_AT });
     expect(routine(db, 'premade-advancedfullbody-4')).toMatchObject({ retired: false, nextDayIndex: 0, createdAt: NOW });
     for (const id of kept) expect(routineExercise(db, id)).toMatchObject({ nextWeight: 135, nextWeightUnit: 'lb' });
-    // The four continuing programs keep every version 1 row on its own day, so every slot keeps its progress.
+    // The continuing programs keep every version 1 row on its own day, so every slot keeps its progress.
     const continuing = V1_ROUTINES.filter((r) => PREMADE_ORDER.includes(r.id));
     const v1Rows = continuing.flatMap((r) => r.days.flatMap(([slug, , rows]) => rows.map(([e]) => `${r.id}:${slug}:${e}`)));
     const now = new Set(exercisesOf(db, continuing.map((r) => r.id)).map((r) => r.id));
@@ -555,13 +557,13 @@ describe('seed version 2 over a version 1 database', () => {
     expect(routineExercise(db, 'premade-ppl-6:legs-b:fedb-seated-leg-curl')).toMatchObject({ setCount: 3, nextWeight: null });
     // The rule of a row that continues follows the new program: Legs A squats now rise by 10 lb.
     expect(routineExercise(db, 'premade-ppl-6:legs-a:barbell-back-squat')).toMatchObject({ increment: 10, repMin: 5, repMax: 8 });
-    // The retired premades keep every row, their progress included.
-    for (const [id, name] of [['premade-5x5-3', '5×5'], ['premade-noequipment-3', 'No equipment']] as const) {
-      expect(routine(db, id)).toMatchObject({ name, isPremade: true, retired: true });
-    }
-    expect(exercisesOf(db, ['premade-5x5-3'])).toEqual(fiveBefore);
-    expect(exercisesOf(db, ['premade-noequipment-3'])).toEqual(noEquipmentBefore);
+    // 5×5 continues with its rows and progress; its squat now rises by double the increment, as lower-body barbell lifts do.
+    expect(routine(db, 'premade-5x5-3')).toMatchObject({ name: '5×5', isPremade: true, retired: false });
+    expect(exercisesOf(db, ['premade-5x5-3']).map((r) => r.id)).toEqual(fiveBefore.map((r) => r.id));
     expect(routineExercise(db, 'premade-5x5-3:a:barbell-back-squat').nextWeight).toBe(225);
+    // No equipment is retired and keeps every row, its progress included.
+    expect(routine(db, 'premade-noequipment-3')).toMatchObject({ name: 'No equipment', isPremade: true, retired: true });
+    expect(exercisesOf(db, ['premade-noequipment-3'])).toEqual(noEquipmentBefore);
     // Every premade row left of a continuing program is one the seed writes.
     const seeded = SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises.map((e) => `${r.id}:${d.slug}:${e.exercise}`)));
     expect(exercisesOf(db, PREMADE_ORDER).map((r) => r.id)).toEqual([...seeded].sort());

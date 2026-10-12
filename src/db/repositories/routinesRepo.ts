@@ -75,6 +75,8 @@ const NO_LAST_RESULT: LastResult = {
 export type UpNext = {
   routineId: string;
   routineName: string;
+  /** A premade, which free may or may not hold (§18.21); a routine of your own needs Pro. */
+  routineIsPremade: boolean;
   dayId: string;
   dayName: string;
   /** The day's latest finished workout. Its `day_mark` is no longer read: marks are per exercise (R69). */
@@ -498,6 +500,7 @@ export function getUpNext(db: Db): UpNext | null {
   return {
     routineId: routine.id,
     routineName: routine.name,
+    routineIsPremade: routine.isPremade,
     dayId: day.id,
     dayName: day.name,
     lastTime,

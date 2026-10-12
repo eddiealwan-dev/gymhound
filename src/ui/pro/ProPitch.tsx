@@ -12,11 +12,15 @@ import { TrialPitchLine } from './TrialLines';
 import { PURCHASES_UNAVAILABLE, STORE_NOT_ANSWERING, useStoreAction } from './useStoreAction';
 
 /** What Pro adds (§8.12 with §18.1's macro graphs, R137), each led by a check. */
-const PRO_LINES = ['Unlimited routines', 'Fuel: calories and protein, with training and rest day targets, and macro graphs'];
+const PRO_LINES = [
+  'All nine programs',
+  'Routines of your own and saved workouts',
+  'Fuel: calories and protein, with training and rest day targets, and macro graphs',
+];
 
 /** What stays free (R137: §8.12's list brought up to date). */
 const FREE_LINE =
-  'Everything else stays free: logging, history, premade routines, your first routine, saved workouts, timer, plates, PRs, Something off, body measurements and water.';
+  'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
 
 /** Under a subscription's price (R159), as the stores ask. */
 const RENEWS = 'Renews automatically until you cancel in your App Store or Google Play account.';

@@ -25,7 +25,7 @@ jest.mock('../state/dataVersion', () => ({ useDbQuery: (query: (db: string) => u
 jest.mock('../db/repositories/routinesRepo', () => ({ listRoutines: jest.fn(() => mockRoutines), setActiveRoutine: jest.fn(), userRoutineCount: jest.fn() }));
 // The saved workouts group has its own tests (savedWorkouts.test.tsx).
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
-jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
@@ -69,7 +69,8 @@ beforeEach(() => {
   jest.mocked(bumpData).mockClear();
   jest.mocked(getActiveWorkoutId).mockReturnValue(null);
   jest.mocked(userRoutineCount).mockReturnValue(0);
-  mockPro = false;
+  // Pro by default: the free rules (§18.21) have their own tests, which set it to false.
+  mockPro = true;
 });
 
 afterEach(() => jest.useRealTimers());
@@ -149,7 +150,7 @@ describe('Routines: the list (design pass)', () => {
   });
 });
 
-const LIMIT = 'Free holds one routine of your own. GymHound Pro holds as many as you like.';
+const LIMIT = 'Routines of your own are part of GymHound Pro.';
 
 describe('Routines: Premade and Yours (§8.6)', () => {
   it('lists the premades under PREMADE and your own routines under YOURS, with New routine', () => {
@@ -180,18 +181,9 @@ describe('Routines: Premade and Yours (§8.6)', () => {
   });
 });
 
-describe('Routines: the free limit (R88)', () => {
-  it('New routine opens the editor when you have no routine of your own', () => {
-    const tree = mount();
-
-    press(tree, 'New routine');
-
-    expect(router.push).toHaveBeenCalledWith('/routines/edit/new');
-    expect(shownText(tree)).not.toContain(LIMIT);
-  });
-
-  it('with one routine of your own, New routine shows the limit sheet instead: See Pro and Not now', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+describe('Routines: routines of your own are Pro (§18.21, R521)', () => {
+  it('free: New routine shows the Pro sheet instead, with See Pro and Not now', () => {
+    mockPro = false;
     const tree = mount();
 
     press(tree, 'New routine');
@@ -199,27 +191,26 @@ describe('Routines: the free limit (R88)', () => {
     expect(router.push).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain(LIMIT);
     expect(buttons(tree, 'See Pro').map((b) => b.props.variant ?? 'primary')).toEqual(['primary']);
-    expect(buttons(tree, 'Not now').map((b) => b.props.variant)).toEqual(['secondary']);
+    expect(buttons(tree, 'Not now').map((b) => b.props.variant)).toEqual(['quiet']);
 
     press(tree, 'Not now');
     expect(shownText(tree)).not.toContain(LIMIT);
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it('reads the count when tapped, so deleting your routine frees the slot', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+  it('reads Pro when tapped, so the trial starting or Pro coming on counts at once', () => {
+    mockPro = false;
     const tree = mount();
     press(tree, 'New routine');
     press(tree, 'Not now');
 
-    jest.mocked(userRoutineCount).mockReturnValue(0);
+    mockPro = true;
     press(tree, 'New routine');
     expect(router.push).toHaveBeenCalledWith('/routines/edit/new');
   });
 
-  it('with Pro on (the debug unlock), New routine opens the editor however many you have', () => {
+  it('with Pro (or the trial), New routine opens the editor however many you have', () => {
     jest.mocked(userRoutineCount).mockReturnValue(3);
-    mockPro = true;
     const tree = mount();
 
     press(tree, 'New routine');
@@ -229,7 +220,7 @@ describe('Routines: the free limit (R88)', () => {
   });
 
   it('a double tap on See Pro opens one paywall', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+    mockPro = false;
     const tree = mount();
 
     press(tree, 'New routine');
@@ -242,8 +233,8 @@ describe('Routines: the free limit (R88)', () => {
     expect(router.push).toHaveBeenCalledTimes(1);
   });
 
-  it('See Pro closes the limit sheet and, once it has gone, opens the paywall (R138)', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+  it('See Pro closes the sheet and, once it has gone, opens the paywall (R138)', () => {
+    mockPro = false;
     const tree = mount();
 
     press(tree, 'New routine');
@@ -253,7 +244,17 @@ describe('Routines: the free limit (R88)', () => {
     act(() => void jest.advanceTimersByTime(400));
     expect(router.push).toHaveBeenCalledTimes(1);
     expect(router.push).toHaveBeenCalledWith('/paywall');
-    expect(shownText(tree)).not.toContain('GymHound Pro is coming.');
+  });
+});
+
+describe('Routines: free programs and Pro programs (§18.21, R520, R525)', () => {
+  it("free: a Pro program's row says Pro where Set active would be, and tapping it explains instead of setting it", () => {
+    mockPro = false;
+    const tree = mount();
+    expect(buttons(tree, 'Pro').length).toBeGreaterThan(0);
+    press(tree, 'Pro');
+    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(shownText(tree).some((t) => /is part of GymHound Pro\. Free includes Beginner full body, 5×5, Dumbbell full body and Mobility\./.test(t))).toBe(true);
   });
 });
 

@@ -39,7 +39,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   deleteRoutine: jest.fn(),
 }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
-jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }) }));
+jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
 jest.mock('./ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
@@ -84,7 +84,7 @@ const PREMADE: RoutineDetail = {
 
 const MINE: RoutineDetail = { ...PREMADE, id: 'mine', name: 'My split', isPremade: false };
 
-const LIMIT = 'Free holds one routine of your own. GymHound Pro holds as many as you like.';
+const LIMIT = 'Routines of your own are part of GymHound Pro.';
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -125,7 +125,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(NOW);
   jest.clearAllMocks();
-  mockPro = false;
+  // Pro by default: the free rules (§18.21) have their own tests, which set it to false.
+  mockPro = true;
   show(PREMADE);
   jest.mocked(getActiveWorkoutId).mockReturnValue(null);
   jest.mocked(userRoutineCount).mockReturnValue(0);
@@ -230,8 +231,8 @@ describe('Routine detail: Duplicate and the free limit (R88)', () => {
     expect(router.push).toHaveBeenCalledWith('/routines/copy-1');
   });
 
-  it('with one routine of your own, shows the limit sheet and copies nothing', () => {
-    jest.mocked(userRoutineCount).mockReturnValue(1);
+  it('free: Duplicate makes a routine of your own, so it shows the Pro sheet and copies nothing (R521)', () => {
+    mockPro = false;
     const tree = mount();
 
     press(tree, 'Duplicate');
@@ -325,3 +326,26 @@ describe('Routine detail: Edit and Delete (R89, R90)', () => {
     warn.mockRestore();
   });
 });
+
+describe('Routine detail: free and Pro (§18.21)', () => {
+  it("free: a Pro program says so under its name, offers See Pro instead of Set active, and sets nothing", () => {
+    mockPro = false;
+    const tree = mount();
+    expect(shownText(tree)).toContain('Push/pull/legs is part of GymHound Pro. Free includes Beginner full body, 5×5, Dumbbell full body and Mobility.');
+    expect(buttons(tree, 'Set active')).toHaveLength(0);
+    press(tree, 'See Pro');
+    expect(router.push).toHaveBeenCalledWith('/paywall');
+    expect(setActiveRoutine).not.toHaveBeenCalled();
+  });
+
+  it('free: a routine of your own kept after Pro ended can be read and deleted, but Edit explains instead (R523)', () => {
+    mockPro = false;
+    show(MINE);
+    const tree = mount();
+    expect(shownText(tree)).toContain("My split is kept. It's ready to use again with GymHound Pro.");
+    press(tree, 'Edit');
+    expect(router.push).not.toHaveBeenCalledWith(expect.stringMatching(/^\/routines\/edit\//));
+    expect(buttons(tree, 'Delete routine')).toHaveLength(1);
+  });
+});
+

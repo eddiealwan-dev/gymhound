@@ -28,6 +28,10 @@ import { Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { TrainTrialNotice } from '../../src/ui/pro/TrialLines';
+import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../src/domain/routineLimit';
+import { quoteFor } from '../../src/domain/quotes';
+import { useIsPro } from '../../src/platform/entitlements';
+import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
@@ -221,6 +225,29 @@ function UpNextCard({
   );
 }
 
+/**
+ * The active routine can't be used now (§18.21, R526): a program outside free, or a routine of your own kept after Pro
+ * ended. Its name, why, **See Pro**, and Change routine to pick one free holds. Nothing about it is lost.
+ */
+function LockedUpNextCard({ upNext }: { upNext: UpNext }) {
+  const openPaywall = useOpenPaywall();
+  return (
+    <Card>
+      <Label>UP NEXT</Label>
+      <Display weight={700} style={{ fontSize: 24, marginTop: 4 }}>
+        {upNext.routineName}
+      </Display>
+      <Body muted style={{ marginTop: 4 }}>
+        {proReasonText(lockedRoutineReason({ name: upNext.routineName, isPremade: upNext.routineIsPremade }))}
+      </Body>
+      <View style={{ marginTop: 16, marginBottom: 8 }}>
+        <Button label="See Pro" onPress={openPaywall} />
+      </View>
+      <ChangeRoutineLink />
+    </Card>
+  );
+}
+
 /** No routine is active: a way to choose one, or to start a workout without one. */
 function NoRoutineCard({ onStartEmpty }: { onStartEmpty: () => void }) {
   return (
@@ -244,6 +271,7 @@ export default function Train() {
   const now = useNow(60_000);
   const today = toLocalDate(now);
   const locale = deviceLocale();
+  const pro = useIsPro();
   const weekStart = mondayOf(today);
   const read = useCallback((d: Db) => readTrain(d, weekStart), [weekStart]);
   // Focused only: Train stays mounted under the session, and every tick there bumps the data version. Reading the whole
@@ -288,9 +316,13 @@ export default function Train() {
       <Display weight={700} style={{ fontSize: 20, letterSpacing: 0.5, color: colors.textMuted }}>
         {greetingFor(new Date(now))}
       </Display>
-      {/* One line that shrinks to fit at any text size (R79). No fixed line height: iOS shrinks only the font to fit,
-          never the line height, which grows with the text size, and at the largest size the date was lost. */}
-      <Display weight={800} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3} style={{ fontSize: 56 }}>
+      {/* The day's line, a new one each day (R530), under the greeting. */}
+      <Body testID="daily-quote" style={{ marginTop: 4, fontSize: 15, lineHeight: 21 }}>
+        {quoteFor(today)}
+      </Body>
+      {/* Half the size it was (the owner, after Round 8: 56 to 28). One line that shrinks to fit at any text size (R79). No
+          fixed line height: iOS shrinks only the font to fit, never the line height, so the date is never lost. */}
+      <Display weight={800} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3} style={{ fontSize: 28, marginTop: 12 }}>
         {formatTrainDate(new Date(now), locale)}
       </Display>
 
@@ -302,6 +334,8 @@ export default function Train() {
             setsDone={active.setsDone}
             onChangeRoutine={() => setChangeBlocked(true)}
           />
+        ) : upNext !== null && !canUseRoutine({ id: upNext.routineId, isPremade: upNext.routineIsPremade }, pro) ? (
+          <LockedUpNextCard upNext={upNext} />
         ) : upNext !== null ? (
           <UpNextCard upNext={upNext} unit={unit} gear={gear} locale={locale} onStart={(dayId) => begin(() => startFromDay(db, dayId))} />
         ) : (

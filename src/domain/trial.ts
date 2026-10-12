@@ -95,7 +95,7 @@ export function trialPitchLine(status: TrialStatus): string {
 }
 
 /** What happens when the trial ends, in the words of a Pro lapse (§9): nothing is deleted. */
-const AT_THE_END = "Then Fuel locks and you can't add more routines. Your routines and food log stay.";
+const AT_THE_END = 'Then Fuel, the Pro programs, your own routines and saved workouts lock. Everything you made stays.';
 
 /**
  * Train's one muted line on the trial's last two days (R487): "ends tomorrow" the day before, "ends today at 6:40 PM"
@@ -112,10 +112,10 @@ export function trialEndingLine(status: TrialStatus, locale: string): string | n
 }
 
 /** The finish summary's line on the workout that started the trial (R486). */
-export const TRIAL_STARTED_LINE = 'Your 7-day full access trial starts now: Fuel and as many routines as you like. Nothing to set up.';
+export const TRIAL_STARTED_LINE = 'Your 7-day full access trial starts now: every program, your own routines, saved workouts and Fuel. Nothing to set up.';
 
 /** Train's one-time line after the trial has ended (R490). */
-export const TRIAL_ENDED_LINE = 'Your full access trial has ended. Your routines and food log are kept. GymHound Pro brings back Fuel and more routines.';
+export const TRIAL_ENDED_LINE = 'Your full access trial has ended. Your routines, saved workouts and food log are kept. GymHound Pro brings them back.';
 
 /** The developer controls' presets (R492). */
 export type TrialPreset = 'not_started' | 'first_day' | 'last_day' | 'ended';

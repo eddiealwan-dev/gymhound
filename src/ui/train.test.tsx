@@ -1,3 +1,4 @@
+import { quoteFor } from '../domain/quotes';
 import { router } from 'expo-router';
 import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -28,6 +29,8 @@ type Read = {
 };
 
 let mockRead: Read;
+/** Whether Pro (or the trial) is on: the Up next card is usable either way for a free premade. */
+let mockPro = true;
 
 // The full access trial's lines have their own tests (trialLines.test.tsx); here they draw nothing.
 jest.mock('./pro/TrialLines', () => ({
@@ -38,6 +41,8 @@ jest.mock('./pro/TrialLines', () => ({
   TrialPitchLine: () => null,
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
+jest.mock('../platform/entitlements', () => ({ useIsPro: () => mockPro }));
+jest.mock('./pro/openPaywall', () => ({ useOpenPaywall: () => jest.fn() }));
 jest.mock('expo-localization', () => ({ getLocales: () => [{ languageTag: 'en-GB' }] }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -106,6 +111,7 @@ const lastWeights = (working: number, next: number, unit: 'lb' | 'kg') => ({
 const upperA = (): UpNext => ({
   routineId: 'ul',
   routineName: 'Upper/lower',
+  routineIsPremade: true,
   dayId: 'ul:upper-a',
   dayName: 'Upper A',
   lastTime: null,
@@ -198,7 +204,8 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     });
     // iOS shrinks only the font to fit, never a fixed line height, which grows with the phone's text size.
     const flat = StyleSheet.flatten(style);
-    expect(flat.fontSize).toBe(56);
+    // Half what it was (56), the owner's change after Round 8.
+    expect(flat.fontSize).toBe(28);
     expect(flat.lineHeight).toBeUndefined();
 
     // The greeting above it wraps instead.
@@ -575,3 +582,40 @@ describe('Train: the first-run units line (R407)', () => {
     expect(lines(mount())).not.toContain(KG_LINE);
   });
 });
+
+describe('Train after Round 8 (§18.21, §18.22)', () => {
+  afterEach(() => {
+    mockPro = true;
+  });
+
+  it('shows the day\'s line under the greeting, the same all day', () => {
+    const tree = mount();
+    const quote = tree.root.findAll((n) => n.props.testID === 'daily-quote' && n.type === Text);
+    expect(quote).toHaveLength(1);
+    expect(quote[0].props.children).toBe(quoteFor('2026-10-10'));
+  });
+
+  it('locks Up next for a program outside free, with See Pro and Change routine, and no Start', () => {
+    mockPro = false;
+    mockRead = { ...mockRead, upNext: { ...upperA(), routineId: 'premade-ppl-6', routineName: 'Push/pull/legs' } };
+    const shown = JSON.stringify(mount().toJSON());
+    expect(shown).toContain('Push/pull/legs is part of GymHound Pro.');
+    expect(shown).toContain('See Pro');
+    expect(shown).toContain('Change routine');
+    expect(shown).not.toContain('Start Push/pull/legs');
+  });
+
+  it('keeps Up next usable for a free program without Pro', () => {
+    mockPro = false;
+    mockRead = { ...mockRead, upNext: { ...upperA(), routineId: 'premade-5x5-3', routineName: '5×5', dayName: 'A' } };
+    const shown = JSON.stringify(mount().toJSON());
+    expect(shown).not.toContain('part of GymHound Pro');
+  });
+
+  it('says a routine of your own is kept, after Pro ends', () => {
+    mockPro = false;
+    mockRead = { ...mockRead, upNext: { ...upperA(), routineId: 'mine', routineIsPremade: false, routineName: 'My split' } };
+    expect(JSON.stringify(mount().toJSON())).toContain("My split is kept. It's ready to use again with GymHound Pro.");
+  });
+});
+

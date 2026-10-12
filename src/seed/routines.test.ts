@@ -25,27 +25,28 @@ const musclesBesidesFrontDelts = (id: string) => ({
 /** Exercises that are not isolation or core work. */
 const isCompound = (id: string) => !['isolation', 'core'].includes(exercise(id).pattern);
 
-/** Each built-in program with its name and days (§18.3, §18.8 R87). */
+/** Each built-in program with its name and days, in the order Routines lists them: free's four first (§18.21). */
 const PROGRAMS = [
+  { id: 'premade-fullbody-3', name: 'Beginner full body', days: ['A', 'B', 'C'] },
+  { id: 'premade-5x5-3', name: '5×5', days: ['A', 'B'] },
+  { id: 'premade-dumbbell-3', name: 'Dumbbell full body', days: ['A', 'B', 'C'] },
+  { id: 'premade-mobility-3', name: 'Mobility', days: ['Hips and legs', 'Back and shoulders', 'Full body'] },
   { id: 'premade-ppl-6', name: 'Push/pull/legs', days: ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'] },
   { id: 'premade-upperlower-4', name: '4-day upper/lower', days: ['Upper A', 'Lower A', 'Upper B', 'Lower B'] },
-  { id: 'premade-fullbody-3', name: 'Beginner full body', days: ['A', 'B', 'C'] },
   { id: 'premade-advancedfullbody-4', name: 'Advanced full body', days: ['A', 'B', 'C', 'D'] },
   { id: 'premade-brosplit-5', name: 'Bro split', days: ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms'] },
-  { id: 'premade-dumbbell-3', name: 'Dumbbell full body', days: ['A', 'B', 'C'] },
   { id: 'premade-calisthenics-3', name: 'Calisthenics', days: ['A', 'B', 'C'] },
-  { id: 'premade-mobility-3', name: 'Mobility', days: ['Hips and legs', 'Back and shoulders', 'Full body'] },
 ] as const;
 
-const VOLUME_CHECKED = PROGRAMS.filter((p) => p.id !== 'premade-mobility-3');
+/** 5×5 is the program people know by name, three main lifts a day; the volume check would rewrite it (R527). */
+const VOLUME_CHECKED = PROGRAMS.filter((p) => p.id !== 'premade-mobility-3' && p.id !== 'premade-5x5-3');
 const GYM_PROGRAMS = VOLUME_CHECKED.filter((p) => p.id !== 'premade-calisthenics-3');
 
-describe('the eight programs', () => {
-  it('are the premades, in the spec order, with their names and days', () => {
+describe('the nine programs', () => {
+  it('are the premades, free first, with their names and days', () => {
     expect(PREMADE_ORDER).toEqual(PROGRAMS.map((p) => p.id));
-    expect(SEED_ROUTINES.map((r) => [r.id, r.name, r.days.map((d) => d.name)])).toEqual(
-      PROGRAMS.map((p) => [p.id, p.name, [...p.days]]),
-    );
+    const inOrder = [...SEED_ROUTINES].sort((a, b) => PREMADE_ORDER.indexOf(a.id) - PREMADE_ORDER.indexOf(b.id));
+    expect(inOrder.map((r) => [r.id, r.name, r.days.map((d) => d.name)])).toEqual(PROGRAMS.map((p) => [p.id, p.name, [...p.days]]));
   });
 
   it('keep the ids of the programs that continue, so their next weights survive', () => {
@@ -56,7 +57,8 @@ describe('the eight programs', () => {
     expect(program('premade-upperlower-4').days.map((d) => d.slug)).toEqual(['upper-a', 'lower-a', 'upper-b', 'lower-b']);
     expect(program('premade-fullbody-3').days.map((d) => d.slug)).toEqual(['a', 'b', 'c']);
     expect(program('premade-dumbbell-3').days.map((d) => d.slug)).toEqual(['a', 'b', 'c']);
-    expect(PREMADE_ORDER).not.toContain('premade-5x5-3');
+    // 5×5 is back with its first ids (R520); No equipment stays retired.
+    expect(program('premade-5x5-3').days.map((d) => d.slug)).toEqual(['a', 'b']);
     expect(PREMADE_ORDER).not.toContain('premade-noequipment-3');
   });
 
@@ -100,8 +102,8 @@ describe('continuity with version 1', () => {
   const v1Rows = continuing.flatMap((r) => r.days.flatMap(([slug, , rows]) => rows.map(([e]) => `${r.id}:${slug}:${e}`)));
   const rows = new Set(SEED_ROUTINES.flatMap((r) => r.days.flatMap((d) => d.exercises.map((e) => `${r.id}:${d.slug}:${e.exercise}`))));
 
-  it('keeps every version 1 row of the four continuing programs on its own day, but the ones listed with a reason', () => {
-    expect(continuing.map((r) => r.id)).toEqual(['premade-fullbody-3', 'premade-upperlower-4', 'premade-ppl-6', 'premade-dumbbell-3']);
+  it('keeps every version 1 row of the five continuing programs on its own day, but the ones listed with a reason', () => {
+    expect(continuing.map((r) => r.id)).toEqual(['premade-fullbody-3', 'premade-upperlower-4', 'premade-ppl-6', 'premade-5x5-3', 'premade-dumbbell-3']);
     expect(v1Rows.filter((id) => !rows.has(id) && !(id in DROPPED_V1_ROWS))).toEqual([]);
   });
 
@@ -274,9 +276,9 @@ describe('rep ranges and increments', () => {
     }
   });
 
-  it('works the main barbell lifts for 5 to 8 reps, and calves and lateral raises for 12 to 20', () => {
+  it('works the main barbell lifts for 5 to 8 reps (5×5 for its 5s), and calves and lateral raises for 12 to 20', () => {
     const MAIN = ['barbell-back-squat', 'barbell-front-squat', 'barbell-deadlift', 'barbell-bench-press'];
-    for (const e of SEED_ROUTINES.flatMap(entries)) {
+    for (const e of SEED_ROUTINES.filter((r) => r.id !== 'premade-5x5-3').flatMap(entries)) {
       const { primaryMuscles, pattern } = exercise(e.exercise);
       if (MAIN.includes(e.exercise)) expect([e.exercise, e.reps]).toEqual([e.exercise, [5, 8]]);
       const calvesOrLaterals = primaryMuscles.includes('calves') || (primaryMuscles.includes('side_delts') && pattern === 'isolation');

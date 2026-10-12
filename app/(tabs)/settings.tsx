@@ -563,7 +563,7 @@ function ProSection() {
       ) : (
         <View style={{ gap: 8 }}>
           <TrialPitchLine />
-          <Body>Free holds one routine of your own. Pro adds more routines and Fuel.</Body>
+          <Body>Free includes four programs, Stats and logging. Pro adds every program, your own routines, saved workouts and Fuel.</Body>
           <Button label="See Pro" onPress={openPaywall} />
         </View>
       )}
