@@ -1,3 +1,4 @@
+import { numberFormat } from './intl';
 import { convertWeight } from './units';
 import type { LoggingType, SetType, WeightUnit } from './types';
 
@@ -36,5 +37,5 @@ export function totalVolume(sets: VolumeSet[], displayUnit: WeightUnit): number 
 
 /** "12,480 lb": the number with the locale's thousands separator, a space, then the unit. */
 export function formatVolume(n: number, unit: WeightUnit, locale: string): string {
-  return `${new Intl.NumberFormat(locale).format(n)} ${unit}`;
+  return `${numberFormat(locale).format(n)} ${unit}`;
 }

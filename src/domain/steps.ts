@@ -1,3 +1,4 @@
+import { dateFormat } from './intl';
 import { fromLocalDate, shiftDay } from './dates';
 
 /**
@@ -42,12 +43,12 @@ export function stepsCount(n: number, locale: string): string {
 
 /** The weekday's initial under a bar ("M"). */
 export function weekdayInitial(localDate: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { weekday: 'narrow' }).format(fromLocalDate(localDate));
+  return dateFormat(locale, { weekday: 'narrow' }).format(fromLocalDate(localDate));
 }
 
 /** The bars as VoiceOver reads them: "Mon 8,214, Tue 6,002, …", oldest first. */
 export function stepsSpoken(days: readonly string[], counts: readonly number[], locale: string): string {
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+  const weekday = dateFormat(locale, { weekday: 'short' });
   return days.map((day, i) => `${weekday.format(fromLocalDate(day))} ${stepsCount(counts[i] ?? 0, locale)}`).join(', ');
 }
 
