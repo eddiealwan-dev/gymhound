@@ -63,6 +63,28 @@ const ICON_BUTTON = { width: 44, height: 44, flexShrink: 0, alignItems: 'center'
 const MUSIC_APPS_HERE = musicAppsFor(Platform.OS);
 
 /**
+ * The count and the time under the workout name. It is the only part of the header that reads the clock, so each second
+ * redraws this line alone, not the header with its buttons and music sheet. In the line the count gives way before the time.
+ */
+function ProgressLine({ startedAt, progress }: { startedAt: number; progress: Progress }) {
+  const now = useNow(1000);
+  const elapsed = formatElapsed(now - startedAt);
+  const { count, time } = progressParts(progress, elapsed);
+  return (
+    <View accessible accessibilityLabel={progressLabel(progress, elapsed)} style={{ flexDirection: 'row', minWidth: 0 }}>
+      {count === '' ? null : (
+        <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 1 }}>
+          {count}
+        </Body>
+      )}
+      <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 0 }}>
+        {time}
+      </Body>
+    </View>
+  );
+}
+
+/**
  * The back chevron, the workout name with its progress and time under it, on a phone the music button, whose sheet shows
  * `musicApp` as picked, and Finish (spec 18.6). A 2pt line along the bottom fills with the share of sets ticked. The name,
  * the line under it and the Finish label stop growing at 1.3× the text size, so the header stays one row. The row grows
@@ -85,11 +107,8 @@ function SessionHeader({
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const now = useNow(1000);
   const [musicOpen, setMusicOpen] = useState(false);
-  const elapsed = formatElapsed(now - startedAt);
   const { done, total } = progress;
-  const { count, time } = progressParts(progress, elapsed);
   return (
     // The 2pt under the row is the progress line's own strip, so the line never covers the text (Round 4).
     <View style={{ backgroundColor: colors.bg, paddingTop: insets.top, paddingBottom: 2, borderBottomWidth: 1, borderBottomColor: colors.border }}>
@@ -120,16 +139,7 @@ function SessionHeader({
           <Display weight={700} numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 22 }}>
             {name}
           </Display>
-          <View accessible accessibilityLabel={progressLabel(progress, elapsed)} style={{ flexDirection: 'row', minWidth: 0 }}>
-            {count === '' ? null : (
-              <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 1 }}>
-                {count}
-              </Body>
-            )}
-            <Body muted numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 13, flexShrink: 0 }}>
-              {time}
-            </Body>
-          </View>
+          <ProgressLine startedAt={startedAt} progress={progress} />
         </View>
         {MUSIC_APPS_HERE.length > 0 ? (
           <Pressable

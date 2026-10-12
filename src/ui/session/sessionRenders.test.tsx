@@ -140,6 +140,14 @@ jest.mock('../../domain/setTable', () => {
   return { ...actual, readRow: jest.fn(actual.readRow) };
 });
 jest.mock('./ExerciseMenu', () => ({ ExerciseMenu: () => null }));
+/** How often the header drew, counted by its music sheet. */
+const mockHeaderDraws = { count: 0 };
+jest.mock('./MusicSheet', () => ({
+  MusicSheet: () => {
+    mockHeaderDraws.count += 1;
+    return null;
+  },
+}));
 jest.mock('./RestBar', () => ({ RestBar: () => null }));
 jest.mock('./FoodOfferBanner', () => ({ FoodOfferBanner: () => null }));
 jest.mock('../native/SleepOfferBanner', () => ({ SleepOfferBanner: () => null }));
@@ -247,8 +255,12 @@ describe('the clocks never redraw the list (performance pass)', () => {
       data.workout.restSetId = 'b1';
     });
     clearCounts();
-    act(() => jest.advanceTimersByTime(5_000));
+    mockHeaderDraws.count = 0;
+    for (let i = 0; i < 5; i++) act(() => void jest.advanceTimersByTime(1_000));
     expect(blocksDrawn()).toEqual([]);
     expect(rowsDrawn()).toEqual([]);
+    // Only the line with the time redraws, not the header with its buttons and music sheet.
+    expect(mockHeaderDraws.count).toBe(0);
+    expect(tree!.root.findAll((n) => n.props.accessibilityLabel === 'Rest, 1 minute 55 seconds left' && n.props.accessibilityRole === 'button').length).toBeGreaterThan(0);
   });
 });

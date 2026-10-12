@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { formatRest } from '../../domain/dates';
-import { restRowPhase, restTrackFraction, spokenRest } from '../../domain/rest';
+import { REST_UP_MS, restRowPhase, restTrackFraction, spokenRest } from '../../domain/rest';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Body, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
+import { useRestClock } from './useRestClock';
 
 type Props = {
   workoutId: string;
@@ -24,9 +25,6 @@ type Props = {
   onOpenRest: () => void;
 };
 
-/** How often the clock is read: the same as the rest bar, so the two show the same second. */
-const TICK_MS = 250;
-
 /**
  * The rest under the set that started it (spec 18.6): a big countdown under a REST label, which opens the exercise's rest
  * choices when tapped, then −15s, +15s and Skip, over a thin track that drains with the time left. At zero it holds a
@@ -39,21 +37,14 @@ const TICK_MS = 250;
 export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRest }: Props) {
   const db = useDb();
   const { colors } = useTheme();
-  const [now, setNow] = useState(() => Date.now());
+  // The clock reads on each whole second of the rest, as the rest bar's does, and stops once the row has gone.
+  const now = useRestClock(endsAt, endsAt + REST_UP_MS);
   // The length this rest started with (the block draws a new row for a new rest).
   const [trackLength] = useState(lengthSeconds);
   /** The height of the row while it counts down, which "Rest's up" keeps so the sets below don't jump at zero. */
   const [runningHeight, setRunningHeight] = useState<number | undefined>(undefined);
 
   const phase = restRowPhase(endsAt, now);
-  const gone = phase.kind === 'gone';
-
-  // The clock stops once the row has gone.
-  useEffect(() => {
-    if (gone) return;
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, [gone]);
 
   if (phase.kind === 'gone') return null;
   const running = phase.kind === 'running';

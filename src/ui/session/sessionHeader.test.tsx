@@ -95,6 +95,12 @@ const textWith = (tree: ReactTestRenderer, children: string) => tree.root.findAl
 
 /** The line under the name: one row, read as one by its label. */
 const lineRow = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.props.accessibilityLabel === '2 of 4 sets done. Workout time 0:01')[0];
+/** The name column holding the line: the nearest styled view above it (the line is its own component, which has no style). */
+const nameColumn = (tree: ReactTestRenderer) => {
+  let node = lineRow(tree).parent!;
+  while (node.props.style === undefined) node = node.parent!;
+  return node;
+};
 
 /** The 2pt line along the bottom of the header. */
 const progressLine = (tree: ReactTestRenderer) => tree.root.findAll((n) => n.type === View && n.props.style?.height === 2);
@@ -235,7 +241,7 @@ describe('the session header (spec 18.6)', () => {
       for (const label of ['Back to Train', 'Music']) {
         expect(flat(pressable(tree, label).props.style)).toMatchObject({ width: 44, height: 44, flexShrink: 0 });
       }
-      expect(flat(lineRow(tree).parent!.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+      expect(flat(nameColumn(tree).props.style)).toMatchObject({ flex: 1, minWidth: 0 });
       expect(textWith(tree, 'Push A')[0].props.numberOfLines).toBe(1);
     });
 
@@ -247,7 +253,7 @@ describe('the session header (spec 18.6)', () => {
       for (const header of tree.root.findAll((n) => n.type === View && flat(n.props.style).borderBottomWidth === 1)) {
         expect(flat(header.props.style).height).toBeUndefined();
       }
-      expect(flat(lineRow(tree).parent!.props.style).height).toBeUndefined();
+      expect(flat(nameColumn(tree).props.style).height).toBeUndefined();
     });
 
     it('the time is never cut: the count shrinks first', () => {
