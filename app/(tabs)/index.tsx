@@ -265,6 +265,21 @@ function NoRoutineCard({ onStartEmpty }: { onStartEmpty: () => void }) {
  * Train: today's date, then the workout in progress, what is up next, or a way to choose a routine; then the streak
  * and the week's volume, and, under Up next, a way to start an empty workout.
  */
+/** The day's quote and, muted under it, who said it (R541). Read as one: the quote, then the name. */
+function DailyQuote({ localDate }: { localDate: string }) {
+  const quote = quoteFor(localDate);
+  return (
+    <View accessible accessibilityLabel={`${quote.text} ${quote.by}`} style={{ marginTop: 4, gap: 2 }}>
+      <Body testID="daily-quote" style={{ fontSize: 15, lineHeight: 21 }}>
+        {quote.text}
+      </Body>
+      <Body testID="daily-quote-by" muted style={{ fontSize: 13, lineHeight: 18 }}>
+        {`— ${quote.by}`}
+      </Body>
+    </View>
+  );
+}
+
 export default function Train() {
   const db = useDb();
   const { colors } = useTheme();
@@ -316,10 +331,8 @@ export default function Train() {
       <Display weight={700} style={{ fontSize: 20, letterSpacing: 0.5, color: colors.textMuted }}>
         {greetingFor(new Date(now))}
       </Display>
-      {/* The day's line, a new one each day (R530), under the greeting. */}
-      <Body testID="daily-quote" style={{ marginTop: 4, fontSize: 15, lineHeight: 21 }}>
-        {quoteFor(today)}
-      </Body>
+      {/* The day's quote, a new one each day (R530, R541), under the greeting, with who said it. One stop for VoiceOver. */}
+      <DailyQuote localDate={today} />
       {/* Half the size it was (the owner, after Round 8: 56 to 28). One line that shrinks to fit at any text size (R79). No
           fixed line height: iOS shrinks only the font to fit, never the line height, so the date is never lost. */}
       <Display weight={800} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3} style={{ fontSize: 28, marginTop: 12 }}>

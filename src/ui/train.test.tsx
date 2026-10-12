@@ -588,11 +588,15 @@ describe('Train after Round 8 (§18.21, §18.22)', () => {
     mockPro = true;
   });
 
-  it('shows the day\'s line under the greeting, the same all day', () => {
+  it("shows the day's quote under the greeting with who said it, the same all day (R541)", () => {
     const tree = mount();
     const quote = tree.root.findAll((n) => n.props.testID === 'daily-quote' && n.type === Text);
+    const by = tree.root.findAll((n) => n.props.testID === 'daily-quote-by' && n.type === Text);
     expect(quote).toHaveLength(1);
-    expect(quote[0].props.children).toBe(quoteFor('2026-10-10'));
+    expect(quote[0].props.children).toBe(quoteFor('2026-10-10').text);
+    expect(by[0].props.children).toBe(`— ${quoteFor('2026-10-10').by}`);
+    const stop = tree.root.findAll((n) => n.props.accessible === true && n.props.accessibilityLabel === `${quoteFor('2026-10-10').text} ${quoteFor('2026-10-10').by}`);
+    expect(stop.length).toBeGreaterThan(0);
   });
 
   it('locks Up next for a program outside free, with See Pro and Change routine, and no Start', () => {
