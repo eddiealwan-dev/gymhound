@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Keyboard, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer, ReactTestRendererJSON } from 'react-test-renderer';
 import type { SetView, WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -291,10 +291,14 @@ describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
 /** Set 1 ticked at 135 x 8, set 2 not ticked yet. */
 const oneDone = () => bench([set('s0', 0, { done: true, weight: 135, weightUnit: 'lb', reps: 8, completedAt: 1 }), set('s1', 1)]);
 
+/** The iPhone's warning buzz for a not-ready tick: a plain vibration, which plays even with System Haptics off (R170). */
+const vibrate = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => {});
+
 describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
   beforeEach(() => {
     jest.mocked(Haptics.impactAsync).mockClear();
     jest.mocked(Haptics.notificationAsync).mockClear();
+    vibrate.mockReset();
     mockAnnounce.mockClear();
   });
 
@@ -307,7 +311,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(tickButton.props.style({ pressed: false })).toMatchObject({ opacity: 1, borderStyle: 'dashed' });
   });
 
-  it('tapping it says "Add a weight to tick", buzzes a warning, focuses nothing and ticks nothing (R99)', async () => {
+  it('tapping it says "Add weight to complete set", buzzes a warning, focuses nothing and ticks nothing (R99)', async () => {
     const tree = mount(bench([set('s0', 0)]));
     const weight = focusOf(tree, 'LB, set 1');
     const reps = focusOf(tree, 'REPS, set 1');
@@ -319,10 +323,10 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(reps).not.toHaveBeenCalled();
     expect(tick).not.toHaveBeenCalled();
     expect(dismiss).not.toHaveBeenCalled();
-    expect(shownText(tree)).toContain('Add a weight to tick');
-    // The warning notification, distinct from the tick's light tap.
-    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
-    expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
+    expect(shownText(tree)).toContain('Add weight to complete set');
+    // On iPhone a plain vibration, distinct from the tick's light tap: no haptic played in Rounds 4 to 7 (R170).
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 
@@ -340,49 +344,43 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
       expect(focus['LB, set 1']).not.toHaveBeenCalled();
       expect(focus['REPS, set 1']).not.toHaveBeenCalled();
-      expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(shownText(tree)).toContain('Add weight to complete set');
     });
 
     it('the buzz comes first, before the tap changes anything on screen (Round 5, R82)', async () => {
       const tree = mount(bench([set('s0', 0)]));
       const focus = focusOf(tree, 'LB, set 1');
       const shownAtBuzz: string[][] = [];
-      jest.mocked(Haptics.notificationAsync).mockImplementationOnce(() => {
-        shownAtBuzz.push(shownText(tree));
-        return Promise.resolve();
-      });
+      vibrate.mockImplementationOnce(() => void shownAtBuzz.push(shownText(tree)));
 
       await tapTick(tree, 'Set 1 done');
 
       expect(shownAtBuzz).toHaveLength(1);
-      expect(shownAtBuzz[0]).not.toContain('Add a weight to tick');
+      expect(shownAtBuzz[0]).not.toContain('Add weight to complete set');
       expect(focus).not.toHaveBeenCalled();
     });
 
-    it('the line and the announcement do not wait for the buzz, and nothing is focused once it has played (R99)', async () => {
+    it('the line and the announcement come with the buzz, and nothing is focused (R99)', async () => {
       const tree = mount(bench([set('s0', 0)]));
       const focus = focusOf(tree, 'LB, set 1');
-      let played!: () => void;
-      jest.mocked(Haptics.notificationAsync).mockImplementationOnce(() => new Promise<void>((resolve) => (played = resolve)));
 
       await tapTick(tree, 'Set 1 done');
 
-      expect(shownText(tree)).toContain('Add a weight to tick');
-      expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
-
-      await act(async () => played());
-
+      expect(shownText(tree)).toContain('Add weight to complete set');
+      expect(mockAnnounce).toHaveBeenCalledWith('Add weight to complete set');
       expect(focus).not.toHaveBeenCalled();
     });
 
     it('a phone with no haptics still shows the line', async () => {
       const tree = mount(bench([set('s0', 0)]));
       const focus = focusOf(tree, 'LB, set 1');
-      jest.mocked(Haptics.notificationAsync).mockImplementationOnce(() => Promise.reject(new Error('no haptics')));
+      vibrate.mockImplementationOnce(() => {
+        throw new Error('no vibration');
+      });
 
       await tapTick(tree, 'Set 1 done');
 
-      expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(shownText(tree)).toContain('Add weight to complete set');
       expect(focus).not.toHaveBeenCalled();
     });
 
@@ -396,11 +394,11 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
         tree.update(block(ex));
       });
 
-      expect(shownText(tree)).toContain('Add a weight to tick');
+      expect(shownText(tree)).toContain('Add weight to complete set');
     });
 
     it.each([
-      { what: 'the missing field', type: null, line: 'Add a weight to tick' },
+      { what: 'the missing field', type: null, line: 'Add weight to complete set' },
       { what: 'a number to check', type: 'abc', line: 'Check this number' },
     ])("draws the line for $what above the row's inputs, in full text colour at body size after an alert icon (R82, R99)", async ({ type, line }) => {
       const tree = mount(bench([set('s0', 0)]));
@@ -433,7 +431,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
       await tapTick(tree, 'Set 1 done');
 
-      expect(mockAnnounce).toHaveBeenCalledWith('Add a weight to tick');
+      expect(mockAnnounce).toHaveBeenCalledWith('Add weight to complete set');
     });
 
     it('says "Check this number" to VoiceOver when that is the line', async () => {
@@ -452,7 +450,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
 
       it.each([
         { what: 'a number to check', type: 'abc', line: 'Check this number' },
-        { what: 'the missing field', type: null, line: 'Add a weight to tick' },
+        { what: 'the missing field', type: null, line: 'Add weight to complete set' },
       ])('says $what once: the new line is read by its live region, not announced as well', async ({ type, line }) => {
         jest.replaceProperty(Platform, 'OS', 'android');
         const tree = mount(bench([set('s0', 0)]));
@@ -495,25 +493,25 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
   it('the line goes once a weight is typed', async () => {
     const tree = mount(bench([set('s0', 0)]));
     await tapTick(tree, 'Set 1 done');
-    expect(shownText(tree)).toContain('Add a weight to tick');
+    expect(shownText(tree)).toContain('Add weight to complete set');
 
     act(() => byLabel(tree, 'LB, set 1').props.onChangeText('135'));
 
     // The reps are still missing, but typing clears the line until the tick is tapped again.
-    expect(shownText(tree).filter((text) => text.endsWith(' to tick'))).toEqual([]);
+    expect(shownText(tree).filter((text) => text.endsWith(' to complete set'))).toEqual([]);
   });
 
   it('the line names the field that is missing now, not the one the tap found (B10)', async () => {
     const tree = mount(bench([set('s0', 0), set('s1', 1)]));
     await tapTick(tree, 'Set 2 done');
-    expect(shownText(tree)).toContain('Add a weight to tick');
+    expect(shownText(tree)).toContain('Add weight to complete set');
 
     // A weight typed in set 1 and left carries down to set 2: now only its reps are missing.
     act(() => tree.update(block(bench([set('s0', 0, { weight: 135, weightUnit: 'lb' }), set('s1', 1)]))));
 
     expect(byLabel(tree, 'LB, set 2').props.placeholder).toBe('135');
-    expect(shownText(tree)).toContain('Add reps to tick');
-    expect(shownText(tree)).not.toContain('Add a weight to tick');
+    expect(shownText(tree)).toContain('Add reps to complete set');
+    expect(shownText(tree)).not.toContain('Add weight to complete set');
     expect(fieldStyle(tree, 'REPS, set 2').borderBottomWidth).toBe(2);
     expect(fieldStyle(tree, 'LB, set 2').borderBottomWidth).toBeUndefined();
   });
@@ -523,21 +521,21 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
       what: 'reps',
       ex: () => bench([set('s0', 0, { weight: 135, weightUnit: 'lb' })]),
       field: 'REPS, set 1',
-      line: 'Add reps to tick',
+      line: 'Add reps to complete set',
       hint: 'Enter reps first',
     },
     {
       what: 'a time',
       ex: (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), loggingType: 'timed' }),
       field: 'TIME, set 1',
-      line: 'Add a time to tick',
+      line: 'Add time to complete set',
       hint: 'Enter a time first',
     },
     {
       what: 'a distance',
       ex: (): WorkoutExerciseView => ({ ...bench([set('s0', 0)]), loggingType: 'distance_time' }),
       field: 'DIST, set 1',
-      line: 'Add a distance to tick',
+      line: 'Add distance to complete set',
       hint: 'Enter a distance first',
     },
   ])('with $what missing, it says "$line", marks that field without focusing it and announces the line', async ({ ex, field, line, hint }) => {
@@ -575,7 +573,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     await tapTick(tree, 'Set 1 done');
 
     expect(shownText(tree)).toContain('Check this number');
-    expect(shownText(tree)).not.toContain('Add a weight to tick');
+    expect(shownText(tree)).not.toContain('Add weight to complete set');
     expect(tick).not.toHaveBeenCalled();
   });
 

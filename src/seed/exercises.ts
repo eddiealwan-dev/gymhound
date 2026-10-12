@@ -301,4 +301,10 @@ export const SEED_EXERCISES: SeedExercise[] = [
     equipment: 'bodyweight', loggingType: 'bodyweight_plus', pattern: 'core',
     primaryMuscles: ['abs', 'lower_back'], secondaryMuscles: ['glutes', 'rear_delts'],
   },
+  {
+    // The owner asked for a bodyweight version beside Weighted sissy squat (Round 7, R172).
+    id: 'sissy-squat', name: 'Sissy squat', aliases: ['bodyweight sissy squat'],
+    equipment: 'bodyweight', loggingType: 'bodyweight_plus', pattern: 'squat',
+    primaryMuscles: ['quads'], secondaryMuscles: [],
+  },
 ];

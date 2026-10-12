@@ -253,7 +253,7 @@ Plain, confident and quiet about it.
 A well in surfaceRaised (12px corners, 4px padding, 4px gaps) holding 44pt segments; the chosen segment is filled with the text colour and labelled in the background colour. Used for Appearance, units, bell sound, bell volume, (wrapping in rows of three) rest length, the default increment on Settings → Progression, and a chart's range: 3M, 1Y and All, under the chart, read as "3M, last 3 months" and so on.
 
 ### Switch
-The platform switch, themed (`switchColors`, R131): on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too), so the off state is as visible as the on state in both themes. The thumb is the background colour on and off, in the browser build too (react-native-web would otherwise turn an on thumb teal). Never red. Its row is 44pt tall with the setting's name on the left.
+The platform switch, themed (`switchColors`, R131, R171): on, a text-colour track under a background-colour thumb; off, a Strong Seam track (on iOS through its background colour too) under a text-colour thumb, so on and off never look alike in either theme (Round 7: one dark thumb on both made on hard to tell in dark mode). The thumb takes its state's colour in the browser build too (react-native-web would otherwise turn an on thumb teal). Never red. Its row is 44pt tall with the setting's name on the left.
 
 ### Settings groups
 Each group is an upper-case Label heading 8pt over its items; items sit 16pt apart; a field is its name 8pt over its control; groups are 32pt apart, the first 24pt under the title. Helper lines ("Used by the plate calculator.") are muted.
