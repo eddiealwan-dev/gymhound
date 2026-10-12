@@ -57,16 +57,17 @@ describe('theme', () => {
     }
   });
 
-  it("a switch keeps DESIGN.md's colours (R131): on, a text track under a bg thumb; off, a borderStrong track", () => {
+  it("a switch keeps DESIGN.md's colours (R131, R171): on, a text track under a bg thumb; off, a borderStrong track under a text thumb", () => {
     for (const colors of [darkColors, lightColors]) {
-      const { thumb, trackOn, trackOff } = switchColors(colors);
-      expect({ thumb, trackOn, trackOff }).toEqual({ thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong });
-      // Each track reads on the page and the card, and the thumb on each track, at 3:1 or more; never red.
-      for (const track of [trackOn, trackOff]) {
+      const switchSet = switchColors(colors);
+      expect(switchSet).toEqual({ thumbOn: colors.bg, thumbOff: colors.text, trackOn: colors.text, trackOff: colors.borderStrong });
+      const { thumbOn, thumbOff, trackOn, trackOff } = switchSet;
+      // Each track reads on the page and the card, and its thumb on it, at 3:1 or more; never red.
+      for (const [thumb, track] of [[thumbOn, trackOn], [thumbOff, trackOff]]) {
         for (const page of [colors.bg, colors.surface]) expect(ratio(track, page)).toBeGreaterThanOrEqual(3);
         expect(ratio(thumb, track)).toBeGreaterThanOrEqual(3);
       }
-      expect([thumb, trackOn, trackOff]).not.toContain(colors.red);
+      expect(Object.values(switchSet)).not.toContain(colors.red);
     }
   });
 

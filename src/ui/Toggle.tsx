@@ -15,7 +15,8 @@ type Props = {
  */
 export function Toggle({ value, onValueChange, accessibilityLabel }: Props) {
   const { colors } = useTheme();
-  const { thumb, trackOn, trackOff } = switchColors(colors);
+  const { thumbOn, thumbOff, trackOn, trackOff } = switchColors(colors);
+  const thumb = value ? thumbOn : thumbOff;
   return (
     <Switch
       accessibilityLabel={accessibilityLabel}

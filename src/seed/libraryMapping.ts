@@ -105,6 +105,8 @@ export const LEGACY_SOURCE: Readonly<Record<string, string | null>> = {
   'bodyweight-split-squat': null,
   'close-grip-push-up': 'Push-Ups_-_Close_Triceps_Position',
   'bird-dog': null,
+  // Weighted_Sissy_Squat is linked to its own fedb- entry, and its photos hold a plate, so the bodyweight one has none.
+  'sissy-squat': null,
 };
 
 /**
@@ -146,6 +148,12 @@ export const LEGACY_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Reach one arm forward and the opposite leg back until both are level with your body.',
     "Keep your hips square and your back flat; don't let it arch.",
     'Pause, return slowly, then switch sides.',
+  ],
+  'sissy-squat': [
+    'Stand tall with your feet hip-width apart and hold something steady with one hand for balance.',
+    'Rise onto the balls of your feet, then bend your knees forward and lean back so your knees, hips and shoulders stay in a line.',
+    'Lower until your knees are well past your toes and you feel a deep stretch in your thighs.',
+    'Push through the balls of your feet to come back up, keeping your hips straight the whole way.',
   ],
 };
 

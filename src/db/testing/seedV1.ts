@@ -21,7 +21,8 @@ export function writeSeedV1(db: Db, now: number = V1_SEEDED_AT): void {
   const unit: WeightUnit = s.unit;
   const base = unit === 'lb' ? s.defaultIncrementLb : s.defaultIncrementKg;
   db.transaction((tx) => {
-    for (const e of SEED_EXERCISES) {
+    // Version 1 had the first 55; Sissy squat came with seed version 6 (R172).
+    for (const e of SEED_EXERCISES.filter((x) => x.id !== 'sissy-squat')) {
       tx.run(sql`
         INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
         VALUES (${e.id}, ${e.name}, ${JSON.stringify(e.aliases)}, ${JSON.stringify(e.primaryMuscles)},

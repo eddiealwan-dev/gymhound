@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
-import { Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
+import { Keyboard, Platform, Pressable, TextInput, Vibration, View } from 'react-native';
 import type { KeyboardTypeOptions, PressableStateCallbackType, TextStyle, ViewStyle } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo';
@@ -68,15 +68,16 @@ function lightHaptic(): void {
 }
 
 /**
- * The warning buzz when a tick that is not ready is tapped, distinct from the tick's light tap. Nothing focuses a field
- * after it any more: the keyboard coming up in the same moment swallowed the buzz on the phone (Rounds 4 to 6, R99).
- * As with `lightHaptic`, a missing haptic changes nothing.
+ * The warning buzz when a tick that is not ready is tapped. Nothing focuses a field with it (R99). On iPhone it is a
+ * plain vibration, not a haptic: the phone gave no haptic in Rounds 4 to 7, and a vibration plays even with System
+ * Haptics off (R170). Elsewhere it is the warning haptic. A missing buzz changes nothing.
  */
 function warningHaptic(): void {
   try {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    if (Platform.OS === 'ios') Vibration.vibrate();
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
   } catch {
-    // no haptics here
+    // no vibration here
   }
 }
 
@@ -89,10 +90,10 @@ const TICK_HIT_SLOP = { top: 4, bottom: 4, right: 4, left: 0 };
 
 /** The line above a row's inputs once its tick was tapped before it was ready (spec 18.6, R82). */
 const NEED_LINE: Record<FieldKey, string> = {
-  weight: 'Add a weight to tick',
-  reps: 'Add reps to tick',
-  durationS: 'Add a time to tick',
-  distance: 'Add a distance to tick',
+  weight: 'Add weight to complete set',
+  reps: 'Add reps to complete set',
+  durationS: 'Add time to complete set',
+  distance: 'Add distance to complete set',
 };
 
 /** The tick's VoiceOver hint while it is not ready (spec 18.6). */

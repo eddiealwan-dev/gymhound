@@ -39,12 +39,13 @@ export const lightColors: Colors = {
 };
 
 /**
- * A switch's colours, as DESIGN.md has them (R131): on, a text-colour track under a background-colour thumb; off, a
- * borderStrong track (3:1 on the page in both themes), so the off state is as visible as the on state. Each track reads
- * on the page and the card, and the thumb on each track, at 3:1 or more.
+ * A switch's colours, as DESIGN.md has them (R131, R171): on, a text-colour track under a background-colour thumb, the
+ * brightest thing in its row; off, a borderStrong track (3:1 on the page in both themes) under a text-colour thumb. The
+ * thumb swaps colour with the state, so on and off never look alike: with one dark thumb on both, on was hard to tell
+ * in dark mode (Round 7). Each track reads on the page and the card, and its thumb on it, at 3:1 or more.
  */
-export function switchColors(colors: Colors): { thumb: string; trackOn: string; trackOff: string } {
-  return { thumb: colors.bg, trackOn: colors.text, trackOff: colors.borderStrong };
+export function switchColors(colors: Colors): { thumbOn: string; thumbOff: string; trackOn: string; trackOff: string } {
+  return { thumbOn: colors.bg, thumbOff: colors.text, trackOn: colors.text, trackOff: colors.borderStrong };
 }
 
 export type Scheme = 'light' | 'dark';
