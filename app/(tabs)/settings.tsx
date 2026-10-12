@@ -22,6 +22,7 @@ import { BarPicker } from '../../src/ui/BarPicker';
 import { Button } from '../../src/ui/Button';
 import { HealthSettings } from '../../src/ui/native/HealthSettings';
 import { PlatesEditor } from '../../src/ui/PlatesEditor';
+import { RestNotificationAccess } from '../../src/ui/RestNotificationAccess';
 import { useOpenPaywall } from '../../src/ui/pro/openPaywall';
 import { PURCHASES_UNAVAILABLE, useStoreAction } from '../../src/ui/pro/useStoreAction';
 import { Screen } from '../../src/ui/Screen';
@@ -328,6 +329,8 @@ function RestTimerSection() {
           }}
         />
       </View>
+      {/* The lock-screen notification: why it's wanted, or where to turn it on (R410). Nothing once it's allowed. */}
+      <RestNotificationAccess />
       <Field label="Bell sound">
         <Segmented
           label="Bell sound"
