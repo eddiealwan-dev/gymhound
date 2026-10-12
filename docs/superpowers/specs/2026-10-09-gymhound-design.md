@@ -1206,6 +1206,13 @@ The owner set this scope and asked for it to run without a review stop, so the c
 - **The rest time in a superset (R101):** the rest after a superset round takes its length from the last member's rest time. The ⋯ Rest time panel of a member that isn't last says so under the exercise's name: "Rest comes after {last}, using its rest time.", or "No rest after {last}: its rest time is Off." when that resolves to Off. The choices stay: they apply whenever the exercise isn't mid-superset.
 - **Library details settled while building (R91, R92):** imported names are in sentence case, keeping acronyms and proper nouns ("EZ-bar curl", "Romanian deadlift"); band-assisted moves log as bodyweight plus, since a band's assistance can't be weighed; `src/seed/libraryIds.json` lists every library id, and the build refuses to drop one, so an exercise with history never vanishes when the source data is updated.
 
+### 18.8a Round 7 fixes (2026-10-12)
+- **Form demo:** the end photo sits in an opaque view that fills the 3:2 frame; an Image given only absoluteFill drew at its own size on the phone, so the start photo showed along the right and bottom.
+- **R170:** on iPhone a not-ready tick buzzes with a plain vibration (`Vibration.vibrate()`), not a haptic — no haptic played in Rounds 4 to 7 even with haptics set to always play, and a vibration does not depend on them — it is longer than a haptic; the light tick tap stays a haptic and is checked again in Round 8.
+- **R171:** a switch's thumb swaps colour with its state (on: background colour on a text-colour track; off: text colour on a Strong Seam track) — with one dark thumb on both tracks, on was hard to tell in dark mode — none.
+- **R172:** **Sissy squat** (bodyweight, logged as bodyweight plus, quads) joins the bundled exercises with hand-written steps and no bundled photos, beside Weighted sissy squat; seed version 6 adds it — the owner asked for a bodyweight version — none.
+- The not-ready line reads "Add weight to complete set" (or reps, time, distance), the owner's words.
+
 ### 18.9 Phase 4 (owner decisions and rulings) (2026-10-11)
 The owner said to continue without waiting, so the plan's open questions were decided by the controller and the choices below are Claude's rulings (R102–R125, R127–R130) for the owner to check. R126 and R131 belong to phase 3 (§18.8, DESIGN.md). The plan is `.superpowers/sdd/2026-10-11-gymhound-phase-4/plan-draft.md`, its ledger `progress.md` beside it. Each ruling reads: what — why — cost if wrong, as built at `phase-4` c535b84; where the build differs from the plan, it says so. Where this section and an earlier one disagree, this section wins.
 

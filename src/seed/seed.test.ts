@@ -65,9 +65,9 @@ const reseed = (db: Db, now = 2) => {
 };
 
 describe('seed data', () => {
-  it('bundles 55 exercises with unique ids, a primary muscle and no muscle both primary and secondary', () => {
-    expect(SEED_EXERCISES).toHaveLength(55);
-    expect(new Set(SEED_EXERCISES.map((e) => e.id)).size).toBe(55);
+  it('bundles 56 exercises with unique ids, a primary muscle and no muscle both primary and secondary', () => {
+    expect(SEED_EXERCISES).toHaveLength(56);
+    expect(new Set(SEED_EXERCISES.map((e) => e.id)).size).toBe(56);
     for (const e of SEED_EXERCISES) {
       expect(e.primaryMuscles.length).toBeGreaterThan(0);
       expect(e.primaryMuscles.filter((m) => e.secondaryMuscles.includes(m))).toEqual([]);
@@ -267,7 +267,7 @@ describe('runSeed', () => {
 
   it('records the seed version', () => {
     const db = seededDb('us');
-    expect(SEED_VERSION).toBe(5);
+    expect(SEED_VERSION).toBe(6);
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
@@ -421,7 +421,8 @@ describe('seed version 2 over a version 1 database', () => {
   it('keeps the 55 ids with their names, aliases, muscles and creation time, and adds their steps and source', () => {
     const db = seededV1Db();
     runSeed(db, NOW);
-    for (const { id, ...content } of SEED_EXERCISES) {
+    // Sissy squat was not in version 1 (R172): a later seed adds it, with that seed's creation time.
+    for (const { id, ...content } of SEED_EXERCISES.filter((e) => e.id !== 'sissy-squat')) {
       const library = LIBRARY_EXERCISES.find((e) => e.id === id)!;
       expect(exercise(db, id)).toEqual({
         id,
@@ -651,7 +652,7 @@ describe('seed version 5: the bundled foods (R139)', () => {
     expect(rowCounts(db).foods).toBe(loadSeedFoods().length);
     expect(food(db, EGG)).toMatchObject({ name: 'Egg, large', source: 'bundled' });
     expect(seedRows(db)).toEqual(before);
-    expect(getSettings(db).seedVersion).toBe(5);
+    expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
   });
 
   it('loads the foods only when the stored seed version is behind', () => {
