@@ -143,7 +143,10 @@ function StartupError({ error, exports = NO_EXPORTS }: { error: Error; exports?:
   }, []);
   const share = (path: string) => {
     setShareFailed(false);
-    shareFile(path).catch(() => setShareFailed(true));
+    shareFile(path).catch((error: unknown) => {
+      console.warn('GymHound could not share the file.', error);
+      setShareFailed(true);
+    });
   };
   const { snapshot, failed } = exports;
   return (
@@ -157,7 +160,7 @@ function StartupError({ error, exports = NO_EXPORTS }: { error: Error; exports?:
             <ErrorButton label="Export the file that failed" primary={false} colors={colors} onPress={() => share(failed)} />
           ) : null}
           {shareFailed ? (
-            <Text style={{ fontFamily: fonts.body400, fontSize: 14, color: colors.textMuted }}>Couldn't open the share sheet.</Text>
+            <Text style={{ fontFamily: fonts.body400, fontSize: 14, color: colors.textMuted }}>Couldn't open the share sheet. Try again.</Text>
           ) : null}
         </View>
       ) : null}
