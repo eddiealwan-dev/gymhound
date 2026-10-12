@@ -209,7 +209,10 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const openNote = () => setNoteDraft(ex.note ?? '');
   const [typeFor, setTypeFor] = useState<string | null>(null);
   const [removeFor, setRemoveFor] = useState<string | null>(null);
-  /** Each set row's sheet openers, the same functions on every draw. The keyboard goes before a sheet opens; its blur saves what is typed (the Sheet closes it too). */
+  /**
+   * Each set row's sheet openers, the same functions on every draw. The keyboard goes before a sheet opens; its blur
+   * saves what is typed (the Sheet closes it too).
+   */
   const rowHandlers = useCallbacksByKey((setId) => ({
     onChangeType: () => {
       Keyboard.dismiss();
