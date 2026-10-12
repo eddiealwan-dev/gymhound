@@ -266,6 +266,8 @@ describe('ExerciseBlock: closing the keyboard (Task 24, R43)', () => {
     expect(tick).toHaveBeenCalledWith('db', ex, ex.sets[0], expect.objectContaining({ weight: 140, reps: 8 }), 'lb', 'mi');
     expect(dismiss).toHaveBeenCalled();
     expect(jest.mocked(tick).mock.invocationCallOrder[0]).toBeLessThan(dismiss.mock.invocationCallOrder[0]);
+    // No tap on a tick (the owner, Round 8, R538).
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 
   it('unticking a set closes the keyboard too', () => {
@@ -398,7 +400,7 @@ describe('ExerciseBlock: a tick that is not ready says why (spec 18.6)', () => {
     expect(tick).not.toHaveBeenCalled();
     expect(dismiss).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain('Add weight to complete set');
-    // On iPhone a plain vibration, distinct from the tick's light tap: no haptic played in Rounds 4 to 7 (R170).
+    // On iPhone a plain vibration: no haptic played in Rounds 4 to 7 (R170).
     expect(vibrate).toHaveBeenCalledTimes(1);
     expect(Haptics.notificationAsync).not.toHaveBeenCalled();
     expect(Haptics.impactAsync).not.toHaveBeenCalled();

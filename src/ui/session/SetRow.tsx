@@ -60,15 +60,6 @@ const KEYBOARD: Record<InputKey, KeyboardTypeOptions> = {
   durationS: 'numbers-and-punctuation',
 };
 
-/** A light tap when a set is ticked. Not every device has one, and a missing haptic never stops a tick. */
-function lightHaptic(): void {
-  try {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-  } catch {
-    // no haptics here
-  }
-}
-
 /**
  * The warning buzz when a tick that is not ready is tapped. Nothing focuses a field with it (R99). On iPhone it is a
  * plain vibration, not a haptic: the phone gave no haptic in Rounds 4 to 7, and a vibration plays even with System
@@ -268,7 +259,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
       setLeft([]);
       setUnlikely([]);
       setAsked(false);
-      lightHaptic();
+      // No tap on a tick: the owner found it not needed (Round 8), and it never played on their phone (R538).
     }
     Keyboard.dismiss();
   };

@@ -515,7 +515,7 @@ In order:
     - **Units:** weight-and-time always shows its unit. Other weights show their unit only when it differs from the display unit ("84 kg × 12").
   - **Prefill:** working sets start with today's target weight. With no target, the previous set's weight is the placeholder, converted to the entry unit. Reps show the previous reps as a placeholder, or `rep_max` if there is no previous. For timed and weight-and-time sets, the duration placeholder is the previous duration, or `rep_max` seconds.
   - **Ticking a set with empty fields accepts the placeholders.** If a field is empty and has no placeholder, the tick stays disabled until it has a value.
-  - **Ticking** gives a light haptic. It starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
+  - **Ticking** gives no haptic (R538; it gave a light one until Round 8). It starts the rest timer, unless the exercise is in a superset and is not the last member of its round.
 - **⋯ menu:**
   - Override today's weight.
   - Plate calculator.
@@ -1486,6 +1486,7 @@ The owner's Round 8 phone check found a scrolling bug and set new free and Pro r
 - **R535:** a photo chosen from the library is opened without iOS's crop step, which used the older picker that can't fetch a photo kept in iCloud and handed back nothing. The newer picker fetches it, asking for the compatible format (JPEG rather than HEIC), and the 3:2 cut is made from the middle, as it already was for iOS's square crop. The camera keeps its crop step. Progress photos ask for the compatible format too.
 - **R536:** the bodyweight sissy squat shows the weighted sissy squat's photos (free-exercise-db has no other), with "Shown with a plate held to the chest. Leave it out." under them. It can no longer take photos of your own (R111).
 - **R537:** Fuel lets you log food before targets are set: the day's food, **Add food** and **Quick add** come first, then the setup card. Before, with no targets, the targets form was all Fuel showed.
+- **R538:** completing a set plays no tap. The owner found it not needed, and it never played on their phone (Rounds 7 and 8). The not-ready buzz (R170) and the rest's end stay.
 - **Not done, for the owner:** barcode scanning. §2 lists it as a non-goal, and a barcode is only useful with a lookup (Open Food Facts), which would be the app's first network call besides RevenueCat and breaks "everything stays on the phone". The `foods.barcode` seam is still there. The Round 9 checklist asks.
 
 **Routine codes, version 2 (Round 8: "the link is not a clickable link", "can the code not be shorter. It was like 15 lines")**
