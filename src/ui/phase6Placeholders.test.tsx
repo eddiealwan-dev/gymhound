@@ -9,7 +9,6 @@ import LiftsRoute from '../../app/(tabs)/lifts';
 import PhotosRoute from '../../app/(tabs)/photos';
 import PhotoRoute from '../../app/photo/[id]';
 import { Footer } from './Footer';
-import { ConsistencyCalendar } from './history/ConsistencyCalendar';
 import { CheckInCard } from './stats/CheckInCard';
 import { LiftsSection } from './stats/LiftsSection';
 import { PhotosRow } from './stats/PhotosRow';
@@ -109,7 +108,6 @@ describe('the stubs draw nothing until their task fills them', () => {
     ['LiftsSection', <LiftsSection key="l" today="2026-10-11" />],
     ['StepsCard', <StepsCard key="s" />],
     ['PhotosRow', <PhotosRow key="p" today="2026-10-11" />],
-    ['ConsistencyCalendar', <ConsistencyCalendar key="k" month="2026-10" today="2026-10-11" onMonthChange={() => {}} />],
   ])('%s', (_name, element) => {
     expect(render(element).toJSON()).toBeNull();
   });
