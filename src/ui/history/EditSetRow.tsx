@@ -81,13 +81,17 @@ export function readField(key: InputKey, text: string, ownUnit: string | null) {
   return parseField(key, t);
 }
 
-/** The set's fields for a value read from `key`. A weight or distance keeps the set's own unit; a set with none takes the display unit. */
+/**
+ * The set's fields for a value read from `key`. A weight or distance keeps the set's own unit (a set with none takes the
+ * display unit); clearing it clears the unit too, so what is typed next is in the display unit, as the session's
+ * `fieldPatch` does.
+ */
 function patchFor(key: InputKey, value: number | null, set: DraftSet, unit: WeightUnit, distanceUnit: DistanceUnit): Partial<DraftSet> {
   switch (key) {
     case 'weight':
-      return value === null ? { weight: null } : { weight: value, weightUnit: set.weightUnit ?? unit };
+      return value === null ? { weight: null, weightUnit: null } : { weight: value, weightUnit: set.weightUnit ?? unit };
     case 'distance':
-      return value === null ? { distance: null } : { distance: value, distanceUnit: set.distanceUnit ?? distanceUnit };
+      return value === null ? { distance: null, distanceUnit: null } : { distance: value, distanceUnit: set.distanceUnit ?? distanceUnit };
     case 'reps':
       return { reps: value };
     case 'durationS':
@@ -266,9 +270,10 @@ export function EditSetRow({ exerciseName, loggingType, set, label, columns, uni
       }}
     >
       {line !== null ? (
-        // Full text colour, led by the alert icon inside the text so it wraps and scales; never red (R99). Save announces
-        // what stops it, so this line is no live region.
-        <Body accessibilityLabel={line} style={{ marginBottom: 4 }}>
+        // Full text colour, led by the alert icon inside the text so it wraps and scales; never red (R99). "Check this
+        // number" on leaving a field is a polite live region, as in the session, so TalkBack says it (nothing announces
+        // there); once Save is tried, Save announces what stops it, so the line is no live region.
+        <Body accessibilityLiveRegion={line === 'Check this number' && !tried ? 'polite' : undefined} accessibilityLabel={line} style={{ marginBottom: 4 }}>
           <Ionicons name="alert-circle-outline" size={16} color={colors.text} allowFontScaling />
           {' '}
           {line}

@@ -14,6 +14,7 @@ import { finishWorkout, startEmptyWorkout, tickSet } from '../db/repositories/wo
 import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
 import { PR_BIT } from '../domain/prs';
 import type { WeightUnit } from '../domain/types';
+import { takeSnapshotSafely } from '../state/backup';
 import { leaveGuarded } from '../state/leaveGuard';
 import { Button } from './Button';
 
@@ -399,6 +400,103 @@ describe('the history editor', () => {
     press(tree, 'Cancel');
     expect(shownText(tree)).not.toContain('Discard changes?');
     expect(router.navigate).toHaveBeenCalledWith(`/history/${id}`);
+  });
+
+  it('"Nothing would be left" makes Keep editing the primary answer (R194)', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
+    const tree = mount(id);
+    press(tree, `${BENCH_NAME}, set 1 done`);
+    press(tree, 'Save');
+    const variant = (label: string) => tree.root.findAllByType(Button).find((b) => b.props.label === label)!.props.variant;
+    expect(variant('Keep editing')).toBe('primary');
+    expect(variant('Delete workout')).toBe('secondary');
+  });
+
+  it('Save warns before dropping an unticked set that holds a value (R195): Keep editing writes nothing, Save anyway drops it', () => {
+    jest.useFakeTimers();
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }, { weight: 135, reps: 4 }]]]);
+    const tree = mount(id);
+    press(tree, `${BENCH_NAME}, set 2 done`);
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain('Some sets will be dropped');
+    expect(shownText(tree)).toContain(`${BENCH_NAME} set 2 isn't ticked.`);
+    expect(tree.root.findAllByType(Button).find((b) => b.props.label === 'Keep editing')!.props.variant).toBe('primary');
+    press(tree, 'Keep editing');
+    expect(shownText(tree)).not.toContain('Some sets will be dropped');
+    expect(setsOf(mockDb, id, BENCH)).toHaveLength(2);
+    expect(router.back).not.toHaveBeenCalled();
+    press(tree, 'Save');
+    press(tree, 'Save anyway');
+    afterSheet();
+    expect(setsOf(mockDb, id, BENCH).map((s) => s.reps)).toEqual([5]);
+    expect(mockAnnounce).toHaveBeenCalledWith('Saved.');
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('an unticked set with no value is dropped without a warning', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
+    const tree = mount(id);
+    press(tree, `Add a set to ${BENCH_NAME}`);
+    press(tree, 'Save');
+    expect(shownText(tree)).not.toContain('Some sets will be dropped');
+    expect(setsOf(mockDb, id, BENCH)).toHaveLength(1);
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('Save warns when an exercise would leave the workout because none of its sets is ticked (R195)', () => {
+    jest.useFakeTimers();
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]], [PLANK, [{ durationS: 60 }]]]);
+    const tree = mount(id);
+    press(tree, 'Plank, set 1 done');
+    press(tree, 'Save');
+    expect(shownText(tree)).toContain('Plank has no ticked sets, so it leaves this workout.');
+    press(tree, 'Save anyway');
+    afterSheet();
+    expect(blockOf(mockDb, id, PLANK)).toBeUndefined();
+    expect(setsOf(mockDb, id, BENCH)).toHaveLength(1);
+  });
+
+  it('a Save with nothing changed goes back without writing', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
+    jest.mocked(takeSnapshotSafely).mockClear();
+    const tree = mount(id);
+    press(tree, 'Save');
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(takeSnapshotSafely).not.toHaveBeenCalled();
+    expect(mockAnnounce).not.toHaveBeenCalledWith('Saved.');
+  });
+
+  it('clearing a kg weight under lb clears its unit: what is typed next is in lb', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 60, reps: 5, unit: 'kg' }]]]);
+    const tree = mount(id);
+    act(() => field(tree, `${BENCH_NAME}, set 1, weight in kg`).props.onChangeText(''));
+    act(() => field(tree, `${BENCH_NAME}, set 1, weight in lb`).props.onChangeText('135'));
+    act(() => field(tree, `${BENCH_NAME}, set 1, weight in lb`).props.onBlur());
+    press(tree, 'Save');
+    const [s] = setsOf(mockDb, id, BENCH);
+    expect([s.weight, s.weightUnit]).toEqual([135, 'lb']);
+  });
+
+  it('"Check this number" on leaving a field is a polite live region; after Save it is not', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
+    const tree = mount(id);
+    const label = `${BENCH_NAME}, set 1, reps`;
+    act(() => field(tree, label).props.onChangeText('5x'));
+    act(() => field(tree, label).props.onBlur());
+    const live = () => tree.root.findAll((n) => n.props.accessibilityLiveRegion === 'polite' && n.props.accessibilityLabel === 'Check this number');
+    expect(live().length).toBeGreaterThan(0);
+    press(tree, 'Save');
+    expect(live()).toHaveLength(0);
+  });
+
+  it('the Set type sheet has a quiet Cancel that closes it', () => {
+    const id = workout(mockDb, OCT_1, [[BENCH, [{ weight: 135, reps: 5 }]]]);
+    const tree = mount(id);
+    press(tree, `${BENCH_NAME}, set 1`);
+    const cancels = tree.root.findAllByType(Button).filter((b) => b.props.label === 'Cancel' && b.props.variant === 'quiet');
+    expect(cancels).toHaveLength(1);
+    act(() => cancels[0].props.onPress());
+    expect(shownText(tree)).not.toContain('Set type');
   });
 
   it('draws nothing red', () => {

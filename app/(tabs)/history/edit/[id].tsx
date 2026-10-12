@@ -9,6 +9,7 @@ import type { Db } from '../../../../src/db/types';
 import { dayTitle, toLocalDate } from '../../../../src/domain/dates';
 import {
   addDraftSet,
+  draftLeavesNothing,
   draftProblems,
   isDraftDirty,
   patchDraftSet,
@@ -18,6 +19,7 @@ import {
   type WorkoutDraft,
 } from '../../../../src/domain/historyDraft';
 import { MARK_LABELS } from '../../../../src/domain/labels';
+import { setLabels, setName } from '../../../../src/domain/setEntry';
 import type { ExerciseMark, SetType } from '../../../../src/domain/types';
 import { announce } from '../../../../src/platform/announce';
 import { useDbQuery } from '../../../../src/state/dataVersion';
@@ -44,6 +46,27 @@ const MARKS = Object.keys(MARK_LABELS) as ExerciseMark[];
 
 /** Said, and shown over Save, when a ticked set lacks a value its type needs. */
 const SETS_NEED_VALUES = 'Some ticked sets need a value.';
+
+/**
+ * What Save would drop that may have been meant (R195), in plain words: an unticked set holding a value ("Bench press set
+ * 4 isn't ticked."), and an exercise with no ticked set, which leaves the workout ("Curl has no ticked sets, so it leaves
+ * this workout."). An unticked set with nothing in it goes without a word.
+ */
+export function droppedLines(draft: WorkoutDraft): string[] {
+  const lines: string[] = [];
+  for (const e of draft.exercises) {
+    if (!e.sets.some((s) => s.done)) {
+      lines.push(`${e.name} has no ticked sets, so it leaves this workout.`);
+      continue;
+    }
+    const labels = setLabels(e.sets.map((s) => s.setType));
+    e.sets.forEach((s, i) => {
+      const holds = [s.weight, s.reps, s.rpe, s.durationS, s.distance].some((v) => v !== null);
+      if (!s.done && holds) lines.push(`${e.name} ${setName(labels[i]).toLowerCase()} isn't ticked.`);
+    });
+  }
+  return lines;
+}
 
 /**
  * The draft with a stable key per set, so a row keeps what is typed in it while sets above it are removed. A set from
@@ -89,6 +112,8 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   const [nothingLeft, setNothingLeft] = useState(false);
+  /** What Save would drop, asked about before it writes (R195); null when the question is not open. */
+  const [dropping, setDropping] = useState<string[] | null>(null);
   /** The set whose chip was tapped: its type sheet is open. */
   const [setFor, setSetFor] = useState<{ workoutExerciseId: string; index: number } | null>(null);
   /** The exercise whose Something off was tapped. */
@@ -192,10 +217,29 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
       announce('Check this number');
       return;
     }
+    // Nothing changed: nothing to write, so no snapshot and no re-run.
+    if (savedRef.current !== null && !isDraftDirty(savedRef.current, current.draft)) {
+      setTried(false);
+      goBack();
+      return;
+    }
     if (draftProblems(current.draft).length > 0) {
       announce(SETS_NEED_VALUES);
       return;
     }
+    // With no set left, "Nothing would be left" asks instead.
+    const drops = draftLeavesNothing(current.draft) ? [] : droppedLines(current.draft);
+    if (drops.length > 0) {
+      setDropping(drops);
+      return;
+    }
+    write();
+  };
+
+  /** Writes the draft (`saveHistoryEdit`) and goes back, or asks "Nothing would be left". */
+  const write = () => {
+    const current = latest.current;
+    if (current === null) return;
     let result: 'saved' | 'nothing_left';
     try {
       result = saveHistoryEdit(db, current.draft);
@@ -320,6 +364,33 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
         <View style={{ marginTop: 16 }}>
           <Button label="Remove set" variant="secondary" onPress={removeSet} />
         </View>
+        <View style={{ marginTop: 12 }}>
+          <Button label="Cancel" variant="quiet" onPress={() => setSetFor(null)} />
+        </View>
+      </Sheet>
+
+      <Sheet visible={dropping !== null} onClose={() => setDropping(null)}>
+        <Display weight={700} style={{ marginBottom: 8 }}>
+          Some sets will be dropped
+        </Display>
+        <View style={{ gap: 4, marginBottom: 16 }}>
+          {(dropping ?? []).map((text, i) => (
+            <Body key={i} muted>
+              {text}
+            </Body>
+          ))}
+        </View>
+        <View style={{ gap: 8 }}>
+          <Button label="Keep editing" variant="primary" onPress={() => setDropping(null)} />
+          <Button
+            label="Save anyway"
+            variant="secondary"
+            onPress={() => {
+              setDropping(null);
+              afterSheetCloses(write);
+            }}
+          />
+        </View>
       </Sheet>
 
       <Sheet visible={markExercise != null} onClose={() => setMarkFor(null)}>
@@ -364,6 +435,7 @@ function WorkoutEditor({ workoutId }: { workoutId: string }) {
         body="Untick fewer sets, or delete the workout."
         confirmLabel="Delete workout"
         cancelLabel="Keep editing"
+        primary="cancel"
         onConfirm={deleteWorkout}
         onCancel={() => setNothingLeft(false)}
       />
