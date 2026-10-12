@@ -119,7 +119,9 @@ describe('Stats: Body (R114)', () => {
   it('shows Stats, Body, a Bodyweight card with "No entries yet.", Measurements and the footer', () => {
     const tree = mount(<Stats />);
     const t = shownText(tree);
-    expect(t.slice(0, 3)).toEqual(['Stats', 'Body', 'Bodyweight']);
+    // Other Stats sections may draw between the title and Body (R172); Body is followed by its Bodyweight card.
+    expect(t[0]).toBe('Stats');
+    expect(t.slice(t.indexOf('Body'), t.indexOf('Body') + 2)).toEqual(['Body', 'Bodyweight']);
     expect(t).toContain('No entries yet.');
     expect(t).toContain('Measurements');
     expect(t).not.toContain('Not built yet.');

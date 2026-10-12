@@ -10,7 +10,7 @@ export type SearchItem = {
 };
 
 /** Lower-case words, split on anything that is not a letter or digit. */
-function words(s: string): string[] {
+export function words(s: string): string[] {
   return s
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
