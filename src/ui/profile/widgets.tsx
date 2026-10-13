@@ -154,8 +154,10 @@ function KcalRing({ eaten, target, locale }: { eaten: number; target: number; lo
   return (
     <View accessible accessibilityLabel={`Calories, ${caloriesSpoken(eaten, locale)} of ${caloriesSpoken(target, locale)}`} style={{ alignItems: 'center', gap: 4 }}>
       <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center' }}>
-        <Svg width={RING} height={RING} style={{ position: 'absolute' }}>
-          <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.surfaceRaised} strokeWidth={RING_STROKE} fill="none" />
+        {/* The track is drawn in the strong border colour: in the raised surface's it all but vanished on the card, so
+            with nothing logged yet there seemed to be no ring (Round 14). */}
+        <Svg width={RING} height={RING} style={{ position: 'absolute', top: 0, left: 0 }}>
+          <Circle testID="kcal-ring-track" cx={RING / 2} cy={RING / 2} r={r} stroke={colors.borderStrong} strokeOpacity={0.6} strokeWidth={RING_STROKE} fill="none" />
           <Circle
             testID="kcal-ring"
             cx={RING / 2}

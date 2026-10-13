@@ -1549,3 +1549,8 @@ Round 13: 16 passed, 1 failed. The fail: at the largest text, text was cut off i
 - **R569b (owner):** Daily macros is one line: today's calories in a 76pt ring ("1,160 kcal", "of 2,600" under it), then Protein, Carbs and Fat beside it, each its name, a 4pt bar and "94 / 180 g" in 12pt type that grows to 1.6× at most; a macro with no target shows its grams and no bar. Past 1.3× text the ring has its own line and each macro the card's whole width, name and amount over its bar.
 - **R570 (owner):** Settings → **Feedback** (after GymHound Pro): "Found a bug, or have an idea? Tell us. It opens an email in your mail app." and **Send feedback**, which opens the mail app with a new email to grunthound@gmail.com, subject "GymHound feedback", and a body that asks what would make GymHound better or what went wrong (for a bug: what you did, what you expected, what happened), then under a rule the build and the phone's system ("Build abc1234 · 2026-10-13 · iOS 18.2"). No form in the app. With no mail app to take it: "Couldn't open Mail. Write to grunthound@gmail.com."
 - **R571 (owner):** GymHound stays account-free for now (R566c stands): no sign-in, no username, email or password; the Profile and Delete all data are as built. The dashboard keeps its three widgets.
+
+### 18.27 Round 14: the calorie ring's track (2026-10-13)
+Round 14: 11 passed, 1 failed. The fail: on Daily macros there seemed to be no calorie ring.
+
+- **R572:** the ring's track was drawn in the raised surface colour, which all but vanishes on the card, so with little or nothing eaten the ring looked absent. The track is now the strong border colour at 60%, plainly a ring at 0 kcal; the eaten arc stays the text colour.

@@ -238,6 +238,8 @@ describe('the Profile (R566, R567)', () => {
     expect(StyleSheet.flatten(amount.props.style).fontSize).toBe(12);
     expect(amount.props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.6);
     expect(card.findAll((n) => n.props.testID === 'widget-macro-protein')).not.toHaveLength(0);
+    // The ring's track shows on the card even with nothing eaten (Round 14).
+    expect(card.findAll((n) => n.props.testID === 'kcal-ring-track')[0].props.stroke).toBe('#736c60');
     expect(card.findAll((n) => n.props.testID === 'widget-macro-carbs')).toHaveLength(0);
 
     // At large text the ring has its own line and each macro the card's width.
