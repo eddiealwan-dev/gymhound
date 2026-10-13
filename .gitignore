@@ -1,0 +1,42 @@
+# dependencies (junctioned outside OneDrive)
+node_modules/
+
+# Expo / build output
+.expo/
+dist/
+web-build/
+/ios/
+/android/
+
+# logs and local env
+*.log
+.env*.local
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Expo (from template)
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# exercise library build: downloaded free-exercise-db photos (scripts/build-library.mjs)
+scripts/.cache/

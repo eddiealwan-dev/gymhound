@@ -1,0 +1,4 @@
+patches/*.patch -text
+# Windows scripts for the PC (scripts/phone-check.*) keep Windows line endings.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

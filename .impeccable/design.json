@@ -1,0 +1,483 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T13:17:09.340Z",
+  "title": "Design System: GymHound",
+  "extensions": {
+    "colorMeta": {
+      "bg-dark": {
+        "role": "neutral",
+        "displayName": "Iron Black",
+        "canonical": "#100f0c",
+        "oklch": "oklch(16.8% 0.006 91.7)",
+        "tonalRamp": [
+          "#0c0b08",
+          "#252421",
+          "#41403c",
+          "#5f5d5a",
+          "#81807c",
+          "#a6a4a0",
+          "#cccac6",
+          "#f0eeea"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Rubber Mat",
+        "canonical": "#1a1814",
+        "oklch": "oklch(21.0% 0.008 84.6)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#262420",
+          "#423f3b",
+          "#605d58",
+          "#82807b",
+          "#a7a49f",
+          "#cdcac5",
+          "#f1eee8"
+        ]
+      },
+      "surface-raised-dark": {
+        "role": "neutral",
+        "displayName": "Raised Plate",
+        "canonical": "#232019",
+        "oklch": "oklch(24.4% 0.014 87.6)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#27241d",
+          "#433f38",
+          "#615d55",
+          "#848077",
+          "#a8a49b",
+          "#cecac1",
+          "#f2eee4"
+        ]
+      },
+      "border-dark": {
+        "role": "neutral",
+        "displayName": "Seam (dark)",
+        "canonical": "#2e2a23",
+        "oklch": "oklch(28.7% 0.014 81.7)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#27231d",
+          "#433f38",
+          "#625d55",
+          "#848077",
+          "#a9a49b",
+          "#cfcac1",
+          "#f3eee4"
+        ]
+      },
+      "border-strong-dark": {
+        "role": "neutral",
+        "displayName": "Strong Seam (dark)",
+        "canonical": "#736c60",
+        "oklch": "oklch(53.4% 0.020 81.3)",
+        "tonalRamp": [
+          "#0f0a03",
+          "#292319",
+          "#453f34",
+          "#635d51",
+          "#867f73",
+          "#aba497",
+          "#d1c9bc",
+          "#f5ede0"
+        ]
+      },
+      "text-dark": {
+        "role": "neutral",
+        "displayName": "Chalk",
+        "canonical": "#f1ece2",
+        "oklch": "oklch(94.4% 0.014 84.6)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#27241c",
+          "#433f37",
+          "#615d55",
+          "#848077",
+          "#a9a49b",
+          "#cfcac0",
+          "#f3eee4"
+        ]
+      },
+      "text-muted-dark": {
+        "role": "neutral",
+        "displayName": "Worn Chalk",
+        "canonical": "#a39d90",
+        "oklch": "oklch(69.7% 0.020 86.2)",
+        "tonalRamp": [
+          "#0f0b03",
+          "#282319",
+          "#443f34",
+          "#635d51",
+          "#858073",
+          "#aaa497",
+          "#d0cabc",
+          "#f4eee0"
+        ]
+      },
+      "text-faint-dark": {
+        "role": "neutral",
+        "displayName": "Ghost Chalk",
+        "canonical": "#6d675c",
+        "oklch": "oklch(51.6% 0.018 82.8)",
+        "tonalRamp": [
+          "#0f0a04",
+          "#28231a",
+          "#453f35",
+          "#635d52",
+          "#867f74",
+          "#aaa498",
+          "#d0cabd",
+          "#f5eee1"
+        ]
+      },
+      "bg-light": {
+        "role": "neutral",
+        "displayName": "Chalk Paper",
+        "canonical": "#f6f3ec",
+        "oklch": "oklch(96.5% 0.010 87.5)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3a",
+          "#605d57",
+          "#83807a",
+          "#a7a49e",
+          "#cdcac3",
+          "#f1eee7"
+        ]
+      },
+      "surface-light": {
+        "role": "neutral",
+        "displayName": "Clean Sheet",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a4a4a4",
+          "#cacaca",
+          "#eeeeee"
+        ]
+      },
+      "surface-raised-light": {
+        "role": "neutral",
+        "displayName": "Warm Stone",
+        "canonical": "#efebe3",
+        "oklch": "oklch(94.1% 0.012 84.6)",
+        "tonalRamp": [
+          "#0d0b06",
+          "#27241e",
+          "#433f39",
+          "#615d56",
+          "#838079",
+          "#a8a49d",
+          "#cecac2",
+          "#f2eee6"
+        ]
+      },
+      "border-light": {
+        "role": "neutral",
+        "displayName": "Seam (light)",
+        "canonical": "#ddd7cb",
+        "oklch": "oklch(88.1% 0.018 84.6)",
+        "tonalRamp": [
+          "#0f0b04",
+          "#28231a",
+          "#443f35",
+          "#625d53",
+          "#858075",
+          "#aaa499",
+          "#d0cabe",
+          "#f4eee2"
+        ]
+      },
+      "border-strong-light": {
+        "role": "neutral",
+        "displayName": "Strong Seam (light)",
+        "canonical": "#8a8478",
+        "oklch": "oklch(61.5% 0.019 84.6)",
+        "tonalRamp": [
+          "#0f0a03",
+          "#282319",
+          "#443f34",
+          "#635d52",
+          "#858074",
+          "#aaa497",
+          "#d0cabd",
+          "#f4eee0"
+        ]
+      },
+      "text-light": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#15130f",
+        "oklch": "oklch(18.8% 0.009 84.6)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3b",
+          "#605d58",
+          "#82807b",
+          "#a7a49f",
+          "#cdcac4",
+          "#f1eee8"
+        ]
+      },
+      "text-muted-light": {
+        "role": "neutral",
+        "displayName": "Worn Ink",
+        "canonical": "#6b665c",
+        "oklch": "oklch(51.2% 0.017 84.6)",
+        "tonalRamp": [
+          "#0e0b04",
+          "#28231b",
+          "#443f36",
+          "#625d53",
+          "#858075",
+          "#a9a499",
+          "#d0cabf",
+          "#f4eee2"
+        ]
+      },
+      "text-faint-light": {
+        "role": "neutral",
+        "displayName": "Ghost Ink",
+        "canonical": "#8f897d",
+        "oklch": "oklch(63.2% 0.019 84.6)",
+        "tonalRamp": [
+          "#0f0a03",
+          "#28231a",
+          "#443f34",
+          "#635d52",
+          "#858074",
+          "#aaa498",
+          "#d0cabd",
+          "#f4eee1"
+        ]
+      },
+      "wordmark-red": {
+        "role": "primary",
+        "displayName": "Wordmark Red",
+        "canonical": "#E10600",
+        "oklch": "oklch(57.3% 0.233 29.5)",
+        "tonalRamp": [
+          "#3f0000",
+          "#660000",
+          "#8c0000",
+          "#b30000",
+          "#de3d2f",
+          "#ff6755",
+          "#ff907a",
+          "#ffb59d"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "GYMHOUND only; fixed size, never follows text size."
+      },
+      "date": {
+        "displayName": "Date",
+        "purpose": "Train's date, one line, shrinks to fit."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The workout name on Train's Resume card."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles (ScreenTitle), sheet titles (SheetTitle) and editor titles (ModalHeader)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Exercise names and the session header's workout name."
+      },
+      "greeting": {
+        "displayName": "Greeting",
+        "purpose": "GOOD MORNING over the date, muted."
+      },
+      "number": {
+        "displayName": "Number",
+        "purpose": "Every number, with tabular figures."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Sentences."
+      },
+      "body-strong": {
+        "displayName": "Body strong",
+        "purpose": "Button labels, list item names, field labels."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Secondary lines, the rule line, quiet controls."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Upper-case muted state and section labels."
+      },
+      "number-suggested": {
+        "displayName": "Number (suggested)",
+        "purpose": "A set field's suggested value, faint and dashed; never an entered value."
+      },
+      "column-label": {
+        "displayName": "Column label",
+        "purpose": "Set table column headers."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "press",
+        "value": "opacity 0.8 while pressed",
+        "purpose": "Every pressable control."
+      },
+      {
+        "name": "sheet",
+        "value": "fade",
+        "purpose": "Sheets fade in over a 50% black scrim."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "content-max",
+        "value": "512px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action in a card or sheet.",
+      "html": "<button class=\"ds-btn-primary\">Start Push A</button>",
+      "css": ".ds-btn-primary { min-height: 48px; padding: 0 20px; border-radius: 12px; border: 1px solid transparent; background: #f1ece2; color: #100f0c; font: 600 16px 'Inter', sans-serif; } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:active { opacity: 0.8; } .ds-btn-primary:focus-visible { outline: 2px solid #f1ece2; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "An outlined alternative action.",
+      "html": "<button class=\"ds-btn-secondary\">Start empty workout</button>",
+      "css": ".ds-btn-secondary { min-height: 48px; padding: 0 20px; border-radius: 12px; border: 1px solid #2e2a23; background: transparent; color: #f1ece2; font: 600 16px 'Inter', sans-serif; } .ds-btn-secondary:hover { border-color: #736c60; } .ds-btn-secondary:active { opacity: 0.8; } .ds-btn-secondary:focus-visible { outline: 2px solid #f1ece2; outline-offset: 2px; }"
+    },
+    {
+      "name": "Compact Pill",
+      "kind": "button",
+      "refersTo": "button-compact",
+      "description": "A 36pt pill with a 4pt hit slop: Finish, the rest pills, Set active on a routine.",
+      "html": "<button class=\"ds-pill\">+15s</button>",
+      "css": ".ds-pill { min-height: 36px; min-width: 44px; padding: 0 12px; border-radius: 18px; border: 1px solid #736c60; background: transparent; color: #f1ece2; font: 600 15px 'Inter', sans-serif; } .ds-pill:active { opacity: 0.8; } .ds-pill:focus-visible { outline: 2px solid #f1ece2; outline-offset: 2px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Up next, Resume, the stat cards, routine rows.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">UP NEXT</div><div class=\"ds-card-title\">Push/pull/legs · Push A</div></div>",
+      "css": ".ds-card { background: #1a1814; border: 1px solid #2e2a23; border-radius: 16px; padding: 16px; color: #f1ece2; } .ds-card-label { font: 600 14px 'Inter', sans-serif; letter-spacing: 0.5px; color: #a39d90; } .ds-card-title { margin-top: 4px; font: 700 24px 'Barlow Condensed', sans-serif; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-control",
+      "description": "Two to four choices in a well; the chosen one is filled with ink. One shared component (Segmented, R353).",
+      "html": "<div class=\"ds-seg\"><button>Light</button><button class=\"on\">Dark</button><button>System</button></div>",
+      "css": ".ds-seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #232019; } .ds-seg button { flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: #f1ece2; font: 600 16px 'Inter', sans-serif; } .ds-seg button.on { background: #f1ece2; color: #100f0c; } .ds-seg button:focus-visible { outline: 2px solid #f1ece2; outline-offset: 1px; }"
+    },
+    {
+      "name": "Set Fields",
+      "kind": "input",
+      "refersTo": "set-field-suggested",
+      "description": "Suggested values are faint and dashed; entered values are bold and solid.",
+      "html": "<div class=\"ds-fields\"><input class=\"ds-field-sug\" placeholder=\"60\"><input class=\"ds-field-ent\" value=\"8\"></div>",
+      "css": ".ds-fields { display: flex; gap: 4px; } .ds-fields input { width: 72px; min-height: 44px; border-radius: 8px; text-align: center; font-size: 20px; font-variant-numeric: tabular-nums; } .ds-field-sug { background: transparent; border: 1px dashed #736c60; color: #6d675c; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; } .ds-field-sug::placeholder { color: #6d675c; } .ds-field-ent { background: #1a1814; border: 1px solid #736c60; color: #f1ece2; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; } .ds-fields input:focus-visible { outline: 2px solid #f1ece2; outline-offset: 1px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "Search, name, note and food fields: a Strong Seam edge and 8px corners, 48pt tall (R352).",
+      "html": "<input class=\"ds-text-field\" placeholder=\"Search exercises\">",
+      "css": ".ds-text-field { min-height: 48px; padding: 0 12px; border-radius: 8px; border: 1px solid #736c60; background: #1a1814; color: #f1ece2; font: 400 16px 'Inter', sans-serif; } .ds-text-field::placeholder { color: #a39d90; }"
+    },
+    {
+      "name": "Tick",
+      "kind": "custom",
+      "refersTo": "tick",
+      "description": "Open ring, bolder on the next set, filled with ink when done.",
+      "html": "<span class=\"ds-tick\"></span><span class=\"ds-tick next\"></span><span class=\"ds-tick done\">&#10003;</span>",
+      "css": ".ds-tick { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-right: 8px; border-radius: 50%; border: 1.5px solid #a39d90; color: #100f0c; font-size: 22px; } .ds-tick.next { border: 2.5px solid #f1ece2; } .ds-tick.done { background: #f1ece2; border-color: #f1ece2; }"
+    },
+    {
+      "name": "Dock",
+      "kind": "nav",
+      "refersTo": "dock",
+      "description": "Four tabs; the focused one is red.",
+      "html": "<nav class=\"ds-dock\"><a class=\"on\">Train</a><a>History</a><a>Stats</a><a>Fuel</a></nav>",
+      "css": ".ds-dock { display: flex; background: #100f0c; border-top: 1px solid #2e2a23; } .ds-dock a { flex: 1; min-height: 56px; display: flex; align-items: center; justify-content: center; font: 600 12px 'Inter', sans-serif; color: #a39d90; } .ds-dock a.on { color: #E10600; } .ds-dock a:focus-visible { outline: 2px solid #f1ece2; outline-offset: -2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bench-Side Logbook",
+    "overview": "GymHound is a training log you glance at between sets: phone on the bench, chalk on the hands, music in the ears. The system behaves like a well-kept logbook on warm, iron-dark paper. Numbers are set in a tall condensed face so they read at arm's length; sentences are set in a plain sans so the rule reads like a person said it. Everything else steps back. There is one loud thing on the whole screen, the red GYMHOUND wordmark beside the hound, and it never moves, never grows and never shares its red with anything that is not the active tab or a personal record.\n\nDensity is a working density, not a dashboard density. Every target is at least 44pt because hands are sweaty and the phone may be lying flat. Rows wrap rather than truncate when the phone's text size goes up, because the person reading may have turned it up for exactly this screen. Depth comes from three warm tonal steps and hairline borders, never from shadow. Light and dark are both first-class; dark is the gym-floor default most lifters will see, light is the same paper in daylight.\n\nWhat a set shows is what it logs, so suggestion and fact look different on sight: a suggested value is faint, light and dashed; an entered value is bold, solid and filled. That distinction is the system's signature and it outranks decoration everywhere.",
+    "keyCharacteristics": [
+      "Warm near-black and warm paper, never neutral grey; every neutral carries a little brown.",
+      "Barlow Condensed for titles and every number (tabular figures); Inter for anything that reads as a sentence.",
+      "One red, three uses: the wordmark, the active tab, PR marks.",
+      "Flat surfaces in three tonal steps with 1px borders; no shadows.",
+      "Primary actions are filled with the text colour; ticks are filled with the text colour.",
+      "44pt targets, 16pt gutters, content capped at 512px and centred."
+    ],
+    "rules": [
+      {
+        "name": "The One Red Rule",
+        "body": "Red #E10600 appears in exactly three places: the GYMHOUND wordmark, the active tab, and PR marks. A flagged day, an invalid number or a destructive button never borrows it; an invalid number gets a heavier muted underline instead.",
+        "section": "colors"
+      },
+      {
+        "name": "The Filled-With-Ink Rule",
+        "body": "Emphasis is made by filling with the text colour and labelling in the background colour (primary button, selected segment, done tick), not by adding a hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Text-Size Rule",
+        "body": "All text follows the phone's text size except the wordmark (fixed) and the session header's name, progress line and Finish label (capped at 1.3x so the header stays one row). Rows wrap instead of capping or truncating.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number that can sit above or beside another number uses tabular figures.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Shadow Rule",
+        "body": "If something needs to stand forward, it moves one tonal step and takes a hairline border. A shadow is never the answer.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep the hound mark and the GYMHOUND wordmark on one line at every width, the wordmark at a fixed 38px. Use the owner's mark files; never redraw the dog.",
+      "**Do** use the theme tokens from `src/ui/theme.ts` for every colour, in both themes.",
+      "**Do** set numbers in Barlow Condensed with tabular figures, and sentences in Inter.",
+      "**Do** keep every target at least 44pt, counting a compact pill's 4pt hit slop.",
+      "**Do** let rows wrap at large text: trailing groups drop to their own line together, then wrap among themselves.",
+      "**Do** keep suggestions faint and dashed, and entered values bold and solid."
+    ],
+    "donts": [
+      "**Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.",
+      "**Don't** add shadows, gradients or glass; move a tonal step instead.",
+      "**Don't** use textFaint for anything but suggested set values, or borderStrong for anything but set-field edges, compact pill outlines, the rest row's edge and a switch's off track.",
+      "**Don't** put the footer on the session or the finish summary, or the hound in the footer.",
+      "**Don't** add motivational quotes, flames or skulls.",
+      "**Don't** truncate a row's text at large text sizes when it can wrap."
+    ]
+  }
+}
