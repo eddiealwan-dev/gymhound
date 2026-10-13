@@ -1,4 +1,5 @@
 import type { BellSound, DistanceUnit, FuelTargets, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
+import { DEFAULT_WIDGETS } from '../../domain/profile';
 import { defaultUnitFor } from '../../domain/units';
 import { settings } from '../schema';
 import type { Db } from '../types';
@@ -52,6 +53,15 @@ export type Settings = {
   hintUnitsDismissed: boolean;
   /** §18.15 (R408): the session's first-run tip (the name opens the form demo, ⋯ holds rest and plates) was dismissed. */
   hintSessionDismissed: boolean;
+  /** Round 12 (R566): the Profile's name and goal, '' when not given. */
+  profileName: string;
+  profileGoal: string;
+  /** The profile photo's file name in `profile/` in the documents folder, or null for none (R566). */
+  profilePhoto: string | null;
+  /** The Profile dashboard's widgets, in order (R567). Read through `dashboardWidgets`, which drops what it doesn't know. */
+  profileWidgets: unknown;
+  /** Workouts a week the Workouts per week widget aims at, or null for no goal (R567). */
+  weeklyWorkoutGoal: number | null;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -87,6 +97,11 @@ const KEYS: Record<keyof Settings, string> = {
   lastCloudCopyAt: 'last_cloud_copy_at',
   hintUnitsDismissed: 'hint_units_dismissed',
   hintSessionDismissed: 'hint_session_dismissed',
+  profileName: 'profile_name',
+  profileGoal: 'profile_goal',
+  profilePhoto: 'profile_photo',
+  profileWidgets: 'profile_widgets',
+  weeklyWorkoutGoal: 'weekly_workout_goal',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -125,6 +140,11 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     lastCloudCopyAt: null,
     hintUnitsDismissed: false,
     hintSessionDismissed: false,
+    profileName: '',
+    profileGoal: '',
+    profilePhoto: null,
+    profileWidgets: [...DEFAULT_WIDGETS],
+    weeklyWorkoutGoal: null,
   };
 }
 

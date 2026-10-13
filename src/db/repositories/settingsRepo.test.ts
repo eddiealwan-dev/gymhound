@@ -29,6 +29,10 @@ const SPEC_KEYS = [
   'pr_flags_backfilled',
   'pro_cached',
   'pro_debug_unlock',
+  'profile_goal',
+  'profile_name',
+  'profile_photo',
+  'profile_widgets',
   'rest_bell',
   'rest_bell_sound',
   'rest_bell_volume',
@@ -37,6 +41,7 @@ const SPEC_KEYS = [
   'theme',
   'unit',
   'water_goal_ml',
+  'weekly_workout_goal',
 ];
 
 const storedKeys = (db: Db) =>
@@ -318,5 +323,33 @@ describe('the water goal (phase 5, R150)', () => {
     expect(getSettings(db).waterGoalMl).toBe(2000);
     setSetting(db, 'waterGoalMl', null);
     expect(getSettings(db).waterGoalMl).toBeNull();
+  });
+});
+
+describe('the profile (R566, R567)', () => {
+  it('starts with no name, goal, photo or weekly goal, and the default dashboard', () => {
+    expect(defaultSettings('us')).toMatchObject({
+      profileName: '',
+      profileGoal: '',
+      profilePhoto: null,
+      profileWidgets: ['workouts_per_week', 'daily_macros'],
+      weeklyWorkoutGoal: null,
+    });
+  });
+
+  it('is added to a database whose settings predate it, without touching the other keys, and round-trips', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    for (const key of ['profile_name', 'profile_goal', 'profile_photo', 'profile_widgets', 'weekly_workout_goal']) db.delete(settings).where(eq(settings.key, key)).run();
+    setSetting(db, 'restSeconds', 90);
+
+    ensureSettings(db, 'us');
+
+    expect(storedKeys(db)).toEqual(SPEC_KEYS);
+    expect(getSettings(db)).toMatchObject({ profileName: '', profileWidgets: ['workouts_per_week', 'daily_macros'], restSeconds: 90 });
+    setSetting(db, 'profileWidgets', ['body_weight']);
+    setSetting(db, 'profilePhoto', 'profile-1.jpg');
+    setSetting(db, 'weeklyWorkoutGoal', 3);
+    expect(getSettings(db)).toMatchObject({ profileWidgets: ['body_weight'], profilePhoto: 'profile-1.jpg', weeklyWorkoutGoal: 3 });
   });
 });

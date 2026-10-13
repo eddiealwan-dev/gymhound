@@ -11,7 +11,14 @@ import { Header } from './Header';
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), replace: jest.fn() },
   usePathname: () => '/routines/edit/new',
+  useFocusEffect: () => undefined,
 }));
+// The header's Profile button reads the profile (R566).
+jest.mock('../db/DbProvider', () => {
+  const { seededDb } = jest.requireActual('../db/testing/fixtures');
+  const db = seededDb();
+  return { useDb: () => db };
+});
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('./HoundMark', () => ({ HoundMark: () => null }));
