@@ -1,5 +1,5 @@
-import { Keyboard, LayoutAnimation, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
-import type { KeyboardEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { Keyboard, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from './Button';
@@ -46,17 +46,15 @@ export function afterSheetCloses(go: () => void): void {
   setTimeout(once, SHEET_GONE_MS);
 }
 
-/** Moves the panel with the keyboard, over the keyboard's own time. */
-function withKeyboard(e: KeyboardEvent): void {
-  LayoutAnimation.configureNext({ duration: e.duration > 10 ? e.duration : 250, update: { duration: e.duration > 10 ? e.duration : 250, type: 'keyboard' } });
-}
-
 /**
  * A panel that rises from the bottom over a dimmed page. Tapping outside it, the back gesture or VoiceOver's escape
  * gesture calls `onClose`. The panel is never taller than the window less the status bar and a 48-point strip of the
  * dimmed page, and its content scrolls when it is taller than that. A field in it that raises the keyboard (iOS) lifts
  * the panel above the keyboard, and is scrolled into view when the panel is too short to show it (R560: no iOS
- * keyboard insets, which can outlive the sheet and leave empty space on a later page).
+ * keyboard insets, which can outlive the sheet and leave empty space on a later page). The panel moves with no
+ * animation of its own: `LayoutAnimation` animates the app's whole next update on iOS, the mounting of the sheet's own
+ * content with it, and the form demo's photos stopped showing (Round 12). Nothing wraps the content either: the field
+ * is found inside the scroll view's own content view.
  */
 export function Sheet({ visible, onClose, children }: SheetProps) {
   const { colors } = useTheme();
@@ -72,7 +70,6 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
   useEffect(() => {
     if (!visible || Platform.OS !== 'ios') return;
     const shown = Keyboard.addListener('keyboardWillShow', (e) => {
-      withKeyboard(e);
       setKeyboard(Math.max(0, Math.round(height - e.endCoordinates.screenY)));
     });
     const didShow = Keyboard.addListener('keyboardDidShow', () => {
@@ -83,8 +80,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
         scrollRef.current?.scrollTo({ y: offset.current, animated: true });
       });
     });
-    const hidden = Keyboard.addListener('keyboardWillHide', (e) => {
-      withKeyboard(e);
+    const hidden = Keyboard.addListener('keyboardWillHide', () => {
       setKeyboard(0);
     });
     return () => {
@@ -127,6 +123,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
         >
           <ScrollView
             ref={scrollRef}
+            innerViewRef={contentRef as React.RefObject<View>}
             alwaysBounceVertical={false}
             keyboardShouldPersistTaps="handled"
             onLayout={(e) => {
@@ -136,7 +133,7 @@ export function Sheet({ visible, onClose, children }: SheetProps) {
             onMomentumScrollEnd={atRest}
             contentContainerStyle={{ padding: 16, paddingBottom: 16 + (keyboard > 0 ? 0 : insets.bottom) }}
           >
-            <View ref={contentRef}>{children}</View>
+            {children}
           </ScrollView>
         </View>
       </View>

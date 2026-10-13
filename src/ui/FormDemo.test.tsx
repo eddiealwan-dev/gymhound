@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { AccessibilityInfo, Image, Platform, StyleSheet, Text } from 'react-native';
+import { AccessibilityInfo, Image, Keyboard, LayoutAnimation, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
@@ -232,6 +232,24 @@ describe('the form demo (R86)', () => {
 });
 
 describe('the form demo: the photos (R86)', () => {
+  it('opened with the keyboard up (a set just typed), the photos still draw, with no layout animation (Round 12)', async () => {
+    const listeners: Record<string, ((e: unknown) => void)[]> = {};
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((type: string, fn: (e: unknown) => void) => {
+      (listeners[type] ??= []).push(fn);
+      return { remove: () => {} };
+    }) as never);
+    const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+    const tree = await open('barbell-bench-press');
+    // The sheet puts the keyboard away as it opens.
+    act(() => (listeners.keyboardWillHide ?? []).forEach((fn) => fn({ duration: 250, endCoordinates: { screenY: 844, height: 0 } })));
+    expect(animate).not.toHaveBeenCalled();
+    expect(photos(tree)).toHaveLength(2);
+    // The photos sit straight in the sheet's scroll view, with nothing wrapped around the content.
+    const scroll = tree.root.findByType(ScrollView);
+    expect(scroll.props.innerViewRef).toBeDefined();
+    expect(scroll.props.children).not.toEqual(expect.objectContaining({ type: View }));
+  });
+
   it('starts on the start photo, then swaps to the end photo and back every 1.2 s, instantly', async () => {
     const tree = await open('barbell-bench-press');
     expect(opacity(cover(tree))).toBe(0);
