@@ -37,7 +37,8 @@ function StepButton({ glyph, label, disabled, onPress }: { glyph: string; label:
         opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
       })}
     >
-      <Body weight={600} style={{ fontSize: 22 }}>
+      {/* A glyph in a 44pt button, like an icon: it keeps its size (at the largest text it spilled out, Round 13). */}
+      <Body weight={600} allowFontScaling={false} style={{ fontSize: 22 }}>
         {glyph}
       </Body>
     </Pressable>

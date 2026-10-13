@@ -4,6 +4,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { Button } from './Button';
 import { EmptyState } from './EmptyState';
+import { BODY_MAX_SCALE } from './Text';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -26,8 +27,8 @@ describe('EmptyState (R401)', () => {
     const line = tree.root.findByType(Text);
     expect(line.props.children).toBe('No photos yet. Each one you add shows here, newest first.');
     expect(StyleSheet.flatten(line.props.style).color).toBe('#a39d90');
-    // It follows the phone's text size and wraps: no cap, no line limit.
-    expect(line.props.maxFontSizeMultiplier).toBeUndefined();
+    // It follows the phone's text size as iOS's body text does, and wraps: no line limit.
+    expect(line.props.maxFontSizeMultiplier).toBe(BODY_MAX_SCALE);
     expect(line.props.numberOfLines).toBeUndefined();
     expect(tree.root.findAllByType(Button)).toHaveLength(0);
   });

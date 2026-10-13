@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, useWindowDimensions, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { finishedWorkoutCount } from '../../../src/db/repositories/onboardingRepo';
 import { workoutCountText } from '../../../src/domain/profile';
 import { deviceLocale } from '../../../src/platform/locale';
 import { useDbQuery } from '../../../src/state/dataVersion';
 import { Avatar, useProfile } from '../../../src/ui/profile/Avatar';
 import { Dashboard } from '../../../src/ui/profile/Dashboard';
+import { useLargeText } from '../../../src/ui/largeText';
 import { Screen } from '../../../src/ui/Screen';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
 import { useTheme } from '../../../src/ui/ThemeProvider';
@@ -23,7 +24,7 @@ export default function Profile() {
   const named = profile.name !== '';
   const spoken = [named ? profile.name : 'No name yet', count, profile.goal !== '' ? `Goal: ${profile.goal}` : null].filter((x) => x !== null).join('. ');
   // Past 1.3× text the words take the card's whole width under the photo, rather than a sliver beside it (R562).
-  const stacked = useWindowDimensions().fontScale > 1.3;
+  const stacked = useLargeText();
   const chevron = <Ionicons name="chevron-forward" size={22} color={colors.textMuted} />;
   const words = (
     <View style={{ flex: stacked ? undefined : 1, minWidth: 0, gap: 2 }}>

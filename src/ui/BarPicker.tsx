@@ -57,15 +57,18 @@ function Choice({ label, detail, selected, onPress }: { label: string; detail?: 
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      {/* Both may wrap at a large text size; neither pushes the tick off the edge. */}
-      <Body weight={selected ? 600 : 400} style={{ flex: 1, minWidth: 0 }}>
-        {label}
-      </Body>
-      {detail ? (
-        <Body muted style={{ flexShrink: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
-          {detail}
+      {/* Name and weight share a line while both fit; at a large text size the weight drops under the name rather than
+          squeeze it ("Standard" broke over three lines, Round 13). Neither pushes the tick off the edge. */}
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12 }}>
+        <Body weight={selected ? 600 : 400} style={{ flexShrink: 1 }}>
+          {label}
         </Body>
-      ) : null}
+        {detail ? (
+          <Body muted style={{ flexShrink: 1, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+            {detail}
+          </Body>
+        ) : null}
+      </View>
       <View style={{ width: 22, alignItems: 'center' }}>
         {selected ? <Ionicons name="checkmark" size={20} color={colors.text} /> : null}
       </View>

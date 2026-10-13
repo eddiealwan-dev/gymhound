@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import { LineChart } from './LineChart';
+import { CHART_LABEL_MAX_SCALE, LineChart } from './LineChart';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -122,19 +122,20 @@ describe('LineChart', () => {
     expect(tree.root.findAllByType(View)[0].props.accessible).toBe(true);
   });
 
-  it('pads the plot by half a label line, scaled with the text size, so the top and bottom labels stay inside', () => {
+  it('pads the plot by half a label line, scaled with the text size (to 1.5×), so the top and bottom labels stay inside', () => {
     const tree = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
     layOut(tree);
     const lines = tree.root.findAllByType(Line).map((l) => l.props.y1);
     expect(Math.min(...lines)).toBe(8);
     expect(Math.max(...lines)).toBe(172);
 
+    // At 2× text the labels stop at 1.5× (CHART_LABEL_MAX_SCALE): a 24pt line, 12pt above and below.
     mockFontScale = 2;
     const big = render(<LineChart points={pts} formatValue={fmt} locale="en-GB" accessibilityLabel="Bodyweight" />);
     layOut(big);
     const bigLines = big.root.findAllByType(Line).map((l) => l.props.y1);
-    expect(Math.min(...bigLines)).toBe(16);
-    expect(Math.max(...bigLines)).toBe(164);
+    expect(Math.min(...bigLines)).toBe(12);
+    expect(Math.max(...bigLines)).toBe(168);
   });
 
   // On the web a label in a zero-height box with overflow hidden (numberOfLines) shrank to nothing, so each label is a
@@ -143,7 +144,7 @@ describe('LineChart', () => {
     mockFontScale = scale;
     const tree = render(<LineChart points={pts} formatValue={(v) => `${v} lb`} locale="en-GB" accessibilityLabel="Bodyweight" />);
     layOut(tree);
-    const lineHeight = 16 * scale;
+    const lineHeight = 16 * Math.min(scale, CHART_LABEL_MAX_SCALE);
     const tickYs = tree.root.findAllByType(Line).map((l) => l.props.y1 as number).sort((a, b) => a - b);
     const column = tree.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.maxWidth === '30%')[0];
     const columnStyle = StyleSheet.flatten(column.props.style);
@@ -309,12 +310,12 @@ describe('LineChart marks (R173, R191)', () => {
   });
 
   it('at a large text size, wider labels place fewer, measured again at that size', () => {
-    mockFontScale = 2;
+    mockFontScale = 1;
     const tree = render(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />);
     layOut(tree, 612);
     measure(tree, { 'Rough sleep': 50, 'Short on food': 50 });
     expect(shownLabel(tree, 'Rough sleep')).toBeDefined();
-    // The same labels at twice the size no longer clear each other.
+    // The same labels at a larger size (their 1.5× cap) no longer clear each other.
     mockFontScale = 3;
     act(() => tree.update(<LineChart points={wide} formatValue={fmt} locale="en-GB" accessibilityLabel="Bench" />));
     expect(shownLabel(tree, 'Short on food')).toBeUndefined();

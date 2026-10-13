@@ -98,7 +98,8 @@ function mount(): ReactTestRenderer {
 function shownText(tree: ReactTestRenderer): string[] {
   const out: string[] = [];
   const walk = (node: unknown) => {
-    if (typeof node === 'string') out.push(node);
+    // Without the zero-width spaces a name may break at (breakableName).
+    if (typeof node === 'string') out.push(node.replace(/\u200B/g, ''));
     else if (Array.isArray(node)) node.forEach(walk);
     else if (node && typeof node === 'object') walk((node as { children?: unknown }).children);
   };

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { type ReactElement, type ReactNode, useCallback } from 'react';
-import { Pressable, useWindowDimensions, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { workoutDatesSince } from '../../db/repositories/analyticsRepo';
@@ -11,13 +11,13 @@ import type { Db } from '../../db/types';
 import { bodyUnit, dailySeries, formatBodyValue } from '../../domain/body';
 import { chartSummary, pointsInRange, rangeChange } from '../../domain/chart';
 import { mondayOf, shiftDay } from '../../domain/dates';
-import { caloriesSpoken, dayTotals, fuelNumber, targetsFor } from '../../domain/fuel';
+import { caloriesSpoken, dayTotals, fuelNumber, gramsSpoken, targetsFor } from '../../domain/fuel';
 import { widgetInfo, type WidgetId, weekLabel, weekSpoken, workoutsPerWeek } from '../../domain/profile';
 import { useIsPro } from '../../platform/entitlements';
 import { useFocusedDbQuery } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { LineChart } from '../charts/LineChart';
-import { MacroBars } from '../fuel/MacroBars';
+import { useLargeText } from '../largeText';
 import { useOpenPaywall } from '../pro/openPaywall';
 import { Body, Display, Label, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -136,56 +136,103 @@ export function WorkoutsPerWeekWidget({ today, goal, locale, onOptions }: { toda
 
 type Today = { totals: ReturnType<typeof dayTotals>; target: ReturnType<typeof targetsFor> | null };
 
-/** The kcal ring: eaten against the target, capped full. */
+/** The share of a target eaten, 0 to 1, capped full; a 0 target is full once anything is eaten (R147). */
+const shareOf = (eaten: number, target: number) => (target > 0 ? Math.min(1, Math.max(0, eaten / target)) : eaten > 0 ? 1 : 0);
+
+/** The ring's size, and how far its words grow: they sit inside it. */
+const RING = 76;
+const RING_STROKE = 7;
+const RING_TEXT_MAX_SCALE = 1.2;
+/** The small amounts under the bars grow some, not as far as body text: they share a row (Round 13 note). */
+const AMOUNT_MAX_SCALE = 1.6;
+
+/** Calories: eaten in a ring against the target, capped full, and "of 2,600" under it. */
 function KcalRing({ eaten, target, locale }: { eaten: number; target: number; locale: string }) {
   const { colors } = useTheme();
-  const size = 96;
-  const stroke = 8;
-  const r = (size - stroke) / 2;
+  const r = (RING - RING_STROKE) / 2;
   const length = 2 * Math.PI * r;
-  const share = target > 0 ? Math.min(1, eaten / target) : eaten > 0 ? 1 : 0;
   return (
-    <View
-      accessible
-      accessibilityLabel={`${caloriesSpoken(eaten, locale)} of ${caloriesSpoken(target, locale)}`}
-      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
-    >
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.surfaceRaised} strokeWidth={stroke} fill="none" />
-        <Circle
-          testID="kcal-ring"
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={colors.text}
-          strokeWidth={stroke}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${length} ${length}`}
-          strokeDashoffset={length * (1 - share)}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </Svg>
-      {/* Inside a fixed ring: capped, so the number stays inside it. */}
-      <Num weight={700} maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 20, maxWidth: size - 2 * stroke - 8 }}>
-        {fuelNumber(eaten, locale)}
-      </Num>
-      <Body muted maxFontSizeMultiplier={1.2} style={{ fontSize: 12 }}>
-        kcal
+    <View accessible accessibilityLabel={`Calories, ${caloriesSpoken(eaten, locale)} of ${caloriesSpoken(target, locale)}`} style={{ alignItems: 'center', gap: 4 }}>
+      <View style={{ width: RING, height: RING, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={RING} height={RING} style={{ position: 'absolute' }}>
+          <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={colors.surfaceRaised} strokeWidth={RING_STROKE} fill="none" />
+          <Circle
+            testID="kcal-ring"
+            cx={RING / 2}
+            cy={RING / 2}
+            r={r}
+            stroke={colors.text}
+            strokeWidth={RING_STROKE}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${length} ${length}`}
+            strokeDashoffset={length * (1 - shareOf(eaten, target))}
+            transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+          />
+        </Svg>
+        <Num weight={700} maxFontSizeMultiplier={RING_TEXT_MAX_SCALE} numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 17, maxWidth: RING - 2 * RING_STROKE - 6 }}>
+          {fuelNumber(eaten, locale)}
+        </Num>
+        <Body muted maxFontSizeMultiplier={RING_TEXT_MAX_SCALE} style={{ fontSize: 11 }}>
+          kcal
+        </Body>
+      </View>
+      <Body muted maxFontSizeMultiplier={AMOUNT_MAX_SCALE} style={{ fontSize: 12, fontVariant: ['tabular-nums'] }}>
+        {`of ${fuelNumber(target, locale)}`}
       </Body>
     </View>
   );
 }
 
 /**
- * Daily macros (R567, Pro): today's calories in a ring against today's target (training or rest day, §7.11), then
- * Fuel's macro bars. With no targets, today's totals and **Set targets**. Free or lapsed, what it would show and
- * **See Pro**: food logging is Pro (§9).
+ * One macro beside the ring: its name, a 4pt bar of eaten against the target (none without a target), and "94 / 180 g"
+ * in small type under it. At large text it takes the card's whole width, name and amount on a line over the bar.
+ */
+function MacroColumn({ name, eaten, target, locale, wide }: { name: string; eaten: number; target: number | null; locale: string; wide: boolean }) {
+  const { colors } = useTheme();
+  const amount = target === null ? `${fuelNumber(eaten, locale)} g` : `${fuelNumber(eaten, locale)} / ${fuelNumber(target, locale)} g`;
+  const spoken = target === null ? `${name}, ${gramsSpoken(eaten, locale)}` : `${name}, ${fuelNumber(eaten, locale)} of ${gramsSpoken(target, locale)}`;
+  const bar = (
+    <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.surfaceRaised, overflow: 'hidden' }}>
+      {target !== null ? <View testID={`widget-macro-${name.toLowerCase()}`} style={{ height: 4, backgroundColor: colors.text, width: `${shareOf(eaten, target) * 100}%` }} /> : null}
+    </View>
+  );
+  if (wide) {
+    return (
+      <View accessible accessibilityLabel={spoken} style={{ gap: 6 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 12 }}>
+          <Body weight={600}>{name}</Body>
+          <Body muted style={{ fontVariant: ['tabular-nums'] }}>
+            {amount}
+          </Body>
+        </View>
+        {bar}
+      </View>
+    );
+  }
+  return (
+    <View accessible accessibilityLabel={spoken} style={{ flex: 1, minWidth: 0, gap: 6 }}>
+      <Body weight={600} maxFontSizeMultiplier={AMOUNT_MAX_SCALE} numberOfLines={1} style={{ fontSize: 13 }}>
+        {name}
+      </Body>
+      {bar}
+      <Body muted maxFontSizeMultiplier={AMOUNT_MAX_SCALE} numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 12, fontVariant: ['tabular-nums'] }}>
+        {amount}
+      </Body>
+    </View>
+  );
+}
+
+/**
+ * Daily macros (R567, Pro): one line, as the owner asked (Round 13): today's calories in a ring against today's target
+ * (training or rest day, §7.11), then Protein, Carbs and Fat beside it, each a thin bar with its amount in small type.
+ * At large text the ring has its own line and each macro the card's whole width. With no targets, today's totals and
+ * **Set targets**. Free or lapsed, what it would show and **See Pro**: food logging is Pro (§9).
  */
 export function DailyMacrosWidget({ today, locale, onOptions }: { today: string; locale: string; onOptions: () => void }) {
   const pro = useIsPro();
-  // Past 1.3× text the bars go under the ring, at the card's full width, as the target fields do (MacroFields).
-  const stacked = useWindowDimensions().fontScale > 1.3;
+  // Past 1.3× text the macros go under the ring, each at the card's full width.
+  const stacked = useLargeText();
   const openPaywall = useOpenPaywall();
   const read = useCallback(
     (db: Db): Today => {
@@ -218,11 +265,13 @@ export function DailyMacrosWidget({ today, locale, onOptions }: { today: string;
           </View>
         </>
       ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
-          <KcalRing eaten={totals.kcal} target={target.kcal} locale={locale} />
-          <View style={{ flexGrow: 1, flexBasis: stacked ? '100%' : 180, minWidth: 0 }}>
-            <MacroBars target={target} totals={totals} locale={locale} />
+        <View style={{ flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'stretch' : 'center', gap: stacked ? 12 : 14 }}>
+          <View style={{ alignItems: stacked ? 'flex-start' : 'center' }}>
+            <KcalRing eaten={totals.kcal} target={target.kcal} locale={locale} />
           </View>
+          <MacroColumn name="Protein" eaten={totals.proteinG} target={target.protein} locale={locale} wide={stacked} />
+          <MacroColumn name="Carbs" eaten={totals.carbsG} target={target.carbs} locale={locale} wide={stacked} />
+          <MacroColumn name="Fat" eaten={totals.fatG} target={target.fat} locale={locale} wide={stacked} />
         </View>
       )}
       <OpenLink label="Fuel" readAs="Open Fuel" onPress={() => router.navigate('/fuel')} />

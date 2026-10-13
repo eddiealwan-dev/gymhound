@@ -2,6 +2,7 @@ import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { Hint } from './Hint';
+import { BODY_MAX_SCALE } from './Text';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,7 +36,7 @@ describe('Hint (R407, R408)', () => {
     const line = mount().root.findByType(Text);
     expect(line.props.children).toBe('Tap ⋯ for more.');
     expect(line.props.numberOfLines).toBeUndefined();
-    expect(line.props.maxFontSizeMultiplier).toBeUndefined();
+    expect(line.props.maxFontSizeMultiplier).toBe(BODY_MAX_SCALE);
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ flex: 1 });
   });
 

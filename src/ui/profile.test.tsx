@@ -22,6 +22,12 @@ let mockDb: Db;
 let mockPro = false;
 let mockPath = '/';
 const mockOpenPaywall = jest.fn();
+/** The phone's text size; normal unless a test makes it large. */
+let mockFontScale = 1;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }),
+}));
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn(() => true) },
@@ -84,6 +90,7 @@ beforeEach(() => {
   mockDb = seededDb();
   mockPro = false;
   mockPath = '/';
+  mockFontScale = 1;
   jest.useFakeTimers({ now: new Date('2026-10-13T12:00:00'), doNotFake: ['nextTick', 'setImmediate'] });
   jest.clearAllMocks();
 });
@@ -205,15 +212,43 @@ describe('the Profile (R566, R567)', () => {
     expect(mockOpenPaywall).toHaveBeenCalled();
   });
 
-  it("Daily macros with Pro: today's calories in a ring against the target, and the macro bars", () => {
+  it("Daily macros with Pro: today's calories in a ring and the three macros, all on one line, amounts in small type", () => {
     mockPro = true;
     setSetting(mockDb, 'fuelTargets', { training: { kcal: 2600, protein: 180, carbs: 300, fat: 80 }, rest: { kcal: 2400, protein: 170, carbs: null, fat: null } });
     logQuickAdd(mockDb, 'Oats', { kcal: 1200, proteinG: 90, carbsG: 150, fatG: 20 }, '2026-10-13', Date.now());
     const tree = mount(<Profile />);
-    // A rest day today: the rest-day target.
-    expect(tree.root.findAll((n) => n.props.accessibilityLabel === '1,200 calories of 2,400 calories').length).toBeGreaterThan(0);
-    expect(texts(tree)).toEqual(expect.arrayContaining(['1,200', 'Protein 90 / 170 g', 'Carbs 150 g · Fat 20 g']));
+    const card = tree.root.findAll((n) => typeof n.type === 'string' && n.props.testID === 'widget-daily_macros')[0];
+    const item = (label: string) => card.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === label)[0];
+    // A rest day today: the rest-day target. Carbs and fat have none, so they are counted with no bar.
+    const ring = item('Calories, 1,200 calories of 2,400 calories');
+    const protein = item('Protein, 90 of 170 grams');
+    const carbs = item('Carbs, 150 grams');
+    const fat = item('Fat, 20 grams');
+    for (const x of [ring, protein, carbs, fat]) expect(x).toBeDefined();
+    // All four share one row (the owner's Round 13 note): the innermost box that holds them all lays them out in a row.
+    const holdsAll = (items: ReactTestInstance[]) => (n: ReactTestInstance) => typeof n.type === 'string' && items.every((m) => n.findAll((x) => x === m).length > 0);
+    const rowOf = (root: ReactTestInstance, items: ReactTestInstance[]) => {
+      const all = root.findAll(holdsAll(items));
+      return all[all.length - 1];
+    };
+    expect(StyleSheet.flatten(rowOf(card, [ring, protein, carbs, fat]).props.style)).toMatchObject({ flexDirection: 'row' });
+    expect(texts(tree)).toEqual(expect.arrayContaining(['1,200', 'of 2,400', 'Protein', '90 / 170 g', 'Carbs', '150 g', 'Fat', '20 g']));
+    // Small type that grows only some: they share a row.
+    const amount = card.findAll((n) => n.type === Text && n.props.children === '90 / 170 g')[0];
+    expect(StyleSheet.flatten(amount.props.style).fontSize).toBe(12);
+    expect(amount.props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.6);
+    expect(card.findAll((n) => n.props.testID === 'widget-macro-protein')).not.toHaveLength(0);
+    expect(card.findAll((n) => n.props.testID === 'widget-macro-carbs')).toHaveLength(0);
 
+    // At large text the ring has its own line and each macro the card's width.
+    mockFontScale = 2;
+    const large = mount(<Profile />);
+    const largeCard = large.root.findAll((n) => typeof n.type === 'string' && n.props.testID === 'widget-daily_macros')[0];
+    const largeItem = (label: string) => largeCard.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === label)[0];
+    const largeItems = ['Calories, 1,200 calories of 2,400 calories', 'Protein, 90 of 170 grams', 'Carbs, 150 grams', 'Fat, 20 grams'].map(largeItem);
+    expect(StyleSheet.flatten(rowOf(largeCard, largeItems).props.style)).toMatchObject({ flexDirection: 'column' });
+
+    mockFontScale = 1;
     setSetting(mockDb, 'fuelTargets', null);
     const none = mount(<Profile />);
     expect(texts(none)).toEqual(expect.arrayContaining(['Today: 1,200 kcal · 90 g protein', 'No targets yet.']));

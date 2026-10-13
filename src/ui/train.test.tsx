@@ -138,7 +138,8 @@ function mount(): ReactTestRenderer {
   return tree;
 }
 
-const lines = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join(''));
+// Without the zero-width spaces a name may break at (breakableName): the words as they read.
+const lines = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((n) => ([] as unknown[]).concat(n.props.children).join('').replace(/\u200B/g, ''));
 
 /** Every string drawn on screen right now (a closed sheet draws nothing). */
 function shownText(tree: ReactTestRenderer): string[] {
@@ -205,6 +206,14 @@ describe('Train leads with today\'s workout (spec 18.6)', () => {
     const greeting = tree.root.findAll((n) => n.type === Text && n.props.children === 'GOOD MORNING');
     expect(greeting).toHaveLength(1);
     expect(greeting[0].props.numberOfLines).toBeUndefined();
+  });
+
+  it('the two stat cards sit side by side, and stack past 1.3× text, so "moved" never breaks (Round 13)', () => {
+    // The test environment's text size is 2.
+    const tree = mount();
+    const cards = tree.root.findAll((n) => typeof n.type === 'string' && ['Streak', 'This week'].every((label) => n.findAll((x) => x.type === Text && x.props.children === label).length > 0));
+    const row = cards[cards.length - 1];
+    expect(StyleSheet.flatten(row.props.style).flexDirection).toBe('column');
   });
 
   it('the stat numbers shrink to fit on one line with no fixed line height, as the date does (R79, Round 5 review)', () => {

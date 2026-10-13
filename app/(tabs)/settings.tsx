@@ -3,6 +3,7 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
+import { useLargeText } from '../../src/ui/largeText';
 import { getFuelTargets } from '../../src/db/repositories/foodLogRepo';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { switchDisplayUnit } from '../../src/db/repositories/unitsRepo';
@@ -31,6 +32,7 @@ import { Segmented } from '../../src/ui/Segmented';
 import { Body, Label, ScreenTitle } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { Toggle } from '../../src/ui/Toggle';
+import { FEEDBACK_EMAIL, openFeedbackEmail } from '../../src/platform/feedback';
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
@@ -169,6 +171,7 @@ const INCREMENT_KEY = { lb: 'defaultIncrementLb', kg: 'defaultIncrementKg' } as 
  */
 function IncrementControl({ unit, value, onChange }: { unit: WeightUnit; value: number; onChange: (increment: number) => void }) {
   const { colors } = useTheme();
+  const large = useLargeText();
   const base = INCREMENT_CHOICES[unit];
   const choices = base.includes(value) || !(value > 0) ? base : [...base, value].sort((a, b) => a - b);
   return (
@@ -183,9 +186,11 @@ function IncrementControl({ unit, value, onChange }: { unit: WeightUnit; value: 
             accessibilityLabel={label}
             accessibilityState={{ selected }}
             onPress={() => onChange(increment)}
+            // At large text each is as wide as its label, so "1.25 kg" never spills out (Round 13).
             style={{
               flexGrow: 1,
-              flexBasis: 64,
+              flexBasis: large ? 'auto' : 64,
+              paddingHorizontal: large ? 12 : 0,
               minHeight: 44,
               borderRadius: 9,
               alignItems: 'center',
@@ -233,6 +238,7 @@ function ProgressionSection() {
  */
 function RestLengthControl({ value, onChange }: { value: number; onChange: (seconds: number) => void }) {
   const { colors } = useTheme();
+  const large = useLargeText();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
       {REST_LENGTHS.map((seconds) => {
@@ -246,7 +252,8 @@ function RestLengthControl({ value, onChange }: { value: number; onChange: (seco
             onPress={() => onChange(seconds)}
             style={{
               flexGrow: 1,
-              flexBasis: '30%',
+              flexBasis: large ? 'auto' : '30%',
+              paddingHorizontal: large ? 12 : 0,
               minHeight: 44,
               borderRadius: 9,
               alignItems: 'center',
@@ -270,8 +277,10 @@ function RestLengthControl({ value, onChange }: { value: number; onChange: (seco
  */
 function BellVolumeControl({ value, onChange }: { value: number; onChange: (volume: number) => void }) {
   const { colors } = useTheme();
+  const large = useLargeText();
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
+    // One row, or at large text as many as the labels need: "100%" ran off the screen (Round 13).
+    <View style={{ flexDirection: 'row', flexWrap: large ? 'wrap' : 'nowrap', backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: 4, gap: 4 }}>
       {BELL_VOLUMES.map((volume) => {
         const selected = volume === value;
         const label = `${Math.round(volume * 100)}%`;
@@ -283,7 +292,10 @@ function BellVolumeControl({ value, onChange }: { value: number; onChange: (volu
             accessibilityState={{ selected }}
             onPress={() => onChange(volume)}
             style={{
-              flex: 1,
+              flexGrow: 1,
+              flexShrink: large ? 0 : 1,
+              flexBasis: large ? 'auto' : 0,
+              paddingHorizontal: large ? 12 : 0,
               minHeight: 44,
               borderRadius: 9,
               alignItems: 'center',
@@ -600,6 +612,33 @@ function ProSection() {
 }
 
 /**
+ * Feedback (R570): **Send feedback** opens the phone's mail app with a new email to GymHound, its subject and a short
+ * prompt filled in. No form in the app. With no mail app to take it, the address is shown to write to instead.
+ */
+function FeedbackSection() {
+  const [unavailable, setUnavailable] = useState(false);
+  return (
+    <Section title="Feedback">
+      <Body muted>Found a bug, or have an idea? Tell us. It opens an email in your mail app.</Body>
+      <Button
+        label="Send feedback"
+        variant="secondary"
+        onPress={() => {
+          setUnavailable(false);
+          void openFeedbackEmail().then((result) => {
+            if (result === 'unavailable') {
+              setUnavailable(true);
+              announce(`Couldn't open Mail. Write to ${FEEDBACK_EMAIL}.`);
+            }
+          });
+        }}
+      />
+      {unavailable ? <Body muted selectable>{`Couldn't open Mail. Write to ${FEEDBACK_EMAIL}.`}</Body> : null}
+    </Section>
+  );
+}
+
+/**
  * The Pro debug switch (§9, R126), for testing Pro before it can be bought: it turns Pro on through the app's one
  * entitlements object, so the routine limit on every screen hears it at once. It shows the debug unlock itself, not
  * whether Pro is on, so it can still be turned off where Pro was also bought. Shown only where the debug unlock is
@@ -643,8 +682,8 @@ function BuildLine() {
 }
 
 /**
- * Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Fuel, Backups, Export, GymHound Pro, and
- * Developer where the debug unlock is allowed.
+ * Settings so far: Appearance, Units, Bar, Plates, Progression, Rest timer, Fuel, Backups, Health, Export, Import,
+ * GymHound Pro, Feedback, and Developer where the debug unlock is allowed.
  */
 export default function Settings() {
   return (
@@ -666,6 +705,7 @@ export default function Settings() {
         <ExportSection />
         <ImportSection />
         <ProSection />
+        <FeedbackSection />
         {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
     </Screen>

@@ -26,6 +26,7 @@ import { Hint } from '../../src/ui/Hint';
 import { Screen } from '../../src/ui/Screen';
 import { Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
+import { breakableName, useLargeText } from '../../src/ui/largeText';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../src/domain/routineLimit';
 import { quoteFor } from '../../src/domain/quotes';
@@ -110,12 +111,12 @@ function ResumeCard({
  */
 const statFontSize = (value: string) => (Platform.OS === 'web' ? Math.min(44, Math.floor((44 * 5) / value.length)) : 44);
 
-/** A label, one big number and a small line under it. Two of these sit side by side at equal width. */
-function StatCard({ label, value, caption }: { label: string; value: string; caption: string }) {
+/** A label, one big number and a small line under it. Two of these sit side by side at equal width, or stack at large text. */
+function StatCard({ label, value, caption, stacked }: { label: string; value: string; caption: string; stacked: boolean }) {
   const { colors } = useTheme();
   const fontSize = statFontSize(value);
   return (
-    <View style={{ flex: 1, minWidth: 0, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16 }}>
+    <View style={{ flex: stacked ? undefined : 1, minWidth: 0, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16 }}>
       {/* The Label style UP NEXT uses, as Fuel's CALORIES LEFT does under its number; not a heading here. */}
       <Label accessibilityRole="none">{label}</Label>
       {/* A common minimum height keeps the captions of the two cards level. Native also shrinks the number when the phone's
@@ -192,7 +193,7 @@ function UpNextCard({
     <Card>
       <Label>UP NEXT</Label>
       <Display weight={700} style={{ fontSize: 24, marginTop: 4 }}>
-        {`${upNext.routineName} · ${upNext.dayName}`}
+        {`${breakableName(upNext.routineName)} · ${upNext.dayName}`}
       </Display>
       <Body muted style={{ fontSize: 14 }}>
         {upNextSubtitle(upNext.lastTime, upNextNeedsWeights(upNext.exercises), locale)}
@@ -234,7 +235,7 @@ function LockedUpNextCard({ upNext }: { upNext: UpNext }) {
     <Card>
       <Label>UP NEXT</Label>
       <Display weight={700} style={{ fontSize: 24, marginTop: 4 }}>
-        {upNext.routineName}
+        {breakableName(upNext.routineName)}
       </Display>
       <Body muted style={{ marginTop: 4 }}>
         {proReasonText(lockedRoutineReason({ name: upNext.routineName, isPremade: upNext.routineIsPremade }))}
@@ -282,6 +283,7 @@ function DailyQuote({ localDate }: { localDate: string }) {
 export default function Train() {
   const db = useDb();
   const { colors } = useTheme();
+  const stacked = useLargeText();
   const now = useNow(60_000);
   const today = toLocalDate(now);
   const locale = deviceLocale();
@@ -366,9 +368,10 @@ export default function Train() {
         />
       ) : null}
 
-      <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-        <StatCard label="Streak" value={`${streak}`} caption={streak === 1 ? 'day' : 'days'} />
-        <StatCard label="This week" value={volumeNumber(weekVolume, unit, locale)} caption={`${unit} moved`} />
+      {/* Past 1.3× text the cards stack: side by side, "moved" broke into "move" and "d" (Round 13). */}
+      <View style={{ flexDirection: stacked ? 'column' : 'row', gap: 12, marginTop: 16 }}>
+        <StatCard label="Streak" value={`${streak}`} caption={streak === 1 ? 'day' : 'days'} stacked={stacked} />
+        <StatCard label="This week" value={volumeNumber(weekVolume, unit, locale)} caption={`${unit} moved`} stacked={stacked} />
       </View>
 
       {active === null && upNext !== null ? (

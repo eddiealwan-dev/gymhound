@@ -24,6 +24,7 @@ import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Screen } from '../../../src/ui/Screen';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
+import { breakableName } from '../../../src/ui/largeText';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to Routines. With nothing to go back to (opened by address, or reloaded), it lands on Routines. */
@@ -107,7 +108,7 @@ export default function RoutineDetailScreen() {
   return (
     <Screen>
       <BackLink label="Routines" onPress={toRoutines} />
-      <ScreenTitle>{routine.name}</ScreenTitle>
+      <ScreenTitle>{breakableName(routine.name)}</ScreenTitle>
       <Body muted style={{ fontSize: 14, marginTop: 4 }}>
         {routineLine({ id: routine.id, isPremade: routine.isPremade, dayCount: routine.days.length })}
       </Body>

@@ -2,15 +2,18 @@ import type { ReactElement } from 'react';
 import { View } from 'react-native';
 import { type EntryTotals, kcalProteinText, leftSpoken, leftText } from '../../domain/fuel';
 import type { Macros } from '../../domain/types';
+import { useLargeText } from '../largeText';
 import { Body, Label, Num } from '../Text';
 
 /**
  * One big number over its label, read by VoiceOver as one ("Protein left, 86 grams"). Two sit side by side down to a
- * 320pt screen at default text (2 x 120 + 16 inside 288) and wrap only when the text is large.
+ * 320pt screen at default text (2 x 120 + 16 inside 288). Past 1.3× text each takes the whole width: side by side,
+ * "1,440" at twice its size broke into "1,44" and "0" (Round 13).
  */
 function LeftNumber({ value, label, spoken }: { value: string; label: string; spoken: string }) {
+  const stacked = useLargeText();
   return (
-    <View accessible accessibilityLabel={`${label}, ${spoken}`} style={{ flexGrow: 1, flexBasis: 120, gap: 4 }}>
+    <View accessible accessibilityLabel={`${label}, ${spoken}`} style={{ flexGrow: 1, flexBasis: stacked ? '100%' : 120, gap: 4 }}>
       <Num style={{ fontSize: 44 }}>{value}</Num>
       <Label accessibilityRole="none">{label}</Label>
     </View>

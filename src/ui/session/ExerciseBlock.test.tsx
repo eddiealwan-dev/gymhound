@@ -10,6 +10,7 @@ import { FormDemo } from '../FormDemo';
 import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow, SUGGESTED_HINT } from './SetRow';
+import { BODY_MAX_SCALE } from '../Text';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1281,9 +1282,9 @@ describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () =>
 
     const text = textNode(tree, line);
     expect(StyleSheet.flatten(text.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
-    // No caps: it wraps at any text size.
+    // No line limit: it wraps at any text size, growing as iOS's body text does.
     expect(text.props.numberOfLines).toBeUndefined();
-    expect(text.props.maxFontSizeMultiplier).toBeUndefined();
+    expect(text.props.maxFontSizeMultiplier).toBe(BODY_MAX_SCALE);
     const shown = shownText(tree);
     expect(shown.indexOf('Bench Press')).toBeLessThan(shown.indexOf(SAVED));
     expect(shown.indexOf(SAVED)).toBeLessThan(shown.indexOf(line));

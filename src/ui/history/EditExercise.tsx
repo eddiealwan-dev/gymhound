@@ -10,6 +10,7 @@ import { cellStyle, COLUMN_GAP } from '../session/SetRow';
 import { Body, Display } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { EditSetRow } from './EditSetRow';
+import { SET_HEADER_MAX_SCALE } from '../largeText';
 
 type Props = {
   exercise: DraftExercise;
@@ -64,7 +65,7 @@ export function EditExercise({ exercise, setKeys, unit, distanceUnit, problems, 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (
           <View key={column.key} style={cellStyle(column.key)}>
-            <Body weight={600} muted numberOfLines={1} style={{ fontSize: 10, letterSpacing: 0.3, textAlign: column.key === 'set' ? 'left' : 'center' }}>
+            <Body weight={600} muted numberOfLines={1} maxFontSizeMultiplier={SET_HEADER_MAX_SCALE} style={{ fontSize: 10, letterSpacing: 0.3, textAlign: column.key === 'set' ? 'left' : 'center' }}>
               {column.header}
             </Body>
           </View>

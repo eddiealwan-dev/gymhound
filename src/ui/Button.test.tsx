@@ -3,6 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { Button } from './Button';
+import { BODY_MAX_SCALE } from './Text';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,9 +51,9 @@ describe('Button', () => {
     expect(StyleSheet.flatten(labelOf(tree).props.style)).toMatchObject({ color: '#100f0c', fontSize: 15 });
   });
 
-  it("a default Button's label follows the phone's text size with no cap", () => {
+  it("a default Button's label follows the phone's text size as iOS's body text does", () => {
     const tree = render(<Button label="Finish" onPress={jest.fn()} />);
-    expect(labelOf(tree).props.maxFontSizeMultiplier).toBeUndefined();
+    expect(labelOf(tree).props.maxFontSizeMultiplier).toBe(BODY_MAX_SCALE);
   });
 
   it('passes accessibilityLabel and maxFontSizeMultiplier through', () => {

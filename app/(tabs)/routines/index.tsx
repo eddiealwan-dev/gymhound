@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, useWindowDimensions, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { listRoutines } from '../../../src/db/repositories/routinesRepo';
 import type { RoutineSummary } from '../../../src/db/repositories/routinesRepo';
 import { listSavedWorkouts } from '../../../src/db/repositories/savedWorkoutsRepo';
@@ -19,6 +19,7 @@ import { useIsPro } from '../../../src/platform/entitlements';
 import { Screen } from '../../../src/ui/Screen';
 import { useStartSaved } from '../../../src/ui/StartSaved';
 import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
+import { breakableName, useLargeText } from '../../../src/ui/largeText';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to where Routines was opened from (Train). With nothing to go back to (opened by address, or reloaded), it lands on Train. */
@@ -76,7 +77,7 @@ function RoutineRow({
         style={({ pressed }) => ({ flex: stacked ? undefined : 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: pressed ? 0.8 : 1 })}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Body weight={600}>{routine.name}</Body>
+          <Body weight={600}>{breakableName(routine.name)}</Body>
           <Body muted style={{ fontSize: 14 }}>
             {days}
           </Body>
@@ -111,12 +112,8 @@ function RoutineRow({
   );
 }
 
-/** Above this text size a row's name takes the whole width and its buttons go under it, rather than squeezing it (R562). */
-const STACK_ABOVE_SCALE = 1.3;
-
-function useStackedRow(): boolean {
-  return useWindowDimensions().fontScale > STACK_ABOVE_SCALE;
-}
+/** Above `STACK_ABOVE_SCALE` a row's name takes the whole width and its buttons go under it, rather than squeezing it (R562). */
+const useStackedRow = useLargeText;
 
 const exerciseCount = (n: number) => (n === 1 ? '1 exercise' : `${n} exercises`);
 

@@ -14,6 +14,13 @@ import { Footer } from './Footer';
 import { FoodEntrySheet } from './fuel/FoodEntrySheet';
 import { Sheet } from './Sheet';
 
+/** The phone's text size: the test environment's 2, unless a test sets it. */
+let mockFontScale = 2;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 375, height: 812, scale: 3, fontScale: mockFontScale }),
+}));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // A real database: the screen reads through the food log and settings, and every write bumps the data version.
@@ -316,7 +323,12 @@ describe('the summary (§8.10, R147)', () => {
 });
 
 describe('the summary at 320pt', () => {
+  afterEach(() => {
+    mockFontScale = 2;
+  });
+
   it('fits Calories left and Protein left side by side in a 320pt screen at default text (288pt inside the gutters)', () => {
+    mockFontScale = 1;
     mockPro = true;
     setFuelTargets(mockDb, TARGETS);
     const tree = mount();
@@ -330,6 +342,17 @@ describe('the summary at 320pt', () => {
     expect(row.flexWrap).toBe('wrap');
     expect(2 * (own.flexBasis as number) + (row.columnGap as number)).toBeLessThanOrEqual(288);
     expect(own.flexGrow).toBe(1);
+  });
+
+  it('past 1.3× text each number takes the whole width, so "1,440" never breaks (Round 13)', () => {
+    mockFontScale = 1.35;
+    mockPro = true;
+    setFuelTargets(mockDb, TARGETS);
+    const tree = mount();
+    for (const label of ['Calories left, 2,400 calories', 'Protein left, 180 grams']) {
+      const [number] = tree.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.type !== 'string');
+      expect(StyleSheet.flatten(number.props.style).flexBasis).toBe('100%');
+    }
   });
 });
 

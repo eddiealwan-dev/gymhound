@@ -20,6 +20,11 @@ const LABEL_LINE_HEIGHT = 16;
 const LABEL_GAP = 8;
 /** The y labels take at most this share of the width; a longer label shrinks to fit on its line. */
 const LABEL_COLUMN_MAX = '30%';
+/**
+ * How far the axis labels grow with the text size (Round 13: at the largest size they were cut to "59…"). The chart's
+ * spoken summary carries its numbers, so its labels grow as a phone's own charts' do: some, not threefold.
+ */
+export const CHART_LABEL_MAX_SCALE = 1.5;
 
 export type LineChartProps = {
   /**
@@ -66,7 +71,8 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
   // Room inside the plot: the dots stay whole at the sides, and half a (scaled) label line above the top tick and below
   // the bottom one, so the y labels centred on those ticks stay inside the chart at any text size. With a mark label,
   // one more label line and its rise over a ring sit above the top tick.
-  const lineHeight = LABEL_LINE_HEIGHT * fontScale;
+  const labelScale = Math.min(fontScale, CHART_LABEL_MAX_SCALE);
+  const lineHeight = LABEL_LINE_HEIGHT * labelScale;
   const halfLine = Math.ceil(lineHeight / 2);
   const side = (anyHollow ? Math.ceil(RING_RADIUS + RING_STROKE / 2) : DOT_RADIUS) + 1;
   const labelRoom = anyLabel ? lineHeight + LABEL_RISE + Math.ceil(RING_RADIUS) : 0;
@@ -89,7 +95,7 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
 
   // Mark labels (R173, R191): each word is measured once per text size, unseen; once every word's width is known, the
   // labels are placed newest first by their dots' gap and their spans' clearance, centred and kept inside the plot.
-  const widthKey = (label: string) => `${fontScale}:${label}`;
+  const widthKey = (label: string) => `${labelScale}:${label}`;
   const words = anyLabel ? [...new Set(drawable.map((pt) => pt.label).filter((l): l is string => l != null && l !== ''))] : [];
   const unmeasured = words.filter((w) => labelWidths[widthKey(w)] === undefined);
   const dotsWithLabels = plotted.dots.map((dot, i) => ({ x: dot.x, y: dot.y, label: drawable[i].label ?? null }));
@@ -115,7 +121,13 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
           width. */}
       <View style={{ height, maxWidth: LABEL_COLUMN_MAX, marginRight: LABEL_GAP, alignItems: 'flex-end' }}>
         {yLabels.map(({ value, marginTop }) => (
-          <Text key={value} style={[smallText, { height: lineHeight, marginTop, flexShrink: 0, textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit>
+          <Text
+            key={value}
+            style={[smallText, { height: lineHeight, marginTop, flexShrink: 0, textAlign: 'right' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            maxFontSizeMultiplier={CHART_LABEL_MAX_SCALE}
+          >
             {formatValue(value)}
           </Text>
         ))}
@@ -147,6 +159,7 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
                 key={`measure:${label}`}
                 onLayout={measureLabel(label)}
                 numberOfLines={1}
+                maxFontSizeMultiplier={CHART_LABEL_MAX_SCALE}
                 style={[smallText, { position: 'absolute', top: 0, left: 0, height: lineHeight, opacity: 0 }]}
               >
                 {label}
@@ -155,14 +168,14 @@ export function LineChart({ points, formatValue, locale, height = 180, accessibi
           {/* The placed mark labels over their dots. */}
           {width > 0 &&
             marks.map(({ key, label, top, left }) => (
-              <Text key={key} numberOfLines={1} style={[smallText, { position: 'absolute', top, left, height: lineHeight }]}>
+              <Text key={key} numberOfLines={1} maxFontSizeMultiplier={CHART_LABEL_MAX_SCALE} style={[smallText, { position: 'absolute', top, left, height: lineHeight }]}>
                 {label}
               </Text>
             ))}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: dates.length === 1 ? 'center' : 'space-between', marginTop: 4 }}>
           {dates.map((d) => (
-            <Text key={d} style={smallText}>
+            <Text key={d} maxFontSizeMultiplier={CHART_LABEL_MAX_SCALE} style={smallText}>
               {formatChartDate(d, locale)}
             </Text>
           ))}

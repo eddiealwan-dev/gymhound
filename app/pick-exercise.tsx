@@ -19,6 +19,7 @@ import { FormDemo } from '../src/ui/FormDemo';
 import { Body, Display } from '../src/ui/Text';
 import { fonts } from '../src/ui/theme';
 import { useTheme } from '../src/ui/ThemeProvider';
+import { breakableName } from '../src/ui/largeText';
 
 /** The muscle chips, head to toe. The three delts are one chip, Shoulders, as they read everywhere (`muscleLabel`). */
 const MUSCLE_CHIPS: readonly Muscle[] = MUSCLE_ORDER.filter((m) => m !== 'side_delts' && m !== 'rear_delts');
@@ -127,7 +128,7 @@ const ExerciseOption = memo(function ExerciseOption({
       >
         <Thumbnail exercise={exercise} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Body weight={600}>{exercise.name}</Body>
+          <Body weight={600}>{breakableName(exercise.name)}</Body>
           <Body muted style={{ fontSize: 14 }}>
             {`${equipment} · ${muscles}${custom}`}
           </Body>

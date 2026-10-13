@@ -23,6 +23,7 @@ import { useTheme } from '../ThemeProvider';
 import { useCallbacksByKey } from '../useCallbacksByKey';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow } from './SetRow';
+import { SET_HEADER_MAX_SCALE } from '../largeText';
 
 const SET_TYPES: { type: SetType; label: string }[] = [
   { type: 'working', label: 'Working' },
@@ -454,10 +455,13 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (
           <View key={column.key} style={cellStyle(column.key)}>
+            {/* Over fixed-width columns: it grows as the set fields under it do, 1.5× at most (R562), and stays whole
+                ("PREVIOUS" was cut at the largest text, Round 13). */}
             <Body
               weight={600}
               muted
               numberOfLines={1}
+              maxFontSizeMultiplier={SET_HEADER_MAX_SCALE}
               style={{ fontSize: 10, letterSpacing: 0.3, textAlign: column.key === 'previous' || column.key === 'set' ? 'left' : 'center' }}
             >
               {column.header}

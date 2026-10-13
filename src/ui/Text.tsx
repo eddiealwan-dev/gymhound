@@ -12,9 +12,17 @@ type DisplayProps = TextProps & { weight?: keyof typeof DISPLAY; upper?: boolean
 /**
  * How far titles, big numbers and Label headings grow with the text size (R562). iOS's own title styles grow about 2×
  * at the largest accessibility size (Large Title 34 to 60pt) while body text grows about 3×; text with no cap at all
- * took Fuel's 28pt title to 100pt, breaking "GymHound Pro" and "Bodyweight" mid-word (Round 11). Body text has no cap.
+ * took Fuel's 28pt title to 100pt, breaking "GymHound Pro" and "Bodyweight" mid-word (Round 11). Body text grows to
+ * `BODY_MAX_SCALE`.
  */
 export const TITLE_MAX_SCALE = 2;
+
+/**
+ * How far body text grows (Round 13): as iOS's own Body style does, 17pt to 53pt at the largest accessibility size.
+ * React Native's own factor there is 3.571, past iOS's, and it made words such as "measurements" wider than the screen,
+ * so they broke mid-word.
+ */
+export const BODY_MAX_SCALE = 53 / 17;
 type BodyProps = TextProps & { weight?: keyof typeof BODY; muted?: boolean };
 type NumProps = TextProps & { weight?: keyof typeof DISPLAY };
 
@@ -40,9 +48,16 @@ export function ScreenTitle(props: TextProps) {
 }
 
 /** Inter, for everything that reads as a sentence. */
-export function Body({ weight = 400, muted = false, style, ...rest }: BodyProps) {
+export function Body({ weight = 400, muted = false, style, maxFontSizeMultiplier, ...rest }: BodyProps) {
   const { colors } = useTheme();
-  return <Text {...rest} style={[{ fontFamily: BODY[weight], fontSize: 16, color: muted ? colors.textMuted : colors.text }, style]} />;
+  return (
+    <Text
+      {...rest}
+      // A caller's own cap, else iOS's body cap; an undefined one passed through (Button's) still gets the body cap.
+      maxFontSizeMultiplier={maxFontSizeMultiplier ?? BODY_MAX_SCALE}
+      style={[{ fontFamily: BODY[weight], fontSize: 16, color: muted ? colors.textMuted : colors.text }, style]}
+    />
+  );
 }
 
 /**
