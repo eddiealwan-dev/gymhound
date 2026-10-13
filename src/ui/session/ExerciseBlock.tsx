@@ -95,6 +95,12 @@ export const NAME_ROW_HIT_SLOP = { top: 10, bottom: 10, left: 6, right: 6 };
 /** How far the name's target reaches above and below its 26pt line: a 44pt target, as ⋯ has. */
 const NAME_HIT_SLOP = { top: 9, bottom: 9 };
 
+/** How far ⋯'s 44pt box reaches above the name's 26pt line: all of its spare 18pt, so none reaches down into the controls. */
+export const DOTS_REACH_ABOVE = 18;
+
+/** The space between the name's line and the controls under it: their 10pt reach then stops 2pt short of the line, clear of ⋯'s glyph. */
+export const CONTROLS_GAP = 8;
+
 /** The space between the count, + Note and Something off, and between the name row's two columns. */
 const NAME_ROW_GAP = 12;
 
@@ -301,88 +307,93 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         </Body>
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', columnGap: NAME_ROW_GAP }}>
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: NAME_ROW_GAP, rowGap: 2 }}>
-          {/*
-            The name opens the form demo (R86). Its 26pt line reaches 9pt above and below, as ⋯ does: a 44pt target.
-            The pressable takes the name's place in the wrapping column, so it shrinks and wraps the same way.
-          */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Show form for ${ex.name}`}
-            onPress={openDemo}
-            hitSlop={NAME_HIT_SLOP}
-            style={({ pressed }) => ({
-              flexShrink: 1,
-              flexBasis: 'auto',
-              minWidth: 0,
-              minHeight: 26,
-              justifyContent: 'center',
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
-            <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
-              {ex.name}
-              {/* A no-break space, so the glyph never sits alone on a line (R94). */}
-              {'\u00A0'}
-              {/* Ionicons turns font scaling off by default: the glyph grows with the name. */}
-              <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} allowFontScaling />
-            </Display>
-          </Pressable>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              columnGap: NAME_ROW_GAP,
-              // Two lines of controls at large text: their 10pt reaches meet, never overlap.
-              rowGap: NAME_ROW_HIT_SLOP.top + NAME_ROW_HIT_SLOP.bottom,
-              flexShrink: 0,
-              maxWidth: '100%',
-            }}
-          >
-            {progress.total > 0 ? (
-              // No text-size cap: the row wraps instead.
-              <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
-                {`${progress.done}/${progress.total}`}
-              </Num>
-            ) : null}
-            {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
-            <NameRowControl
-              icon="alert-circle-outline"
-              label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
-              readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
-              onPress={onOpenMark}
-            />
-            {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
-            {onOpenModify ? <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} /> : null}
-            {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
-            {/* + Note comes last (the owner's Round 11 note). */}
-            {!ex.note && !editingNote ? (
-              <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
-            ) : null}
-          </View>
-        </View>
+        {/*
+          The name opens the form demo (R86). Its 26pt line reaches 9pt above and below, as ⋯ does: a 44pt target.
+          The pressable is as wide as the name, so a tap beside a short name opens nothing; a long one shrinks and wraps.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Show form for ${ex.name}`}
+          onPress={openDemo}
+          hitSlop={NAME_HIT_SLOP}
+          style={({ pressed }) => ({
+            flexShrink: 1,
+            flexBasis: 'auto',
+            minWidth: 0,
+            minHeight: 26,
+            justifyContent: 'center',
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
+          <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
+            {ex.name}
+            {/* A no-break space, so the glyph never sits alone on a line (R94). */}
+            {'\u00A0'}
+            {/* Ionicons turns font scaling off by default: the glyph grows with the name. */}
+            <Ionicons testID="form-demo-cue" name="information-circle-outline" size={16} color={colors.textMuted} allowFontScaling />
+          </Display>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Options for ${ex.name}`}
           onPress={onOpenMenu}
           hitSlop={4}
-          // Centred on the name's first 26pt line: the 44pt box reaches 9pt above and below it without making the row taller.
+          // The glyph is centred on the name's first 26pt line, and the 44pt box reaches 18pt above it without making the
+          // row taller: below the line the controls start, and they take the space under ⋯ too (Round 12), so a box that
+          // reached down would have them take the bottom of the glyph. `marginLeft: 'auto'` keeps it at the card's right
+          // edge beside a short name.
           style={({ pressed }) => ({
             width: 44,
             height: 44,
-            marginVertical: -9,
+            marginTop: -DOTS_REACH_ABOVE,
+            marginLeft: 'auto',
             flexShrink: 0,
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-end',
+            paddingBottom: 2,
             opacity: pressed ? 0.8 : 1,
           })}
         >
           <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
         </Pressable>
       </View>
-
+      {/*
+        The quiet controls take the card's whole width under the name, the space under ⋯ too, so only + Note goes to a
+        second line on a phone (the owner's Round 12 note). They start where their 10pt reach clears ⋯'s glyph.
+      */}
+      <View
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          columnGap: NAME_ROW_GAP,
+          // Two lines of controls at large text: their 10pt reaches meet, never overlap.
+          rowGap: NAME_ROW_HIT_SLOP.top + NAME_ROW_HIT_SLOP.bottom,
+          marginTop: CONTROLS_GAP,
+        }}
+      >
+        {progress.total > 0 ? (
+          // No text-size cap: the row wraps instead.
+          <Num weight={600} accessibilityLabel={countLabel(progress)} style={{ fontSize: 16, color: colors.textMuted, flexShrink: 0 }}>
+            {`${progress.done}/${progress.total}`}
+          </Num>
+        ) : null}
+        {/* Quiet even when flagged: it shows the reason, muted, never red (R81). */}
+        <NameRowControl
+          icon="alert-circle-outline"
+          label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
+          readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
+          onPress={onOpenMark}
+        />
+        {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
+        {onOpenModify ? <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} /> : null}
+        {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
+        {/* + Note comes last (the owner's Round 11 note). */}
+        {!ex.note && !editingNote ? (
+          <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
+        ) : null}
+      </View>
       {editingNote ? (
         <TextInput
           value={noteDraft}
