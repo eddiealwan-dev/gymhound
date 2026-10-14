@@ -23,6 +23,8 @@ import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Body, Label, ScreenTitle } from '../../../src/ui/Text';
 import { fonts } from '../../../src/ui/theme';
 import { useTheme } from '../../../src/ui/ThemeProvider';
+import { getCloudFolder } from '../../../src/platform/cloud/iCloudFolder';
+import { getHealthStore } from '../../../src/platform/health';
 
 const PHOTO_DENIED = 'Camera access is off. Turn it on in Settings to take a photo.';
 const PHOTO_FAILED = "Couldn't save the photo. Try again.";
@@ -34,8 +36,15 @@ export const NO_ACCOUNT =
   "GymHound doesn't use an account. What you log stays on this phone, so there's no username, email or password to remember or reset, and no sign-in with Apple, Google or Facebook.";
 export const MOVING_PHONES = 'Moving to a new phone? Backups in Settings bring everything with you, and GymHound Pro comes back with Restore purchases on the same Apple ID.';
 
-export const ERASE_BODY =
-  "Every workout, routine and saved workout of your own, exercise of your own, body entry, photo, food and water entry, your profile and your settings are deleted from this phone, with GymHound's backups on the phone and in iCloud. This can't be undone. Workouts already in Apple Health stay there. Pro stays with your Apple ID.";
+/**
+ * What Delete all data deletes (R566). The iCloud copy and Apple Health are named only where this build has them, so a
+ * store build without them (R591) never mentions them.
+ */
+export function eraseBody({ cloud, health }: { cloud: boolean; health: boolean }): string {
+  const backups = cloud ? "GymHound's backups on the phone and in iCloud" : "GymHound's backups on the phone";
+  const kept = health ? ' Workouts already in Apple Health stay there.' : '';
+  return `Every workout, routine and saved workout of your own, exercise of your own, body entry, photo, food and water entry, your profile and your settings are deleted from this phone, with ${backups}. This can't be undone.${kept} Pro stays with your Apple ID.`;
+}
 const ERASE_FAILED = "Couldn't delete your data. Nothing was deleted.";
 
 function backToProfile() {
@@ -267,7 +276,7 @@ function DangerZone() {
       <ConfirmSheet
         visible={asking}
         title="Delete all data?"
-        body={ERASE_BODY}
+        body={eraseBody({ cloud: getCloudFolder() !== null, health: getHealthStore() !== null })}
         confirmLabel="Delete everything"
         cancelLabel="Cancel"
         primary="cancel"

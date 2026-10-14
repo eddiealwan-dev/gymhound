@@ -28,6 +28,7 @@
     "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
+    "expo-store-review": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -62,7 +63,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "build:library": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-library.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "eas-build-post-install": "node scripts/leave-out-untested.js"
   },
   "private": true,
   "jest": {

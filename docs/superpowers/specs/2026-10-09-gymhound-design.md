@@ -1554,3 +1554,37 @@ Round 13: 16 passed, 1 failed. The fail: at the largest text, text was cut off i
 Round 14: 11 passed, 1 failed. The fail: on Daily macros there seemed to be no calorie ring.
 
 - **R572:** the ring's track was drawn in the raised surface colour, which all but vanishes on the card, so with little or nothing eaten the ring looked absent. The track is now the strong border colour at 60%, plainly a ring at 0 kcal; the eaten arc stays the text colour.
+
+### 18.28 Before launch: prices, the rule test, the rating prompt, tester mode and the store build (2026-10-14)
+From the owner's strategy review (`marketing/gymhound-combined-plan.md` in the project's files): test the rule with lifters before locking the store copy or paywall, change the prices now, and keep untested features out of the store build. Rules marked "owner" are theirs; the rest are Claude's, for the owner to check.
+
+**Prices (owner)**
+- **R580 (owner):** Pro is **$4.99 a month** and **$29.99 a year** ($2.50 a month, marked Save 50%), each with the store's **7-day free trial**, and **$69.99 lifetime**. Lifetime is not one of the radio cards: a quiet **More payment options** under Yearly and Monthly adds it to them. A store that sells only lifetime shows it without the link. The planned prices (`PLANNED_PLANS`) change to match; App Store Connect, Play Console and RevenueCat must be set the same. (Supersedes R556's prices and R563's $119.88.)
+
+**The rule test (stage 1)**
+- **R581:** Settings → Developer → **Rule test** opens a full-screen page. Three still screens of bench press (3 × 6–8, +5 lb, planned 135 lb), drawn like a workout's exercise with every line from the rule's own functions: **Rule** (8, 8, 8 at 135: "next time 140 lb ↑"), **Hold** (Rough sleep, 8, 8, 8 at 125: "holds at 135 lb · Rough sleep") and **Miss** (8, 8, 7 at 135: "holds at 135 lb"). The miss is there because a miss holds too: a lifter who can't tell it from the hold hasn't seen what Something off adds.
+- **R582:** each screen shows for 5 seconds, then the next; nothing on them can be tapped.
+- **R583:** then five questions, each with a field: What will happen next time? Why? What does "Something off" mean here? What would you do if you disagreed? Who decided to hold the weight, you or the app?
+- **R584:** Save keeps them on the phone (`rule_test_answers`), under the name typed or "Tester n"; **Share answers** sends every entry as text. Developer only, so lifters never see it.
+
+**The rating prompt**
+- **R585:** the store's own prompt (`expo-store-review`), with no question of ours first, asked only when: 3 or more finished workouts; this workout set a personal record or the rule raised a weight; no exercise in it was marked Something off; not asked in the last 60 days; not a tester build.
+- **R586:** checked once when the finish summary opens, and asked 1 second later so the summary is seen first. The time it asked is kept (`review_asked_at`). The store decides whether it shows (iOS at most three times a year).
+- **R587:** the rules' answer at the last finish is kept (`review_last_check`) and shown in Settings → Developer ("Rating prompt: Something off was marked, so not today."), since the prompt may not show in Expo Go.
+- **R588:** a failure is logged and never reaches the screen.
+
+**The store build**
+- **R589:** Apple Health, Health Connect, the iCloud copy and the Live Activity (`LEFT_OUT_OF_STORE` in `plugins/nativeConfig.js`) are left out of the `production` and `tester` EAS builds until they pass a phone check on a development build. A left-out package counts as not installed: no plugin, entitlement or permission in the app config, and Metro bundles the stub, so the app's gate (R306) hides the feature as in Expo Go. Development and preview builds keep them, for testing.
+- **R590:** `scripts/leave-out-untested.js` runs as `eas-build-post-install` and removes the left-out packages on a store profile before EAS prebuilds, so none of their native code is linked. Taking a package off the list is how a feature joins the store build.
+- **R591:** Delete all data names the iCloud copy and Apple Health only where the build has them. The in-app music controls (Task 7.6) aren't built yet; the music bar that opens your player (owner-tested) stays.
+
+**Tester mode (stages 2 and 3)**
+- **R592:** a new `tester` EAS profile (production plus `EXPO_PUBLIC_TESTER=1`) is for TestFlight. Pro is on for every tester from the start, with no store and no switch, so testers see the rule on routines of their own. A tester build is never submitted for App Store review.
+- **R593:** in a tester build, the finish summary of the 2nd finished workout asks: Did you lift the weight it showed today? If not, why not? Did anything about the rule confuse you? The 3rd asks: Did the rule help you? How? Was there a time it held or raised the weight and you thought it was wrong? Would you pay to set your own rule on your own routines? Each set once; Save keeps them (`tester_answers`).
+- **R594:** Settings → **Test answers** (tester builds only) says how many sets are saved, and **Send test answers** shares them as text. Nothing leaves the phone unless the tester sends it.
+
+**Shares**
+- **R595:** `EXPO_PUBLIC_STORE_URL`, once set, puts the store link under every share card's footer (without "https://" or "www.") and ends the routine-code message with "Get GymHound: {link}". One link for both stores: a GruntHound page that sends each phone to its store. Unset (now), nothing changes. (Completes R443.)
+
+**Words**
+- Store copy, screenshots and docs lead with the rule, and never say the app notices, detects or decides an off day: the lifter marks Something off (`CLAUDE.md`, `PRODUCT.md`, `docs/store/aso.md`).

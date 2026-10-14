@@ -19,3 +19,22 @@ export function revenueCatApiKey(): string | null {
   });
   return key === undefined || key === '' ? null : key;
 }
+
+/**
+ * Whether this is a tester build (§18.28, R592): the `tester` EAS profile sets `EXPO_PUBLIC_TESTER=1` for TestFlight.
+ * It turns Pro on for every tester and asks the tester questions after the 2nd and 3rd finished workouts. The store
+ * build never sets it. Named in full so Expo inlines it at build time.
+ */
+export function isTesterBuild(): boolean {
+  return process.env.EXPO_PUBLIC_TESTER === '1';
+}
+
+/**
+ * The store link that share cards and routine codes carry (§18.28, R595), from `EXPO_PUBLIC_STORE_URL`, or null while it
+ * is unset or empty (now: there is no listing yet). One link for both stores: a GruntHound page that sends each phone to
+ * its store. Named in full so Expo inlines it at build time.
+ */
+export function storeUrl(): string | null {
+  const url = process.env.EXPO_PUBLIC_STORE_URL;
+  return url === undefined || url.trim() === '' ? null : url.trim();
+}

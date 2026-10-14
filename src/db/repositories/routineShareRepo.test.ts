@@ -165,4 +165,11 @@ describe('routine sharing (§18.18)', () => {
     expect(message).toBe('My Push/pull/legs routine for GymHound. In the app, open Routines → Add from code and paste this code:\n\nGH2.abc.defg');
     expect(message).not.toContain('gymhound://');
   });
+
+  it('ends with where to get the app once there is a store link, and the code still reads (R595)', () => {
+    const code = encodePremade('premade-ppl-6');
+    const message = shareMessage('Push/pull/legs', code, 'https://grunthound.com/gymhound');
+    expect(message.endsWith(`${code}\n\nGet GymHound: https://grunthound.com/gymhound`)).toBe(true);
+    expect(decodeRoutine(message).ok).toBe(true);
+  });
 });

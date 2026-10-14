@@ -1,4 +1,5 @@
-import { Switch, Text } from 'react-native';
+import { router } from 'expo-router';
+import { Share, Switch, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Settings from '../../app/(tabs)/settings';
@@ -10,6 +11,7 @@ import { draftReducer, newDraft } from '../domain/routineDraft';
 import { createRevenueCatEntitlements } from '../platform/entitlements';
 import type { AppEntitlements, PurchasesSdk } from '../platform/entitlements';
 import { useRoutineLimit } from './RoutineLimit';
+import { Button } from './Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,6 +21,8 @@ let mockDb: Db;
 let mockEntitlements: AppEntitlements | null = null;
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn() }, useFocusEffect: jest.fn() }));
+let mockTester = false;
+jest.mock('../platform/runtime', () => ({ ...jest.requireActual('../platform/runtime'), isTesterBuild: () => mockTester }));
 jest.mock('../platform/entitlements/select', () => {
   const actual = jest.requireActual('../platform/entitlements/select');
   return { ...actual, entitlementsFor: (db: Db) => mockEntitlements ?? actual.entitlementsFor(db) };
@@ -187,5 +191,36 @@ describe('Settings: Developer (R126)', () => {
     );
     expect(unlock(tree)[0].props.value).toBe(false);
     expect(mockEntitlements.isPro()).toBe(true);
+  });
+});
+
+describe('Settings: the rule test, the rating line and test answers (§18.28)', () => {
+  const button = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).find((b) => b.props.label === label);
+
+  it('Developer opens the rule test and says what the rating rules said last (R581, R587)', () => {
+    build(true);
+    let tree = mount();
+    expect(texts(tree)).toContain('Rating prompt: no workout finished yet.');
+    act(() => button(tree, 'Rule test')!.props.onPress());
+    expect(router.push).toHaveBeenCalledWith('/rule-test');
+
+    setSetting(mockDb, 'reviewLastCheck', 'Something off was marked, so not today.');
+    tree = mount();
+    expect(texts(tree)).toContain('Rating prompt: Something off was marked, so not today.');
+  });
+
+  it('Test answers shows only in a tester build, and shares what is saved (R594)', () => {
+    build(false);
+    expect(button(mount(), 'Send test answers')).toBeUndefined();
+
+    mockTester = true;
+    setSetting(mockDb, 'testerAnswers', [{ workout: 2, at: Date.UTC(2026, 9, 20, 12), answers: [{ question: 'If not, why not?', answer: 'Too heavy' }] }]);
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    const tree = mount();
+    expect(texts(tree)).toContain("1 set of answers saved. Send them to GymHound when you're asked.");
+    act(() => button(tree, 'Send test answers')!.props.onPress());
+    expect(share.mock.calls[0][0].message).toContain('If not, why not?\nToo heavy');
+    share.mockRestore();
+    mockTester = false;
   });
 });

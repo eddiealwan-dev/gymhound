@@ -10,6 +10,8 @@ import { announce } from '../platform/announce';
 import type { FinishSummary } from '../db/repositories/workoutViewsRepo';
 import type { PrHighlight } from '../domain/prs';
 import { bumpData } from '../state/dataVersion';
+import { checkReviewAfterFinish } from '../db/repositories/reviewRepo';
+import { requestStoreReview } from '../platform/storeReview';
 import { Button } from './Button';
 import { PbCard } from './finish/PbCard';
 import { PB_READY_TIMEOUT_MS } from './finish/PbCardHost';
@@ -37,6 +39,8 @@ jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ savedWorkoutOf: jest.
 jest.mock('../platform/announce', () => ({ ...jest.requireActual('../platform/announce'), announce: jest.fn() }));
 jest.mock('../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() }));
 jest.mock('../db/repositories/workoutViewsRepo', () => ({ getFinishSummary: jest.fn() }));
+jest.mock('../db/repositories/reviewRepo', () => ({ checkReviewAfterFinish: jest.fn(() => false) }));
+jest.mock('../platform/storeReview', () => ({ requestStoreReview: jest.fn(async () => {}) }));
 jest.mock('react-native-view-shot', () => ({ captureRef: jest.fn(async () => 'file:///cache/ReactNative-snapshot-image1.png'), releaseCapture: jest.fn() }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(async () => true), shareAsync: jest.fn(async () => {}) }));
 let mockScheme: 'light' | 'dark' = 'dark';
@@ -145,6 +149,39 @@ const plankPr: PrHighlight = {
   localDate: '2026-10-11',
 };
 
+describe('the rating prompt after a finish (R585–R587)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.mocked(checkReviewAfterFinish).mockReset().mockReturnValue(false);
+    jest.mocked(requestStoreReview).mockClear();
+    mockRead = { unit: 'lb', summary: pushA([]) };
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('runs the rules once for the workout shown, and asks the store a second later when they say so', () => {
+    jest.mocked(checkReviewAfterFinish).mockReturnValue(true);
+    const tree = mount();
+    act(() => tree.update(<FinishSummaryScreen />));
+    expect(checkReviewAfterFinish).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(checkReviewAfterFinish).mock.calls[0]).toEqual(['db', 'w1', expect.any(Number), false]);
+    act(() => void jest.advanceTimersByTime(999));
+    expect(requestStoreReview).not.toHaveBeenCalled();
+    act(() => void jest.advanceTimersByTime(1));
+    expect(requestStoreReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing when the rules say no, or when the workout is not there', () => {
+    mount();
+    act(() => void jest.advanceTimersByTime(2000));
+    expect(requestStoreReview).not.toHaveBeenCalled();
+
+    jest.mocked(checkReviewAfterFinish).mockClear();
+    mockRead = { unit: 'lb', summary: null };
+    mount();
+    expect(checkReviewAfterFinish).not.toHaveBeenCalled();
+  });
+});
+
 describe('personal records on the finish summary (R104, R105)', () => {
   const next: FinishSummary['next'] = [
     { workoutExerciseId: 'we6', name: 'Barbell bench press', loggingType: 'weighted', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', mark: null },
@@ -240,6 +277,17 @@ describe('the personal record card (R106)', () => {
   it('shows the lockup, the PR mark and PERSONAL RECORD, the exercise, the figure and its unit, the caption, the date and the footer (§18.17)', () => {
     const text = shownText(renderCard(benchPr('heaviest')));
     expect(text).toEqual(['GYMHOUND', 'PR', 'PERSONAL RECORD', 'Bench press', '185', 'lb × 5', 'Heaviest set', 'SUN 11 OCT 2026', 'GymHound · gym log']);
+  });
+
+  it('puts the store link under the footer once the build has one (R595)', () => {
+    const saved = process.env.EXPO_PUBLIC_STORE_URL;
+    process.env.EXPO_PUBLIC_STORE_URL = 'https://www.grunthound.com/gymhound/';
+    try {
+      expect(shownText(renderCard(benchPr('heaviest'))).slice(-2)).toEqual(['GymHound · gym log', 'grunthound.com/gymhound']);
+    } finally {
+      if (saved === undefined) delete process.env.EXPO_PUBLIC_STORE_URL;
+      else process.env.EXPO_PUBLIC_STORE_URL = saved;
+    }
   });
 
   it('lays the date out for the locale, and keeps a value with no unit whole', () => {

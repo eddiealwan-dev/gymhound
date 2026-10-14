@@ -530,10 +530,12 @@ export function shareLink(code: string): string {
 
 /**
  * What the share sheet sends (R473, after Round 8): what it is, where to paste it, and the code on its own line. No
- * link: a custom gymhound:// link isn't tappable in Messages or Notes, and Expo Go can't open it, so it only confused.
+ * gymhound:// link: it isn't tappable in Messages or Notes, and Expo Go can't open it, so it only confused. With the
+ * store link (`storeLink`, R595), a last line says where to get the app, for a friend who doesn't have it yet.
  */
-export function shareMessage(routineName: string, code: string): string {
-  return `My ${routineName.trim()} routine for GymHound. In the app, open Routines → Add from code and paste this code:\n\n${code}`;
+export function shareMessage(routineName: string, code: string, storeLink: string | null = null): string {
+  const message = `My ${routineName.trim()} routine for GymHound. In the app, open Routines → Add from code and paste this code:\n\n${code}`;
+  return storeLink === null ? message : `${message}\n\nGet GymHound: ${storeLink}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------

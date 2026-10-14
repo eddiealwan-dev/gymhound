@@ -82,6 +82,30 @@ const OPTIONAL_NATIVE_PACKAGES = [
   '@notifee/react-native',
 ];
 
+/**
+ * Left out of every store build (production, and tester for TestFlight) until its feature passes a phone check on a
+ * development build (§18.28, R589–R591): Apple Health, Health Connect, the iCloud copy and the Live Activity. A left-out
+ * package is treated as not installed: its plugin, entitlements and permissions stay out of the app config, Metro bundles
+ * the stub in its place, so the app's one gate hides the feature as in Expo Go, and `scripts/leave-out-untested.js`
+ * removes it before EAS prebuilds, so none of its native code is linked either. Take a package off the list once its
+ * feature passes.
+ */
+const LEFT_OUT_OF_STORE = [
+  '@kingstinct/react-native-healthkit',
+  'react-native-health-connect',
+  'react-native-cloud-storage',
+  'expo-widgets',
+  '@expo/ui',
+];
+
+/** The EAS build profiles that go to the stores (R589); `EAS_BUILD_PROFILE` names the one building. */
+const STORE_PROFILES = ['production', 'tester'];
+
+/** The packages left out of a build with this EAS profile: none outside the store profiles. */
+function leftOutFor(profile) {
+  return STORE_PROFILES.includes(profile) ? LEFT_OUT_OF_STORE : [];
+}
+
 /** Whether `name` is installed for the project at `root`. */
 function isInstalled(name, root) {
   try {
@@ -146,9 +170,13 @@ function withPhase7Native(config, isInstalledFn) {
   };
 }
 
-/** The app config for the project at `root`, as app.config.js returns it. */
-function appConfig(config, root = path.join(__dirname, '..')) {
-  return withPhase7Native(config, (name) => isInstalled(name, root));
+/**
+ * The app config for the project at `root`, as app.config.js returns it. A package the build's EAS profile leaves out
+ * (R589) counts as not installed.
+ */
+function appConfig(config, root = path.join(__dirname, '..'), profile = process.env.EAS_BUILD_PROFILE) {
+  const leftOut = leftOutFor(profile);
+  return withPhase7Native(config, (name) => !leftOut.includes(name) && isInstalled(name, root));
 }
 
 module.exports = {
@@ -157,6 +185,9 @@ module.exports = {
   HEALTH_CONNECT_PERMISSIONS,
   OPTIONAL_PLUGINS,
   OPTIONAL_NATIVE_PACKAGES,
+  LEFT_OUT_OF_STORE,
+  STORE_PROFILES,
+  leftOutFor,
   isInstalled,
   optionalPackageOf,
   withPhase7Native,

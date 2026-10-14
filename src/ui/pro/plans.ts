@@ -1,13 +1,13 @@
 import type { PlanKind, StorePeriod, StorePlan } from '../../platform/entitlements';
 
 /**
- * The owner's prices (R556), shown only where the build has no store (Expo Go, a development build), so the paywall can
+ * The owner's prices (R556, R580), shown only where the build has no store (Expo Go, a development build), so the paywall can
  * be seen as it will be. A build with a store shows the store's own plans and prices instead.
  */
 export const PLANNED_PLANS: StorePlan[] = [
-  { kind: 'yearly', priceString: '$119.88', price: 119.88, perMonthString: '$9.99', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
-  { kind: 'monthly', priceString: '$19.99', price: 19.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
-  { kind: 'lifetime', priceString: '$199', price: 199, perMonthString: null, period: null, freeTrialDays: null },
+  { kind: 'yearly', priceString: '$29.99', price: 29.99, perMonthString: '$2.50', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
+  { kind: 'monthly', priceString: '$4.99', price: 4.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
+  { kind: 'lifetime', priceString: '$69.99', price: 69.99, perMonthString: null, period: null, freeTrialDays: null },
 ];
 
 export const PLAN_TITLES: Record<PlanKind, string> = { yearly: 'Yearly', monthly: 'Monthly', lifetime: 'Lifetime' };

@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { finishedWorkoutCount } from '../../src/db/repositories/onboardingRepo';
+import { checkReviewAfterFinish } from '../../src/db/repositories/reviewRepo';
 import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { getFinishSummary } from '../../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../../src/db/types';
@@ -10,11 +11,14 @@ import { formatElapsed } from '../../src/domain/dates';
 import { finishLine } from '../../src/domain/ruleLine';
 import { formatVolume } from '../../src/domain/volume';
 import { deviceLocale } from '../../src/platform/locale';
+import { isTesterBuild } from '../../src/platform/runtime';
+import { requestStoreReview } from '../../src/platform/storeReview';
 import { useDbQuery } from '../../src/state/dataVersion';
 import { Button } from '../../src/ui/Button';
 import { FinishPrs } from '../../src/ui/finish/FinishPrs';
 import { PbCardHost } from '../../src/ui/finish/PbCardHost';
 import { SaveAsWorkout } from '../../src/ui/finish/SaveAsWorkout';
+import { TesterQuestions } from '../../src/ui/finish/TesterQuestions';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { pbCardFor } from '../../src/db/repositories/shareCardsRepo';
 import { useDb } from '../../src/db/DbProvider';
@@ -25,6 +29,29 @@ import { useTheme } from '../../src/ui/ThemeProvider';
  * second Train screen after every workout. Opened by address with nothing under it, it puts Train in its place.
  */
 const goToTrain = () => router.dismissTo('/');
+
+/** How long after the summary opens the store's rating prompt is asked for (R586), so the summary is seen first. */
+export const REVIEW_DELAY_MS = 1000;
+
+/**
+ * Runs the rating rules once per finished workout shown (R585–R587), and asks the store a second after the summary
+ * opens when they say so. A failure is logged and never reaches the screen.
+ */
+function useReviewAfterFinish(db: Db, id: string, shown: boolean) {
+  const checked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shown || checked.current === id) return;
+    checked.current = id;
+    let ask = false;
+    try {
+      ask = checkReviewAfterFinish(db, id, Date.now(), isTesterBuild());
+    } catch (error) {
+      console.warn('GymHound could not check the rating rules.', error);
+    }
+    // Not cleared on unmount: the store's prompt is fine over Train too, and a re-run must not cancel it.
+    if (ask) setTimeout(() => void requestStoreReview(), REVIEW_DELAY_MS);
+  }, [db, id, shown]);
+}
 
 /** The summary of a finished workout, or null when there is none with this id (the page was opened by address, or the data was cleared). */
 function readSummary(db: Db, id: string) {
@@ -64,6 +91,7 @@ export default function FinishSummary() {
   const db = useDb();
   const read = useCallback((db: Db) => readSummary(db, id), [id]);
   const { summary, unit, firstWorkout } = useDbQuery(read);
+  useReviewAfterFinish(db, id, summary !== null);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -100,6 +128,7 @@ export default function FinishSummary() {
                   </View>
                 )}
                 <FinishPrs summary={summary} firstWorkout={firstWorkout} />
+                <TesterQuestions />
               </>
             )}
             <View style={{ flex: 1, minHeight: 24 }} />

@@ -37,7 +37,11 @@ const SPEC_KEYS = [
   'rest_bell_sound',
   'rest_bell_volume',
   'rest_seconds',
+  'review_asked_at',
+  'review_last_check',
+  'rule_test_answers',
   'seed_version',
+  'tester_answers',
   'theme',
   'unit',
   'water_goal_ml',
@@ -327,6 +331,10 @@ describe('the water goal (phase 5, R150)', () => {
 });
 
 describe('the profile (R566, R567)', () => {
+  it('starts the rule test, the rating prompt and the tester answers empty (§18.28)', () => {
+    expect(defaultSettings('us')).toMatchObject({ ruleTestAnswers: [], reviewAskedAt: null, reviewLastCheck: null, testerAnswers: [] });
+  });
+
   it('starts with no name, goal, photo or weekly goal, and the default dashboard', () => {
     expect(defaultSettings('us')).toMatchObject({
       profileName: '',

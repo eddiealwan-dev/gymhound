@@ -1,18 +1,19 @@
 import type { Db } from '../../db/types';
-import { isExpoGo, revenueCatApiKey } from '../runtime';
+import { isExpoGo, isTesterBuild, revenueCatApiKey } from '../runtime';
 import { createDebugEntitlements, debugUnlockAllowed } from './debug';
 import { createFreeOnlyEntitlements } from './freeOnly';
 import type { AppEntitlements, EntitlementsKind, PurchasesSdk } from './index';
 import { createRevenueCatEntitlements } from './revenuecat';
 import { loadPurchasesSdk } from './revenuecatSdk';
 
-type Env = { expoGo: boolean; apiKey: string | null; debugAllowed: boolean };
+type Env = { expoGo: boolean; apiKey: string | null; debugAllowed: boolean; tester?: boolean };
 
 /**
- * Which entitlements this build uses (§9, R133): RevenueCat outside Expo Go with a store key; else the debug unlock where
- * it is allowed; else free-only.
+ * Which entitlements this build uses (§9, R133): a tester build's Pro for everyone (R592); RevenueCat outside Expo Go
+ * with a store key; else the debug unlock where it is allowed; else free-only.
  */
 export function selectKind(env: Env): EntitlementsKind {
+  if (env.tester) return 'debug';
   if (!env.expoGo && env.apiKey !== null) return 'revenuecat';
   return env.debugAllowed ? 'debug' : 'free';
 }
@@ -31,7 +32,9 @@ export function createEntitlements(
   const apiKey = env.apiKey !== undefined ? env.apiKey : revenueCatApiKey();
   const debugAllowed = env.debugAllowed ?? debugUnlockAllowed();
   const loadSdk = env.loadSdk ?? loadPurchasesSdk;
+  const tester = env.tester ?? isTesterBuild();
 
+  if (tester) return createDebugEntitlements(db, true);
   let kind = selectKind({ expoGo, apiKey, debugAllowed });
   if (kind === 'revenuecat' && apiKey !== null) {
     let sdk: PurchasesSdk | null = null;
