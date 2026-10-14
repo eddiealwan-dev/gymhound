@@ -25,9 +25,17 @@
     "production": {
       "environment": "production",
       "autoIncrement": true
+    },
+    "tester": {
+      "extends": "production",
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_TESTER": "1"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "tester": {}
   }
 }

@@ -62,7 +62,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "build:library": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-library.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "eas-build-post-install": "node scripts/leave-out-untested.js"
   },
   "private": true,
   "jest": {

@@ -31,14 +31,16 @@ if (real !== linked) {
 // that never runs in Expo Go (src/platform/native/optional.ts). Metro still resolves every require when it bundles, so
 // one that is not installed yet resolves to a stub instead of failing the bundle. Once installed, the real package is
 // bundled and the guard keeps Expo Go from running it (R306).
-const { isInstalled, optionalPackageOf } = require('./plugins/nativeConfig');
+// A store build also stubs the packages its EAS profile leaves out (R589), so the app hides those features.
+const { isInstalled, leftOutFor, optionalPackageOf } = require('./plugins/nativeConfig');
+const leftOut = leftOutFor(process.env.EAS_BUILD_PROFILE);
 const missingNative = path.join(__dirname, 'src', 'platform', 'native', 'missingNativeModule.js');
 const installed = new Map();
 const resolveBefore = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const pkg = optionalPackageOf(moduleName);
   if (pkg !== null) {
-    if (!installed.has(pkg)) installed.set(pkg, isInstalled(pkg, __dirname));
+    if (!installed.has(pkg)) installed.set(pkg, !leftOut.includes(pkg) && isInstalled(pkg, __dirname));
     if (!installed.get(pkg)) return { type: 'sourceFile', filePath: missingNative };
   }
   return resolveBefore ? resolveBefore(context, moduleName, platform) : context.resolveRequest(context, moduleName, platform);

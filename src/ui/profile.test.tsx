@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { Image, Platform, StyleSheet, Text, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import EditProfile, { ERASE_BODY, NO_ACCOUNT, PHOTO_PHONE_ONLY } from '../../app/(tabs)/profile/edit';
+import EditProfile, { eraseBody, NO_ACCOUNT, PHOTO_PHONE_ONLY } from '../../app/(tabs)/profile/edit';
 import Profile from '../../app/(tabs)/profile/index';
 import { logQuickAdd } from '../db/repositories/foodLogRepo';
 import { getSettings, setSetting } from '../db/repositories/settingsRepo';
@@ -324,6 +324,15 @@ describe('Edit profile (R566, R568)', () => {
     }
   });
 
+  it('names the iCloud copy and Apple Health in Delete all data only where the build has them (R591)', () => {
+    expect(eraseBody({ cloud: false, health: false })).toBe(
+      "Every workout, routine and saved workout of your own, exercise of your own, body entry, photo, food and water entry, your profile and your settings are deleted from this phone, with GymHound's backups on the phone. This can't be undone. Pro stays with your Apple ID.",
+    );
+    const both = eraseBody({ cloud: true, health: true });
+    expect(both).toContain("GymHound's backups on the phone and in iCloud.");
+    expect(both).toContain(' Workouts already in Apple Health stay there. ');
+  });
+
   it('says plainly that there is no account to sign in to', () => {
     expect(texts(mount(<EditProfile />))).toEqual(expect.arrayContaining(['Account', NO_ACCOUNT]));
   });
@@ -334,7 +343,7 @@ describe('Edit profile (R566, R568)', () => {
     const tree = mount(<EditProfile />);
     act(() => button(tree, 'Delete all data')!.props.onPress());
     const ask = tree.root.findByType(ConfirmSheet);
-    expect(ask.props).toMatchObject({ visible: true, title: 'Delete all data?', body: ERASE_BODY, confirmLabel: 'Delete everything', primary: 'cancel' });
+    expect(ask.props).toMatchObject({ visible: true, title: 'Delete all data?', body: eraseBody({ cloud: false, health: false }), confirmLabel: 'Delete everything', primary: 'cancel' });
     act(() => ask.props.onCancel());
     expect(mockDb.select().from(workouts).all()).toHaveLength(1);
 
