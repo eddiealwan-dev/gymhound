@@ -52,12 +52,23 @@ describe('selectKind (§9, R133)', () => {
     [{ expoGo: false, apiKey: null, debugAllowed: true }, 'debug'],
     [{ expoGo: false, apiKey: null, debugAllowed: false }, 'free'],
     [{ expoGo: true, apiKey: null, debugAllowed: true }, 'debug'],
+    // A tester build (R592) never sells: Pro is on for every tester.
+    [{ expoGo: false, apiKey: 'key', debugAllowed: false, tester: true }, 'debug'],
   ] as const)('%j → %s', (env, kind) => {
     expect(selectKind(env)).toBe(kind);
   });
 });
 
 describe('createEntitlements', () => {
+  it('a tester build has Pro on from the start, with no store and no switch (R592)', () => {
+    const loadSdk = jest.fn();
+    const entitlements = createEntitlements(freshDb(), { expoGo: false, apiKey: 'key', debugAllowed: false, tester: true, loadSdk });
+    expect(entitlements.kind).toBe('debug');
+    expect(entitlements.isPro()).toBe(true);
+    expect(entitlements.canPurchase()).toBe(false);
+    expect(loadSdk).not.toHaveBeenCalled();
+  });
+
   it('in Expo Go never calls the SDK loader, even with a key', () => {
     const loadSdk = jest.fn(fakeSdk);
     const entitlements = createEntitlements(freshDb(), { expoGo: true, apiKey: 'key', debugAllowed: true, loadSdk });

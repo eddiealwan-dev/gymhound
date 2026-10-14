@@ -29,10 +29,11 @@ export function createListeners(): { subscribe(onChange: () => void): () => void
 /**
  * Entitlements with no store (R88, R133): Pro is on only while Settings' `proDebugUnlock` is and the debug unlock is
  * allowed, read live on every call. Nothing can be bought or restored. Used in Expo Go and builds with no store key.
+ * In a tester build (`tester`, R592) Pro is always on, so every TestFlight tester sees the rule on routines of their own.
  */
-export function createDebugEntitlements(db: Db): AppEntitlements {
+export function createDebugEntitlements(db: Db, tester = false): AppEntitlements {
   const { subscribe, notify } = createListeners();
-  const isPro = () => debugUnlockAllowed() && getSettings(db).proDebugUnlock;
+  const isPro = () => tester || (debugUnlockAllowed() && getSettings(db).proDebugUnlock);
 
   return {
     kind: 'debug',

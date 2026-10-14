@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, Share, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { useLargeText } from '../../src/ui/largeText';
 import { getFuelTargets } from '../../src/db/repositories/foodLogRepo';
@@ -32,6 +32,9 @@ import { Segmented } from '../../src/ui/Segmented';
 import { Body, Label, ScreenTitle } from '../../src/ui/Text';
 import { useTheme } from '../../src/ui/ThemeProvider';
 import { Toggle } from '../../src/ui/Toggle';
+import { readTesterEntries, testerText } from '../../src/domain/testerQuestions';
+import { isTesterBuild } from '../../src/platform/runtime';
+import { deviceLocale } from '../../src/platform/locale';
 import { FEEDBACK_EMAIL, openFeedbackEmail } from '../../src/platform/feedback';
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -649,7 +652,7 @@ function DeveloperSection() {
   const entitlements = entitlementsFor(db);
   // Heard so the switch redraws when the unlock changes; the switch shows the stored setting.
   useSyncExternalStore(entitlements.subscribe, entitlements.isDebugPro);
-  const unlocked = useDbQuery(getSettings).proDebugUnlock;
+  const { proDebugUnlock: unlocked, reviewLastCheck } = useDbQuery(getSettings);
   return (
     <Section title="Developer">
       <BuildLine />
@@ -664,8 +667,34 @@ function DeveloperSection() {
           }}
         />
       </View>
+      {/* What the rating rules said at the last finish (R587), since the store's prompt may not show here. */}
+      <Body muted testID="review-last-check">{`Rating prompt: ${reviewLastCheck ?? 'no workout finished yet.'}`}</Body>
       {/* The rule test (R581): three still screens, then the questions, for checking the rule is understood. */}
       <Button label="Rule test" variant="secondary" onPress={() => router.push('/rule-test')} />
+    </Section>
+  );
+}
+
+/**
+ * Test answers (R594), only in a tester build: how many sets of answers are saved, and Send test answers, which shares
+ * them as text through the phone's share sheet. Nothing leaves the phone unless the tester sends it.
+ */
+function TestAnswersSection() {
+  const entries = readTesterEntries(useDbQuery(getSettings).testerAnswers);
+  return (
+    <Section title="Test answers">
+      <Body muted>
+        {entries.length === 0
+          ? 'Questions come up after your 2nd and 3rd finished workouts.'
+          : `${entries.length} ${entries.length === 1 ? 'set' : 'sets'} of answers saved. Send them to GymHound when you're asked.`}
+      </Body>
+      <Button
+        label="Send test answers"
+        variant="secondary"
+        onPress={() => {
+          Share.share({ message: testerText(entries, deviceLocale()) }).catch((error: unknown) => console.warn('GymHound could not share the test answers.', error));
+        }}
+      />
     </Section>
   );
 }
@@ -708,6 +737,7 @@ export default function Settings() {
         <ImportSection />
         <ProSection />
         <FeedbackSection />
+        {isTesterBuild() ? <TestAnswersSection /> : null}
         {debugUnlockAllowed() ? <DeveloperSection /> : null}
       </View>
     </Screen>
