@@ -16,3 +16,5 @@ Supporting angles:
 
 When weighing a feature, ask whether it strengthens the transparent progression rule first, then portability or
 quiet logging. Lead App Store copy and the first screenshots with the visible rule and its "why".
+
+Never say the app notices, detects or decides an off day: the lifter marks Something off, and the weight holds.
