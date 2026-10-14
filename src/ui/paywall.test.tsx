@@ -52,7 +52,7 @@ const RESTORE_FAILED = "Couldn't reach the store. Try again.";
 const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
 const START = 'Start your free trial';
 
-/** The store's plans, at the owner's prices (R570). */
+/** The store's plans, at the owner's prices (R580). */
 const PLANS: StorePlan[] = [
   { kind: 'yearly', priceString: '$29.99', price: 29.99, perMonthString: '$2.50', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
   { kind: 'monthly', priceString: '$4.99', price: 4.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
@@ -153,7 +153,7 @@ describe('ProPitch (§8.12, R137)', () => {
     expect(button(tree, START)).toBeTruthy();
   });
 
-  it('offers Yearly and Monthly as radio buttons, Yearly chosen and marked with its saving, Lifetime under More payment options (R570)', () => {
+  it('offers Yearly and Monthly as radio buttons, Yearly chosen and marked with its saving, Lifetime under More payment options (R580)', () => {
     const tree = render(<ProPitch context="screen" />);
     expect(radios(tree).map((r) => [r.props.accessibilityLabel, r.props.accessibilityState.checked])).toEqual([
       ['Yearly, Save 50%, $2.50/mo, $29.99 billed yearly, 7 days free', true],

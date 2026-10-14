@@ -74,6 +74,6 @@ Dark mode for every shot, since the warm dark palette is the brand. Make one lig
 
 ## Still for the owner to decide
 
-- Prices are set (R570): $4.99 a month and $29.99 a year, each with the store's 7-day free trial, and $69.99 lifetime under More payment options. Set the same in App Store Connect, Play Console and RevenueCat.
+- Prices are set (R580): $4.99 a month and $29.99 a year, each with the store's 7-day free trial, and $69.99 lifetime under More payment options. Set the same in App Store Connect, Play Console and RevenueCat.
 - The privacy policy and terms URLs (`EXPO_PUBLIC_PRIVACY_URL`, `EXPO_PUBLIC_TERMS_URL`), and a support URL. A simple page on a GruntHound domain is enough.
 - Whether the listing name should be just "GymHound" once the brand is known; the current title spends 17 characters on search words.

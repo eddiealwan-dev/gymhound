@@ -22,7 +22,7 @@ const PRO_LINES = [
 const FREE_LINE =
   'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
 
-/** The quiet link under the subscriptions that shows the one-time plan (R570). */
+/** The quiet link under the subscriptions that shows the one-time plan (R580). */
 const MORE_OPTIONS = 'More payment options';
 
 /** Under a subscription's price (R159), as the stores ask. */
@@ -119,7 +119,7 @@ function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen:
  * and adds **Not now**; `tab` sits inside a locked Fuel tab (R151). `onDone` runs once Pro is on (a purchase or a
  * restore), or on Not now. Opening it asks the store for its plans again. Yearly and Monthly are chosen like radio
  * buttons, Yearly first and chosen, marked with its saving over Monthly; Lifetime joins them once **More payment
- * options** is tapped (R570). The button says what it starts
+ * options** is tapped (R580). The button says what it starts
  * ("Start your free trial" on a plan with the store's free trial, "Buy lifetime"), with the terms and the renewal line
  * under it. With no store in the build, the owner's planned prices show so the screen can be checked, and buy and
  * Restore purchases are disabled under one line; with a store that has nothing to sell yet, no plans show and only
@@ -133,7 +133,7 @@ export function ProPitch({ context, onDone }: { context: 'screen' | 'tab'; onDon
   const plans = canPurchase ? storePlans : canRestore ? [] : PLANNED_PLANS;
   const [chosen, setChosen] = useState<PlanKind>('yearly');
   const [moreOptions, setMoreOptions] = useState(false);
-  // Lifetime waits under More payment options (R570), unless it is the only plan the store has.
+  // Lifetime waits under More payment options (R580), unless it is the only plan the store has.
   const hasSubscription = plans.some((p) => p.period !== null);
   const shownPlans = moreOptions || !hasSubscription ? plans : plans.filter((p) => p.period !== null);
   const hiddenOnce = shownPlans.length < plans.length;

@@ -1,7 +1,7 @@
 import type { PlanKind, StorePeriod, StorePlan } from '../../platform/entitlements';
 
 /**
- * The owner's prices (R556, R570), shown only where the build has no store (Expo Go, a development build), so the paywall can
+ * The owner's prices (R556, R580), shown only where the build has no store (Expo Go, a development build), so the paywall can
  * be seen as it will be. A build with a store shows the store's own plans and prices instead.
  */
 export const PLANNED_PLANS: StorePlan[] = [
