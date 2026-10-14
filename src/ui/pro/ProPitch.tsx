@@ -22,6 +22,9 @@ const PRO_LINES = [
 const FREE_LINE =
   'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
 
+/** The quiet link under the subscriptions that shows the one-time plan (R570). */
+const MORE_OPTIONS = 'More payment options';
+
 /** Under a subscription's price (R159), as the stores ask. */
 const RENEWS = 'Renews automatically until you cancel in your App Store or Google Play account.';
 
@@ -114,8 +117,9 @@ function PlanCard({ plan, chosen, saving, onChoose }: { plan: StorePlan; chosen:
 /**
  * What GymHound Pro adds, its plans, and buy and Restore (§8.12, R137, R159, R556). `screen` is the full-screen paywall
  * and adds **Not now**; `tab` sits inside a locked Fuel tab (R151). `onDone` runs once Pro is on (a purchase or a
- * restore), or on Not now. Opening it asks the store for its plans again. Yearly, Monthly and Lifetime are chosen
- * like radio buttons, Yearly first and chosen, marked with its saving over Monthly. The button says what it starts
+ * restore), or on Not now. Opening it asks the store for its plans again. Yearly and Monthly are chosen like radio
+ * buttons, Yearly first and chosen, marked with its saving over Monthly; Lifetime joins them once **More payment
+ * options** is tapped (R570). The button says what it starts
  * ("Start your free trial" on a plan with the store's free trial, "Buy lifetime"), with the terms and the renewal line
  * under it. With no store in the build, the owner's planned prices show so the screen can be checked, and buy and
  * Restore purchases are disabled under one line; with a store that has nothing to sell yet, no plans show and only
@@ -128,7 +132,12 @@ export function ProPitch({ context, onDone }: { context: 'screen' | 'tab'; onDon
   const { busy, status, run } = useStoreAction(onDone);
   const plans = canPurchase ? storePlans : canRestore ? [] : PLANNED_PLANS;
   const [chosen, setChosen] = useState<PlanKind>('yearly');
-  const plan = plans.find((p) => p.kind === chosen) ?? plans[0] ?? null;
+  const [moreOptions, setMoreOptions] = useState(false);
+  // Lifetime waits under More payment options (R570), unless it is the only plan the store has.
+  const hasSubscription = plans.some((p) => p.period !== null);
+  const shownPlans = moreOptions || !hasSubscription ? plans : plans.filter((p) => p.period !== null);
+  const hiddenOnce = shownPlans.length < plans.length;
+  const plan = shownPlans.find((p) => p.kind === chosen) ?? shownPlans[0] ?? null;
   const saving = yearlySaving(plans);
   const links = legalLinks();
 
@@ -155,9 +164,12 @@ export function ProPitch({ context, onDone }: { context: 'screen' | 'tab'; onDon
       </View>
       {plans.length > 0 ? (
         <View accessibilityRole="radiogroup" accessibilityLabel="Choose a plan" style={{ gap: 8, marginTop: 8 }}>
-          {plans.map((p) => (
+          {shownPlans.map((p) => (
             <PlanCard key={p.kind} plan={p} chosen={p === plan} saving={saving} onChoose={() => setChosen(p.kind)} />
           ))}
+          {hiddenOnce ? (
+            <Button label={MORE_OPTIONS} variant="quiet" onPress={() => setMoreOptions(true)} />
+          ) : null}
         </View>
       ) : null}
       <View style={{ gap: 8, marginTop: 8 }}>

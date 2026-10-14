@@ -52,12 +52,13 @@ const RESTORE_FAILED = "Couldn't reach the store. Try again.";
 const MONTHLY = { priceString: '$4.99', period: { count: 1, unit: 'month' as const } };
 const START = 'Start your free trial';
 
-/** The store's plans, at the owner's prices (R556). */
+/** The store's plans, at the owner's prices (R570). */
 const PLANS: StorePlan[] = [
-  { kind: 'yearly', priceString: '$119.88', price: 119.88, perMonthString: '$9.99', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
-  { kind: 'monthly', priceString: '$19.99', price: 19.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
-  { kind: 'lifetime', priceString: '$199', price: 199, perMonthString: null, period: null, freeTrialDays: null },
+  { kind: 'yearly', priceString: '$29.99', price: 29.99, perMonthString: '$2.50', period: { count: 1, unit: 'year' }, freeTrialDays: 7 },
+  { kind: 'monthly', priceString: '$4.99', price: 4.99, perMonthString: null, period: { count: 1, unit: 'month' }, freeTrialDays: 7 },
+  { kind: 'lifetime', priceString: '$69.99', price: 69.99, perMonthString: null, period: null, freeTrialDays: null },
 ];
+const MORE = 'More payment options';
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
   return { isPro: false, isDebugPro: false, canPurchase: true, canRestore: true, plans: PLANS, subscribed: false, kind: 'revenuecat', ...over };
@@ -152,14 +153,21 @@ describe('ProPitch (§8.12, R137)', () => {
     expect(button(tree, START)).toBeTruthy();
   });
 
-  it('offers Yearly, Monthly and Lifetime as radio buttons, Yearly chosen and marked with its saving (R556)', () => {
+  it('offers Yearly and Monthly as radio buttons, Yearly chosen and marked with its saving, Lifetime under More payment options (R570)', () => {
     const tree = render(<ProPitch context="screen" />);
     expect(radios(tree).map((r) => [r.props.accessibilityLabel, r.props.accessibilityState.checked])).toEqual([
-      ['Yearly, Save 50%, $9.99/mo, $119.88 billed yearly, 7 days free', true],
-      ['Monthly, $19.99/mo, Billed monthly, 7 days free', false],
-      ['Lifetime, $199, One-time payment', false],
+      ['Yearly, Save 50%, $2.50/mo, $29.99 billed yearly, 7 days free', true],
+      ['Monthly, $4.99/mo, Billed monthly, 7 days free', false],
     ]);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$119.88 billed yearly', '$19.99/mo', '$199', 'One-time payment']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$2.50/mo', '$29.99 billed yearly', '$4.99/mo', MORE]));
+    expect(shownText(tree)).not.toContain('$69.99');
+    act(() => button(tree, MORE).props.onPress());
+    expect(radios(tree).map((r) => r.props.accessibilityLabel)).toEqual([
+      'Yearly, Save 50%, $2.50/mo, $29.99 billed yearly, 7 days free',
+      'Monthly, $4.99/mo, Billed monthly, 7 days free',
+      'Lifetime, $69.99, One-time payment',
+    ]);
+    expect(shownText(tree)).not.toContain(MORE);
     expect(shownText(tree)).not.toContain(UNAVAILABLE);
     expect(button(tree, START).props.disabled).toBeFalsy();
     expect(button(tree, 'Restore purchases').props.disabled).toBeFalsy();
@@ -168,7 +176,7 @@ describe('ProPitch (§8.12, R137)', () => {
   it('says what the free trial leads to, and that a subscription renews until cancelled (R159)', () => {
     const tree = render(<ProPitch context="screen" />);
     const shown = shownText(tree);
-    const terms = "7 days free, then $119.88 a year. Cancel before the trial ends and you won't be charged.";
+    const terms = "7 days free, then $29.99 a year. Cancel before the trial ends and you won't be charged.";
     expect(shown).toContain(terms);
     expect(shown).toContain(RENEWS);
     expect(shown.indexOf(RENEWS)).toBeGreaterThan(shown.indexOf(terms));
@@ -178,23 +186,32 @@ describe('ProPitch (§8.12, R137)', () => {
     mockPurchase.mockResolvedValue('cancelled');
     const tree = render(<ProPitch context="screen" />);
     act(() => radios(tree)[1].props.onPress());
-    expect(shownText(tree)).toContain("7 days free, then $19.99 a month. Cancel before the trial ends and you won't be charged.");
+    expect(shownText(tree)).toContain("7 days free, then $4.99 a month. Cancel before the trial ends and you won't be charged.");
     await press(tree, START);
     expect(mockPurchase).toHaveBeenLastCalledWith('monthly');
 
+    act(() => button(tree, MORE).props.onPress());
     act(() => radios(tree)[2].props.onPress());
     expect(radios(tree)[2].props.accessibilityState.checked).toBe(true);
-    expect(shownText(tree)).toContain('$199 once. Pro is yours to keep.');
+    expect(shownText(tree)).toContain('$69.99 once. Pro is yours to keep.');
     expect(shownText(tree)).not.toContain(RENEWS);
     await press(tree, 'Buy lifetime');
     expect(mockPurchase).toHaveBeenLastCalledWith('lifetime');
+  });
+
+  it('shows Lifetime without More payment options when the store sells nothing else', () => {
+    mockState = state({ plans: [PLANS[2]] });
+    const tree = render(<ProPitch context="screen" />);
+    expect(radios(tree).map((r) => r.props.accessibilityLabel)).toEqual(['Lifetime, $69.99, One-time payment']);
+    expect(shownText(tree)).not.toContain(MORE);
+    expect(button(tree, 'Buy lifetime')).toBeTruthy();
   });
 
   it('a subscription with no free trial says Subscribe, with its price', () => {
     mockState = state({ plans: [{ ...PLANS[1], freeTrialDays: null }] });
     const tree = render(<ProPitch context="screen" />);
     expect(button(tree, 'Subscribe')).toBeTruthy();
-    expect(shownText(tree)).toContain('$19.99 a month.');
+    expect(shownText(tree)).toContain('$4.99 a month.');
     expect(shownText(tree)).not.toContain('Save 50%');
   });
 
@@ -259,8 +276,8 @@ describe('ProPitch (§8.12, R137)', () => {
     mockState = state({ kind: 'debug', canPurchase: false, canRestore: false, plans: [] });
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
 
-    expect(radios(tree)).toHaveLength(3);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$9.99/mo', '$19.99/mo', '$199']));
+    expect(radios(tree)).toHaveLength(2);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['Save 50%', '$2.50/mo', '$4.99/mo', MORE]));
     expect(button(tree, START).props.disabled).toBe(true);
     expect(button(tree, 'Restore purchases').props.disabled).toBe(true);
     expect(shownText(tree).filter((line) => line === UNAVAILABLE)).toHaveLength(1);
