@@ -664,6 +664,8 @@ function DeveloperSection() {
           }}
         />
       </View>
+      {/* The rule test (R581): three still screens, then the questions, for checking the rule is understood. */}
+      <Button label="Rule test" variant="secondary" onPress={() => router.push('/rule-test')} />
     </Section>
   );
 }

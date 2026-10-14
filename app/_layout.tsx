@@ -144,6 +144,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
         <Stack.Screen name="finish/[id]" options={{ presentation: 'fullScreenModal' }} />
         {/* Phase 5 (R154): the paywall, full screen above the tabs with no dock (§8.1); adding food and your own foods rise over Fuel. */}
         <Stack.Screen name="paywall" options={{ presentation: 'fullScreenModal' }} />
+        {/* The rule test (R581), from Settings → Developer. */}
+        <Stack.Screen name="rule-test" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="food/add" options={{ presentation: 'modal' }} />
         <Stack.Screen name="food/[id]" options={{ presentation: 'modal' }} />
         {/* The barcode scanner (R547) fills the screen: the camera needs the room. */}

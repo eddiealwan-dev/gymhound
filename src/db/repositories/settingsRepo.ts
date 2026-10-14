@@ -62,6 +62,14 @@ export type Settings = {
   profileWidgets: unknown;
   /** Workouts a week the Workouts per week widget aims at, or null for no goal (R567). */
   weeklyWorkoutGoal: number | null;
+  /** §18.28 (R584): the rule test's answers, one entry per person. Read through `readRuleTestEntries`. */
+  ruleTestAnswers: unknown;
+  /** §18.28 (R586): when the store's rating prompt was last asked for (epoch ms), or null. */
+  reviewAskedAt: number | null;
+  /** §18.28 (R587): what the rating rules said at the last finish, for Settings → Developer. Null before one. */
+  reviewLastCheck: string | null;
+  /** §18.28 (R593): the tester questions' answers, one entry per workout asked after. Read through `readTesterEntries`. */
+  testerAnswers: unknown;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -102,6 +110,10 @@ const KEYS: Record<keyof Settings, string> = {
   profilePhoto: 'profile_photo',
   profileWidgets: 'profile_widgets',
   weeklyWorkoutGoal: 'weekly_workout_goal',
+  ruleTestAnswers: 'rule_test_answers',
+  reviewAskedAt: 'review_asked_at',
+  reviewLastCheck: 'review_last_check',
+  testerAnswers: 'tester_answers',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -145,6 +157,10 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     profilePhoto: null,
     profileWidgets: [...DEFAULT_WIDGETS],
     weeklyWorkoutGoal: null,
+    ruleTestAnswers: [],
+    reviewAskedAt: null,
+    reviewLastCheck: null,
+    testerAnswers: [],
   };
 }
 
