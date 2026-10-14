@@ -279,6 +279,17 @@ describe('the personal record card (R106)', () => {
     expect(text).toEqual(['GYMHOUND', 'PR', 'PERSONAL RECORD', 'Bench press', '185', 'lb × 5', 'Heaviest set', 'SUN 11 OCT 2026', 'GymHound · gym log']);
   });
 
+  it('puts the store link under the footer once the build has one (R595)', () => {
+    const saved = process.env.EXPO_PUBLIC_STORE_URL;
+    process.env.EXPO_PUBLIC_STORE_URL = 'https://www.grunthound.com/gymhound/';
+    try {
+      expect(shownText(renderCard(benchPr('heaviest'))).slice(-2)).toEqual(['GymHound · gym log', 'grunthound.com/gymhound']);
+    } finally {
+      if (saved === undefined) delete process.env.EXPO_PUBLIC_STORE_URL;
+      else process.env.EXPO_PUBLIC_STORE_URL = saved;
+    }
+  });
+
   it('lays the date out for the locale, and keeps a value with no unit whole', () => {
     expect(shownText(renderCard(plankPr, 'en-US'))).toEqual(['GYMHOUND', 'PR', 'PERSONAL RECORD', 'Plank', '1:30', 'Longest hold', 'SUN OCT 11 2026', 'GymHound · gym log']);
   });

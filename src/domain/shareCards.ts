@@ -23,10 +23,14 @@ import { formatVolume, totalVolume, type VolumeSet } from './volume';
 // repository reads the rows, these functions turn them into the plain words and numbers the card views draw.
 
 /**
- * The quiet line at the foot of every share card (R443). One constant, so a store link can be added in one place once
- * there is a listing. No URL today: there is nowhere to send anyone yet.
+ * The quiet line at the foot of every share card (R443). The store link goes under it once there is a listing (R595).
  */
 export const SHARE_CARD_FOOTER = 'GymHound · gym log';
+
+/** The store link as a card prints it (R595): without "https://", "www." or a trailing slash, so it fits one line. */
+export function cardLink(url: string): string {
+  return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The personal best card

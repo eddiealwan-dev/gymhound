@@ -2,7 +2,8 @@ import { forwardRef } from 'react';
 import type { ReactNode } from 'react';
 import { Image, Text, View } from 'react-native';
 import type { TextStyle } from 'react-native';
-import { SHARE_CARD_FOOTER } from '../../domain/shareCards';
+import { cardLink, SHARE_CARD_FOOTER } from '../../domain/shareCards';
+import { storeUrl } from '../../platform/runtime';
 import { darkColors, fonts } from '../theme';
 
 /** The owner's GruntHound hound, dark export (48px with @2x and @3x); never redrawn. */
@@ -40,6 +41,7 @@ export const body = (fontSize: number, extra?: TextStyle): TextStyle => ({
  */
 export const ShareFrame = forwardRef<View, { onReady?: () => void; children: ReactNode }>(function ShareFrame({ onReady, children }, ref) {
   const c = cardColors;
+  const link = storeUrl();
   return (
     <View
       ref={ref}
@@ -57,6 +59,11 @@ export const ShareFrame = forwardRef<View, { onReady?: () => void; children: Rea
         <Text {...fixed} numberOfLines={1} style={body(12, { letterSpacing: 0.4 })}>
           {SHARE_CARD_FOOTER}
         </Text>
+        {link !== null ? (
+          <Text {...fixed} numberOfLines={1} style={body(12, { letterSpacing: 0.4, marginTop: 2 })}>
+            {cardLink(link)}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
