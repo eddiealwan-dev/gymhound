@@ -9,9 +9,10 @@ import { insertProgram } from '../db/testing/programFixture';
 import type { Db } from '../db/types';
 import { workPlanFor } from '../domain/sessionBlock';
 import { announce } from '../platform/announce';
-import { clockAt, LEAD_IN_MS } from '../domain/workClock';
+import { clockAt, LEAD_IN_MS, type WorkPlan } from '../domain/workClock';
 import { commitSetField, discard, finish, removeFromWorkout, replaceWith, tick } from './sessionActions';
 import {
+  clockFor,
   doneWorkClock,
   pauseWorkClock,
   releaseWorkHold,
@@ -241,6 +242,40 @@ describe('the work clock (Task 7b)', () => {
     finish(db, workoutId());
     expect(timer()).toBeNull();
     expect(mockCues.cancel).toHaveBeenCalled();
+  });
+
+  it("starting a clock on another block keeps the ended block's end line", () => {
+    startDay('program-crossfit-foundations', 'a');
+    const metcon = exercisesNow()[3];
+    const other = exercisesNow()[0];
+    const run: WorkPlan = { kind: 'run', noun: 'Run', steps: [{ kind: 'work', seconds: 300, set: 1 }] };
+    startWorkClock(db, workoutId(), metcon.id, metconPlan());
+    at(LEAD_IN_MS + 600_000);
+    startWorkClock(db, workoutId(), other.id, run);
+    const shown = (id: string) => clockFor(getSettings(db), workoutId(), id);
+    expect(shown(other.id)?.plan.kind).toBe('run');
+    expect(clockAt(shown(metcon.id)!, Date.now())).toMatchObject({ phase: 'ended', endLine: 'Time. Enter your rounds.' });
+    // Its score ticked, it has done its job; Finish or Discard takes every clock away.
+    tickSetOf(3, 0, { reps: 6 });
+    expect(shown(metcon.id)).toBeNull();
+    expect(shown(other.id)).not.toBeNull();
+  });
+
+  it('a clock not yet ended is replaced, as before, and an ended one goes with Discard', () => {
+    startDay('program-crossfit-foundations', 'a');
+    const metcon = exercisesNow()[3];
+    const other = exercisesNow()[0];
+    const run: WorkPlan = { kind: 'run', noun: 'Run', steps: [{ kind: 'work', seconds: 300, set: 1 }] };
+    startWorkClock(db, workoutId(), metcon.id, metconPlan());
+    at(LEAD_IN_MS + 100_000);
+    startWorkClock(db, workoutId(), other.id, run);
+    expect(clockFor(getSettings(db), workoutId(), metcon.id)).toBeNull();
+    at(LEAD_IN_MS + 500_000);
+    startWorkClock(db, workoutId(), metcon.id, metconPlan());
+    expect(clockFor(getSettings(db), workoutId(), other.id)).not.toBeNull();
+    const id = workoutId();
+    discard(db, id);
+    expect(getSettings(db).workClocksEnded).toEqual([]);
   });
 
   it('Discard takes it away too', () => {

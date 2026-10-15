@@ -24,6 +24,7 @@ const pullUps = (done: boolean) => ({
 let mockWorkout: Record<string, unknown>;
 /** The work clock in settings (Task 7b), or none. */
 let mockWorkTimer: Record<string, unknown> | null = null;
+let mockEnded: Record<string, unknown>[] = [];
 
 /** What each block and the Modify sheet were last drawn with. */
 const mockBlocks = new Map<string, Record<string, unknown>>();
@@ -40,7 +41,7 @@ jest.mock('../../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() 
 jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
-  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km', restSeconds: 120, workTimer: mockWorkTimer }),
+  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km', restSeconds: 120, workTimer: mockWorkTimer, workClocksEnded: mockEnded }),
 }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
 jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn(), replaceWith: jest.fn(), changeRungTo: jest.fn() }));
@@ -90,6 +91,7 @@ beforeEach(() => {
   mockBlocks.clear();
   mockModify = {};
   mockWorkTimer = null;
+  mockEnded = [];
   jest.mocked(replaceWith).mockClear();
   jest.mocked(changeRungTo).mockClear();
   jest.mocked(router.push).mockClear();
@@ -171,6 +173,16 @@ describe('the work clock (Task 7b)', () => {
     mount();
     expect(mockBlocks.get('we1')).toMatchObject({ workTimer: mockWorkTimer, clockBusy: false });
     expect(mockBlocks.get('we2')).toMatchObject({ workTimer: null, clockBusy: true });
+  });
+
+  it("keeps an ended clock on its block once another block's clock starts, so its end line stays", () => {
+    mockWorkout = two();
+    const ended = timer({ doneAtS: 300 });
+    mockEnded = [ended];
+    mockWorkTimer = timer({ workoutExerciseId: 'we2' });
+    mount();
+    expect(mockBlocks.get('we1')).toMatchObject({ workTimer: ended, clockBusy: true });
+    expect(mockBlocks.get('we2')).toMatchObject({ workTimer: mockWorkTimer, clockBusy: false });
   });
 
   it('frees Start once the clock has ended, and with none', () => {

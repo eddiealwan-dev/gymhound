@@ -49,6 +49,7 @@ const SPEC_KEYS = [
   'units_chosen',
   'water_goal_ml',
   'weekly_workout_goal',
+  'work_clocks_ended',
   'work_timer',
 ];
 

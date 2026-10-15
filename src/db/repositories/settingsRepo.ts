@@ -87,6 +87,11 @@ export type Settings = {
    * long it has been paused, never a counter (`workClock.ts`). One at a time; null when none.
    */
   workTimer: WorkTimer | null;
+  /**
+   * Clocks of the workout in progress that ended before another block's was started: each keeps its end line on its
+   * block until its score is ticked, or the workout ends. At most one a block.
+   */
+  workClocksEnded: WorkTimer[];
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -135,6 +140,7 @@ const KEYS: Record<keyof Settings, string> = {
   testerAnswers: 'tester_answers',
   deloadOfferDismissed: 'deload_offer_dismissed',
   workTimer: 'work_timer',
+  workClocksEnded: 'work_clocks_ended',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -186,6 +192,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     testerAnswers: [],
     deloadOfferDismissed: null,
     workTimer: null,
+    workClocksEnded: [],
   };
 }
 

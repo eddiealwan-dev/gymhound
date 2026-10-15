@@ -55,10 +55,33 @@ function save(db: Db, t: WorkTimer): void {
 }
 
 /**
+ * The clock a block shows: the one going, else one that ended on it before another block's clock was started (its end
+ * line stays), else none.
+ */
+export function clockFor(
+  settings: { workTimer: WorkTimer | null; workClocksEnded?: readonly WorkTimer[] | null },
+  workoutId: string,
+  workoutExerciseId: string,
+): WorkTimer | null {
+  const t = settings.workTimer;
+  if (t !== null && t.workoutId === workoutId && t.workoutExerciseId === workoutExerciseId) return t;
+  return (settings.workClocksEnded ?? []).find((e) => e.workoutId === workoutId && e.workoutExerciseId === workoutExerciseId) ?? null;
+}
+
+/** Drops the ended clock kept for `workoutExerciseId`, or every one with none given. */
+function forgetEnded(db: Db, workoutExerciseId?: string): void {
+  const kept = getSettings(db).workClocksEnded ?? [];
+  const left = workoutExerciseId === undefined ? [] : kept.filter((e) => e.workoutExerciseId !== workoutExerciseId);
+  if (left.length !== kept.length) setSetting(db, 'workClocksEnded', left);
+}
+
+/**
  * Takes the clock away and its cues down: Reset, Finish, Discard, and an exercise removed, replaced or ticked when it
- * is `workoutExerciseId`'s (left out, whichever it is). Does not bump: the caller does, once.
+ * is `workoutExerciseId`'s (left out, whichever it is), with the ended clock kept for it. Does not bump: the caller
+ * does, once.
  */
 export function clearWorkClock(db: Db, workoutExerciseId?: string): void {
+  forgetEnded(db, workoutExerciseId);
   const t = stored(db);
   if (t === null || (workoutExerciseId !== undefined && t.workoutExerciseId !== workoutExerciseId)) return;
   setSetting(db, 'workTimer', null);
@@ -74,10 +97,14 @@ export function emomRunsFor(db: Db, workoutExerciseId: string, now: number): boo
 
 /**
  * Start: the clock's work begins after the lead-in. A rest still running is skipped (the work has begun), and a clock
- * of another exercise is replaced.
+ * of another exercise is replaced; one that has ended is kept, so its block still shows its end line (`clockFor`).
  */
 export function startWorkClock(db: Db, workoutId: string, workoutExerciseId: string, plan: WorkPlan): void {
   const now = Date.now();
+  const before = stored(db);
+  const kept = (getSettings(db).workClocksEnded ?? []).filter((e) => e.workoutId === workoutId && e.workoutExerciseId !== workoutExerciseId);
+  const endedBefore = before !== null && before.workoutId === workoutId && before.workoutExerciseId !== workoutExerciseId && clockAt(before, now).phase === 'ended';
+  setSetting(db, 'workClocksEnded', endedBefore ? [...kept.filter((e) => e.workoutExerciseId !== before.workoutExerciseId), before] : kept);
   const rest = getActiveRest(db);
   if (rest !== null && rest.restEndsAt !== null && rest.restEndsAt > now) {
     setRestEndsAt(db, rest.workoutId, null);
