@@ -38,7 +38,9 @@ export function EditExercise({ exercise, setKeys, unit, distanceUnit, problems, 
   const { name, mark } = exercise;
   // A carry's distance is in its own unit (R607), as its sets were logged; it heads the column ("FT").
   const carryUnit = exercise.loggingType === 'weighted_distance' ? (exercise.sets.find((x) => x.distanceUnit !== null)?.distanceUnit ?? 'm') : undefined;
-  const columns = tableColumns(exercise.loggingType, unit, exercise.showRpe, carryUnit).filter((c) => c.key !== 'previous');
+  const table = tableColumns(exercise.loggingType, unit, exercise.showRpe, carryUnit).filter((c) => c.key !== 'previous');
+  // A score with a load gets the load's column before the score, headed by the unit as in the session (ruling R-g3).
+  const columns = exercise.loadColumn ? [table[0], { key: 'weight' as const, header: unit.toUpperCase() }, ...table.slice(1)] : table;
   const labels = setLabels(exercise.sets.map((s) => s.setType));
   return (
     <View style={{ marginBottom: 28 }}>

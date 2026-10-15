@@ -29,6 +29,11 @@ export type DraftExercise = {
   loggingType: LoggingType;
   showRpe: boolean;
   mark: ExerciseMark | null;
+  /**
+   * A score whose load the editor shows (ruling R-g3, W3 review): it has one logged, or its program slot's metcon has a
+   * loaded move. Absent reads as none.
+   */
+  loadColumn?: boolean;
   sets: DraftSet[];
 };
 

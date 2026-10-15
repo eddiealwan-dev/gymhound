@@ -10,6 +10,7 @@ import {
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { metconLoadMove } from '../../domain/sessionBlock';
 import { historySlots, programSlotOf } from './programRunRepo';
 import { recomputePrFlags } from './prRepo';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
@@ -62,41 +63,52 @@ export function loadWorkoutDraft(db: Db, workoutId: string): WorkoutDraft | null
       loggingType: exercises.loggingType,
       showRpe: workoutExercises.showRpe,
       mark: workoutExercises.mark,
+      routineExerciseId: workoutExercises.routineExerciseId,
     })
     .from(workoutExercises)
     .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
     .where(eq(workoutExercises.workoutId, workoutId))
     .orderBy(asc(workoutExercises.position))
     .all();
+  const setsOf = (workoutExerciseId: string): DraftSet[] =>
+    db
+      .select({
+        id: sets.id,
+        setType: sets.setType,
+        weight: sets.weight,
+        weightUnit: sets.weightUnit,
+        reps: sets.reps,
+        rpe: sets.rpe,
+        durationS: sets.durationS,
+        distance: sets.distance,
+        distanceUnit: sets.distanceUnit,
+        extraReps: sets.extraReps,
+        done: sets.done,
+      })
+      .from(sets)
+      .where(eq(sets.workoutExerciseId, workoutExerciseId))
+      .orderBy(asc(sets.position))
+      .all();
   return {
     workoutId,
     name: workout.name,
-    exercises: blocks.map((b) => ({
-      workoutExerciseId: b.id,
-      exerciseId: b.exerciseId,
-      name: b.name,
-      loggingType: b.loggingType,
-      showRpe: b.showRpe,
-      mark: b.mark,
-      sets: db
-        .select({
-          id: sets.id,
-          setType: sets.setType,
-          weight: sets.weight,
-          weightUnit: sets.weightUnit,
-          reps: sets.reps,
-          rpe: sets.rpe,
-          durationS: sets.durationS,
-          distance: sets.distance,
-          distanceUnit: sets.distanceUnit,
-          extraReps: sets.extraReps,
-          done: sets.done,
-        })
-        .from(sets)
-        .where(eq(sets.workoutExerciseId, b.id))
-        .orderBy(asc(sets.position))
-        .all(),
-    })),
+    exercises: blocks.map((b) => {
+      const blockSets = setsOf(b.id);
+      const score = b.loggingType === 'rounds' || b.loggingType === 'for_time';
+      const metcon = score ? (programSlotOf(workout.routineId, b.routineExerciseId)?.metcon ?? null) : null;
+      // A score's load can be fixed here when it has one, or when its metcon's main move takes one (ruling R-g3).
+      const loadColumn = score && (blockSets.some((s) => s.weight !== null) || (metcon !== null && metconLoadMove(metcon) !== null));
+      return {
+        workoutExerciseId: b.id,
+        exerciseId: b.exerciseId,
+        name: b.name,
+        loggingType: b.loggingType,
+        showRpe: b.showRpe,
+        mark: b.mark,
+        ...(score ? { loadColumn } : {}),
+        sets: blockSets,
+      };
+    }),
   };
 }
 

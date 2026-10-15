@@ -18,7 +18,9 @@ import {
   saveWorkoutEdit,
 } from './workoutHistoryRepo';
 import { finishWorkout, startEmptyWorkout, startWorkoutFromDay, storeOutcomes, tickSet } from './workoutsRepo';
-import { getActiveWorkoutView } from './workoutViewsRepo';
+import { getActiveWorkoutView, getFinishSummary } from './workoutViewsRepo';
+import { setActiveProgram } from './programRunRepo';
+import { insertProgram, runSession } from '../testing/programFixture';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -635,5 +637,37 @@ describe('only exercises whose sets changed re-run the rule', () => {
     const d = draftOf(db, id);
     saveWorkoutEdit(db, setDraftMark(d, weIdOf(d, BENCH), 'sick'));
     expect(block(db, id, BENCH)).toMatchObject({ outcome: 'held_marked' });
+  });
+});
+
+describe("a metcon's load in the history editor (ruling R-g3, W3 review)", () => {
+  const programAt = new Date(2026, 9, 12, 9, 0).getTime();
+
+  it('gives a score a load column when its slot has a loaded move, and saves an edited load, which the finish line then reads', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, program.id, programAt);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const fran = tue.slots.find((s) => s.ruleKind === 'metcon')!;
+    // Logged with no load: the slot's thrusters still take one, so the editor offers it.
+    const id = runSession(db, `${program.id}:${tue.slug}`, programAt + DAY, { [fran.id]: { seconds: [462] } });
+    const draft = loadWorkoutDraft(db, id)!;
+    const ex = draft.exercises.find((e) => e.loggingType === 'for_time')!;
+    expect(ex.loadColumn).toBe(true);
+
+    saveWorkoutEdit(db, patchDraftSet(draft, ex.workoutExerciseId, 0, { weight: 85, weightUnit: 'lb' }));
+    expect(loadWorkoutDraft(db, id)!.exercises.find((e) => e.loggingType === 'for_time')!.sets[0]).toMatchObject({ weight: 85, weightUnit: 'lb' });
+    expect(getFinishSummary(db, id, 'lb').lines?.map((l) => l.text)).toContain('21-15-9 for time — 7:42 at 85 lb');
+  });
+
+  it('has none for a metcon with no loaded move and no load logged', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-foundations');
+    setActiveProgram(db, program.id, programAt);
+    const day = program.days.find((d) => d.slots.some((s) => s.ruleKind === 'metcon' && s.exerciseId.includes('cindy')))!;
+    const cindy = day.slots.find((s) => s.ruleKind === 'metcon')!;
+    const id = runSession(db, `${program.id}:${day.slug}`, programAt + DAY, { [cindy.id]: { reps: [9] } });
+    const exs = loadWorkoutDraft(db, id)!.exercises;
+    expect(exs.find((e) => e.loggingType === 'rounds')!.loadColumn).toBe(false);
   });
 });
