@@ -689,9 +689,11 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
   it('runs follow the week (R620)', () => {
     const easy = program({ kind: 'weekly_seconds', weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } });
     const at = (seconds: number, sets = 1): Rule => ({ setCount: sets, repMin: seconds, repMax: seconds, increment: 0, incrementUnit: 'lb' });
-    expect(line(easy, at(1740), 'timed')).toBe('Week 3: 29:00. Adds 2:00 a week up to 40:00.');
+    // The clock and the suggested time say this week's target, so the line says what comes next (design gate #18).
+    expect(line(easy, at(1740), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week 31:00.');
     const lighter = { ...easy, week: 4, weekInfo: { week: 4, kind: 'lighter' as const, halfSets: true, holds: true, runShare: 0.6, note: '' } };
-    expect(line(lighter, at(1116), 'timed')).toBe("Week 4: 18:36. That's 60% on this lighter week. Adds 2:00 a week up to 40:00.");
+    expect(line(lighter, at(1116), 'timed')).toBe('60% of the time this lighter week. Adds 2:00 a week, up to 40:00. Next week 33:00.');
+    expect(line({ ...easy, week: 9 }, at(2400), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week 40:00 again.');
     const intervals = program({ kind: 'weekly_seconds', weekly: { kind: 'sets_then_seconds', startSets: 6, capSets: 8, seconds: 180, stepS: 15 } });
     expect(line(intervals, at(180, 8), 'timed')).toBe('Week 3: 8 × 3:00. Adds a set a week up to 8, then 15 s a set.');
     expect(line(program({ kind: 'weekly_seconds', weekly: { kind: 'fixed' } }), at(600), 'timed')).toBe('10:00, the same every week.');

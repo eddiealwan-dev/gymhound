@@ -110,11 +110,6 @@ export function runNoun(exerciseId: string): string {
   return 'Run';
 }
 
-/** A run's format line: "Run 29:00". */
-export function runFormat(exerciseId: string, targetS: number): string {
-  return `${runNoun(exerciseId)} ${formatRest(targetS)}`;
-}
-
 /** Intervals' format line: "6 × 3:00 hard / 2:00 easy", or "8 × 1:00 hard" with no easy part. */
 export function intervalFormat(sets: number, workS: number, easyS: number | null): string {
   const hard = `${sets} × ${formatRest(workS)} hard`;

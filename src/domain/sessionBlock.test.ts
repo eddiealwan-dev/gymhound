@@ -12,7 +12,6 @@ import {
   metconRuleLine,
   metconTitle,
   metconVoice,
-  runFormat,
   TECHNIQUE_LINE,
   workPlanFor,
   type BlockInput,
@@ -119,12 +118,6 @@ describe('metconParts (R-t7b2, design gate #2)', () => {
 });
 
 describe('the format lines and what the notes say', () => {
-  it('names a run by its target, and a walk, a ride or a row by its own word', () => {
-    expect(runFormat('easy-run', 1740)).toBe('Run 29:00');
-    expect(runFormat('long-run', 3600)).toBe('Run 60:00');
-    expect(runFormat('incline-treadmill-walk', 900)).toBe('Walk 15:00');
-  });
-
   it('writes intervals as sets × hard / easy, leaving out an easy part it does not know', () => {
     expect(intervalFormat(6, 180, 120)).toBe('6 × 3:00 hard / 2:00 easy');
     expect(intervalFormat(8, 20, 100)).toBe('8 × 0:20 hard / 1:40 easy');

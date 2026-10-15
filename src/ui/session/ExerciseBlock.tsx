@@ -20,7 +20,6 @@ import {
   metconParts,
   metconRuleLine,
   metconTitle,
-  runFormat,
   runNoun,
   targetSecondsOf,
   TECHNIQUE_LINE,
@@ -261,10 +260,9 @@ export const ExerciseBlock = memo(function ExerciseBlock({
     kind === 'metcon' && ex.program ? metconTitle(ex.program.catalogName, ex.name) : named !== null && named.name !== ex.program?.catalogName ? named.name : ex.name;
   /** The slot's note as the session says it: loads in the session unit, a minute or more as a clock, ranges with an en dash. */
   const slotNote = named?.note && !(kind === 'technique' && emomFormat(named.note, ex.rule) !== null) ? sessionNoteText(named.note, unit) : null;
+  // A single run has no format line: its clock and suggested time say the target (design gate #18).
   const formatLine =
-    kind === 'run' && targetS !== null && targetS > 0
-      ? runFormat(ex.exerciseId, targetS)
-      : kind === 'intervals' && targetS !== null && targetS > 0 && working.length > 0
+    kind === 'intervals' && targetS !== null && targetS > 0 && working.length > 0
         ? intervalFormat(working.length, targetS, easySecondsOf(ex.program?.note ?? null))
         : kind === 'technique' && plan?.kind === 'emom'
           ? emomFormat(ex.program?.note ?? null, ex.rule)

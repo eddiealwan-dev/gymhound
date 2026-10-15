@@ -457,7 +457,11 @@ function runSentence(p: ProgramRule, rule: Rule): string {
   const share = p.weekInfo?.runShare ?? 1;
   const lighter = share < 1 ? ` That's ${pct(share)}% on this lighter week.` : '';
   if (weekly.kind === 'seconds') {
-    return `Week ${p.week}: ${formatRest(rule.repMin)}.${lighter} Adds ${formatRest(weekly.stepS)} a week up to ${formatRest(weekly.capS)}.`;
+    // The clock and the suggested time say this week's target, so the line says how it grows and next week's (gate #18).
+    const next = Math.min(weekly.startS + p.week * weekly.stepS, weekly.capS);
+    const now = Math.min(weekly.startS + (p.week - 1) * weekly.stepS, weekly.capS);
+    const lighterNow = share < 1 ? `${pct(share)}% of the time this lighter week. ` : '';
+    return `${lighterNow}Adds ${formatRest(weekly.stepS)} a week, up to ${formatRest(weekly.capS)}. Next week ${formatRest(next)}${next === now ? ' again' : ''}.`;
   }
   return `Week ${p.week}: ${rule.setCount} × ${formatRest(rule.repMin)}.${lighter} Adds a set a week up to ${weekly.capSets}, then ${weekly.stepS} s a set.`;
 }

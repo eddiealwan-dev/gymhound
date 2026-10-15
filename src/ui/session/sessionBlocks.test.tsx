@@ -134,7 +134,7 @@ const franEx = () =>
 const run = () =>
   exercise(
     { exerciseId: 'easy-run', name: 'Easy run', loggingType: 'timed', equipment: 'other', rule: { setCount: 1, repMin: 1740, repMax: 1740, increment: 0, incrementUnit: 'lb' } },
-    { rule: { kind: 'weekly_seconds', weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } }, restKind: 'none', countsTowardVolume: false, catalogName: 'Easy run' },
+    { rule: { kind: 'weekly_seconds', week: 3, weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } }, restKind: 'none', countsTowardVolume: false, catalogName: 'Easy run' },
   );
 
 const intervals = () =>
@@ -297,9 +297,10 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
 });
 
 describe('a run is a timed effort with its own block', () => {
-  it("reads as the run and the week's target, with the clock and one row that suggests the target", () => {
+  it("says the week's target once, on the clock and in the suggested time, with the rule saying what comes next (design gate #18)", () => {
     const tree = mount(run());
-    expect(shownText(tree)).toContain('Run 29:00');
+    expect(shownText(tree)).not.toContain('Run 29:00');
+    expect(shownText(tree)).toContain('Adds 2:00 a week, up to 40:00. Next week 31:00.');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'run', steps: [{ seconds: 1740 }] });
     expect(headers(tree)).toEqual(['PREVIOUS', 'TIME', '✓']);
     expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
@@ -310,7 +311,6 @@ describe('a run is a timed effort with its own block', () => {
   it("reads its target from one field, as its rule line and clock do, when the range's ends differ", () => {
     const base = run();
     const tree = mount({ ...base, rule: { ...base.rule!, repMin: 1740, repMax: 1800 } });
-    expect(shownText(tree)).toContain('Run 29:00');
     expect(clock(tree)[0].props.plan).toMatchObject({ steps: [{ seconds: 1740 }] });
     expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
   });
