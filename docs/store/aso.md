@@ -1,6 +1,6 @@
 # GymHound: App Store and Play listing (ASO notes)
 
-Drafted 2026-10-12 for the owner to review before the first store submission (plan Task 7.9); updated 2026-10-14 from the combined strategy and ASO plan (title, subtitle, keywords, rule-first captions, prices). Everything here follows `PRODUCT.md`: plain words, no invented claims (no "#1", no user counts, no reviews), no motivational slogans.
+Drafted 2026-10-12 for the owner to review before the first store submission (plan Task 7.9); updated 2026-10-14 from the combined strategy and ASO plan (title, subtitle, keywords, rule-first captions, prices), and 2026-10-15 for the twenty programs. Everything here follows `PRODUCT.md`: plain words, no invented claims (no "#1", no user counts, no reviews), no motivational slogans.
 
 **Never** say the app notices, detects or decides an off day: the lifter marks Something off, and the weight holds. No "knows", "smart", "AI" or "coach" in any field, caption or screenshot. Nothing untested on a phone (Live Activity, Apple Health, iCloud, the in-app music controls, watch apps) appears in the listing, not even as "coming soon". Red stays out of the screenshots' captions; it appears only where the app itself shows it (the wordmark, the active tab, PR marks).
 
@@ -30,14 +30,14 @@ How the keywords were chosen:
 3. No account, no feed. Your workouts stay on your phone.
 
 Then short sections, in the app's voice:
-- **The rule, in words.** If every working set hits the top of the range on a normal day, next time adds weight. It's written under every exercise.
+- **The rule, in words.** If every working set hits the top of the range on a normal day, next time adds weight. It's written under every exercise, in every program, with why the weight went up or held. Change the weight or the rule yourself.
 - **Something off?** Rough sleep, sick, short on food, pain, cutting: you mark it and the weight holds instead of dropping. The rule and Something off are free.
-- **Routines.** 9 programs (4 free), or build your own. Share a routine with a link or a code.
-- **882 exercises with form photos.** Add your own exercises and photos.
+- **Routines.** All 20 programs, five of them free, each with its own card: a short description and the sources it cites. Or build your own. Share a routine with a link or a code.
+- **990 exercises with steps and form demos, photos for most.** Add your own exercises and photos.
 - **Rest timer.** Per exercise, with -15s, +15s and Skip, with your chosen bell.
 - **Personal bests.** Marked as you set them, with share cards for PRs and your week.
 - **History and Stats.** A calendar, trends for every lift and body measurement, weekly sets per muscle, CSV export.
-- **GymHound Pro.** Routines of your own, saved workouts, all nine programs, and Fuel: food log, macro targets for training and rest days, and trends. $4.99 a month or $29.99 a year, each with a 7-day free trial, or $69.99 once. Water and the food CSV are always free.
+- **GymHound Pro.** Routines of your own, saved workouts, all 20 programs (five are always free), and Fuel: food log, macro targets for training and rest days, and trends. $4.99 a month or $29.99 a year, each with a 7-day free trial, or $69.99 once. Water and the food CSV are always free.
 - **Privacy.** Everything is on your phone, with a backup after every workout.
 
 ### Screenshot order (6.9" and 6.5" iPhone; up to 10)
@@ -50,7 +50,7 @@ Most people see only the first three, so those carry the pitch. Each caption is 
 4. **Change the rule.** Caption: "Change the rule. Or the weight." Shows the routine editor's rep range and increment beside today's override.
 5. **Privacy.** Caption: "No account. Your data stays on your phone." Shows Settings → Backups, or a plain dark card with the hound mark.
 6. **Share cards.** Caption: "Share a PR or your week". Shows the personal record card beside the weekly card.
-7. **Routines.** Caption: "9 programs, or build your own". Shows the premade list with one active.
+7. **Routines.** Caption: "20 programs, each with its sources". Shows the PROGRAMS list with one active, or a program's card with its Sources link.
 8. **Stats.** Caption: "Every lift, trending up". Shows a lift chart with records.
 9. **Fuel (Pro).** Caption: "Food and macros, on training and rest days". Shows Calories left and Protein left.
 10. **Session mid-workout.** Caption: "Last time's numbers beside every set". Shows 2 exercises, ghost values, one completed set and the rest countdown.

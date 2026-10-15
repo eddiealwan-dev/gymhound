@@ -1,4 +1,4 @@
-// The nine programs seed versions 6 to 8 wrote (§18.8 R87, §18.21 R520), kept as test data only: seed version 9
+// The nine old programs seed versions 6 to 8 wrote (§18.8 R87, §18.21 R520), kept as test data only: seed version 9
 // retired them (§18.29, R598), so the app no longer bundles them, but a phone updated from version 8 still has them
 // with their days, exercises and progress. `writeSeedV8Programs` (seedV8.ts) writes them as version 8 left them.
 

@@ -35,11 +35,11 @@ jest.mock('./ThemeProvider', () => {
 });
 
 const TITLE = 'GymHound Pro';
-const ROUTINES = 'All nine programs';
+const ROUTINES = 'All 20 programs';
 const FUEL = 'Fuel: calories and protein, with training and rest day targets, and macro graphs';
 const OWN = 'Routines of your own and saved workouts';
 const FREE =
-  'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
+  'Everything else stays free: logging, history, Stats, five programs (Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters), the rest timer, plates, PRs, Something off, body measurements and water.';
 const UNAVAILABLE = "Purchases aren't available in this build.";
 const NOT_ANSWERING = "The store isn't answering. Try again later.";
 const RENEWS = 'Renews automatically until you cancel in your App Store or Google Play account.';
@@ -126,6 +126,16 @@ describe('priceLine (§8.12, R157)', () => {
 });
 
 describe('ProPitch (§8.12, R137)', () => {
+  it('paywall lists "All 20 programs" and the free five (R638)', () => {
+    const tree = render(<ProPitch context="screen" onDone={() => {}} />);
+    const shown = shownText(tree);
+
+    expect(shown).toEqual(expect.arrayContaining(['All 20 programs']));
+    expect(shown.join(' ')).not.toMatch(/nine|four programs/i);
+    const free = shown.find((line) => line.startsWith('Everything else stays free'));
+    expect(free).toContain('five programs (Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters)');
+  });
+
   it('shows the title, the three Pro lines each with a check, the free list, Start your free trial, Restore purchases and Not now', () => {
     const tree = render(<ProPitch context="screen" onDone={() => {}} />);
     const shown = shownText(tree);

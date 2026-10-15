@@ -43,7 +43,7 @@ export const SEED_ROUTINES: readonly SeedRoutine[] = PROGRAMS.map((program) => (
 export const PREMADE_ORDER: readonly string[] = PROGRAM_ORDER;
 
 /**
- * The nine programs seed version 9 retired (R598), in the order Routines listed them, which Earlier programs keeps.
+ * The nine old programs seed version 9 retired (R598), in the order Routines listed them, which Earlier programs keeps.
  * Retired, never deleted: whoever has one keeps it whole, and it keeps running.
  */
 export const RETIRED_PREMADES: readonly string[] = [

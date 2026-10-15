@@ -13,14 +13,14 @@ import { PURCHASES_UNAVAILABLE, STORE_NOT_ANSWERING, useStoreAction } from './us
 
 /** What Pro adds (§8.12 with §18.1's macro graphs, R137), each led by a check. */
 const PRO_LINES = [
-  'All nine programs',
+  'All 20 programs',
   'Routines of your own and saved workouts',
   'Fuel: calories and protein, with training and rest day targets, and macro graphs',
 ];
 
-/** What stays free (R137: §8.12's list brought up to date). */
+/** What stays free (R137: §8.12's list brought up to date; the five free programs, R597, R638). */
 const FREE_LINE =
-  'Everything else stays free: logging, history, Stats, four programs (Beginner full body, 5×5, Dumbbell full body and Mobility), the rest timer, plates, PRs, Something off, body measurements and water.';
+  'Everything else stays free: logging, history, Stats, five programs (Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters), the rest timer, plates, PRs, Something off, body measurements and water.';
 
 /** The quiet link under the subscriptions that shows the one-time plan (R580). */
 const MORE_OPTIONS = 'More payment options';

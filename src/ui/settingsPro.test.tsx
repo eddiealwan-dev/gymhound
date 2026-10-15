@@ -44,7 +44,7 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const FREE_LINE = 'Free includes four programs, Stats and logging. Pro adds every program, your own routines, saved workouts and Fuel.';
+const FREE_LINE = 'Free includes five programs, Stats and logging. Pro adds every program, your own routines, saved workouts and Fuel.';
 const UNAVAILABLE = "Purchases aren't available in this build.";
 
 function state(over: Partial<EntitlementsState> = {}): EntitlementsState {
