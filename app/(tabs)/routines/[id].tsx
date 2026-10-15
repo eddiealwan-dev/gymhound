@@ -55,16 +55,18 @@ function ExerciseRow({
   onPress: (exercise: RoutineDetailExercise) => void;
 }) {
   const scheme = schemeOf(exercise, plan);
+  /** A program slot may be called by its role ("Warm-up run", ruling R-g4). */
+  const name = plan?.name ?? exercise.name;
   return (
     // At a large text size the scheme drops under the name rather than squeezing it, as on Up next.
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${exercise.name}, ${scheme}`}
+      accessibilityLabel={`${name}, ${scheme}`}
       accessibilityHint="Modify or see its stats"
       onPress={() => onPress(exercise)}
       style={({ pressed }) => ({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8, minHeight: 44, opacity: pressed ? 0.8 : 1 })}
     >
-      <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+      <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{name}</Body>
       <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
         {scheme}
       </Body>

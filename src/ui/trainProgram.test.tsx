@@ -146,14 +146,15 @@ describe('Up next for a program (§18.29)', () => {
     mockRead.upNext = upNext({}, [
       exercise('re-bench', 'Barbell bench press', { nextWeight: 135, nextWeightUnit: 'lb' }),
       exercise('re-yoke', 'Yoke carry', { loggingType: 'weighted_distance', equipment: 'other', setCount: 4, repMin: 50, repMax: 50, schemeExtra: { distanceUnit: 'ft' } }),
-      exercise('re-metcon', 'AMRAP 10: goblet squat, push-up, run', { loggingType: 'rounds', equipment: 'other', setCount: 1, repMin: 4, repMax: 7, schemeExtra: { metcon: { format: 'AMRAP', workMinutes: 10 } } }),
+      exercise('re-metcon', 'AMRAP 10: goblet squat, push-up, run', { loggingType: 'rounds', equipment: 'other', setCount: 1, repMin: 4, repMax: 7, schemeExtra: { metcon: { format: 'AMRAP', workMinutes: 10, capMinutes: null } } }),
       exercise('re-run', 'Long run', { loggingType: 'timed', equipment: 'bodyweight', setCount: 1, repMin: 4200, repMax: 4200, schemeExtra: { clock: true } }),
     ]);
     const shown = lines(mount());
     expect(shown).toContain('Barbell bench press');
     expect(shown).toContain('Yoke carry');
     expect(shown).toContain('4×50 ft · —');
-    expect(shown).toContain('AMRAP 10 min');
+    expect(shown).toContain('10 min');
+    expect(shown).not.toContain('AMRAP 10 min');
     expect(shown).toContain('70:00');
   });
 

@@ -6,12 +6,13 @@
 
 import type { AddSetRule, ProgramWeek, RuleKind, WeekKind, WeeklyRule } from '../seed/programTypes';
 import { formatRest } from './dates';
+import { enDashRanges, secondsAsMinutes } from './programCard';
 import { MARK_LABELS } from './labels';
 import type { Gear } from './plates';
 import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
-import { convertIncrement, formatWeight, isZeroWeight } from './units';
+import { convertIncrement, formatWeight, isZeroWeight, loadsInUnit } from './units';
 
 export type Rule = NonNullable<OutcomeInput['rule']>;
 
@@ -330,6 +331,33 @@ export function slotNoteText(note: string, catalogName: string, kind: RuleKind):
   let text = note.replace(/\((?:see )?Appendix A\)/g, '(Change rung lists them)').trim();
   if (kind === 'metcon' && text.startsWith(catalogName)) text = text.slice(catalogName.length).replace(/^[.\s]+/, '');
   return text === '' ? null : text;
+}
+
+/**
+ * A slot's note as the session shows it (design gate #17, #20, #24; ruling R-g4): loads in the session unit (to the
+ * nearest 0.5 kg), seconds of a minute or more as a clock ("120 s" → "2:00", as the format line says it), and number
+ * ranges with an en dash. The words are the documents'.
+ */
+export function sessionNoteText(note: string, unit: WeightUnit): string {
+  return enDashRanges(secondsAsMinutes(loadsInUnit(note, unit)));
+}
+
+/** The easy runs either side of the work (#20), named by their note: "Warm-up run", "Cool-down run" (ruling R-g4). */
+const RUN_ROLES: readonly { starts: RegExp; name: string; only: RegExp }[] = [
+  { starts: /^warm-up\b/i, name: 'Warm-up run', only: /^warm-up\.?$/i },
+  { starts: /^cool-down\b/i, name: 'Cool-down run', only: /^cool-down\.?$/i },
+];
+
+/**
+ * What a slot is called where it shows, with the note it keeps: an easy run whose note says it is the warm-up or the
+ * cool-down is the "Warm-up run" or the "Cool-down run", and a note that said only that goes, since the name now does.
+ * Every other slot keeps its name and note.
+ */
+export function slotName(name: string, note: string | null): { name: string; note: string | null } {
+  if (name !== 'Easy run' || note === null) return { name, note };
+  const role = RUN_ROLES.find((r) => r.starts.test(note.trim()));
+  if (!role) return { name, note };
+  return { name: role.name, note: role.only.test(note.trim()) ? null : note };
 }
 
 /**

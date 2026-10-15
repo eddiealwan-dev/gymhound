@@ -9,7 +9,7 @@ import { seededDb } from '../testing/fixtures';
 import { fakeSessions, insertProgram, runSession } from '../testing/programFixture';
 import type { LoggingType } from '../../domain/types';
 import type { Db } from '../types';
-import { changeRungToday, showsWarmUp } from './programViewRepo';
+import { changeRungToday, programPageOf, showsWarmUp } from './programViewRepo';
 import { changeRung, setActiveProgram, startEarlyDeload } from './programRunRepo';
 import { getActiveWorkoutView, getFinishSummary } from './workoutViewsRepo';
 import { startWorkoutFromDay, tickSet } from './workoutsRepo';
@@ -335,5 +335,24 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
       text: expect.stringMatching(/ — 7$/),
       why: 'You beat your score twice in a row. Go heavier or take the next scaling step.',
     });
+  });
+});
+
+describe("a program day's rows on its page and Up next (design gate #19, #20)", () => {
+  it("names #20's easy runs either side of the intervals by what they are", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    const wed = program.days.find((d) => d.name.includes('Intervals'))!;
+    const page = programPageOf(db, program.id)!;
+    expect(wed.slots.map((s) => page.slots[s.id].scheme.name ?? null)).toEqual(['Warm-up run', null, 'Cool-down run']);
+  });
+
+  it("gives a For Time metcon its cap, for the scheme column", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, program.id, NOW);
+    const fran = program.days.flatMap((d) => d.slots).find((s) => s.exerciseId === 'metcon-21-15-9-thruster-pullup')!;
+    expect(programPageOf(db, program.id)!.slots[fran.id].scheme.schemeExtra).toEqual({ metcon: { format: 'For Time', workMinutes: 6, capMinutes: 8 } });
   });
 });

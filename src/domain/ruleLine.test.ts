@@ -17,6 +17,8 @@ import {
   rungName,
   secondsUpLine,
   slotNoteText,
+  slotName,
+  sessionNoteText,
   todaysRead,
   WARM_UP_LINE,
   weekLine,
@@ -866,5 +868,37 @@ describe('the finish words of a program slot (R613, R617, R618, R619, R622)', ()
     expect(addSetLine('Armor Building Complex', 6)).toBe('Armor Building Complex — next time 6 sets ↑');
     expect(secondsUpLine('Bike intervals', 35)).toBe('Bike intervals — next time 35 s a set ↑');
     expect(BEAT_TWICE).toBe('You beat your score twice in a row.');
+  });
+});
+
+describe('a program note in the session (design gate #17, #20, #24; ruling R-g4)', () => {
+  it('says loads in the session unit, rounded to 0.5 kg', () => {
+    expect(sessionNoteText('Weeks 1–2: empty bar to 75 lb', 'kg')).toBe('Weeks 1–2: empty bar to 34 kg');
+    expect(sessionNoteText('Weeks 1–2: empty bar to 75 lb', 'lb')).toBe('Weeks 1–2: empty bar to 75 lb');
+  });
+
+  it('says a minute or more as a clock, as the format line does', () => {
+    expect(sessionNoteText('Hard (about 5 km pace) with 120 s easy jog between', 'lb')).toBe('Hard (about 5 km pace) with 2:00 easy jog between');
+    expect(sessionNoteText('Finisher: 30 s hard / 90 s easy', 'lb')).toBe('Finisher: 30 s hard / 1:30 easy');
+  });
+
+  it('writes number ranges with an en dash, never a rep scheme', () => {
+    expect(sessionNoteText('Barbell back squat (top set). RPE 8-9; 3-5 min rest after', 'lb')).toBe('Barbell back squat (top set). RPE 8–9; 3–5 min rest after');
+    expect(sessionNoteText('Pause 1-2 s at the top', 'lb')).toBe('Pause 1–2 s at the top');
+    expect(sessionNoteText('21-15-9 for time', 'lb')).toBe('21-15-9 for time');
+  });
+});
+
+describe("a run slot's name (ruling R-g4, design gate #20)", () => {
+  it('names the easy runs either side of the work by what they are, and drops a note that only said so', () => {
+    expect(slotName('Easy run', 'Warm-up jog plus 4 strides')).toEqual({ name: 'Warm-up run', note: 'Warm-up jog plus 4 strides' });
+    expect(slotName('Easy run', 'Warm-up')).toEqual({ name: 'Warm-up run', note: null });
+    expect(slotName('Easy run', 'Cool-down')).toEqual({ name: 'Cool-down run', note: null });
+  });
+
+  it('leaves every other slot as it is', () => {
+    expect(slotName('Easy run', 'After lifting, or 3+ hours later')).toEqual({ name: 'Easy run', note: 'After lifting, or 3+ hours later' });
+    expect(slotName('Barbell back squat', 'Warm-up sets first')).toEqual({ name: 'Barbell back squat', note: 'Warm-up sets first' });
+    expect(slotName('Easy run', null)).toEqual({ name: 'Easy run', note: null });
   });
 });

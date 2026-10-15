@@ -356,6 +356,23 @@ describe('your own routines keep their set rows', () => {
   });
 });
 
+describe("a program note and name in the session (design gate #17, #20; ruling R-g4)", () => {
+  it('says the note in the session unit, with a minute or more as a clock and ranges with an en dash', () => {
+    const squat = exercise({}, { note: 'Weeks 1–2: empty bar to 75 lb. RPE 8-9' });
+    expect(shownText(mount(squat, null, false, 'kg'))).toContain('Weeks 1–2: empty bar to 34 kg. RPE 8–9');
+    expect(shownText(mount(intervals()))).toContain('Hard (about 5 km pace) with 2:00 easy jog between');
+  });
+
+  it("calls #20's cool-down easy run the Cool-down run, without a note that only said so", () => {
+    const base = run();
+    const cool = { ...base, rule: { ...base.rule!, repMin: 600, repMax: 600 }, program: { ...base.program!, note: 'Cool-down' } };
+    const tree = mount(cool);
+    expect(shownText(tree)).toContain('Cool-down run');
+    expect(shownText(tree)).not.toContain('Cool-down');
+    expect(labels(tree)).toContain('Show form for Cool-down run');
+  });
+});
+
 describe('a metcon whose name gives no amounts', () => {
   it('shows the full name as its format line and no list, never an empty amount column', () => {
     const odd = exercise(

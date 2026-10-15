@@ -7,7 +7,7 @@ import { MARK_LABELS } from '../../domain/labels';
 import { planInUnit, type Gear } from '../../domain/plates';
 import { restAfterLine, restLengthFor } from '../../domain/rest';
 import { restLengthOf } from '../../domain/restKind';
-import { lastSummary, programRuleSentence, programTodaysRead, ruleSentence, todaysRead, WARM_UP_LINE } from '../../domain/ruleLine';
+import { lastSummary, programRuleSentence, programTodaysRead, ruleSentence, sessionNoteText, slotName, todaysRead, WARM_UP_LINE } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import {
   blockColumns,
@@ -250,8 +250,15 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   /** A metcon's score or a run, once ticked, has no more use for its clock. */
   const scored = (kind === 'metcon' || kind === 'run') && working.length > 0 && working.every((s) => s.done);
   const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName, unit) : null;
-  /** The name in the name row: a metcon by the program's label for it ("Metcon A"). */
-  const name = kind === 'metcon' && ex.program ? metconTitle(ex.program.catalogName, ex.name) : ex.name;
+  /**
+   * The name in the name row: a metcon by the program's label for it ("Metcon A"); #20's easy runs by their role
+   * ("Warm-up run", ruling R-g4), whose note then keeps only what the name doesn't say.
+   */
+  const named = ex.program ? slotName(ex.program.catalogName, ex.program.note) : null;
+  const name =
+    kind === 'metcon' && ex.program ? metconTitle(ex.program.catalogName, ex.name) : named !== null && named.name !== ex.program?.catalogName ? named.name : ex.name;
+  /** The slot's note as the session says it: loads in the session unit, a minute or more as a clock, ranges with an en dash. */
+  const slotNote = named?.note ? sessionNoteText(named.note, unit) : null;
   const formatLine =
     kind === 'run' && targetS !== null && targetS > 0
       ? runFormat(ex.exerciseId, targetS)
@@ -550,9 +557,9 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       ) : null}
       {/* A program slot's note, as the documents write it (R606), and the warm-up line under a lifting day's first slot
           (R626). Muted under the rule; they wrap at any text size. */}
-      {program?.note ? (
+      {slotNote !== null ? (
         <Body muted style={{ fontSize: 14, marginTop: 4 }}>
-          {program.note}
+          {slotNote}
         </Body>
       ) : null}
       {program?.warmUp ? (

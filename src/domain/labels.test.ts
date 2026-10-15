@@ -29,8 +29,10 @@ describe('formatRepScheme', () => {
   it("a program's carries, scores and runs (R607, R620): the distance unit, the format, a clock", () => {
     expect(formatRepScheme(4, 50, 50, 'weighted_distance', { distanceUnit: 'ft' })).toBe('4×50 ft');
     expect(formatRepScheme(4, 40, 40, 'weighted_distance', { distanceUnit: 'yd' })).toBe('4×40 yd');
-    expect(formatRepScheme(1, 4, 7, 'rounds', { metcon: { format: 'AMRAP', workMinutes: 12 } })).toBe('AMRAP 12 min');
-    expect(formatRepScheme(1, 8, 12, 'for_time', { metcon: { format: 'For Time', workMinutes: 10 } })).toBe('For Time');
+    // A metcon's name already says its format, so the scheme column says its minutes or its cap (design gate #19).
+    expect(formatRepScheme(1, 4, 7, 'rounds', { metcon: { format: 'AMRAP', workMinutes: 12, capMinutes: null } })).toBe('12 min');
+    expect(formatRepScheme(1, 8, 12, 'for_time', { metcon: { format: 'For Time', workMinutes: 6, capMinutes: 8 } })).toBe('8 min cap');
+    expect(formatRepScheme(1, 8, 12, 'for_time', { metcon: { format: 'For Time', workMinutes: 10, capMinutes: null } })).toBe('For Time');
     expect(formatRepScheme(1, 4, 7, 'rounds')).toBe('AMRAP');
     expect(formatRepScheme(1, 8, 12, 'for_time')).toBe('For Time');
     expect(formatRepScheme(1, 1740, 1740, 'timed', { clock: true })).toBe('29:00');

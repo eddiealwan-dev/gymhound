@@ -38,7 +38,7 @@ const minutes = (digits: string): string => formatRest(Number(digits.replace(/,/
  * Seconds of a minute or more, as minutes (ruling R-w3): "5,400 s" → "90:00", "60-90 s" → "1:00-1:30", "60 seconds" →
  * "1:00", and "+120 s per week" → "+2:00 a week". Under a minute stays as written ("30 s", "30-45 s").
  */
-function secondsAsMinutes(text: string): string {
+export function secondsAsMinutes(text: string): string {
   return text.replace(
     /\b(\d{1,3}(?:,\d{3})+|\d+)(?:(\s?[-–]\s?)(\d{1,3}(?:,\d{3})+|\d+))? ?(?:s|seconds)\b( per week)?/g,
     (whole, from: string, dash: string | undefined, to: string | undefined, perWeek: string | undefined) => {
@@ -48,6 +48,14 @@ function secondsAsMinutes(text: string): string {
       return perWeek ? `${range} a week` : range;
     },
   );
+}
+
+/**
+ * Number ranges with an en dash (ruling R-g4): "4-8 reps" → "4–8 reps", "RPE 8-9" → "RPE 8–9". A rep scheme of three or
+ * more numbers ("21-15-9") is not a range and keeps its hyphens.
+ */
+export function enDashRanges(text: string): string {
+  return text.replace(/(?<![\d.\-–])(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?![\d\-–]|\.\d)/g, '$1–$2');
 }
 
 /**

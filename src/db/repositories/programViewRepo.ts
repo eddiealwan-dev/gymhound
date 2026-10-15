@@ -11,6 +11,7 @@ import {
   resetWhy,
   rungName,
   secondsUpLine,
+  slotName,
   slotNoteText,
   weekLine,
   type NextTime,
@@ -370,7 +371,14 @@ export function programFinishLines(
 }
 
 /** A slot's sets and range for its next session, with its scheme words (§18.29). */
-export type SlotScheme = { setCount: number; repMin: number; repMax: number; schemeExtra?: RepSchemeExtra };
+export type SlotScheme = {
+  setCount: number;
+  repMin: number;
+  repMax: number;
+  schemeExtra?: RepSchemeExtra;
+  /** What the slot is called where that isn't its exercise's name: #20's "Warm-up run" and "Cool-down run" (`slotName`). */
+  name?: string;
+};
 
 /**
  * A program slot's sets and range for the next session (R617–R620), as `startWorkoutFromDay` will snapshot them: half on
@@ -407,9 +415,10 @@ export function slotScheme(
       slot.addSet?.then.kind === 'seconds' ? slotSessions(db, row.routineExerciseId, 0, row.exerciseId).filter((s) => s.outcome === 'raised').length : 0,
   });
   const unit = carryUnit(slot);
+  const named = slotName(slot.catalogName, slot.note);
   const extra: RepSchemeExtra = {
     ...(unit ? { distanceUnit: unit } : {}),
-    ...(slot.metcon ? { metcon: { format: slot.metcon.format, workMinutes: slot.metcon.workMinutes } } : {}),
+    ...(slot.metcon ? { metcon: { format: slot.metcon.format, workMinutes: slot.metcon.workMinutes, capMinutes: slot.metcon.capMinutes } } : {}),
     ...(slot.ruleKind === 'weekly_seconds' ? { clock: true } : {}),
   };
   return {
@@ -417,6 +426,7 @@ export function slotScheme(
     repMin: snapshot.repMin,
     repMax: snapshot.repMax,
     ...(Object.keys(extra).length > 0 ? { schemeExtra: extra } : {}),
+    ...(named.name !== slot.catalogName ? { name: named.name } : {}),
   };
 }
 

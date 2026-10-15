@@ -90,6 +90,19 @@ describe('the active program under its card (R634, R616, R636)', () => {
     expect(shown.indexOf('Week 1 of 12')).toBeLessThan(shown.indexOf('Barbell back squat'));
   });
 
+  it("names #20's easy runs by their role, and a metcon's column by its minutes or cap (design gate #19, #20)", () => {
+    mockPro = true;
+    insertProgram(mockDb, 'program-hybrid-athlete');
+    setActiveProgram(mockDb, 'program-hybrid-athlete', NOW);
+    const runs = texts(mount('program-hybrid-athlete'));
+    expect(runs).toEqual(expect.arrayContaining(['Warm-up run', 'Cool-down run']));
+    insertProgram(mockDb, 'program-crossfit-performance');
+    setActiveProgram(mockDb, 'program-crossfit-performance', NOW);
+    const metcons = texts(mount('program-crossfit-performance'));
+    expect(metcons).toEqual(expect.arrayContaining(['12 min', '8 min cap']));
+    expect(metcons).not.toContain('For Time');
+  });
+
   it("an inactive program's card names no exercise, in its text or its labels", () => {
     insertProgram(mockDb, BF);
     insertProgram(mockDb, 'program-dumbbell-full-body');
