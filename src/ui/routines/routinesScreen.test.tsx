@@ -256,6 +256,17 @@ describe('Routines: a Pro program on free (R525)', () => {
     expect(buttons(tree, 'Set active')).toHaveLength(0);
   });
 
+  it('an active Pro program keeps "Active" on its own line, and "Pro" on its line (walkthrough)', () => {
+    mockPro = false;
+    mockRoutines = TWENTY.map((r) => (r.id === 'program-advanced-upper-lower-dup' ? { ...r, isActive: true } : r));
+    const tree = mount();
+    const row = rowTarget(tree, 'Advanced Upper/Lower DUP');
+    expect(row.props.accessibilityLabel).toBe('Advanced Upper/Lower DUP, 4 days a week · 6 weeks · Advanced, part of GymHound Pro, active');
+    expect(row.findAll((n) => n.type === Text && n.props.children === '4\u00a0days a week\u00a0· 6\u00a0weeks\u00a0· Advanced\u00a0· Pro')).toHaveLength(1);
+    const column = row.findAll((n) => n.type === View && n.props.testID === 'program-row-text')[0];
+    expect(column.findAll((n) => n.type === Text && n.props.children === 'Active')).toHaveLength(1);
+  });
+
   it('with Pro the line does not say Pro', () => {
     const tree = mount();
     expect(rowTarget(tree, 'Advanced Upper/Lower DUP').findAll((n) => n.type === Text && n.props.children === '4\u00a0days a week\u00a0· 6\u00a0weeks\u00a0· Advanced')).toHaveLength(1);

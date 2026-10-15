@@ -48,7 +48,7 @@ const unbroken = (line: string) => line.replace(/(\d) (?=\S)/g, '$1\u00a0').repl
  * 12 weeks · Beginner", all one 44pt+ target that opens its card, where Set active lives. The name and the line take
  * the whole width between the picture and the chevron at every text size (design gate #1): a Pro program for a free
  * lifter ends its line with "· Pro" (R525), and the program in use has "✓ Active" on a line of its own under it, in
- * body strong. A state is a word and a mark, never a pill (R636). ⋯ at the end opens the program's options (R542).
+ * body strong, a Pro one on free included. A state is a word and a mark, never a pill (R636). ⋯ at the end opens the program's options (R542).
  */
 function ProgramRow({
   routine,
@@ -63,8 +63,9 @@ function ProgramRow({
 }) {
   const { colors } = useTheme();
   const line = routineLine(routine);
-  const active = routine.isActive && !locked;
-  const state = locked ? 'part of GymHound Pro' : active ? 'active' : null;
+  // The program in use stays marked Active on free too, beside "Pro" on its line (the walkthrough).
+  const active = routine.isActive;
+  const state = [locked ? 'part of GymHound Pro' : null, active ? 'active' : null].filter((s) => s !== null).join(', ') || null;
   return (
     <View
       style={{
