@@ -9,6 +9,7 @@ import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 import { getWorkoutPrs } from './prRepo';
+import { carryUnit, programSlotOf } from './programRunRepo';
 import { ruleOf } from './ruleSnapshot';
 
 export type SetView = PrevSet & {
@@ -230,6 +231,8 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       sets: setsByExercise.get(we.id) ?? [],
       previous: getPreviousSets(db, we.exerciseId, workout.id),
       bestWeight: best.get(we.exerciseId) ?? null,
+      // A program carry is entered in its slot's ft or yd, from the first set (R607).
+      slotDistanceUnit: carryUnit(programSlotOf(workout.routineId, we.routineExerciseId)),
     })),
   };
 }
