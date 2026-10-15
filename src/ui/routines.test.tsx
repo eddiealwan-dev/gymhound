@@ -151,10 +151,11 @@ describe('Routines: the list (design pass)', () => {
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
   });
 
-  it('"Premade" is the group heading', () => {
+  it('"Earlier programs" is the group heading of the retired programs still in use (R598)', () => {
+    // The twenty have their own tests (routines/routinesScreen.test.tsx); these premades are not among them.
     const tree = mount();
 
-    const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Premade')[0];
+    const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Earlier programs')[0];
     expect(heading.props.accessibilityRole).toBe('header');
     expect(StyleSheet.flatten(heading.props.style)).toMatchObject({ textTransform: 'uppercase', fontSize: 14, color: '#a39d90' });
   });
@@ -162,15 +163,15 @@ describe('Routines: the list (design pass)', () => {
 
 const LIMIT = 'Routines of your own are part of GymHound Pro.';
 
-describe('Routines: Premade and Yours (§8.6)', () => {
-  it('lists the premades under PREMADE and your own routines under YOURS, with New routine', () => {
+describe('Routines: Yours and Earlier programs (§8.6, R598)', () => {
+  it('lists your own routines under YOURS, with New routine, and a retired program under EARLIER PROGRAMS after them', () => {
     mockRoutines = [routine('fb', 'Full body', true), routine('mine', 'My split', false, false)];
     const tree = mount();
 
     const shown = shownText(tree);
-    expect(shown.indexOf('Premade')).toBeLessThan(shown.indexOf('Full body'));
-    expect(shown.indexOf('Full body')).toBeLessThan(shown.indexOf('Yours'));
     expect(shown.indexOf('Yours')).toBeLessThan(shown.indexOf('My split'));
+    expect(shown.indexOf('My split')).toBeLessThan(shown.indexOf('Earlier programs'));
+    expect(shown.indexOf('Earlier programs')).toBeLessThan(shown.indexOf('Full body'));
     const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Yours')[0];
     expect(heading.props.accessibilityRole).toBe('header');
     expect(buttons(tree, 'New routine')).toHaveLength(1);
