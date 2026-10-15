@@ -10,7 +10,7 @@ import {
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { programSlotOf } from './programRunRepo';
+import { historySlots, programSlotOf } from './programRunRepo';
 import { recomputePrFlags } from './prRepo';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
@@ -131,7 +131,7 @@ function slotWithProgram(db: Db, id: string) {
  * The newest finished workout exercise linked to a routine slot that ran a rule (by finish time, then start, then
  * workout id, then the later block), of `exerciseId` when given. The active workout's rows are never read.
  */
-function newestLinked(db: Db, id: string, exerciseId?: string) {
+function newestLinked(db: Db, ids: readonly string[], exerciseId?: string) {
   return db
     .select({
       exerciseId: workoutExercises.exerciseId,
@@ -145,7 +145,7 @@ function newestLinked(db: Db, id: string, exerciseId?: string) {
     .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
     .where(
       and(
-        eq(workoutExercises.routineExerciseId, id),
+        inArray(workoutExercises.routineExerciseId, [...ids]),
         exerciseId === undefined ? undefined : eq(workoutExercises.exerciseId, exerciseId),
         eq(workouts.status, 'finished'),
         isNotNull(workoutExercises.outcome),
@@ -158,16 +158,25 @@ function newestLinked(db: Db, id: string, exerciseId?: string) {
 }
 
 /**
+ * Each of `routineExerciseIds` and, on a program, the slots on its line on the other days (`historySlots`, R625 as
+ * amended), without repeats: their history holds the edited sessions, so an edit to the squat on day A re-reads day B's
+ * squat too, even after B swapped its lift away and back.
+ */
+function withLines(db: Db, routineExerciseIds: readonly string[]): string[] {
+  return [...new Set([...new Set(routineExerciseIds)].flatMap((id) => historySlots(db, id)))];
+}
+
+/**
  * The ladder slots among `routineExerciseIds` whose rung follows their history (R618): the rung their newest finished
  * session moved them to, or no session yet. One the lifter moved with Change rung since then is not among them, so a
  * history edit keeps the lifter's rung. Read before an edit or a delete changes anything.
  */
 export function laddersFollowingHistory(db: Db, routineExerciseIds: readonly string[]): Set<string> {
   const following = new Set<string>();
-  for (const id of new Set(routineExerciseIds)) {
+  for (const id of withLines(db, routineExerciseIds)) {
     const slot = slotWithProgram(db, id);
     if (slot?.program?.ruleKind !== 'ladder') continue;
-    const newest = newestLinked(db, id);
+    const newest = newestLinked(db, historySlots(db, id));
     if (!newest || (newest.nextRung ?? newest.ruleRung ?? 0) === (slot.ladderRung ?? 0)) following.add(id);
   }
   return following;
@@ -182,16 +191,20 @@ export function laddersFollowingHistory(db: Db, routineExerciseIds: readonly str
  *
  * A program slot's progress follows the same newest session (§18.29): an added-sets slot takes its next set count
  * (R619), and a ladder slot in `laddersFollowing` (`laddersFollowingHistory`, read before the change) takes its next
- * rung, that rung's exercise and its next weight from the newest session on any rung (R618).
+ * rung, that rung's exercise and its next weight from the newest session on any rung (R618). On a program, each slot
+ * reads its lift's sessions on any day (`historySlots`, R625 as amended), and the slots on its line on the other days
+ * are refreshed too.
  */
 export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[], laddersFollowing: ReadonlySet<string> = new Set()): void {
-  for (const id of new Set(routineExerciseIds)) {
+  for (const id of withLines(db, routineExerciseIds)) {
     const slot = slotWithProgram(db, id);
     if (!slot) continue;
+    // The lift's sessions on any day: a ladder's on any rung, any other slot's of the exercise it holds (R625 amended).
+    const line = historySlots(db, id);
     const ladder = slot.program?.ruleKind === 'ladder' ? slot.program.ladder : null;
     if (ladder) {
       if (!laddersFollowing.has(id)) continue;
-      const newest = newestLinked(db, id);
+      const newest = newestLinked(db, line);
       if (!newest) continue;
       const rung = newest.nextRung ?? newest.ruleRung ?? 0;
       if (!ladder[rung]) continue;
@@ -203,7 +216,7 @@ export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[]
     }
     const addSet = slot.program?.ruleKind === 'add_set';
     if (slot.nextWeight === null && !addSet) continue;
-    const newest = newestLinked(db, id, slot.exerciseId);
+    const newest = newestLinked(db, line, slot.exerciseId);
     if (!newest) continue;
     db.update(routineExercises)
       .set({

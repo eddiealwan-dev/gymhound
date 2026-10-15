@@ -27,6 +27,7 @@ import {
   ensureRunStarted,
   finishedWorkoutsAfter,
   isBefore,
+  historySlots,
   programSlotOf,
   runNow,
   slotSessions,
@@ -139,7 +140,9 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
               unit,
               missedInRun: slotSessions(tx, rule.id, run.runStartedAt, rule.exerciseId).some((s) => s.missed),
               secondsRaises:
-                slot.addSet?.then.kind === 'seconds' ? slotSessions(tx, rule.id, 0).filter((s) => s.outcome === 'raised').length : 0,
+                slot.addSet?.then.kind === 'seconds'
+                  ? slotSessions(tx, rule.id, 0, rule.exerciseId).filter((s) => s.outcome === 'raised').length
+                  : 0,
             })
           : {
               setCount: rule.setCount,
@@ -150,6 +153,7 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
               ruleKind: null,
               ruleRung: null,
             };
+      const plan = rule.nextWeight === null ? null : { weight: rule.nextWeight, unit: rule.nextWeightUnit };
       const workoutExerciseId = newId();
       tx.insert(workoutExercises)
         .values({
@@ -167,11 +171,8 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
           ruleIncrementUnit: snapshot.incrementUnit,
           ruleKind: snapshot.ruleKind,
           ruleRung: snapshot.ruleRung,
-          plannedWeight:
-            rule.nextWeight === null
-              ? null
-              : planInUnit(rule.nextWeight, rule.nextWeightUnit ?? unit, unit, equipment === 'barbell', bar, plates),
-          plannedUnit: rule.nextWeight === null ? null : unit,
+          plannedWeight: plan === null ? null : planInUnit(plan.weight, plan.unit ?? unit, unit, equipment === 'barbell', bar, plates),
+          plannedUnit: plan === null ? null : unit,
         })
         .run();
       for (let position = 0; position < snapshot.setCount; position++) {
@@ -289,6 +290,8 @@ function programOutcome(
   a: {
     program: Program;
     slot: ProgramSlot;
+    /** The routine slot the workout exercise ran from. */
+    routineExerciseId: string;
     exerciseId: string;
     input: OutcomeInput;
     weekHolds: boolean;
@@ -301,7 +304,6 @@ function programOutcome(
   const { program, slot, input, weekHolds, history } = a;
   const rule = input.rule;
   const previousOf = (h: readonly SlotSession[]) => h.filter((x) => !skipped(x)).at(-1);
-  const previous = previousOf(history);
   const counted = countedSets(input.sets);
   const status: Outcome = counted.length === 0 ? 'no_sets' : weekHolds ? 'held_week' : input.marked ? 'held_marked' : 'held';
   // The plain hold: nothing added and never a miss, with no weight on a timed set.
@@ -339,6 +341,13 @@ function programOutcome(
       const ladder = slot.ladder ?? [];
       const rung = a.ruleRung ?? 0;
       const r = ladder[rung];
+      // The sessions in a row on this rung (R618): those since the slot's own last session on another rung (after Change
+      // rung away and back, the earlier stay does not count), and of those only the ones on this rung, since another day
+      // on the line can be on another rung after Change rung and does not break the run (R625 amended).
+      let ownElsewhere = history.length - 1;
+      while (ownElsewhere >= 0 && !(history[ownElsewhere].routineExerciseId === a.routineExerciseId && (history[ownElsewhere].ruleRung ?? 0) !== rung)) ownElsewhere--;
+      const onRung = history.slice(ownElsewhere + 1).filter((h) => (h.ruleRung ?? 0) === rung);
+      const previousOnRung = previousOf(onRung);
       if (!rule || !r || status !== 'held') return { result: plain(), nextRung: rung, nextSetCount: null };
       // R618: the top of the rung's range on every set moves up; any set under 5 reps (under the bottom of a hold
       // rung's range) on two normal sessions in a row on this rung moves down.
@@ -346,7 +355,7 @@ function programOutcome(
       const low = (x: OutcomeInput) => countedSets(x.sets).some((s) => setMeasure(s, x.loggingType) < bottom);
       const allTop = counted.length >= rule.setCount && counted.every((s) => setMeasure(s, input.loggingType) >= r.repMax);
       const lowLastTime =
-        previous !== undefined && previous.ruleRung === rung && previous.nextRung === rung && low(inputOf(db, previous.workoutExerciseId, input));
+        previousOnRung !== undefined && previousOnRung.nextRung === rung && low(inputOf(db, previousOnRung.workoutExerciseId, input));
       const move = ladderNext({ rung, rungCount: ladder.length, allTop, lowToday: low(input), lowLastTime });
       if (move.moved !== null) {
         // The next rung starts at the bottom of its range with no weight carried (a different exercise or step).
@@ -354,7 +363,7 @@ function programOutcome(
         return { result, nextRung: move.rung, nextSetCount: null };
       }
       // A weighted top rung runs the load rule with its own increment (R618); halving is for load slots only.
-      if (r.weightedIncrementLb !== null) return { result: computeOutcome(loadInput(r.weightedIncrementLb, history)), nextRung: rung, nextSetCount: null };
+      if (r.weightedIncrementLb !== null) return { result: computeOutcome(loadInput(r.weightedIncrementLb, onRung)), nextRung: rung, nextSetCount: null };
       return { result: plain(), nextRung: rung, nextSetCount: null };
     }
 
@@ -424,11 +433,15 @@ function storeAll(db: Db, workoutId: string, only?: readonly string[], context?:
         ? programOutcome(db, {
             program: run.program,
             slot,
+            routineExerciseId: we.routineExerciseId,
             exerciseId: we.exerciseId,
             input: { ...input, week: { holds: weekHolds }, distanceUnit: carryUnit(slot) ?? undefined },
             weekHolds,
             ruleRung: we.ruleRung,
-            history: slotSessions(db, we.routineExerciseId, from).filter((h) => h.id !== workout.id && isBefore(h, workout)),
+            // The lift's sessions on any day before this one: of the exercise it logged, a ladder's on any rung.
+            history: slotSessions(db, we.routineExerciseId, from, slot.ruleKind === 'ladder' ? undefined : we.exerciseId).filter(
+              (h) => h.id !== workout.id && isBefore(h, workout),
+            ),
             inRun,
           })
         : { result: computeOutcome(input), nextRung: null, nextSetCount: null, ruleIncrement: undefined };
@@ -495,7 +508,8 @@ export function rerunLaterInRun(db: Db, workout: WorkoutTime & { routineId: stri
   const run = runNow(db, workout.routineId);
   if (!run || workout.startedAt < run.runStartedAt) return;
   const context: StoreContext = { gear: gearNow(db), run };
-  const slots = [...new Set(routineExerciseIds)];
+  // The slots on the edited ones' lines re-run too: the same lift on another day reads them (R625 as amended).
+  const slots = [...new Set(routineExerciseIds.flatMap((id) => historySlots(db, id)))];
   for (const later of finishedWorkoutsAfter(db, workout.routineId, workout)) {
     if (later.startedAt < run.runStartedAt) continue;
     const linked = workoutSlotRows(db, later.id, slots);
@@ -508,11 +522,15 @@ export function rerunLaterInRun(db: Db, workout: WorkoutTime & { routineId: stri
  * routine exercise it came from, if that slot still holds the same exercise (R74). At finish the workout is the newest
  * finished one of each of its slots, so its own outcomes are the slots' next weights (7.3). An added-sets slot also
  * takes its next set count (R619). A ladder slot that is still on the rung and exercise the workout logged moves to the
- * next rung, its exercise and its next weight (R618); one moved by Change rung since is left alone.
+ * next rung, its exercise and its next weight (R618); one moved by Change rung since is left alone. A program slot
+ * writes every slot on its line (`historySlots`, R625 as amended), under the same conditions.
  */
 function writeOutcomes(db: Db, workoutId: string): void {
   for (const o of storeAll(db, workoutId)) {
     if (o.routineExerciseId === null) continue;
+    // A program slot writes its lift on the other days too: the slots on its line that hold what it logged (R625 as
+    // amended), by the same conditions as its own.
+    const ids = o.slot ? historySlots(db, o.routineExerciseId) : [o.routineExerciseId];
     const ladder = o.slot?.ladder;
     if (o.slot?.ruleKind === 'ladder' && ladder) {
       const rung = o.nextRung ?? o.ruleRung ?? 0;
@@ -522,7 +540,7 @@ function writeOutcomes(db: Db, workoutId: string): void {
         .set({ ladderRung: rung, exerciseId: ladder[rung].exerciseId, nextWeight: o.nextWeight, nextWeightUnit: o.nextUnit })
         .where(
           and(
-            eq(routineExercises.id, o.routineExerciseId),
+            inArray(routineExercises.id, ids),
             eq(routineExercises.exerciseId, o.exerciseId),
             loggedRung === 0
               ? or(isNull(routineExercises.ladderRung), eq(routineExercises.ladderRung, 0))
@@ -536,7 +554,7 @@ function writeOutcomes(db: Db, workoutId: string): void {
     // Only while the routine slot still holds this exercise (R74).
     db.update(routineExercises)
       .set({ nextWeight: o.nextWeight, nextWeightUnit: o.nextUnit, ...(o.nextSetCount === null ? {} : { nextSetCount: o.nextSetCount }) })
-      .where(and(eq(routineExercises.id, o.routineExerciseId), eq(routineExercises.exerciseId, o.exerciseId)))
+      .where(and(inArray(routineExercises.id, ids), eq(routineExercises.exerciseId, o.exerciseId)))
       .run();
   }
 }

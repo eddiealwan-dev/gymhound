@@ -12,7 +12,7 @@ import { PREMADE_ORDER, RETIRED_PREMADES } from '../../seed/routines';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { programState } from './programRunRepo';
+import { historySlots, joinGroupNextWeight, programState } from './programRunRepo';
 import { slotScheme } from './programViewRepo';
 import { getSettings, setSetting } from './settingsRepo';
 
@@ -490,7 +490,8 @@ export function saveRoutine(db: Db, draft: RoutineDraft, now: number): string {
 /**
  * The outcome, mark, working weight and next weight of the latest finished workout exercise run from
  * `routineExerciseId` with the exercise the slot holds now, `exerciseId` (R74); all null when it has never been
- * finished (or was finished before the rule wrote outcomes).
+ * finished (or was finished before the rule wrote outcomes). On a program, from the lift's sessions on any day
+ * (`historySlots`, R625 as amended).
  */
 function lastResult(db: Db, routineExerciseId: string, exerciseId: string): LastResult {
   return (
@@ -507,7 +508,7 @@ function lastResult(db: Db, routineExerciseId: string, exerciseId: string): Last
       .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
       .where(
         and(
-          eq(workoutExercises.routineExerciseId, routineExerciseId),
+          inArray(workoutExercises.routineExerciseId, historySlots(db, routineExerciseId)),
           eq(workoutExercises.exerciseId, exerciseId),
           eq(workouts.status, 'finished'),
         ),
@@ -640,8 +641,11 @@ export function swapCandidates(db: Db): SwapCandidate[] {
 /**
  * Modify on a routine's page (R553): the routine's exercise at `routineExerciseId` becomes `exerciseId`, keeping its
  * sets, reps and increment. Its next weight is cleared, since it was the old exercise's: the first workout with the new
- * one asks for a starting weight. Workouts already finished keep the old exercise.
+ * one asks for a starting weight, unless on a program another day runs the new one with the same range and rule: then
+ * it shares that progression's next weight (R625 as amended). Workouts already finished keep the old exercise.
  */
 export function swapRoutineExercise(db: Db, routineExerciseId: string, exerciseId: string): void {
   db.update(routineExercises).set({ exerciseId, nextWeight: null, nextWeightUnit: null }).where(eq(routineExercises.id, routineExerciseId)).run();
+  // On a program, swapping onto a lift another day runs joins its progression and its next weight (R625 as amended).
+  joinGroupNextWeight(db, routineExerciseId);
 }

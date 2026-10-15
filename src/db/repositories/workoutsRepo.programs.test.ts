@@ -116,11 +116,12 @@ describe('misses, resets and halving (R612, R613)', () => {
     runSession(db, BF_A, at(2), { [SQUAT_A]: { weight: 140, reps: [5, 5, 4] }, [BENCH_A]: { weight: 100, reps: [8, 8, 8] } });
     const after = startWorkoutFromDay(db, BF_A, at(3));
     expect(blockOf(db, after, SQUAT_A)).toMatchObject({ ruleIncrement: 2.5, ruleIncrementUnit: 'lb', plannedWeight: 140 });
-    // Only the slot that missed: the bench and day B's squat keep 5 lb.
+    // Only the lift that missed: the bench keeps 5 lb. Day B's squat is the same progression (R625 as amended), so it
+    // halves too.
     expect(blockOf(db, after, BENCH_A)).toMatchObject({ ruleIncrement: 5 });
     discardWorkout(db, after);
     const dayB = startWorkoutFromDay(db, `${BF}:b`, at(3));
-    expect(blockOf(db, dayB, SQUAT_B)).toMatchObject({ ruleIncrement: 5 });
+    expect(blockOf(db, dayB, SQUAT_B)).toMatchObject({ ruleIncrement: 2.5, plannedWeight: 140 });
   });
 
   it('a kg lifter halves to 1.25 kg and resets to a multiple of the full increment off a barbell', () => {
