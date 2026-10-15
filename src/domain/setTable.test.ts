@@ -59,6 +59,12 @@ describe('tableColumns (brief Step 2)', () => {
     expect(headers('distance_time')).toEqual(['SET', 'PREVIOUS', 'DIST', 'TIME', '✓']);
   });
 
+  it("a carry heads its distance with the unit it is entered in, as the session's event does (R607)", () => {
+    expect(tableColumns('weighted_distance', 'lb', false, 'ft').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'LB', 'FT', 'TIME', '✓']);
+    expect(tableColumns('weighted_distance', 'kg', false, 'yd').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'KG', 'YD', 'TIME', '✓']);
+    expect(tableColumns('distance_time', 'lb', false, 'mi').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'DIST', 'TIME', '✓']);
+  });
+
   it('adds RPE after the inputs and before the tick only when it is shown', () => {
     expect(keys('weighted', 'lb', true)).toEqual(['set', 'previous', 'weight', 'reps', 'rpe', 'tick']);
     expect(headers('timed', 'lb', true)).toEqual(['SET', 'PREVIOUS', 'TIME', 'RPE', '✓']);

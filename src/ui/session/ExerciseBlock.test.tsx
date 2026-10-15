@@ -1589,7 +1589,7 @@ describe('SetRow: the three program logging types (R607)', () => {
   it('renders a carry\'s fields with VoiceOver labels ("Set 1 distance, feet") under LB, DIST and TIME', () => {
     const tree = mount(yoke());
 
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'DIST', 'TIME']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'FT', 'TIME']));
     for (const label of ['Set 1 weight, pounds', 'Set 1 distance, feet', 'Set 1 time']) {
       expect(byLabel(tree, label).props.onChangeText).toEqual(expect.any(Function));
     }

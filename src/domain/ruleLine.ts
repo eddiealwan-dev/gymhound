@@ -392,7 +392,7 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   const plates = unloadableRaise(rule, loggingType, load);
   const add = `add ${inc}${halved}.${plates === null ? '' : ` ${plates}`}`;
   if (loggingType === 'weighted_distance') {
-    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, ${add}`;
+    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, ${add} A marked day holds the weight.`;
   }
   if (loggingType === 'assisted') {
     return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;

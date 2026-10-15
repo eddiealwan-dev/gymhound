@@ -55,7 +55,7 @@ function loadHeader(loggingType: LoggingType, unit: WeightUnit): string {
   return label;
 }
 
-function fieldHeader(key: FieldKey, loggingType: LoggingType, unit: WeightUnit): string {
+function fieldHeader(key: FieldKey, loggingType: LoggingType, unit: WeightUnit, carryUnit: DistanceUnit | undefined): string {
   switch (key) {
     case 'weight':
       return loadHeader(loggingType, unit);
@@ -66,19 +66,21 @@ function fieldHeader(key: FieldKey, loggingType: LoggingType, unit: WeightUnit):
     case 'durationS':
       return 'TIME';
     case 'distance':
-      return 'DIST';
+      // A carry's distance is in its own unit (ft or yd, R607), so the header names it, as LB names the load.
+      return loggingType === 'weighted_distance' && carryUnit !== undefined ? carryUnit.toUpperCase() : 'DIST';
   }
 }
 
 /**
  * The columns of a set table, left to right: SET, PREVIOUS, the inputs for the logging type, RPE when the exercise
  * shows it, and the tick. The header row and every set row are drawn from this one list, so they cannot misalign.
+ * `carryUnit` is the unit a carry's distance is entered in, which heads its column ("FT"); without it, "DIST".
  */
-export function tableColumns(loggingType: LoggingType, unit: WeightUnit, showRpe: boolean): Column[] {
+export function tableColumns(loggingType: LoggingType, unit: WeightUnit, showRpe: boolean, carryUnit?: DistanceUnit): Column[] {
   return [
     { key: 'set', header: 'SET' },
     { key: 'previous', header: 'PREVIOUS' },
-    ...FIELDS[loggingType].map((key): Column => ({ key, header: fieldHeader(key, loggingType, unit) })),
+    ...FIELDS[loggingType].map((key): Column => ({ key, header: fieldHeader(key, loggingType, unit, carryUnit) })),
     ...(showRpe ? [{ key: 'rpe', header: 'RPE' } as const] : []),
     { key: 'tick', header: '✓' },
   ];

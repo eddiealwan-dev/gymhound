@@ -543,7 +543,7 @@ describe('the history editor and the three program logging types (R607)', () => 
     addProgramExercise('yoke-carry', 'Yoke carry', 'weighted_distance');
     const id = oneSet('yoke-carry', { weight: 315, distance: 50 }, 'ft');
     const tree = mount(id);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'DIST', 'TIME']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'FT', 'TIME']));
     expect(field(tree, 'Yoke carry, set 1, weight in lb').props.value).toBe('315');
     expect(field(tree, 'Yoke carry, set 1, distance in ft').props.value).toBe('50 ft');
     expect(field(tree, 'Yoke carry, set 1, time').props.value).toBe('');

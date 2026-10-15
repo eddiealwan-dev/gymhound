@@ -36,7 +36,9 @@ type Props = {
 export function EditExercise({ exercise, setKeys, unit, distanceUnit, problems, tried, onPatch, onAddSet, onOpenSet, onOpenMark, onInvalidChange }: Props) {
   const { colors } = useTheme();
   const { name, mark } = exercise;
-  const columns = tableColumns(exercise.loggingType, unit, exercise.showRpe).filter((c) => c.key !== 'previous');
+  // A carry's distance is in its own unit (R607), as its sets were logged; it heads the column ("FT").
+  const carryUnit = exercise.loggingType === 'weighted_distance' ? (exercise.sets.find((x) => x.distanceUnit !== null)?.distanceUnit ?? 'm') : undefined;
+  const columns = tableColumns(exercise.loggingType, unit, exercise.showRpe, carryUnit).filter((c) => c.key !== 'previous');
   const labels = setLabels(exercise.sets.map((s) => s.setType));
   return (
     <View style={{ marginBottom: 28 }}>

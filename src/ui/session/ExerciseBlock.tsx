@@ -232,7 +232,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const entryUnit = entryDistanceUnit(ex, distanceUnit) ?? 'm';
   // The same columns while nothing they show changes, so a write to one set redraws its row alone.
   const columns = useMemo(
-    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe), entryUnit),
+    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe, entryUnit), entryUnit),
     [kind, ex.loggingType, unit, ex.showRpe, entryUnit],
   );
   // Each row's previous is worked out once for the whole block. A row equal to the one drawn before keeps its object,

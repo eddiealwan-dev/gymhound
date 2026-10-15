@@ -563,10 +563,10 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
-  it('a carry says the distance and its unit', () => {
+  it('a carry says the distance and its unit, and that a marked day holds the weight', () => {
     const yoke = program({ carryUnit: 'ft' });
     const rule: Rule = { setCount: 4, repMin: 50, repMax: 50, increment: 10, incrementUnit: 'lb' };
-    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb.');
+    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb. A marked day holds the weight.');
     expect(read(yoke, rule, 320, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
       'Cover 50 ft on every run on a normal day and next time is 330 lb.',
     );
