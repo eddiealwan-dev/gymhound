@@ -542,6 +542,43 @@ describe('tick and the three program logging types (R607)', () => {
     expect(reread(amrap.sets[0].id)).toMatchObject({ reps: 6, extraReps: 4, weight: null, done: true });
   });
 
+  /** The bench press read as a program metcon whose moves are `elements`, with last time's score at 95 lb. */
+  function metconWithLast(loggingType: 'rounds' | 'for_time', elements: string[]) {
+    startFromDay(db, PUSH_A);
+    const ex = activeView().exercises[0];
+    const last = { position: 0, setType: 'working' as const, weight: 95, weightUnit: 'lb' as const, reps: loggingType === 'rounds' ? 6 : null, durationS: loggingType === 'for_time' ? 462 : null, distance: null, distanceUnit: null };
+    const metcon = { format: loggingType === 'rounds' ? ('AMRAP' as const) : ('For Time' as const), workMinutes: 10, elements, capMinutes: null };
+    const program = { rule: { kind: 'metcon' }, warmUp: false, note: null, metcon, catalogName: 'Metcon', countsTowardVolume: true, restKind: 'none' };
+    return { ...ex, loggingType, previous: [last], program: program as unknown as NonNullable<typeof ex.program> };
+  }
+
+  it("saves no load on a score whose metcon has no loaded move, whatever last time's had (W3 review)", () => {
+    const cindy = metconWithLast('rounds', ['Pull-up', 'Push-up', 'Air squat']);
+
+    expect(tick(db, cindy, cindy.sets[0], { ...NOTHING, reps: 7 })).toBe(true);
+
+    expect(reread(cindy.sets[0].id)).toMatchObject({ reps: 7, weight: null });
+  });
+
+  it("saves last time's load on a score when its loaded move's field shows it (ruling R-g3, R48)", () => {
+    const fran = metconWithLast('for_time', ['Thruster', 'Pull-up']);
+
+    expect(tick(db, fran, fran.sets[0], { ...NOTHING, durationS: 450 })).toBe(true);
+
+    expect(reread(fran.sets[0].id)).toMatchObject({ durationS: 450, weight: 95, weightUnit: 'lb' });
+  });
+
+  it("saves no time on a carry unless one was typed, whatever last time's was (final review)", () => {
+    startFromDay(db, PUSH_A);
+    const ex = activeView().exercises[0];
+    const last = { position: 0, setType: 'working' as const, weight: 315, weightUnit: 'lb' as const, reps: null, durationS: 40, distance: 50, distanceUnit: 'ft' as const };
+    const yoke = { ...ex, loggingType: 'weighted_distance' as const, previous: [last], rule: ex.rule && { ...ex.rule, repMax: 50 }, slotDistanceUnit: 'ft' as const };
+
+    expect(tick(db, yoke, yoke.sets[0], NOTHING)).toBe(true);
+
+    expect(reread(yoke.sets[0].id)).toMatchObject({ weight: 315, distance: 50, durationS: null });
+  });
+
   it('commitSetField saves extra reps typed into their field', () => {
     startFromDay(db, PUSH_A);
     const set = bench().sets[0];
