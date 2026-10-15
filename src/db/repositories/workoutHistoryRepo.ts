@@ -7,9 +7,11 @@ import {
   type DraftSet,
   type WorkoutDraft,
 } from '../../domain/historyDraft';
+import { programById } from '../../seed/programs.generated';
 import { newId } from '../ids';
-import { exercises, routineExercises, sets, workoutExercises, workouts } from '../schema';
+import { exercises, routineDays, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { finishedWorkoutsAfter, programSlotOf, workoutSlotRows, type WorkoutTime } from './programRunRepo';
 import { recomputePrFlags } from './prRepo';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
@@ -113,42 +115,116 @@ function setValues(s: DraftSet, unit: { weight: DraftSet['weightUnit']; distance
   };
 }
 
+/** A routine slot with the program slot it is (§18.29), or undefined for a routine of your own. */
+function slotWithProgram(db: Db, id: string) {
+  const row = db
+    .select({ slot: routineExercises, routineId: routineDays.routineId })
+    .from(routineExercises)
+    .innerJoin(routineDays, eq(routineDays.id, routineExercises.routineDayId))
+    .where(eq(routineExercises.id, id))
+    .get();
+  return row ? { ...row.slot, program: programSlotOf(row.routineId, id) } : undefined;
+}
+
+/**
+ * The newest finished workout exercise linked to a routine slot that ran a rule (by finish time, then start, then
+ * workout id, then the later block), of `exerciseId` when given. The active workout's rows are never read.
+ */
+function newestLinked(db: Db, id: string, exerciseId?: string) {
+  return db
+    .select({
+      exerciseId: workoutExercises.exerciseId,
+      nextWeight: workoutExercises.nextWeight,
+      nextUnit: workoutExercises.nextUnit,
+      ruleRung: workoutExercises.ruleRung,
+      nextRung: workoutExercises.nextRung,
+      nextSetCount: workoutExercises.nextSetCount,
+    })
+    .from(workoutExercises)
+    .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
+    .where(
+      and(
+        eq(workoutExercises.routineExerciseId, id),
+        exerciseId === undefined ? undefined : eq(workoutExercises.exerciseId, exerciseId),
+        eq(workouts.status, 'finished'),
+        isNotNull(workoutExercises.outcome),
+        ne(workoutExercises.outcome, 'no_rule'),
+      ),
+    )
+    .orderBy(desc(workouts.finishedAt), desc(workouts.startedAt), desc(workouts.id), desc(workoutExercises.position))
+    .limit(1)
+    .get();
+}
+
+/**
+ * The ladder slots among `routineExerciseIds` whose rung follows their history (R618): the rung their newest finished
+ * session moved them to, or no session yet. One the lifter moved with Change rung since then is not among them, so a
+ * history edit keeps the lifter's rung. Read before an edit or a delete changes anything.
+ */
+export function laddersFollowingHistory(db: Db, routineExerciseIds: readonly string[]): Set<string> {
+  const following = new Set<string>();
+  for (const id of new Set(routineExerciseIds)) {
+    const slot = slotWithProgram(db, id);
+    if (slot?.program?.ruleKind !== 'ladder') continue;
+    const newest = newestLinked(db, id);
+    if (!newest || (newest.nextRung ?? newest.ruleRung ?? 0) === (slot.ladderRung ?? 0)) following.add(id);
+  }
+  return following;
+}
+
 /**
  * For each routine slot (R167, spec 7.3): its next weight from the most recent finished workout exercise linked to it
  * (by finish time, then start, then workout id, then the later block) that still holds the slot's exercise (R74) and
  * ran a rule (outcome not `no_rule`). With none left the slot keeps its value; a slot that no longer exists is skipped.
  * A slot with no next weight (never trained, or its progress reset when its exercise was swapped) is left alone, so a
  * reset sticks (R192): history from before the reset never refills it. The active workout's rows are never read.
+ *
+ * A program slot's progress follows the same newest session (§18.29): an added-sets slot takes its next set count
+ * (R619), and a ladder slot in `laddersFollowing` (`laddersFollowingHistory`, read before the change) takes its next
+ * rung, that rung's exercise and its next weight from the newest session on any rung (R618).
  */
-export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[]): void {
+export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[], laddersFollowing: ReadonlySet<string> = new Set()): void {
   for (const id of new Set(routineExerciseIds)) {
-    const slot = db
-      .select({ exerciseId: routineExercises.exerciseId, nextWeight: routineExercises.nextWeight })
-      .from(routineExercises)
-      .where(eq(routineExercises.id, id))
-      .get();
-    if (!slot || slot.nextWeight === null) continue;
-    const newest = db
-      .select({ nextWeight: workoutExercises.nextWeight, nextUnit: workoutExercises.nextUnit })
-      .from(workoutExercises)
-      .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
-      .where(
-        and(
-          eq(workoutExercises.routineExerciseId, id),
-          eq(workoutExercises.exerciseId, slot.exerciseId),
-          eq(workouts.status, 'finished'),
-          isNotNull(workoutExercises.outcome),
-          ne(workoutExercises.outcome, 'no_rule'),
-        ),
-      )
-      .orderBy(desc(workouts.finishedAt), desc(workouts.startedAt), desc(workouts.id), desc(workoutExercises.position))
-      .limit(1)
-      .get();
+    const slot = slotWithProgram(db, id);
+    if (!slot) continue;
+    const ladder = slot.program?.ruleKind === 'ladder' ? slot.program.ladder : null;
+    if (ladder) {
+      if (!laddersFollowing.has(id)) continue;
+      const newest = newestLinked(db, id);
+      if (!newest) continue;
+      const rung = newest.nextRung ?? newest.ruleRung ?? 0;
+      if (!ladder[rung]) continue;
+      db.update(routineExercises)
+        .set({ ladderRung: rung, exerciseId: ladder[rung].exerciseId, nextWeight: newest.nextWeight, nextWeightUnit: newest.nextUnit })
+        .where(eq(routineExercises.id, id))
+        .run();
+      continue;
+    }
+    const addSet = slot.program?.ruleKind === 'add_set';
+    if (slot.nextWeight === null && !addSet) continue;
+    const newest = newestLinked(db, id, slot.exerciseId);
     if (!newest) continue;
     db.update(routineExercises)
-      .set({ nextWeight: newest.nextWeight, nextWeightUnit: newest.nextUnit })
+      .set({
+        ...(slot.nextWeight === null ? {} : { nextWeight: newest.nextWeight, nextWeightUnit: newest.nextUnit }),
+        ...(addSet && newest.nextSetCount !== null ? { nextSetCount: newest.nextSetCount } : {}),
+      })
       .where(eq(routineExercises.id, id))
       .run();
+  }
+}
+
+/**
+ * After a history edit or delete of `workout` (§7.12): on one of the twenty programs, each later finished workout of
+ * the program re-runs the rule on its exercises linked to `routineExerciseIds`, in time order, since a slot's misses in
+ * a row, two-session raises, rungs and added sets read the sessions before it. Each keeps its own snapshot and week.
+ * Your own routines need nothing: §7.3 reads only the workout itself (R628).
+ */
+function recomputeLater(db: Db, workout: WorkoutTime & { routineId: string | null }, routineExerciseIds: readonly string[]): void {
+  if (workout.routineId === null || !programById(workout.routineId) || routineExerciseIds.length === 0) return;
+  for (const later of finishedWorkoutsAfter(db, workout.routineId, workout)) {
+    const linked = workoutSlotRows(db, later.id, [...new Set(routineExerciseIds)]);
+    if (linked.length > 0) storeOutcomes(db, later.id, linked);
   }
 }
 
@@ -182,7 +258,9 @@ function renumber(db: Db, workoutId: string): void {
  * their stored outcome and next weight); PR flags are recomputed for every exercise the workout had before or
  * after; each routine slot it was linked to before or after takes its next weight from its newest finished workout
  * (`refreshNextWeights`). The saved workout it was started from re-remembers its sets only when this is the latest
- * finished workout started from it (R169). Names, notes, dates and times are not edited; Up next does not move (R168).
+ * finished workout started from it (R169). Names, notes, dates and times are not edited; Up next does not move (R168). On one of the twenty
+ * programs the later workouts re-run their linked exercises in time order first (§18.29: misses, resets, rungs and added
+ * sets read the sessions before them), and a ladder keeps a rung the lifter chose with Change rung (R618).
  *
  * Throws, changing nothing: for a workout that is not finished (the active workout is never edited here); with
  * `NothingLeftError` when no set would be left; when a ticked set lacks a value its type needs; for a value out of range
@@ -197,6 +275,7 @@ export function saveWorkoutEdit(db: Db, draft: WorkoutDraft): void {
     if (!draftValuesInRange(draft)) throw new Error('A set has a value out of range.');
 
     const before = linksOf(tx, workout.id);
+    const laddersFollowing = laddersFollowingHistory(tx, before.routineExerciseIds);
     const saved = loadWorkoutDraft(tx, workout.id)!;
     const blocks = new Set(saved.exercises.map((e) => e.workoutExerciseId));
     const listed = draft.exercises.map((e) => e.workoutExerciseId);
@@ -254,8 +333,10 @@ export function saveWorkoutEdit(db: Db, draft: WorkoutDraft): void {
 
     storeOutcomes(tx, workout.id, changed);
     const after = linksOf(tx, workout.id);
+    const slots = [...before.routineExerciseIds, ...after.routineExerciseIds];
+    recomputeLater(tx, workout, slots);
     recomputePrFlags(tx, [...new Set([...before.exerciseIds, ...after.exerciseIds])]);
-    refreshNextWeights(tx, [...before.routineExerciseIds, ...after.routineExerciseIds]);
+    refreshNextWeights(tx, slots, laddersFollowing);
 
     if (workout.savedWorkoutId !== null && isLatestFromSaved(tx, workout.savedWorkoutId, workout.id)) {
       rememberSavedWorkout(tx, workout.id);
@@ -277,20 +358,23 @@ function isLatestFromSaved(db: Db, savedWorkoutId: string, workoutId: string): b
 
 /**
  * Deletes a finished workout with its exercises and sets (spec 7.12), in one transaction, then recomputes the PR flags
- * of its exercises and the next weights of the routine slots it was linked to, from the workouts left. Saved workouts
+ * of its exercises and the next weights of the routine slots it was linked to, from the workouts left (on a program,
+ * after re-running the later workouts' linked exercises in time order, as an edit does). Saved workouts
  * and the routines' Up next pointers are not changed (R168, R169). Throws, changing nothing, for a workout that is not
  * finished.
  */
 export function deleteFinishedWorkout(db: Db, workoutId: string): void {
   db.transaction((tx) => {
-    requireFinished(tx, workoutId);
+    const workout = requireFinished(tx, workoutId);
     // Collected first: the rows are gone after the delete.
     const { exerciseIds, routineExerciseIds } = linksOf(tx, workoutId);
+    const laddersFollowing = laddersFollowingHistory(tx, routineExerciseIds);
     const blockIds = tx.select({ id: workoutExercises.id }).from(workoutExercises).where(eq(workoutExercises.workoutId, workoutId));
     tx.delete(sets).where(inArray(sets.workoutExerciseId, blockIds)).run();
     tx.delete(workoutExercises).where(eq(workoutExercises.workoutId, workoutId)).run();
     tx.delete(workouts).where(eq(workouts.id, workoutId)).run();
+    recomputeLater(tx, workout, routineExerciseIds);
     recomputePrFlags(tx, exerciseIds);
-    refreshNextWeights(tx, routineExerciseIds);
+    refreshNextWeights(tx, routineExerciseIds, laddersFollowing);
   });
 }
