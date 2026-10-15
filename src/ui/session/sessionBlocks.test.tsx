@@ -8,6 +8,7 @@ import { startTimer, type WorkTimer } from '../../domain/workClock';
 import type { MetconRule } from '../../seed/programTypes';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
+import { cellStyle } from './SetRow';
 import { RestInline } from './RestInline';
 import { WorkClock } from './WorkClock';
 
@@ -296,6 +297,34 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
   });
 });
 
+describe('the score row lines up with the set rows (design gate #14, #16)', () => {
+  it("gives PREVIOUS the SET chip's room, so the fields keep the set rows' width and right edge", () => {
+    expect(cellStyle('previous', true)).toMatchObject({ flexBasis: 36, flexGrow: 1.5, flexShrink: 1, minWidth: 0 });
+    expect(cellStyle('previous', false)).toMatchObject({ flex: 1.5, minWidth: 0 });
+    const tree = mount(metconA());
+    const cells = tree.root.findAll((n) => n.type === View && StyleSheet.flatten(n.props.style)?.flexBasis === 36);
+    // The header's PREVIOUS and the score row's.
+    expect(cells).toHaveLength(2);
+  });
+
+  it('shows a faint dash under PREVIOUS on a first day, not a hole', () => {
+    const tree = mount(metconA());
+    const dash = tree.root.findAll((n) => n.type === Text && n.props.children === '–');
+    expect(dash).toHaveLength(1);
+    expect(StyleSheet.flatten(dash[0].props.style)).toMatchObject({ color: '#6d675c' });
+  });
+
+  it("draws an event's empty optional time as a suggestion, and a ticked one with no time as a bare dash", () => {
+    const open = field(mount(exercise({ ...yoke(), previous: [] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' })), 'Set 1 time, optional');
+    expect(open.props.placeholder).toBe('–');
+    expect(StyleSheet.flatten(open.props.style)).toMatchObject({ borderStyle: 'dashed' });
+    const done = exercise({ ...yoke(), previous: [], sets: [set('s1', 0, { done: true, weight: 335, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', completedAt: 5 })] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' });
+    const ticked = field(mount(done), 'Set 1 time, optional');
+    expect(ticked.props.placeholder).toBe('–');
+    expect(StyleSheet.flatten(ticked.props.style)).toMatchObject({ borderWidth: 0, backgroundColor: 'transparent' });
+  });
+});
+
 describe('a run is a timed effort with its own block', () => {
   it("says the week's target once, on the clock and in the suggested time, with the rule saying what comes next (design gate #18)", () => {
     const tree = mount(run());
@@ -329,8 +358,8 @@ describe('a run is a timed effort with its own block', () => {
 describe('an event reads as an event', () => {
   it('heads distance with its unit, shows last time as load × distance, and ticks drop-free', () => {
     const tree = mount(yoke());
-    expect(headers(tree)).toEqual(['SET', 'PREVIOUS', 'LB', 'FT', 'TIME', '✓']);
-    expect(shownText(tree)).toContain('315 × 50');
+    expect(headers(tree)).toEqual(['SET', 'LAST', 'LB', 'FT', 'TIME', '✓']);
+    expect(shownText(tree)).toContain('315 × 50');
     expect(labels(tree)).toContain('Previous 315 pounds for 50 feet in 22 seconds');
     expect(labels(tree)).toContain('Set 1 carried drop-free');
     expect(shownText(tree)).toContain(

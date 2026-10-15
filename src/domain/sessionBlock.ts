@@ -220,7 +220,10 @@ export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions)
       const target = o.targetS ?? null;
       return rows.map((row) => {
         const suggested = row.set.setType === 'working' && target !== null ? { ...row, placeholders: { ...row.placeholders, durationS: target } } : row;
-        return kind === 'run' ? { ...suggested, spokenAs: o.noun ?? 'Run' } : suggested;
+        // Every time a run shows is a clock, "0:08" too, as its clock and format line say them (design gate #15).
+        const last = row.matched?.durationS ?? null;
+        const clocked: RowModel = { ...suggested, clockTimes: true, previous: last === null ? row.previous : formatRest(last) };
+        return kind === 'run' ? { ...clocked, spokenAs: o.noun ?? 'Run' } : clocked;
       });
     }
     case 'event':
@@ -243,7 +246,8 @@ function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previou
   const distance = p.distanceUnit === (row.distanceUnit ?? p.distanceUnit) ? `${p.distance}` : `${p.distance} ${p.distanceUnit}`;
   const said = `${p.weight} ${WEIGHT_WORDS[weightUnit]} for ${p.distance} ${DISTANCE_WORDS[p.distanceUnit]}`;
   return {
-    previous: `${weightText(p.weight, weightUnit, unit)} × ${distance}`,
+    // A no-break space after the ×, so a narrow column wraps it as "140" over "× 50" (design gate #11).
+    previous: `${weightText(p.weight, weightUnit, unit)} × ${distance}`,
     previousLabel: p.durationS === null ? said : `${said} in ${spokenRest(p.durationS)}`,
   };
 }
@@ -254,7 +258,10 @@ function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previou
  */
 export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit): Column[] {
   if (kind === 'metcon' || kind === 'run') return columns.filter((c) => c.key !== 'set');
-  if (kind === 'event') return columns.map((c) => (c.key === 'distance' ? { ...c, header: eventDistanceUnit.toUpperCase() } : c));
+  // Beside three inputs, PREVIOUS can't fit at 320 wide, so an event heads it LAST (design gate #11).
+  if (kind === 'event') {
+    return columns.map((c) => (c.key === 'distance' ? { ...c, header: eventDistanceUnit.toUpperCase() } : c.key === 'previous' ? { ...c, header: 'LAST' } : c));
+  }
   return columns;
 }
 

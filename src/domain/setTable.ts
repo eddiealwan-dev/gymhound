@@ -187,6 +187,8 @@ export type RowModel = {
   optional?: InputKey[];
   /** The tick's VoiceOver label when "Set 1 done" is not what it means ("Set 1 carried drop-free"). */
   tickLabel?: string;
+  /** Its time shows as a clock even under a minute ("0:40"): a program run's or interval's (design gate #15). */
+  clockTimes?: true;
 };
 
 /** A number to 2 decimals, as the set rows show it: 254.60000000000002 is 254.6. */
@@ -326,7 +328,8 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit, distan
   const value = storedValue(set, key);
   if (value === null) return '';
   if (key === 'distance') return distanceText(value, set.distanceUnit ?? distanceUnit, distanceUnit);
-  return key === 'durationS' ? durationText(value) : numberText(value);
+  if (key === 'durationS') return showsClock(row) ? formatRest(value) : durationText(value);
+  return numberText(value);
 }
 
 /**
@@ -334,8 +337,11 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit, distan
  * a target hints it over last time's weight (R49): a cleared weight shows what its tick logs. A ticked row too (B2):
  * clearing its weight takes the tick off, and the open row then shows the target.
  */
-/** The types whose Previous shows a time as a clock ("0:45"), so their hint does too. */
+/** The types whose Previous shows a time as a clock ("0:45"), so their hint and value do too. */
 const CLOCK_TIMES: readonly LoggingType[] = ['for_time', 'weighted_distance'];
+
+/** Whether a row's time reads as a clock, under a minute too: a score's, a carry's, a program run's (design gate #15). */
+const showsClock = (row: RowModel): boolean => CLOCK_TIMES.includes(row.loggingType) || row.clockTimes === true;
 
 export function hintText(row: RowModel, key: InputKey): string {
   const { placeholders } = row;
@@ -348,7 +354,7 @@ export function hintText(row: RowModel, key: InputKey): string {
     case 'durationS':
       if (placeholders.durationS === null) return '';
       // A score's or a carry's time hints as its Previous reads it ("0:45"); the other types as "45s" (Task 7).
-      return CLOCK_TIMES.includes(row.loggingType) ? formatRest(placeholders.durationS) : formatDuration(placeholders.durationS);
+      return showsClock(row) ? formatRest(placeholders.durationS) : formatDuration(placeholders.durationS);
     case 'distance':
       return placeholders.distance === null ? '' : numberText(placeholders.distance);
     case 'extraReps':

@@ -37,8 +37,12 @@ import { useTheme } from '../ThemeProvider';
 /** The space between columns. */
 export const COLUMN_GAP = 4;
 
-/** How wide each column is. The header row and every set row use this, so they line up. Inputs and Previous share what the fixed columns leave. */
-export function cellStyle(key: ColumnKey): ViewStyle {
+/**
+ * How wide each column is. The header row and every set row use this, so they line up. Inputs and Previous share what
+ * the fixed columns leave. A row without the SET chip (a metcon's score, a run) gives its room and gap to Previous as a
+ * basis, so its fields keep the set rows' width and right edge (design gate #14).
+ */
+export function cellStyle(key: ColumnKey, chipless = false): ViewStyle {
   switch (key) {
     case 'set':
       return { width: 32 };
@@ -46,7 +50,7 @@ export function cellStyle(key: ColumnKey): ViewStyle {
       // 4pt wider than the 40pt ring, which sits centred in it (R67).
       return { width: 44, alignItems: 'center' };
     case 'previous':
-      return { flex: 1.5, minWidth: 0 };
+      return chipless ? { flexBasis: 32 + COLUMN_GAP, flexGrow: 1.5, flexShrink: 1, minWidth: 0 } : { flex: 1.5, minWidth: 0 };
     case 'rpe':
       return { flex: 0.8, minWidth: 40, maxWidth: 56 };
     default:
@@ -175,6 +179,8 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
   const [unlikely, setUnlikely] = useState<InputKey[]>([]);
 
   const reading = readRow(row, drafts, unit, distanceUnit);
+  /** A row without the SET chip lines its fields up with the set rows' (`cellStyle`). */
+  const chipless = !columns.some((c) => c.key === 'set');
   const showHint = reading.invalid.some((key) => left.includes(key));
   const canTick = reading.tickable;
   /**
@@ -295,12 +301,19 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
   const input = (key: InputKey, header: string) => {
     // A number that doesn't read, or one the soft check flags (R422), gets the heavier muted underline.
     const invalid = (reading.invalid.includes(key) && left.includes(key)) || soft.includes(key);
-    const look = fieldLook(row, key, drafts[key]);
+    /**
+     * A field that may stay empty (an event's time) reads as a suggestion while it is empty, dashed with a faint "–"; on a
+     * ticked row with nothing in it, the dash stands alone with no box, so the row doesn't look unfinished (gate #16).
+     */
+    const optionalEmpty = row.optional?.includes(key) === true && (drafts[key] ?? valueText(row, key, unit, distanceUnit)) === '';
+    const fieldLookNow = fieldLook(row, key, drafts[key]);
+    const look = optionalEmpty && fieldLookNow === 'empty' ? 'suggested' : fieldLookNow;
+    const bare: TextStyle | null = optionalEmpty && set.done ? { borderWidth: 0, backgroundColor: 'transparent' } : null;
     return (
       <TextInput
         value={drafts[key] ?? valueText(row, key, unit, distanceUnit)}
         // A field that may stay empty (an event's time) shows a faint dash rather than nothing (Task 7b).
-        placeholder={hintText(row, key) || (row.optional?.includes(key) && !set.done ? '–' : '')}
+        placeholder={hintText(row, key) || (row.optional?.includes(key) ? '–' : '')}
         placeholderTextColor={colors.textFaint}
         onChangeText={(text) => type(key, text)}
         onBlur={() => leave(key)}
@@ -318,6 +331,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
           paddingHorizontal: 2,
           borderRadius: 8,
           ...inputLook(look, invalid, colors, needed === key),
+          ...bare,
           fontSize: 20,
           fontVariant: ['tabular-nums'],
           textAlign: 'center',
@@ -350,6 +364,14 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
           </Pressable>
         );
       case 'previous':
+        // A score or a run with no last time shows a faint dash, as an event's empty time does, not a hole (gate #14).
+        if (row.previous === '' && row.spokenAs !== undefined) {
+          return (
+            <Num weight={600} accessibilityElementsHidden importantForAccessibility="no" style={{ fontSize: 17, color: colors.textFaint }}>
+              –
+            </Num>
+          );
+        }
         return (
           <Num
             weight={600}
@@ -401,7 +423,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: COLUMN_GAP }}>
         {columns.map((column) => (
-          <View key={column.key} style={cellStyle(column.key)}>
+          <View key={column.key} style={cellStyle(column.key, chipless)}>
             {cell(column)}
           </View>
         ))}

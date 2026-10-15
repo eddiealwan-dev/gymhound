@@ -574,7 +574,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (
-          <View key={column.key} style={cellStyle(column.key)}>
+          <View key={column.key} style={cellStyle(column.key, !columns.some((c) => c.key === 'set'))}>
             {/* Over fixed-width columns: it grows as the set fields under it do, 1.5× at most (R562), and stays whole
                 ("PREVIOUS" was cut at the largest text, Round 13). */}
             <Body

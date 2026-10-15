@@ -1,5 +1,5 @@
 import type { MetconRule, RuleKind } from '../seed/programTypes';
-import { buildRows, hintText, rowFieldVoiceLabel, rowTickLabel, tableColumns, type ExerciseInput, type SetInput } from './setTable';
+import { buildRows, hintText, rowFieldVoiceLabel, rowTickLabel, tableColumns, valueText, type ExerciseInput, type SetInput } from './setTable';
 import {
   blockColumns,
   blockKindOf,
@@ -269,12 +269,36 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
       previous: [{ ...sv('p'), weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: 22 }],
     });
     const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
-    expect(row.previous).toBe('315 × 50');
+    expect(row.previous).toBe('315 × 50');
     expect(row.previousLabel).toBe('315 pounds for 50 feet in 22 seconds');
     expect(rowTickLabel(row)).toBe('Set 1 carried drop-free');
     expect(row.optional).toEqual(['durationS']);
     expect(rowFieldVoiceLabel(row, 'durationS', 'TIME', 'lb', 'mi')).toBe('Set 1 time, optional');
     expect(rowFieldVoiceLabel(row, 'distance', 'FT', 'lb', 'ft')).toBe('Set 1 distance, feet');
+  });
+
+  it('says every score and run time as a clock, under a minute too (design gate #15)', () => {
+    const score = blockRows('metcon', buildRows(input({ loggingType: 'for_time', sets: [sv('s1', { durationS: 13 })] }), 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(valueText(score[0], 'durationS', 'lb', 'mi')).toBe('0:13');
+    const ex = input({ loggingType: 'timed', sets: [sv('s1', { durationS: 40 })], previous: [{ ...sv('p'), durationS: 8 }] });
+    const [run] = blockRows('run', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb', targetS: 1740 });
+    expect(run.previous).toBe('0:08');
+    expect(valueText(run, 'durationS', 'lb', 'mi')).toBe('0:40');
+    const intervals = blockRows('intervals', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb', targetS: 20 });
+    expect(intervals[0].previous).toBe('0:08');
+    expect(hintText({ ...intervals[0], set: { ...intervals[0].set, durationS: null } }, 'durationS')).toBe('0:20');
+    // A plank in your own routine keeps "40".
+    const plank = buildRows(ex, 'lb', gear, 'mi');
+    expect(valueText(plank[0], 'durationS', 'lb', 'mi')).toBe('40');
+  });
+
+  it("breaks an event's last time before the ×, so it wraps as \"140\" over \"× 50\" (design gate #11)", () => {
+    const ex = input({
+      loggingType: 'weighted_distance',
+      slotDistanceUnit: 'ft',
+      previous: [{ ...sv('p'), weight: 140, weightUnit: 'lb', distance: 50, distanceUnit: 'ft' }],
+    });
+    expect(blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' })[0].previous).toBe('140 × 50');
   });
 
   it("keeps a unit that isn't the one shown", () => {
@@ -284,7 +308,7 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
       previous: [{ ...sv('p'), weight: 140, weightUnit: 'kg', distance: 20, distanceUnit: 'm' }],
     });
     const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
-    expect(row.previous).toBe('140 kg × 20 m');
+    expect(row.previous).toBe('140 kg × 20 m');
     expect(row.previousLabel).toBe('140 kilograms for 20 metres');
   });
 
@@ -306,8 +330,8 @@ describe('blockColumns', () => {
     expect(keys(blockColumns('run', cols('timed'), 'ft'))).toEqual(['previous', 'durationS', 'tick']);
   });
 
-  it("heads an event's distance with its unit", () => {
-    expect(blockColumns('event', cols('weighted_distance'), 'yd').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'LB', 'YD', 'TIME', '✓']);
+  it("heads an event's distance with its unit, and its previous LAST, which fits beside three inputs at 320 (design gate #11)", () => {
+    expect(blockColumns('event', cols('weighted_distance'), 'yd').map((c) => c.header)).toEqual(['SET', 'LAST', 'LB', 'YD', 'TIME', '✓']);
   });
 
   it('keeps the columns of intervals, technique and plain sets', () => {
