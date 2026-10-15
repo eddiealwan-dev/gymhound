@@ -213,6 +213,26 @@ describe('setActiveRoutine', () => {
   });
 });
 
+describe('getUpNext of a program: the warm-up line (R626, R645)', () => {
+  it("marks a lifting day's first slot, as the session shows it, before the first workout too", () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'program-barbell-foundations');
+    const exercises = getUpNext(db)!.exercises;
+    expect(exercises.map((e) => e.warmUp === true)).toEqual(exercises.map((_, i) => i === 0));
+  });
+
+  it('marks nothing on a calisthenics day, a run day, or a routine of your own', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'program-calisthenics-foundations');
+    expect(getUpNext(db)!.exercises.some((e) => e.warmUp)).toBe(false);
+    setActiveRoutine(db, 'program-hybrid-athlete');
+    db.update(routines).set({ nextDayIndex: 2 }).where(eq(routines.id, 'program-hybrid-athlete')).run();
+    expect(getUpNext(db)!.exercises.some((e) => e.warmUp)).toBe(false);
+    setActiveRoutine(db, PPL);
+    expect(getUpNext(db)!.exercises.some((e) => e.warmUp)).toBe(false);
+  });
+});
+
 describe('getUpNext', () => {
   it('is null when no routine is active', () => {
     expect(getUpNext(seededDb())).toBeNull();

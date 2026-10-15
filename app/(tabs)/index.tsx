@@ -17,7 +17,7 @@ import { cardText } from '../../src/domain/programCard';
 import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
 import type { DistanceUnit, WeightUnit } from '../../src/domain/types';
-import { weekLine } from '../../src/domain/ruleLine';
+import { WARM_UP_LINE, weekLine } from '../../src/domain/ruleLine';
 import {
   DELOAD_OFFER,
   firstSentence,
@@ -300,15 +300,20 @@ function UpNextCard({
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
         // pushes the scheme to the right edge. The 14pt scheme sits on the 16pt name's baseline, not its top.
+        // A lifting day's first exercise has the warm-up line muted under it, as in the session (R626, R645); it wraps.
         return (
-          <View
-            key={exercise.routineExerciseId}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}
-          >
-            <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
-            <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
-              {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
-            </Body>
+          <View key={exercise.routineExerciseId}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}>
+              <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+              <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
+                {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
+              </Body>
+            </View>
+            {exercise.warmUp ? (
+              <Body muted style={{ fontSize: 14, marginBottom: 8 }}>
+                {WARM_UP_LINE}
+              </Body>
+            ) : null}
           </View>
         );
       })}

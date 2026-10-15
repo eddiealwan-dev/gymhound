@@ -12,8 +12,8 @@ import { PREMADE_ORDER, RETIRED_PREMADES } from '../../seed/routines';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { historySlots, joinGroupNextWeight, programState } from './programRunRepo';
-import { slotScheme } from './programViewRepo';
+import { historySlots, joinGroupNextWeight, programSlotOf, programState } from './programRunRepo';
+import { showsWarmUp, slotScheme } from './programViewRepo';
 import { getSettings, setSetting } from './settingsRepo';
 
 /** Raised when a premade routine would be edited or deleted. Premades are read-only (§8.6). */
@@ -78,6 +78,8 @@ export type UpNextExercise = {
   lastWorkingUnit: WeightUnit | null;
   lastNextWeight: number | null;
   lastNextUnit: WeightUnit | null;
+  /** The warm-up line goes under it: a program's lifting day's first slot, as in the session (R626, R645). */
+  warmUp?: boolean;
   /** A program slot's scheme words (§18.29): a carry's distance unit, a metcon's format, a run on a clock. */
   schemeExtra?: RepSchemeExtra;
 };
@@ -572,6 +574,12 @@ export function getUpNext(db: Db): UpNext | null {
     .all();
 
   const program = upNextProgram(db, routine.id, routine.runStartedAt, routine.runDeloadAt);
+  const programData = programById(routine.id);
+  /** Whether the warm-up line goes under this slot (R626, R645), before the run starts too. */
+  const warmUp = (e: { routineExerciseId: string; loggingType: LoggingType }): boolean => {
+    const slot = programData ? programSlotOf(routine.id, e.routineExerciseId) : undefined;
+    return programData !== undefined && slot !== undefined && showsWarmUp(programData, slot, e.loggingType);
+  };
   return {
     routineId: routine.id,
     routineName: routine.name,
@@ -584,6 +592,7 @@ export function getUpNext(db: Db): UpNext | null {
       // A program slot shows the week's sets and range (R617-R620), as the workout will start it.
       ...(program ? (slotScheme(db, routine.id, { ...exercise, ladderRung, nextSetCount }, program.week, program.weekInfo) ?? {}) : {}),
       ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
+      ...(warmUp(exercise) ? { warmUp: true } : {}),
     })),
     program,
   };
