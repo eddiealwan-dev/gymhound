@@ -290,6 +290,8 @@ function programOutcome(
   a: {
     program: Program;
     slot: ProgramSlot;
+    /** The routine slot the workout exercise ran from. */
+    routineExerciseId: string;
     exerciseId: string;
     input: OutcomeInput;
     weekHolds: boolean;
@@ -339,8 +341,12 @@ function programOutcome(
       const ladder = slot.ladder ?? [];
       const rung = a.ruleRung ?? 0;
       const r = ladder[rung];
-      // The sessions on this rung: on a program another day can be on another one after Change rung (R625 amended).
-      const onRung = history.filter((h) => (h.ruleRung ?? 0) === rung);
+      // The sessions in a row on this rung (R618): those since the slot's own last session on another rung (after Change
+      // rung away and back, the earlier stay does not count), and of those only the ones on this rung, since another day
+      // on the line can be on another rung after Change rung and does not break the run (R625 amended).
+      let ownElsewhere = history.length - 1;
+      while (ownElsewhere >= 0 && !(history[ownElsewhere].routineExerciseId === a.routineExerciseId && (history[ownElsewhere].ruleRung ?? 0) !== rung)) ownElsewhere--;
+      const onRung = history.slice(ownElsewhere + 1).filter((h) => (h.ruleRung ?? 0) === rung);
       const previousOnRung = previousOf(onRung);
       if (!rule || !r || status !== 'held') return { result: plain(), nextRung: rung, nextSetCount: null };
       // R618: the top of the rung's range on every set moves up; any set under 5 reps (under the bottom of a hold
@@ -427,6 +433,7 @@ function storeAll(db: Db, workoutId: string, only?: readonly string[], context?:
         ? programOutcome(db, {
             program: run.program,
             slot,
+            routineExerciseId: we.routineExerciseId,
             exerciseId: we.exerciseId,
             input: { ...input, week: { holds: weekHolds }, distanceUnit: carryUnit(slot) ?? undefined },
             weekHolds,

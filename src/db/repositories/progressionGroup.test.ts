@@ -322,6 +322,43 @@ describe("a lift's progression reads its sessions on any day, through swaps and 
     expect(slotRow(db, SQUAT_A).nextWeight).toBe(145);
   });
 
+  describe('a ladder steps down after two low sessions in a row on its rung (R618)', () => {
+    const CALI = 'program-calisthenics-foundations';
+    const a = `${CALI}:a:assisted-squat`;
+    const b = `${CALI}:b:assisted-squat`;
+    const low = { reps: [4, 4, 4] };
+    const mid = { reps: [6, 6, 6] };
+
+    it('after Change rung away and back, one low session holds the rung and a second steps down', () => {
+      const db = seededDb();
+      insertProgram(db, CALI);
+      setActiveProgram(db, CALI, NOW);
+      changeRung(db, a, 1);
+      runSession(db, `${CALI}:a`, at(1), { [a]: low });
+      changeRung(db, a, 0);
+      runSession(db, `${CALI}:a`, at(2), { [a]: mid });
+      runSession(db, `${CALI}:a`, at(3), { [a]: mid });
+      changeRung(db, a, 1);
+      const first = runSession(db, `${CALI}:a`, at(4), { [a]: low });
+      expect(blockOf(db, first, a)).toMatchObject({ ruleRung: 1, nextRung: 1 });
+      expect(slotRow(db, a).ladderRung).toBe(1);
+      const second = runSession(db, `${CALI}:a`, at(5), { [a]: low });
+      expect(blockOf(db, second, a)).toMatchObject({ ruleRung: 1, nextRung: 0 });
+      expect(slotRow(db, a).ladderRung).toBe(0);
+    });
+
+    it("another day on another rung between two low sessions does not break the streak", () => {
+      const db = seededDb();
+      insertProgram(db, CALI);
+      setActiveProgram(db, CALI, NOW);
+      changeRung(db, a, 1);
+      runSession(db, `${CALI}:a`, at(1), { [a]: low });
+      runSession(db, `${CALI}:b`, at(2), { [b]: mid });
+      const second = runSession(db, `${CALI}:a`, at(3), { [a]: low });
+      expect(blockOf(db, second, a)).toMatchObject({ ruleRung: 1, nextRung: 0 });
+    });
+  });
+
   describe('a ladder after Change rung', () => {
     const CALI = 'program-calisthenics-foundations';
     const a = `${CALI}:a:assisted-squat`;

@@ -154,6 +154,8 @@ export function finishedWorkoutsSince(db: Db, routineId: string, from: number): 
 /** One finished session of a program slot, as `storeOutcomes` stored it. */
 export type SlotSession = WorkoutTime & {
   workoutExerciseId: string;
+  /** The slot that logged it: on a program, the slot itself or one on its line on another day (`historySlots`). */
+  routineExerciseId: string | null;
   exerciseId: string;
   missed: boolean;
   outcome: string | null;
@@ -184,6 +186,7 @@ export function slotSessions(db: Db, routineExerciseId: string, from: number, ex
       startedAt: workouts.startedAt,
       finishedAt: workouts.finishedAt,
       workoutExerciseId: workoutExercises.id,
+      routineExerciseId: workoutExercises.routineExerciseId,
       exerciseId: workoutExercises.exerciseId,
       missed: workoutExercises.missed,
       outcome: workoutExercises.outcome,
