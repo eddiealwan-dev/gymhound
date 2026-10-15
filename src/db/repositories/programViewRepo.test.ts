@@ -464,3 +464,58 @@ describe('what a slot rule knows of its block (design gate #4, #5)', () => {
     expect([farmer, sandbag, sled].map((e) => e.program!.rule.eventWord)).toEqual(['carry', 'carry', 'push']);
   });
 });
+
+describe("PREVIOUS and prefill follow the slot's progression line (ruling R-f2)", () => {
+  const previousOf = (db: Db, routineExerciseId: string) => blockIn(db, routineExerciseId).previous;
+
+  it("Strongman Thursday's speed log lift shows none of Monday's 3–5 sets: its own line has no session yet", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-strongman-prep');
+    setActiveProgram(db, program.id, NOW);
+    const monLog = 'program-strongman-prep:mon-overhead:fedb-log-lift';
+    const thuLog = 'program-strongman-prep:thu-events-a:fedb-log-lift';
+    runSession(db, 'program-strongman-prep:mon-overhead', at(1), { [monLog]: { weight: 90, reps: [5, 5, 5, 5] } });
+    startWorkoutFromDay(db, 'program-strongman-prep:thu-events-a', at(3));
+    expect(previousOf(db, thuLog)).toEqual([]);
+  });
+
+  it("#20 Wednesday's warm-up and cool-down runs show none of Tuesday's 25:30 easy run", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const tueRun = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
+    runSession(db, `${program.id}:${tue.slug}`, at(1), { [tueRun.id]: { seconds: [1530] } });
+    const wed = program.days.find((d) => d.name.startsWith('Wed'))!;
+    const [warm, , cool] = wed.slots;
+    startWorkoutFromDay(db, `${program.id}:${wed.slug}`, at(2));
+    expect(previousOf(db, warm.id)).toEqual([]);
+    expect(previousOf(db, cool.id)).toEqual([]);
+  });
+
+  it("a lift on its line on another day shows that day's sets: Barbell Foundations B's squat shows A's", () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 5] } });
+    startWorkoutFromDay(db, `${BF}:b`, at(2));
+    expect(previousOf(db, `${BF}:b:barbell-back-squat`).map((s) => [s.weight, s.reps])).toEqual([
+      [135, 5],
+      [135, 5],
+      [135, 5],
+    ]);
+  });
+
+  it('your own routines keep PREVIOUS by exercise, from any workout, as before', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 5] } });
+    // A Push/pull/legs day has the bench press; Barbell Foundations A has it too.
+    const benchA = `${BF_A}:barbell-bench-press`;
+    runSession(db, BF_A, at(2), { [benchA]: { weight: 95, reps: [5, 5, 5] } });
+    startWorkoutFromDay(db, 'premade-ppl-6:push-a', at(3));
+    const bench = viewOf(db).exercises.find((e) => e.exerciseId === 'barbell-bench-press')!;
+    expect(bench.previous.map((s) => s.weight)).toEqual([95, 95, 95]);
+  });
+});
