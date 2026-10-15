@@ -283,6 +283,7 @@ function UpNextCard({
   onStart: (dayId: string) => void;
 }) {
   const dayHasWeight = upNextDayHasWeight(upNext.exercises);
+  const large = useLargeText();
   const program = upNext.program ?? null;
   const week = program === null || program.done ? null : programWeekText(program);
   return (
@@ -306,10 +307,13 @@ function UpNextCard({
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
         // pushes the scheme to the right edge. The 14pt scheme sits on the 16pt name's baseline, not its top.
         // A lifting day's first exercise has the warm-up line muted under it, as in the session (R626, R645); it wraps.
+        // A metcon's name is long and says its format, so its minutes or cap stay in the scheme column beside it and the
+        // name wraps, rather than the column dropping under it as a sub-line (design gate #19); at large text it drops.
+        const besideName = !large && exercise.schemeExtra?.metcon != null;
         return (
           <View key={exercise.routineExerciseId}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}>
-              <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+            <View style={{ flexDirection: 'row', flexWrap: besideName ? 'nowrap' : 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}>
+              <Body style={besideName ? { flex: 1, minWidth: 0 } : { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
               <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
                 {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
               </Body>

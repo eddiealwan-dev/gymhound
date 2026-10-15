@@ -31,7 +31,7 @@ import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Screen } from '../../../src/ui/Screen';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
-import { breakableName } from '../../../src/ui/largeText';
+import { breakableName, useLargeText } from '../../../src/ui/largeText';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to Routines. With nothing to go back to (opened by address, or reloaded), it lands on Routines. */
@@ -57,6 +57,8 @@ function ExerciseRow({
   const scheme = schemeOf(exercise, plan);
   /** A program slot may be called by its role ("Warm-up run", ruling R-g4). */
   const name = plan?.name ?? exercise.name;
+  /** A metcon's minutes or cap stay beside its long name, as on Up next (design gate #19); at large text they drop under. */
+  const besideName = !useLargeText() && plan?.schemeExtra?.metcon != null;
   return (
     // At a large text size the scheme drops under the name rather than squeezing it, as on Up next.
     <Pressable
@@ -64,9 +66,17 @@ function ExerciseRow({
       accessibilityLabel={`${name}, ${scheme}`}
       accessibilityHint="Modify or see its stats"
       onPress={() => onPress(exercise)}
-      style={({ pressed }) => ({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8, minHeight: 44, opacity: pressed ? 0.8 : 1 })}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        flexWrap: besideName ? 'nowrap' : 'wrap',
+        alignItems: 'baseline',
+        columnGap: 8,
+        paddingVertical: 8,
+        minHeight: 44,
+        opacity: pressed ? 0.8 : 1,
+      })}
     >
-      <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{name}</Body>
+      <Body style={besideName ? { flex: 1, minWidth: 0 } : { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{name}</Body>
       <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
         {scheme}
       </Body>
