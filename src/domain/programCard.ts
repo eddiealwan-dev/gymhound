@@ -1,5 +1,6 @@
 // What a program's card says (spec §18.29, R630, R631): its title, the summary band, the details, and its sources.
 // Pure: the card and the Sources sheet draw these words, and nothing here reads the database.
+import { PROGRAMS } from '../seed/programs.generated';
 import type { Program, ProgramSource } from '../seed/programTypes';
 import { formatRest } from './dates';
 
@@ -38,7 +39,7 @@ const minutes = (digits: string): string => formatRest(Number(digits.replace(/,/
  * Seconds of a minute or more, as minutes (ruling R-w3): "5,400 s" → "90:00", "60-90 s" → "1:00-1:30", "60 seconds" →
  * "1:00", and "+120 s per week" → "+2:00 a week". Under a minute stays as written ("30 s", "30-45 s").
  */
-function secondsAsMinutes(text: string): string {
+export function secondsAsMinutes(text: string): string {
   return text.replace(
     /\b(\d{1,3}(?:,\d{3})+|\d+)(?:(\s?[-–]\s?)(\d{1,3}(?:,\d{3})+|\d+))? ?(?:s|seconds)\b( per week)?/g,
     (whole, from: string, dash: string | undefined, to: string | undefined, perWeek: string | undefined) => {
@@ -51,14 +52,58 @@ function secondsAsMinutes(text: string): string {
 }
 
 /**
+ * Number ranges with an en dash (ruling R-g4): "4-8 reps" → "4–8 reps", "RPE 8-9" → "RPE 8–9". A rep scheme of three or
+ * more numbers ("21-15-9") is not a range and keeps its hyphens.
+ */
+export function enDashRanges(text: string): string {
+  return text.replace(/(?<![\d.\-–])(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?![\d\-–]|\.\d)/g, '$1–$2');
+}
+
+/**
  * Program text as the card and Up next show it (ruling R-w3, extending R-t2c): the documents' words, without the
  * asides and sentences that point at things the app lacks (a volume table, an appendix, an earlier app review), and
  * with seconds of a minute or more as minutes. Anything else is word for word.
  */
 export function cardText(text: string): string {
   const cut = ASIDES.reduce((t, aside) => t.replace(aside, ''), text);
-  const sentences = cut.split(/(?<=[.?])\s+(?=[A-Z#"'])/).filter((s) => !POINTS_AWAY.test(s));
-  return secondsAsMinutes(sentences.join(' ')).trim();
+  const sentences = cut.split(SENTENCES).filter((s) => !POINTS_AWAY.test(s));
+  return namedPrograms(enDashRanges(secondsAsMinutes(sentences.join(' ')))).trim();
+}
+
+/** Where program text breaks into sentences. */
+const SENTENCES = /(?<=[.?])\s+(?=[A-Z#"'])/;
+
+/** The twenty by number, for a reference the documents make by number alone. */
+const NAMES = new Map(PROGRAMS.map((p) => [p.number, p.name]));
+
+/**
+ * A program the text points to by its number alone gets its name, as every other reference has it (design gate #24):
+ * "or #11 to build the base" → "or #11 Advanced Upper/Lower DUP to build the base".
+ */
+function namedPrograms(text: string): string {
+  return text.replace(/#(\d+)(?!\d)(?! [A-Z])/g, (whole, n: string) => {
+    const name = NAMES.get(Number(n));
+    return name === undefined ? whole : `#${n} ${name}`;
+  });
+}
+
+/** A sentence led by its own label, as the documents write the parts of a rule: "Heavy days: top of range …". */
+const LABELLED = /^([A-Z][^.:=→]{0,80}?):\s+(.*)$/s;
+
+/**
+ * How it progresses in short paragraphs (ruling R-g1): a new paragraph at each of the documents' labelled sentences
+ * ("Heavy days:", "Stall rule:"), the label apart so the card can set it in body strong, and the words unchanged. A
+ * sentence without a label stays with the paragraph before it; a text with no labels is one paragraph.
+ */
+export function progressionParagraphs(text: string): { label: string | null; text: string }[] {
+  const out: { label: string | null; text: string }[] = [];
+  for (const sentence of text.split(SENTENCES)) {
+    const m = LABELLED.exec(sentence);
+    if (m && m[1].split(' ').length <= 10) out.push({ label: `${m[1]}:`, text: m[2] });
+    else if (out.length > 0) out[out.length - 1].text += ` ${sentence}`;
+    else out.push({ label: null, text: sentence });
+  }
+  return out;
 }
 
 /** Why it works as the card shows it: each bullet's `cardText`, any left empty dropped. */

@@ -127,6 +127,14 @@ export type ClockState = {
 
 const STEP_WORD = { work: 'HARD', easy: 'EASY' } as const;
 
+/** The lead-in's label, before the work starts. */
+export const LEAD_IN_LABEL = 'GET READY';
+/** What a paused clock's label ends with (design gate #8). */
+const PAUSED = ' · PAUSED';
+
+/** Whether the clock is in its lead-in, paused or not. */
+export const inLeadIn = (state: Pick<ClockState, 'label'>): boolean => state.label.startsWith(LEAD_IN_LABEL);
+
 function stepLabel(plan: WorkPlan, step: WorkStep): string {
   switch (plan.kind) {
     case 'amrap':
@@ -147,6 +155,8 @@ function endLineOf(plan: WorkPlan, doneAtS: number | null): string {
   const total = sumMs(plan.steps) / 1000;
   if (doneAtS !== null) {
     const at = `Stopped at ${formatRest(doneAtS)}.`;
+    // Where an EMOM or intervals stopped is the minute or the set, not a time into it (design gate #9).
+    const inSet = plan.steps[stepAt(plan, doneAtS * 1000).index].set;
     switch (plan.kind) {
       case 'amrap':
         return `${at} Enter your rounds.`;
@@ -154,9 +164,9 @@ function endLineOf(plan: WorkPlan, doneAtS: number | null): string {
       case 'run':
         return `${at} Tick to log it.`;
       case 'intervals':
-        return `${at} Tick each set you ran.`;
+        return `Stopped in set ${inSet} of ${setCount(plan)}. Tick each set you ran.`;
       case 'emom':
-        return at;
+        return `Stopped in minute ${inSet} of ${setCount(plan)}.`;
     }
   }
   switch (plan.kind) {
@@ -242,9 +252,11 @@ export function clockAt(t: WorkTimer, now: number): ClockState {
     };
   }
   const paused = t.pausedAt !== null;
+  /** Paused, the label says so, so a frozen time never reads as a hung timer (design gate #8). */
+  const named = (label: string) => (paused ? `${label}${PAUSED}` : label);
   if (ms < 0) {
     const shown = Math.ceil(-ms / 1000);
-    return { ...base, phase: paused ? 'paused' : 'ready', label: 'GET READY', shown, fraction: shown / (LEAD_IN_MS / 1000), stepIndex: 0, set: plan.steps[0].set };
+    return { ...base, phase: paused ? 'paused' : 'ready', label: named(LEAD_IN_LABEL), shown, fraction: shown / (LEAD_IN_MS / 1000), stepIndex: 0, set: plan.steps[0].set };
   }
   const { index, into } = stepAt(plan, ms);
   const step = plan.steps[index];
@@ -256,10 +268,10 @@ export function clockAt(t: WorkTimer, now: number): ClockState {
   const phase: ClockPhase = paused ? 'paused' : 'running';
   if (countsUp(plan)) {
     const shown = Math.floor(ms / 1000);
-    return { ...base, phase, label: stepLabel(plan, step), shown, fraction: shown / (totalMs / 1000), stepIndex: index, set: step.set };
+    return { ...base, phase, label: named(stepLabel(plan, step)), shown, fraction: shown / (totalMs / 1000), stepIndex: index, set: step.set };
   }
   const shown = Math.ceil((step.seconds * 1000 - into) / 1000);
-  return { ...base, phase, label: stepLabel(plan, step), shown, fraction: shown / step.seconds, stepIndex: index, set: step.set };
+  return { ...base, phase, label: named(stepLabel(plan, step)), shown, fraction: shown / step.seconds, stepIndex: index, set: step.set };
 }
 
 /**
@@ -365,7 +377,7 @@ export function clockVoiceLabel(state: ClockState, plan: WorkPlan): string {
   if (state.phase === 'idle') return idleVoiceLabel(plan);
   const paused = state.phase === 'paused' ? ', paused' : '';
   const time = spokenRest(state.shown);
-  if (state.label === 'GET READY') return `Get ready, ${time}${paused}`;
+  if (inLeadIn(state)) return `Get ready, ${time}${paused}`;
   const step = plan.steps[state.stepIndex];
   const n = setCount(plan);
   if (state.phase === 'waiting') return `Set ${state.set} next, ${time}. Tap Start when ready`;

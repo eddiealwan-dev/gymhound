@@ -31,7 +31,7 @@ import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Screen } from '../../../src/ui/Screen';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
 import { Body, Display, ScreenTitle } from '../../../src/ui/Text';
-import { breakableName } from '../../../src/ui/largeText';
+import { breakableName, useLargeText } from '../../../src/ui/largeText';
 import { useTheme } from '../../../src/ui/ThemeProvider';
 
 /** Back to Routines. With nothing to go back to (opened by address, or reloaded), it lands on Routines. */
@@ -55,16 +55,28 @@ function ExerciseRow({
   onPress: (exercise: RoutineDetailExercise) => void;
 }) {
   const scheme = schemeOf(exercise, plan);
+  /** A program slot may be called by its role ("Warm-up run", ruling R-g4). */
+  const name = plan?.name ?? exercise.name;
+  /** A metcon's minutes or cap stay beside its long name, as on Up next (design gate #19); at large text they drop under. */
+  const besideName = !useLargeText() && plan?.schemeExtra?.metcon != null;
   return (
     // At a large text size the scheme drops under the name rather than squeezing it, as on Up next.
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${exercise.name}, ${scheme}`}
+      accessibilityLabel={`${name}, ${scheme}`}
       accessibilityHint="Modify or see its stats"
       onPress={() => onPress(exercise)}
-      style={({ pressed }) => ({ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8, minHeight: 44, opacity: pressed ? 0.8 : 1 })}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        flexWrap: besideName ? 'nowrap' : 'wrap',
+        alignItems: 'baseline',
+        columnGap: 8,
+        paddingVertical: 8,
+        minHeight: 44,
+        opacity: pressed ? 0.8 : 1,
+      })}
     >
-      <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+      <Body style={besideName ? { flex: 1, minWidth: 0 } : { flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{name}</Body>
       <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
         {scheme}
       </Body>
@@ -125,20 +137,41 @@ const RETIRED = 'Retired. It keeps running for you, and its history stays.';
  * weeks done."), the week's line, a line for each lift that dropped back twice in this run, and Start over, which asks
  * first.
  */
-function ActiveProgramState({ name, page, onStartOver }: { name: string; page: ProgramPageView | null; onStartOver: () => void }) {
-  if (page === null) return <ActiveBadge />;
+function ActiveProgramState({
+  name,
+  page,
+  onStartOver,
+  onDuplicate,
+}: {
+  name: string;
+  page: ProgramPageView | null;
+  onStartOver: () => void;
+  onDuplicate: () => void;
+}) {
   return (
     <View style={{ gap: 4 }}>
       <ActiveBadge />
-      <Body weight={600}>{programWeekText(page)}</Body>
-      {page.weekLine === null ? null : <Body muted>{page.weekLine}</Body>}
-      {page.droppedTwice.map((exercise) => (
-        <Body key={exercise} muted>
-          {graduationLine(exercise)}
-        </Body>
-      ))}
-      <View style={{ marginTop: 4 }}>
-        <Button label="Start over" variant="secondary" accessibilityLabel={`Start ${name} over at week 1`} onPress={onStartOver} />
+      {page === null ? null : (
+        <>
+          <Body weight={600}>{programWeekText(page)}</Body>
+          {page.weekLine === null ? null : <Body muted>{page.weekLine}</Body>}
+          {page.droppedTwice.map((exercise) => (
+            <Body key={exercise} muted>
+              {graduationLine(exercise)}
+            </Body>
+          ))}
+        </>
+      )}
+      {/*
+        A reset and a copy are quiet, side by side, so neither outweighs the state above them (design gate #23); Start
+        over still asks first. The row steps back by a quiet button's 20pt padding so "Start over" lines up with the text,
+        and wraps at a large text size.
+      */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, marginTop: 4, marginLeft: -20 }}>
+        {page === null ? null : (
+          <Button label="Start over" variant="quiet" accessibilityLabel={`Start ${name} over at week 1`} onPress={onStartOver} />
+        )}
+        <Button label="Duplicate" variant="quiet" onPress={onDuplicate} />
       </View>
     </View>
   );
@@ -191,16 +224,21 @@ export default function RoutineDetailScreen() {
       {program !== undefined ? (
         <ProgramCard
           program={program}
+          locked={locked}
           footer={
             <View style={{ gap: 8 }}>
               {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : showDays ? null : <Body muted>{HIDDEN}</Body>}
+              {/* Duplicate copies the exercises, so it is offered only while they show (R635). */}
               {showDays ? (
-                <ActiveProgramState name={routine.name} page={page} onStartOver={() => setAskStartOver(true)} />
+                <ActiveProgramState
+                  name={routine.name}
+                  page={page}
+                  onStartOver={() => setAskStartOver(true)}
+                  onDuplicate={() => actions.duplicate(routine)}
+                />
               ) : (
                 <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />
               )}
-              {/* Duplicate copies the exercises, so it is offered only while they show (R635). */}
-              {showDays ? <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} /> : null}
               {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
               <Button label="Share routine" variant="quiet" accessibilityLabel={`Share ${routine.name}`} onPress={() => actions.share(routine)} />
               {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}

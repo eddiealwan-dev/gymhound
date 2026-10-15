@@ -116,6 +116,18 @@ describe('the finish summary (8.5, R64)', () => {
     expect(text.slice(logged + 1)).toEqual([...lines, 'Save as a workout', 'Done']);
   });
 
+  it('counts a score as a score under LOGGED, and leaves VOLUME out of a day with none (design gate #6)', () => {
+    mockRead = { unit: 'kg', summary: { ...pushA([]), volume: 0, setCount: 2, scoreCount: 1 } };
+    const tree = mount();
+    const text = shownText(tree);
+    expect(text).not.toContain('VOLUME');
+    expect(text).not.toContain('Volume');
+    expect(text).toContain('1 set · 1 score');
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Logged 1 set and 1 score')).not.toHaveLength(0);
+    mockRead = { unit: 'kg', summary: { ...pushA([]), volume: 0, setCount: 1, scoreCount: 1 } };
+    expect(shownText(mount())).toContain('1 score');
+  });
+
   it("a program's lines (§18.29): the reset line and the metcon line, each with its why muted under it", () => {
     const reset = { workoutExerciseId: 'we1', name: 'Barbell back squat', loggingType: 'weighted' as const, outcome: 'reset' as const, nextWeight: 160, nextUnit: 'lb' as const, mark: null };
     mockRead = {

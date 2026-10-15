@@ -18,7 +18,7 @@ const COUNTED_IN_SECONDS: LoggingType[] = ['timed', 'weighted_time'];
  */
 export type RepSchemeExtra = {
   distanceUnit?: 'ft' | 'yd' | null;
-  metcon?: { format: 'AMRAP' | 'For Time'; workMinutes: number } | null;
+  metcon?: { format: 'AMRAP' | 'For Time'; workMinutes: number; capMinutes: number | null } | null;
   clock?: boolean;
 };
 
@@ -27,12 +27,13 @@ const clockOf = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.
 
 /**
  * Sets by reps: "3×8–12", "5×5" when the range is one value, and "3×30–60s" for the types counted in seconds. A
- * program's carries say their distance ("4×50 ft"), its scores their format ("AMRAP 12 min", "For Time") and its runs
+ * program's carries say their distance ("4×50 ft"), its scores their minutes or cap ("12 min", "8 min cap") and its runs
  * their time on a clock ("29:00", "6×3:00").
  */
 export function formatRepScheme(setCount: number, repMin: number, repMax: number, loggingType: LoggingType, extra: RepSchemeExtra = {}): string {
-  if (loggingType === 'rounds') return extra.metcon ? `AMRAP ${extra.metcon.workMinutes} min` : 'AMRAP';
-  if (loggingType === 'for_time') return 'For Time';
+  // A metcon's name says its format ("AMRAP 12: …", "21-15-9: …"), so its column says the minutes or the cap (design gate #19).
+  if (loggingType === 'rounds') return extra.metcon ? `${extra.metcon.workMinutes} min` : 'AMRAP';
+  if (loggingType === 'for_time') return extra.metcon?.capMinutes != null ? `${extra.metcon.capMinutes} min cap` : 'For Time';
   const reps = repMin === repMax ? `${repMin}` : `${repMin}–${repMax}`;
   if (extra.clock && repMin === repMax) return setCount === 1 ? clockOf(repMin) : `${setCount}×${clockOf(repMin)}`;
   if (loggingType === 'weighted_distance' && extra.distanceUnit) return `${setCount}×${reps} ${extra.distanceUnit}`;

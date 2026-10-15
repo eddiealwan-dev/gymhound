@@ -17,6 +17,8 @@ import {
   rungName,
   secondsUpLine,
   slotNoteText,
+  slotName,
+  sessionNoteText,
   todaysRead,
   WARM_UP_LINE,
   weekLine,
@@ -122,6 +124,9 @@ describe('ruleSentence (spec 7.4, the rule)', () => {
 
   it("the scores of programs (R607): last time's score, with or without a rule; never a weight to add", () => {
     expect(sentence(RULE_LB, 'rounds', 'lb', last({ sets: 1, reps: 6, extraReps: 4 }))).toBe('Last time: 6 + 4.');
+    // The load of a metcon's main move, when it was logged (ruling R-g3).
+    expect(sentence(RULE_LB, 'rounds', 'kg', last({ sets: 1, reps: 6, extraReps: 4, weight: 16, weightUnit: 'kg' }))).toBe('Last time: 6 + 4 at 16 kg.');
+    expect(sentence(RULE_LB, 'for_time', 'kg', last({ sets: 1, durationS: 462, weight: 43, weightUnit: 'kg' }))).toBe('Last time: 7:42 at 43 kg.');
     expect(sentence(null, 'rounds', 'lb', last({ sets: 1, reps: 6 }))).toBe('Last time: 6.');
     expect(sentence(RULE_LB, 'for_time', 'lb', last({ sets: 1, durationS: 462 }))).toBe('Last time: 7:42.');
     expect(sentence(RULE_LB, 'for_time', 'lb', NO_LAST)).toBe('First time logging this.');
@@ -531,6 +536,42 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
       expect(read(program({ halved: true }), HALVED, 135, { equipment: 'barbell' })).toBe('Hit 8s on a normal day and next time is 140 lb.');
     });
 
+    it('names the 0.625 kg pair a halved kg raise needs (W2 review)', () => {
+      const kgLine = programRuleSentence({
+        program: program({ halved: true }),
+        rule: { setCount: 3, repMin: 5, repMax: 8, increment: 1.25, incrementUnit: 'kg' },
+        loggingType: 'weighted',
+        unit: 'kg',
+        last: null,
+        load: { planned: { weight: 80, unit: 'kg' }, equipment: 'barbell', gear: KG_GEAR },
+      });
+      expect(kgLine).toBe(
+        'If every working set hits 8 on a normal day, add 1.25 kg (halved after the first miss). ' +
+          'Your plates make 82.5 kg; add 0.625 kg plates in Settings to load 81.25 kg. A marked day holds the weight.',
+      );
+    });
+
+    it("says so for a full raise the plates can't load (W2 review)", () => {
+      const no25: Gear = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1 } };
+      expect(loadLine(program(), RULE_LB, 135, 'barbell', no25)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 145 lb; add 2.5 lb plates in Settings to load 140 lb. A marked day holds the weight.',
+      );
+    });
+
+    it('when the number of plates, not their size, stops the raise, it asks for another pair of the size you own (W2 review)', () => {
+      const onePair: Gear = { bar: 45, plates: { '45': 4, '2.5': 1 } };
+      expect(loadLine(program(), RULE_LB, 140, 'barbell', onePair)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 225 lb; add another pair of 2.5 lb plates in Settings to load 145 lb. A marked day holds the weight.',
+      );
+    });
+
+    it("names no plate when today's weight itself isn't one your plates make", () => {
+      const onePair: Gear = { bar: 45, plates: { '45': 4, '2.5': 1 } };
+      expect(loadLine(program(), RULE_LB, 141, 'barbell', onePair)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 225 lb. A marked day holds the weight.',
+      );
+    });
+
     it('adds nothing when the plates load the raise, off a barbell, or with no plan yet', () => {
       const withFractions: Gear = { bar: 45, plates: { ...LB_GEAR.plates, '1.25': 1 } };
       const plain = 'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight.';
@@ -563,13 +604,31 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
-  it('a carry says the distance and its unit, and that a marked day holds the weight', () => {
+  it('a carry says the distance and its unit unbroken, and that a marked day holds the weight (design gate #5)', () => {
     const yoke = program({ carryUnit: 'ft' });
     const rule: Rule = { setCount: 4, repMin: 50, repMax: 50, increment: 10, incrementUnit: 'lb' };
-    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb. A marked day holds the weight.');
+    expect(line(yoke, rule, 'weighted_distance')).toBe('If every carry covers 50 ft unbroken on a normal day, add 10 lb. A marked day holds the weight.');
     expect(read(yoke, rule, 320, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
-      'Cover 50 ft on every run on a normal day and next time is 330 lb.',
+      'Cover 50 ft unbroken on every carry on a normal day and next time is 330 lb.',
     );
+  });
+
+  it('a sled push is a push, not a carry', () => {
+    const sled = program({ carryUnit: 'yd', eventWord: 'push' });
+    const rule: Rule = { setCount: 4, repMin: 40, repMax: 40, increment: 20, incrementUnit: 'lb' };
+    expect(line(sled, rule, 'weighted_distance')).toBe('If every push covers 40 yd unbroken on a normal day, add 20 lb. A marked day holds the weight.');
+    expect(read(sled, rule, 200, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
+      'Cover 40 yd unbroken on every push on a normal day and next time is 220 lb.',
+    );
+  });
+
+  it("an EMOM's rule is every minute clean, with the marked day holding (design gate #4)", () => {
+    const emom = program({ emom: true });
+    const rule: Rule = { setCount: 10, repMin: 2, repMax: 2, increment: 5, incrementUnit: 'lb' };
+    expect(programRuleSentence({ program: emom, rule, loggingType: 'weighted', unit: 'kg', last: null })).toBe(
+      'Make every minute clean on a normal day and next time adds 2.5 kg. A marked day holds the weight.',
+    );
+    expect(read(emom, rule, 95)).toBe('Every minute clean on a normal day and next time is 100 lb.');
   });
 
   it('weight and time says seconds as "45 s" (#8 Farmer\'s carry)', () => {
@@ -609,15 +668,27 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
   const ladder = (rung: number, rungs: RungWords[] = PULL_UP_RUNGS) => program({ kind: 'ladder', rung, rungs });
   const LADDER_RULE: Rule = { setCount: 3, repMin: 5, repMax: 8, increment: 0, incrementUnit: 'lb' };
 
-  it('a ladder names its rung and the next one', () => {
+  it("a ladder names its rung and the next one, in the sentence's own case (design gate #24)", () => {
     expect(line(ladder(4), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 5 of 6: Pull-up. Hit 8 on every set on a normal day and next time is Weighted pull-up at 3 × 5.',
+      'Rung 5 of 6: Pull-up. Hit 8 on every set on a normal day and next time is weighted pull-up, 3 × 5.',
     );
     expect(line(ladder(0), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set on a normal day and next time is Arch hang at 3 × 10 s.',
+      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set on a normal day and next time is arch hang, 3 × 10 s.',
     );
     expect(line(ladder(1), { ...LADDER_RULE, repMin: 10, repMax: 30 }, 'timed')).toBe(
-      'Rung 2 of 6: Arch hang. Hold 30 s on every set on a normal day and next time is Negative pull-up at 3 × 5.',
+      'Rung 2 of 6: Arch hang. Hold 30 s on every set on a normal day and next time is negative pull-up, 3 × 5.',
+    );
+    // The library's "Band assisted pull-up" reads as the compound it is; a proper name keeps its capital.
+    const ring = [
+      { name: 'Ring row', timed: false, repMin: 5, repMax: 8, weighted: false },
+      { name: 'Band assisted pull-up', timed: false, repMin: 5, repMax: 8, weighted: false },
+      { name: 'Bulgarian split squat', timed: false, repMin: 5, repMax: 8, weighted: false },
+    ];
+    expect(line(ladder(0, ring), LADDER_RULE, 'bodyweight_plus')).toBe(
+      'Rung 1 of 3: Ring row. Hit 8 on every set on a normal day and next time is band-assisted pull-up, 3 × 5.',
+    );
+    expect(line(ladder(1, ring), LADDER_RULE, 'bodyweight_plus')).toBe(
+      'Rung 2 of 3: Band-assisted pull-up. Hit 8 on every set on a normal day and next time is Bulgarian split squat, 3 × 5.',
     );
   });
 
@@ -669,9 +740,11 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
   it('runs follow the week (R620)', () => {
     const easy = program({ kind: 'weekly_seconds', weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } });
     const at = (seconds: number, sets = 1): Rule => ({ setCount: sets, repMin: seconds, repMax: seconds, increment: 0, incrementUnit: 'lb' });
-    expect(line(easy, at(1740), 'timed')).toBe('Week 3: 29:00. Adds 2:00 a week up to 40:00.');
+    // The clock and the suggested time say this week's target, so the line says what comes next (design gate #18).
+    expect(line(easy, at(1740), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week 31:00.');
     const lighter = { ...easy, week: 4, weekInfo: { week: 4, kind: 'lighter' as const, halfSets: true, holds: true, runShare: 0.6, note: '' } };
-    expect(line(lighter, at(1116), 'timed')).toBe("Week 4: 18:36. That's 60% on this lighter week. Adds 2:00 a week up to 40:00.");
+    expect(line(lighter, at(1116), 'timed')).toBe('60% of the time this lighter week. Adds 2:00 a week, up to 40:00. Next week 33:00.');
+    expect(line({ ...easy, week: 9 }, at(2400), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week 40:00 again.');
     const intervals = program({ kind: 'weekly_seconds', weekly: { kind: 'sets_then_seconds', startSets: 6, capSets: 8, seconds: 180, stepS: 15 } });
     expect(line(intervals, at(180, 8), 'timed')).toBe('Week 3: 8 × 3:00. Adds a set a week up to 8, then 15 s a set.');
     expect(line(program({ kind: 'weekly_seconds', weekly: { kind: 'fixed' } }), at(600), 'timed')).toBe('10:00, the same every week.');
@@ -866,5 +939,37 @@ describe('the finish words of a program slot (R613, R617, R618, R619, R622)', ()
     expect(addSetLine('Armor Building Complex', 6)).toBe('Armor Building Complex — next time 6 sets ↑');
     expect(secondsUpLine('Bike intervals', 35)).toBe('Bike intervals — next time 35 s a set ↑');
     expect(BEAT_TWICE).toBe('You beat your score twice in a row.');
+  });
+});
+
+describe('a program note in the session (design gate #17, #20, #24; ruling R-g4)', () => {
+  it('says loads in the session unit, rounded to 0.5 kg', () => {
+    expect(sessionNoteText('Weeks 1–2: empty bar to 75 lb', 'kg')).toBe('Weeks 1–2: empty bar to 34 kg');
+    expect(sessionNoteText('Weeks 1–2: empty bar to 75 lb', 'lb')).toBe('Weeks 1–2: empty bar to 75 lb');
+  });
+
+  it('says a minute or more as a clock, as the format line does', () => {
+    expect(sessionNoteText('Hard (about 5 km pace) with 120 s easy jog between', 'lb')).toBe('Hard (about 5 km pace) with 2:00 easy jog between');
+    expect(sessionNoteText('Finisher: 30 s hard / 90 s easy', 'lb')).toBe('Finisher: 30 s hard / 1:30 easy');
+  });
+
+  it('writes number ranges with an en dash, never a rep scheme', () => {
+    expect(sessionNoteText('Barbell back squat (top set). RPE 8-9; 3-5 min rest after', 'lb')).toBe('Barbell back squat (top set). RPE 8–9; 3–5 min rest after');
+    expect(sessionNoteText('Pause 1-2 s at the top', 'lb')).toBe('Pause 1–2 s at the top');
+    expect(sessionNoteText('21-15-9 for time', 'lb')).toBe('21-15-9 for time');
+  });
+});
+
+describe("a run slot's name (ruling R-g4, design gate #20)", () => {
+  it('names the easy runs either side of the work by what they are, and drops a note that only said so', () => {
+    expect(slotName('Easy run', 'Warm-up jog plus 4 strides')).toEqual({ name: 'Warm-up run', note: 'Warm-up jog plus 4 strides' });
+    expect(slotName('Easy run', 'Warm-up')).toEqual({ name: 'Warm-up run', note: null });
+    expect(slotName('Easy run', 'Cool-down')).toEqual({ name: 'Cool-down run', note: null });
+  });
+
+  it('leaves every other slot as it is', () => {
+    expect(slotName('Easy run', 'After lifting, or 3+ hours later')).toEqual({ name: 'Easy run', note: 'After lifting, or 3+ hours later' });
+    expect(slotName('Barbell back squat', 'Warm-up sets first')).toEqual({ name: 'Barbell back squat', note: 'Warm-up sets first' });
+    expect(slotName('Easy run', null)).toEqual({ name: 'Easy run', note: null });
   });
 });

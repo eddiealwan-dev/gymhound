@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { formatRest } from '../../domain/dates';
-import { beatTwice, beatTwiceForTime, missStreak } from '../../domain/programRules';
+import { beatTwice, beatTwiceForTime, missStreak, runTarget } from '../../domain/programRules';
 import {
   addSetLine,
   BEAT_TWICE,
@@ -11,6 +11,7 @@ import {
   resetWhy,
   rungName,
   secondsUpLine,
+  slotName,
   slotNoteText,
   weekLine,
   type NextTime,
@@ -21,7 +22,7 @@ import type { RepSchemeExtra } from '../../domain/labels';
 import { weekInfo as weekInfoFor } from '../../domain/programRules';
 import { restKindOf, type RestKind } from '../../domain/restKind';
 import type { Equipment, LoggingType, Pattern, WeightUnit } from '../../domain/types';
-import { convertIncrement } from '../../domain/units';
+import { convertIncrement, formatWeight } from '../../domain/units';
 import { programById } from '../../seed/programs.generated';
 import type { LadderRung, MetconRule, Program, ProgramSlot, ProgramWeek, RuleKind, WeekKind } from '../../seed/programTypes';
 import { exercises, routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
@@ -52,13 +53,17 @@ export function weekInfoOf(program: Program, week: number | null, kind: WeekKind
   );
 }
 
-/** The types whose first slot makes a lifting day: a load the warm-up's percentages are of (R645). */
-const LIFTED: readonly LoggingType[] = ['weighted', 'weighted_time', 'weighted_distance'];
+/**
+ * The type whose first slot makes a lifting day: weight and reps, a bar or dumbbell lift whose working weight the
+ * warm-up's percentages are of (R645). A carry or a loaded hold has none (ruling R-w2b).
+ */
+const LIFTED: readonly LoggingType[] = ['weighted'];
 
 /**
- * Whether a slot shows the warm-up line (R626, R645, ruling R-t2b): each lifting day's first slot, but not a run, a
- * metcon, a hold (#16's skill holds, a timed rung), a Mobility move, or a bodyweight or calisthenics movement (a
- * ladder, a pull-up), whose percentages have no working weight to be of.
+ * Whether a slot shows the warm-up line (R626, R645, rulings R-t2b, R-w2a, R-w2b): each lifting day's first slot when it
+ * is a weighted, non-ladder bar or dumbbell lift; not a carry, a loaded hold, a run, a metcon, a hold (#16's skill
+ * holds, a timed rung), a Mobility move, or a bodyweight or calisthenics movement (a ladder, a pull-up), whose
+ * percentages have no working weight to be of.
  */
 export function showsWarmUp(program: Program, slot: ProgramSlot, loggingType: LoggingType): boolean {
   if (!slot.warmUpLine || program.id === MOBILITY) return false;
@@ -130,6 +135,10 @@ export function programRuleOf(
   return {
     kind: a.ruleKind,
     carryUnit: carryUnit(slot),
+    ...(carryUnit(slot) !== null || a.exerciseId.includes('carry') || a.exerciseId.includes('sled')
+      ? { eventWord: a.exerciseId.startsWith('sled-') ? ('push' as const) : ('carry' as const) }
+      : {}),
+    ...(!slot.countsTowardVolume && /^EMOM\b/i.test(slot.note.trim()) ? { emom: true } : {}),
     sessionsToRaise: slot.sessionsToRaise,
     halved: a.ruleKind === 'load' && slot.halveAfterFirstMiss && rule !== null && rule.increment > 0 && rule.increment < full - 1e-9,
     missesBefore: misses,
@@ -276,16 +285,31 @@ export function changeRungToday(db: Db, workoutExerciseId: string, rung: number)
 }
 
 /** A metcon's score (R622): its first done set's rounds and extra reps, or its time. Null with none logged. */
-function scoreOf(db: Db, workoutExerciseId: string): { rounds: number; extraReps: number; seconds: number | null } | null {
+function scoreOf(
+  db: Db,
+  workoutExerciseId: string,
+): { rounds: number; extraReps: number; seconds: number | null; weight: number | null; weightUnit: WeightUnit | null } | null {
   const s = db
-    .select({ reps: sets.reps, extraReps: sets.extraReps, durationS: sets.durationS })
+    .select({ reps: sets.reps, extraReps: sets.extraReps, durationS: sets.durationS, weight: sets.weight, weightUnit: sets.weightUnit })
     .from(sets)
     .where(and(eq(sets.workoutExerciseId, workoutExerciseId), eq(sets.done, true)))
     .orderBy(asc(sets.position))
     .get();
   if (!s) return null;
-  return { rounds: s.reps ?? 0, extraReps: s.extraReps ?? 0, seconds: s.durationS };
+  return { rounds: s.reps ?? 0, extraReps: s.extraReps ?? 0, seconds: s.durationS, weight: s.weight, weightUnit: s.weightUnit };
 }
+
+/** A metcon's name on the finish summary: its format, the exercise's name before the moves ("AMRAP 12", "21-15-9"). */
+const metconShortName = (name: string): string => (name.includes(':') ? name.slice(0, name.indexOf(':')).trim() : name);
+
+/** An AMRAP's score in words: "5 rounds", "6 rounds + 4 reps", "1 round". */
+function roundsText(rounds: number, extraReps: number): string {
+  const r = `${rounds} ${rounds === 1 ? 'round' : 'rounds'}`;
+  return extraReps > 0 ? `${r} + ${extraReps} ${extraReps === 1 ? 'rep' : 'reps'}` : r;
+}
+
+/** What the finish summary says after a metcon not yet beaten twice: its rule, in the lift lines' plain words (gate #6). */
+const METCON_RULE = 'Beat it twice in a row to go heavier.';
 
 /** One line of the finish summary, with a muted why under it when it has one. */
 export type FinishRow = { workoutExerciseId: string; text: string; why: string | null };
@@ -300,7 +324,7 @@ const BEAT_TWICE_WHY = `${BEAT_TWICE} Go heavier or take the next scaling step.`
  */
 export function programFinishLines(
   db: Db,
-  workout: { id: string; routineId: string | null; startedAt: number; finishedAt: number | null },
+  workout: { id: string; routineId: string | null; startedAt: number; finishedAt: number | null; programWeek?: number | null },
   next: readonly NextTime[],
 ): FinishRow[] {
   const byId = new Map(next.map((n) => [n.workoutExerciseId, n]));
@@ -357,11 +381,23 @@ export function programFinishLines(
         loggingType === 'for_time'
           ? beatTwiceForTime(scores.flatMap((x) => (x.seconds === null ? [] : [x.seconds])))
           : beatTwice(scores.map((x) => ({ rounds: x.rounds, extraReps: x.extraReps })));
-      // The score, and why under it once it beat the last one twice in a row.
+      // The score with the load it was done at, then its rule; once it beat the last one twice in a row, why under it.
       if (now && (loggingType !== 'for_time' || now.seconds !== null)) {
-        const score = loggingType === 'for_time' ? formatRest(now.seconds ?? 0) : now.extraReps > 0 ? `${now.rounds} + ${now.extraReps}` : `${now.rounds}`;
-        push(`${name} — ${score}`, beat ? BEAT_TWICE_WHY : null);
+        const score = loggingType === 'for_time' ? formatRest(now.seconds ?? 0) : roundsText(now.rounds, now.extraReps);
+        const at = now.weight !== null && now.weightUnit !== null ? ` at ${formatWeight(now.weight, now.weightUnit)}` : '';
+        const line = `${metconShortName(name)} — ${score}${at}.`;
+        push(beat ? line : `${line} ${METCON_RULE}`, beat ? BEAT_TWICE_WHY : null);
       }
+      continue;
+    }
+    if (slot.ruleKind === 'weekly_seconds' && slot.weekly && slot.weekly.kind !== 'fixed' && workout.programWeek != null) {
+      // A run's next time follows the program week (R620): next week's target, as its rule line says it (gate #6).
+      const nextWeek = workout.programWeek + 1;
+      const share = weekInfoFor(program.weekPlan, program.weeks, nextWeek, null)?.runShare ?? 1;
+      const target = runTarget(slot.weekly, { sets: slot.sets, seconds: slot.repMin }, nextWeek, share);
+      const shown = slotName(slot.catalogName, slot.note).name;
+      const runName = shown !== slot.catalogName ? shown : name;
+      push(`${runName} — next time ${slot.weekly.kind === 'seconds' ? formatRest(target.seconds) : `${target.sets} × ${formatRest(target.seconds)}`}.`);
       continue;
     }
     plain();
@@ -370,7 +406,14 @@ export function programFinishLines(
 }
 
 /** A slot's sets and range for its next session, with its scheme words (§18.29). */
-export type SlotScheme = { setCount: number; repMin: number; repMax: number; schemeExtra?: RepSchemeExtra };
+export type SlotScheme = {
+  setCount: number;
+  repMin: number;
+  repMax: number;
+  schemeExtra?: RepSchemeExtra;
+  /** What the slot is called where that isn't its exercise's name: #20's "Warm-up run" and "Cool-down run" (`slotName`). */
+  name?: string;
+};
 
 /**
  * A program slot's sets and range for the next session (R617–R620), as `startWorkoutFromDay` will snapshot them: half on
@@ -407,9 +450,10 @@ export function slotScheme(
       slot.addSet?.then.kind === 'seconds' ? slotSessions(db, row.routineExerciseId, 0, row.exerciseId).filter((s) => s.outcome === 'raised').length : 0,
   });
   const unit = carryUnit(slot);
+  const named = slotName(slot.catalogName, slot.note);
   const extra: RepSchemeExtra = {
     ...(unit ? { distanceUnit: unit } : {}),
-    ...(slot.metcon ? { metcon: { format: slot.metcon.format, workMinutes: slot.metcon.workMinutes } } : {}),
+    ...(slot.metcon ? { metcon: { format: slot.metcon.format, workMinutes: slot.metcon.workMinutes, capMinutes: slot.metcon.capMinutes } } : {}),
     ...(slot.ruleKind === 'weekly_seconds' ? { clock: true } : {}),
   };
   return {
@@ -417,6 +461,7 @@ export function slotScheme(
     repMin: snapshot.repMin,
     repMax: snapshot.repMax,
     ...(Object.keys(extra).length > 0 ? { schemeExtra: extra } : {}),
+    ...(named.name !== slot.catalogName ? { name: named.name } : {}),
   };
 }
 

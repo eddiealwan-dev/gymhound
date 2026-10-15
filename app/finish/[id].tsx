@@ -65,11 +65,20 @@ function readSummary(db: Db, id: string) {
   }
 }
 
+/** What LOGGED says: the sets, and a metcon's score counted as a score, not a set (design gate #6): "12 sets · 1 score". */
+function loggedParts(setCount: number, scoreCount: number): string[] {
+  const sets = setCount - scoreCount;
+  const parts = [sets > 0 || scoreCount === 0 ? `${sets} ${sets === 1 ? 'set' : 'sets'}` : null, scoreCount > 0 ? `${scoreCount} ${scoreCount === 1 ? 'score' : 'scores'}` : null];
+  return parts.filter((p): p is string => p !== null);
+}
+const loggedText = (setCount: number, scoreCount: number) => loggedParts(setCount, scoreCount).join(' · ');
+const loggedSpoken = (setCount: number, scoreCount: number) => loggedParts(setCount, scoreCount).join(' and ');
+
 /** One big figure with a small caption above it. */
-function Figure({ caption, value, label }: { caption: string; value: string; label: string }) {
+function Figure({ caption, value, label, spoken }: { caption: string; value: string; label: string; spoken?: string }) {
   const { colors } = useTheme();
   return (
-    <View style={{ paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border }} accessible accessibilityLabel={`${label} ${value}`}>
+    <View style={{ paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border }} accessible accessibilityLabel={`${label} ${spoken ?? value}`}>
       <Label accessibilityRole="none">{caption}</Label>
       <Num weight={700} style={{ fontSize: 44, lineHeight: 52 }}>
         {value}
@@ -116,12 +125,9 @@ export default function FinishSummary() {
                   {summary.name}
                 </Display>
                 <Figure caption="Duration" label="Duration" value={formatElapsed(summary.durationMs)} />
-                <Figure caption="Volume" label="Volume" value={formatVolume(summary.volume, unit, deviceLocale())} />
-                <Figure
-                  caption="Logged"
-                  label="Sets logged"
-                  value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
-                />
+                {/* A run or metcon day lifts nothing: no VOLUME of 0 (design gate #6). */}
+                {summary.volume > 0 ? <Figure caption="Volume" label="Volume" value={formatVolume(summary.volume, unit, deviceLocale())} /> : null}
+                <Figure caption="Logged" label="Logged" value={loggedText(summary.setCount, summary.scoreCount ?? 0)} spoken={loggedSpoken(summary.setCount, summary.scoreCount ?? 0)} />
                 {lines.length > 0 && (
                   <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
                     {lines.map((line, i) => (

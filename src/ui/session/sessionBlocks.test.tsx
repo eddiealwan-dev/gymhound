@@ -8,6 +8,7 @@ import { startTimer, type WorkTimer } from '../../domain/workClock';
 import type { MetconRule } from '../../seed/programTypes';
 import { Button } from '../Button';
 import { ExerciseBlock } from './ExerciseBlock';
+import { cellStyle } from './SetRow';
 import { RestInline } from './RestInline';
 import { WorkClock } from './WorkClock';
 
@@ -134,7 +135,7 @@ const franEx = () =>
 const run = () =>
   exercise(
     { exerciseId: 'easy-run', name: 'Easy run', loggingType: 'timed', equipment: 'other', rule: { setCount: 1, repMin: 1740, repMax: 1740, increment: 0, incrementUnit: 'lb' } },
-    { rule: { kind: 'weekly_seconds', weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } }, restKind: 'none', countsTowardVolume: false, catalogName: 'Easy run' },
+    { rule: { kind: 'weekly_seconds', week: 3, weekly: { kind: 'seconds', startS: 1500, stepS: 120, capS: 2400 } }, restKind: 'none', countsTowardVolume: false, catalogName: 'Easy run' },
   );
 
 const intervals = () =>
@@ -168,7 +169,20 @@ const yoke = () =>
       plannedUnit: 'lb',
       previous: [{ ...set('p', 0), weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: 22 }],
     },
-    { rule: { kind: 'load', carryUnit: 'ft' }, catalogName: 'Yoke carry', restKind: 'heavy' },
+    { rule: { kind: 'load', carryUnit: 'ft', eventWord: 'carry' }, catalogName: 'Yoke carry', restKind: 'heavy' },
+  );
+
+const sled = () =>
+  exercise(
+    {
+      exerciseId: 'sled-push-distance',
+      name: 'Sled push',
+      loggingType: 'weighted_distance',
+      equipment: 'other',
+      rule: { setCount: 4, repMin: 40, repMax: 40, increment: 20, incrementUnit: 'lb' },
+      previous: [],
+    },
+    { rule: { kind: 'load', carryUnit: 'yd', eventWord: 'push' }, catalogName: 'Sled push', restKind: 'heavy' },
   );
 
 const snatch = () =>
@@ -177,14 +191,14 @@ const snatch = () =>
     { rule: { kind: 'manual', manualText: 'Technique work, add weight when every rep is crisp' }, countsTowardVolume: false, note: 'EMOM 10: 2 reps every minute', catalogName: 'Power snatch (technique)' },
   );
 
-function mount(ex: WorkoutExerciseView, workTimer: WorkTimer | null = null, clockBusy = false): ReactTestRenderer {
+function mount(ex: WorkoutExerciseView, workTimer: WorkTimer | null = null, clockBusy = false, unit: 'lb' | 'kg' = 'lb'): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(
       <ExerciseBlock
         workoutId="w1"
         ex={ex}
-        unit="lb"
+        unit={unit}
         gear={{ bar: 45, plates: { '45': 4 } }}
         distanceUnit="mi"
         onOpenMenu={() => {}}
@@ -253,7 +267,7 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
 
   it('scores in one row with no SET chip, suggesting nothing, with last time beside it', () => {
     const tree = mount(metconA({ previous: [{ ...set('p', 0), reps: 6, extraReps: 4 }] }));
-    expect(headers(tree)).toEqual(['PREVIOUS', 'ROUNDS', '+REPS', '✓']);
+    expect(headers(tree)).toEqual(['PREVIOUS', 'LB', 'ROUNDS', '+REPS', '✓']);
     expect(shownText(tree)).toContain('6 + 4');
     expect(field(tree, 'Score rounds').props.placeholder).toBe('');
     expect(field(tree, 'Score extra reps').props.placeholder).toBe('');
@@ -268,22 +282,54 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
     expect(clock(tree)).toHaveLength(0);
   });
 
-  it('says For Time with its cap, and shows the full name where the list cannot say it all', () => {
-    const tree = mount(franEx());
+  it('says its rep scheme and cap in the format line, the scheme beside each move and the load in the session unit (design gate #2)', () => {
+    const tree = mount(franEx(), null, false, 'kg');
     const shown = shownText(tree);
     expect(shown).toContain('Metcon');
-    expect(shown).toContain('For Time · 8 min cap');
-    expect(shown).toContain('21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)');
+    expect(shown).toContain('21-15-9 for time · 8 min cap');
+    expect(shown.filter((s) => s === '21-15-9')).toHaveLength(2);
+    expect(shown).toEqual(expect.arrayContaining(['Thrusters', '43 / 29.5 kg', 'Pull-ups (scaled as needed)']));
+    // The name is not repeated under the format line.
+    expect(shown.some((s) => s.includes('thrusters (95/65 lb)'))).toBe(false);
     expect(shown).toContain('7:42');
     expect(field(tree, 'Score time').props.placeholder).toBe('');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'for_time', steps: [{ seconds: 480 }] });
   });
 });
 
+describe('the score row lines up with the set rows (design gate #14, #16)', () => {
+  it("gives PREVIOUS the SET chip's room, so the fields keep the set rows' width and right edge", () => {
+    expect(cellStyle('previous', true)).toMatchObject({ flexBasis: 36, flexGrow: 1.5, flexShrink: 1, minWidth: 0 });
+    expect(cellStyle('previous', false)).toMatchObject({ flex: 1.5, minWidth: 0 });
+    const tree = mount(metconA());
+    const cells = tree.root.findAll((n) => n.type === View && StyleSheet.flatten(n.props.style)?.flexBasis === 36);
+    // The header's PREVIOUS and the score row's.
+    expect(cells).toHaveLength(2);
+  });
+
+  it('shows a faint dash under PREVIOUS on a first day, not a hole', () => {
+    const tree = mount(metconA());
+    const dash = tree.root.findAll((n) => n.type === Text && n.props.children === '–');
+    expect(dash).toHaveLength(1);
+    expect(StyleSheet.flatten(dash[0].props.style)).toMatchObject({ color: '#6d675c' });
+  });
+
+  it("draws an event's empty optional time as a suggestion, and a ticked one with no time as a bare dash", () => {
+    const open = field(mount(exercise({ ...yoke(), previous: [] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' })), 'Set 1 time, optional');
+    expect(open.props.placeholder).toBe('–');
+    expect(StyleSheet.flatten(open.props.style)).toMatchObject({ borderStyle: 'dashed' });
+    const done = exercise({ ...yoke(), previous: [], sets: [set('s1', 0, { done: true, weight: 335, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', completedAt: 5 })] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' });
+    const ticked = field(mount(done), 'Set 1 time, optional');
+    expect(ticked.props.placeholder).toBe('–');
+    expect(StyleSheet.flatten(ticked.props.style)).toMatchObject({ borderWidth: 0, backgroundColor: 'transparent' });
+  });
+});
+
 describe('a run is a timed effort with its own block', () => {
-  it("reads as the run and the week's target, with the clock and one row that suggests the target", () => {
+  it("says the week's target once, on the clock and in the suggested time, with the rule saying what comes next (design gate #18)", () => {
     const tree = mount(run());
-    expect(shownText(tree)).toContain('Run 29:00');
+    expect(shownText(tree)).not.toContain('Run 29:00');
+    expect(shownText(tree)).toContain('Adds 2:00 a week, up to 40:00. Next week 31:00.');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'run', steps: [{ seconds: 1740 }] });
     expect(headers(tree)).toEqual(['PREVIOUS', 'TIME', '✓']);
     expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
@@ -294,7 +340,6 @@ describe('a run is a timed effort with its own block', () => {
   it("reads its target from one field, as its rule line and clock do, when the range's ends differ", () => {
     const base = run();
     const tree = mount({ ...base, rule: { ...base.rule!, repMin: 1740, repMax: 1800 } });
-    expect(shownText(tree)).toContain('Run 29:00');
     expect(clock(tree)[0].props.plan).toMatchObject({ steps: [{ seconds: 1740 }] });
     expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
   });
@@ -313,11 +358,13 @@ describe('a run is a timed effort with its own block', () => {
 describe('an event reads as an event', () => {
   it('heads distance with its unit, shows last time as load × distance, and ticks drop-free', () => {
     const tree = mount(yoke());
-    expect(headers(tree)).toEqual(['SET', 'PREVIOUS', 'LB', 'FT', 'TIME', '✓']);
-    expect(shownText(tree)).toContain('315 × 50');
+    expect(headers(tree)).toEqual(['SET', 'LAST', 'LB', 'FT', 'TIME', '✓']);
+    expect(shownText(tree)).toContain('315 × 50');
     expect(labels(tree)).toContain('Previous 315 pounds for 50 feet in 22 seconds');
     expect(labels(tree)).toContain('Set 1 carried drop-free');
-    expect(shownText(tree).some((s) => s.endsWith('A drop ends the set: log what you carried unbroken.'))).toBe(true);
+    expect(shownText(tree)).toContain(
+      'If every carry covers 50 ft unbroken on a normal day, add 20 lb. A marked day holds the weight. A drop ends the set: log what you carried unbroken. Cover 50 ft unbroken on every carry on a normal day and next time is 355 lb.',
+    );
     expect(buttons(tree)).toEqual(expect.arrayContaining(['+ Set', '+ Warmup']));
     expect(clock(tree)).toHaveLength(0);
   });
@@ -332,13 +379,37 @@ describe('an event reads as an event', () => {
   });
 });
 
+describe('a sled push', () => {
+  it('is a push: a stop ends the set, and the tick says so', () => {
+    const tree = mount(sled());
+    expect(shownText(tree).some((t) => t.includes('If every push covers 40 yd unbroken on a normal day') && t.includes('A stop ends the set: log what you pushed unbroken.'))).toBe(true);
+    expect(labels(tree)).toContain('Set 1 pushed without a stop');
+  });
+});
+
 describe('technique sets', () => {
-  it('say they are not counted, with an EMOM clock when the note starts EMOM', () => {
+  it('say what is not counted, with an EMOM clock when the note starts EMOM', () => {
     const tree = mount(snatch());
-    expect(shownText(tree)).toContain('Technique · not counted');
+    expect(shownText(tree)).toContain('Technique set: not counted toward weekly volume.');
+    expect(shownText(tree)).not.toContain('Technique · not counted');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'emom' });
     expect(clock(tree)[0].props.plan.steps).toHaveLength(10);
     expect(headers(tree)[0]).toBe('SET');
+  });
+
+  it('lead an EMOM with its format line, then the rule, then the technique line, the note not repeated (design gate #3, #4)', () => {
+    const emom = exercise(
+      { exerciseId: 'fedb-snatch', name: 'Snatch', rule: { setCount: 10, repMin: 2, repMax: 2, increment: 5, incrementUnit: 'lb' }, plannedWeight: 95, plannedUnit: 'lb', equipment: 'barbell', sets: [0, 1, 2].map((i) => set(`n${i}`, i)) },
+      { rule: { kind: 'load', emom: true }, countsTowardVolume: false, note: 'EMOM 10: 2 reps every minute', catalogName: 'Snatch' },
+    );
+    const shown = shownText(mount(emom));
+    const format = shown.indexOf('EMOM 10 min · 2 reps every minute');
+    const rule = shown.findIndex((t) => t.startsWith('Make every minute clean on a normal day and next time adds 5 lb.') && t.includes('A marked day holds the weight.'));
+    const technique = shown.indexOf('Technique set: not counted toward weekly volume.');
+    expect(format).toBeGreaterThan(-1);
+    expect(rule).toBeGreaterThan(format);
+    expect(technique).toBeGreaterThan(rule);
+    expect(shown).not.toContain('EMOM 10: 2 reps every minute');
   });
 });
 
@@ -350,6 +421,60 @@ describe('your own routines keep their set rows', () => {
     expect(buttons(tree)).toEqual(expect.arrayContaining(['+ Set', '+ Warmup']));
     expect(labels(tree)).toContain('Set 1 done');
     expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+});
+
+describe("a program note and name in the session (design gate #17, #20; ruling R-g4)", () => {
+  it('says the note in the session unit, with a minute or more as a clock and ranges with an en dash', () => {
+    const squat = exercise({}, { note: 'Weeks 1–2: empty bar to 75 lb. RPE 8-9' });
+    expect(shownText(mount(squat, null, false, 'kg'))).toContain('Weeks 1–2: empty bar to 34 kg. RPE 8–9');
+    expect(shownText(mount(intervals()))).toContain('Hard (about 5 km pace) with 2:00 easy jog between');
+  });
+
+  it("calls #20's cool-down easy run the Cool-down run, without a note that only said so", () => {
+    const base = run();
+    const cool = { ...base, rule: { ...base.rule!, repMin: 600, repMax: 600 }, program: { ...base.program!, note: 'Cool-down' } };
+    const tree = mount(cool);
+    expect(shownText(tree)).toContain('Cool-down run');
+    expect(shownText(tree)).not.toContain('Cool-down');
+    expect(labels(tree)).toContain('Show form for Cool-down run');
+  });
+});
+
+describe("a metcon logs the load of its main weighted move (ruling R-g3)", () => {
+  it('has an optional weight field in the score row, named for the move, in the session unit', () => {
+    const tree = mount(franEx(), null, false, 'kg');
+    expect(headers(tree)).toEqual(['PREVIOUS', 'KG', 'TIME', '✓']);
+    const load = field(tree, 'Thrusters weight, kilograms, optional');
+    expect(load.props.placeholder).toBe('–');
+  });
+
+  it("suggests last time's load", () => {
+    const ex = franEx();
+    const tree = mount({ ...ex, previous: [{ ...ex.previous[0], weight: 43, weightUnit: 'kg' }] }, null, false, 'kg');
+    expect(field(tree, 'Thrusters weight, kilograms, optional').props.placeholder).toBe('43');
+    expect(shownText(tree)).toContain('Beat your score twice in a row, then go heavier or take the next scaling step. Last time: 7:42 at 43 kg.');
+  });
+
+  it('has none when no move takes a load', () => {
+    const cindy: MetconRule = { format: 'AMRAP', workMinutes: 15, elements: ['Pull-up (scaled as needed)', 'Push-up', 'Air squat'], capMinutes: null };
+    const ex = exercise(
+      { exerciseId: 'metcon-amrap-15-cindy-scaled', name: 'AMRAP 15', loggingType: 'rounds', equipment: 'other' },
+      { rule: { kind: 'metcon' }, metcon: cindy, catalogName: 'Metcon C · AMRAP 15 min: 5 pull-ups (scaled), 10 push-ups, 15 air squats', restKind: 'none' },
+    );
+    expect(headers(mount(ex))).toEqual(['PREVIOUS', 'ROUNDS', '+REPS', '✓']);
+  });
+});
+
+describe('a metcon whose name gives no amounts', () => {
+  it('shows the full name as its format line and no list, never an empty amount column', () => {
+    const odd = exercise(
+      { exerciseId: 'metcon-amrap-10-squat-pushup-run', name: 'AMRAP 10', loggingType: 'rounds', equipment: 'other' },
+      { rule: { kind: 'metcon' }, metcon: amrap, catalogName: 'Metcon · AMRAP 10: goblet squat, push-up, run', restKind: 'none' },
+    );
+    const tree = mount(odd);
+    expect(shownText(tree)).toContain('AMRAP 10: goblet squat, push-up, run');
+    expect(tree.root.findAll((n) => n.type === View && n.props.testID === 'metcon-move')).toHaveLength(0);
   });
 });
 

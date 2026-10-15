@@ -58,7 +58,7 @@ describe('Up next for a program', () => {
     const program = insertProgram(db, 'program-crossfit-foundations');
     setActiveProgram(db, program.id, NOW);
     const metcon = getUpNext(db)!.exercises.find((e) => e.loggingType === 'rounds')!;
-    expect(metcon.schemeExtra).toEqual({ metcon: { format: 'AMRAP', workMinutes: 10 } });
+    expect(metcon.schemeExtra).toEqual({ metcon: { format: 'AMRAP', workMinutes: 10, capMinutes: null } });
   });
 
   describe('the reactive deload (R627)', () => {

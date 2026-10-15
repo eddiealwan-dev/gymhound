@@ -1,5 +1,5 @@
 import type { MetconRule, RuleKind } from '../seed/programTypes';
-import { buildRows, hintText, rowFieldVoiceLabel, rowTickLabel, tableColumns, type ExerciseInput, type SetInput } from './setTable';
+import { buildRows, hintText, rowFieldVoiceLabel, rowTickLabel, tableColumns, valueText, type ExerciseInput, type SetInput } from './setTable';
 import {
   blockColumns,
   blockKindOf,
@@ -8,11 +8,11 @@ import {
   easySecondsOf,
   emomMinutesOf,
   intervalFormat,
+  metconLoadMove,
   metconParts,
   metconRuleLine,
   metconTitle,
   metconVoice,
-  runFormat,
   TECHNIQUE_LINE,
   workPlanFor,
   type BlockInput,
@@ -58,7 +58,7 @@ describe('blockKindOf', () => {
   });
 });
 
-describe('metconParts (R-t7b2)', () => {
+describe('metconParts (R-t7b2, design gate #2)', () => {
   it("takes the format and the moves from the structured rule, the amounts and the program's words from the name where they match", () => {
     expect(metconParts(amrap, 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run')).toEqual({
       format: 'AMRAP 10 min',
@@ -67,7 +67,6 @@ describe('metconParts (R-t7b2)', () => {
         { amount: '10', name: 'Push-ups (scaled)', load: null },
         { amount: '200 m', name: 'Run', load: null },
       ],
-      subtitle: null,
     });
   });
 
@@ -80,42 +79,46 @@ describe('metconParts (R-t7b2)', () => {
     ]);
   });
 
-  it('says the cap, takes a load from the name, and shows the full name when the list cannot say it all', () => {
-    expect(metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)')).toEqual({
-      format: 'For Time · 8 min cap',
+  it('puts a rep scheme in the format line and beside every move, and the load in the session unit', () => {
+    const name = 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)';
+    expect(metconParts(fran, name, 'kg')).toEqual({
+      format: '21-15-9 for time · 8 min cap',
       elements: [
-        { amount: null, name: 'Thrusters', load: '95/65 lb' },
-        { amount: null, name: 'Pull-ups (scaled as needed)', load: null },
+        { amount: '21-15-9', name: 'Thrusters', load: '43 / 29.5 kg' },
+        { amount: '21-15-9', name: 'Pull-ups (scaled as needed)', load: null },
       ],
-      subtitle: '21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)',
     });
+    expect(metconParts(fran, name, 'lb').elements[0].load).toBe('95 / 65 lb');
   });
 
-  it('shows the full name for rounds for time, whose rounds the rule does not hold', () => {
+  it('puts the rounds in the format line, with no repeat of the name', () => {
     const rule: MetconRule = { format: 'For Time', workMinutes: 10, elements: ['Row (erg)', 'Thruster', 'Ring row'], capMinutes: 12 };
-    const parts = metconParts(rule, 'Metcon B · 3 rounds for time: 200 m row, 10 thrusters, 10 ring rows (cap 12 min)');
-    expect(parts.elements.map((e) => e.amount)).toEqual(['200 m', '10', '10']);
-    expect(parts.subtitle).toBe('3 rounds for time: 200 m row, 10 thrusters, 10 ring rows (cap 12 min)');
+    expect(metconParts(rule, 'Metcon B · 3 rounds for time: 200 m row, 10 thrusters, 10 ring rows (cap 12 min)')).toEqual({
+      format: '3 rounds for time · 12 min cap',
+      elements: [
+        { amount: '200 m', name: 'Row (erg)', load: null },
+        { amount: '10', name: 'Thrusters', load: null },
+        { amount: '10', name: 'Ring rows', load: null },
+      ],
+    });
+    const five: MetconRule = { format: 'For Time', workMinutes: 12, elements: ['Dumbbell snatch', 'Chest-to-bar pull-up'], capMinutes: 15 };
+    const parts = metconParts(five, 'Metcon · 5 rounds for time: 12 dumbbell snatches (alternating), 10 chest-to-bar pull-ups (cap 15 min)');
+    expect(parts.format).toBe('5 rounds for time · 15 min cap');
+    expect(parts.elements.map((e) => `${e.amount} ${e.name}`)).toEqual(['12 Dumbbell snatches (alternating)', '10 Chest-to-bar pull-ups']);
   });
 
-  it('shows a move bare when the name has nothing for it', () => {
-    const parts = metconParts(amrap, 'AMRAP 10: goblet squat, push-up, run');
-    expect(parts.elements[0]).toEqual({ amount: null, name: 'Goblet squat', load: null });
-    expect(parts.subtitle).toBe('AMRAP 10: goblet squat, push-up, run');
+  it('shows the full name as the format line and no list when it cannot find the amounts, never an empty column', () => {
+    expect(metconParts(amrap, 'AMRAP 10: goblet squat, push-up, run')).toEqual({ format: 'AMRAP 10: goblet squat, push-up, run', elements: [] });
   });
 
-  it('says For Time alone with no cap', () => {
-    expect(metconParts({ ...fran, capMinutes: null }, '').format).toBe('For Time');
+  it('says For Time alone with no cap, and lists the moves bare with no name to read', () => {
+    const parts = metconParts({ ...fran, capMinutes: null }, '');
+    expect(parts.format).toBe('For Time');
+    expect(parts.elements.map((e) => e.amount)).toEqual([null, null]);
   });
 });
 
 describe('the format lines and what the notes say', () => {
-  it('names a run by its target, and a walk, a ride or a row by its own word', () => {
-    expect(runFormat('easy-run', 1740)).toBe('Run 29:00');
-    expect(runFormat('long-run', 3600)).toBe('Run 60:00');
-    expect(runFormat('incline-treadmill-walk', 900)).toBe('Walk 15:00');
-  });
-
   it('writes intervals as sets × hard / easy, leaving out an easy part it does not know', () => {
     expect(intervalFormat(6, 180, 120)).toBe('6 × 3:00 hard / 2:00 easy');
     expect(intervalFormat(8, 20, 100)).toBe('8 × 0:20 hard / 1:40 easy');
@@ -136,7 +139,7 @@ describe('the format lines and what the notes say', () => {
   });
 
   it('marks technique sets in the words the owner chose', () => {
-    expect(TECHNIQUE_LINE).toBe('Technique · not counted');
+    expect(TECHNIQUE_LINE).toBe('Technique set: not counted toward weekly volume.');
   });
 });
 
@@ -267,12 +270,36 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
       previous: [{ ...sv('p'), weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: 22 }],
     });
     const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
-    expect(row.previous).toBe('315 × 50');
+    expect(row.previous).toBe('315 × 50');
     expect(row.previousLabel).toBe('315 pounds for 50 feet in 22 seconds');
     expect(rowTickLabel(row)).toBe('Set 1 carried drop-free');
     expect(row.optional).toEqual(['durationS']);
     expect(rowFieldVoiceLabel(row, 'durationS', 'TIME', 'lb', 'mi')).toBe('Set 1 time, optional');
     expect(rowFieldVoiceLabel(row, 'distance', 'FT', 'lb', 'ft')).toBe('Set 1 distance, feet');
+  });
+
+  it('says every score and run time as a clock, under a minute too (design gate #15)', () => {
+    const score = blockRows('metcon', buildRows(input({ loggingType: 'for_time', sets: [sv('s1', { durationS: 13 })] }), 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(valueText(score[0], 'durationS', 'lb', 'mi')).toBe('0:13');
+    const ex = input({ loggingType: 'timed', sets: [sv('s1', { durationS: 40 })], previous: [{ ...sv('p'), durationS: 8 }] });
+    const [run] = blockRows('run', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb', targetS: 1740 });
+    expect(run.previous).toBe('0:08');
+    expect(valueText(run, 'durationS', 'lb', 'mi')).toBe('0:40');
+    const intervals = blockRows('intervals', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb', targetS: 20 });
+    expect(intervals[0].previous).toBe('0:08');
+    expect(hintText({ ...intervals[0], set: { ...intervals[0].set, durationS: null } }, 'durationS')).toBe('0:20');
+    // A plank in your own routine keeps "40".
+    const plank = buildRows(ex, 'lb', gear, 'mi');
+    expect(valueText(plank[0], 'durationS', 'lb', 'mi')).toBe('40');
+  });
+
+  it("breaks an event's last time before the ×, so it wraps as \"140\" over \"× 50\" (design gate #11)", () => {
+    const ex = input({
+      loggingType: 'weighted_distance',
+      slotDistanceUnit: 'ft',
+      previous: [{ ...sv('p'), weight: 140, weightUnit: 'lb', distance: 50, distanceUnit: 'ft' }],
+    });
+    expect(blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' })[0].previous).toBe('140 × 50');
   });
 
   it("keeps a unit that isn't the one shown", () => {
@@ -282,7 +309,7 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
       previous: [{ ...sv('p'), weight: 140, weightUnit: 'kg', distance: 20, distanceUnit: 'm' }],
     });
     const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
-    expect(row.previous).toBe('140 kg × 20 m');
+    expect(row.previous).toBe('140 kg × 20 m');
     expect(row.previousLabel).toBe('140 kilograms for 20 metres');
   });
 
@@ -295,6 +322,47 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
   });
 });
 
+describe("a metcon's load (ruling R-g3)", () => {
+  const gear = { bar: 45, plates: { '45': 4 } };
+  const scoreSet: SetInput = { id: 's1', position: 0, setType: 'working', weight: null, weightUnit: null, reps: null, durationS: null, distance: null, distanceUnit: null, rpe: null, done: false };
+  const ex = (previous: ExerciseInput['previous']): ExerciseInput => ({
+    loggingType: 'for_time',
+    equipment: 'other',
+    rule: null,
+    plannedWeight: null,
+    plannedUnit: null,
+    overrideWeight: null,
+    overrideUnit: null,
+    sets: [scoreSet],
+    previous,
+  });
+
+  it('finds the main weighted move: the first that takes a load', () => {
+    expect(metconLoadMove(amrap)).toBe(0);
+    expect(metconLoadMove(fran)).toBe(0);
+    expect(metconLoadMove({ ...amrap, elements: ['Run', 'Wall ball', 'Burpee'] })).toBe(1);
+    expect(metconLoadMove({ ...amrap, elements: ['Dumbbell snatch', 'Chest-to-bar pull-up'] })).toBe(0);
+    expect(metconLoadMove({ ...amrap, elements: ['Pull-up (scaled as needed)', 'Push-up', 'Air squat'] })).toBeNull();
+  });
+
+  it('adds an optional weight column before the score, headed by the unit', () => {
+    const c = blockColumns('metcon', tableColumns('for_time', 'kg', false), 'ft', 'kg');
+    expect(c.map((x) => x.header)).toEqual(['PREVIOUS', 'KG', 'TIME', '✓']);
+    expect(blockColumns('metcon', tableColumns('rounds', 'kg', false), 'ft', 'kg').map((x) => x.key)).toEqual(['previous', 'weight', 'reps', 'extraReps', 'tick']);
+    expect(blockColumns('metcon', tableColumns('rounds', 'kg', false), 'ft').map((x) => x.key)).toEqual(['previous', 'reps', 'extraReps', 'tick']);
+  });
+
+  it("suggests last time's load, may stay empty, and is named for its move", () => {
+    const [row] = blockRows('metcon', buildRows(ex([{ ...scoreSet, durationS: 462, weight: 95, weightUnit: 'lb' }]), 'kg', gear, 'mi'), { unit: 'kg', loadName: 'Thrusters' });
+    expect(hintText(row, 'weight')).toBe('43');
+    expect(hintText(row, 'durationS')).toBe('');
+    expect(row.optional).toEqual(['weight']);
+    expect(rowFieldVoiceLabel(row, 'weight', 'KG', 'kg', 'mi')).toBe('Thrusters weight, kilograms, optional');
+    const [fresh] = blockRows('metcon', buildRows(ex([]), 'kg', gear, 'mi'), { unit: 'kg', loadName: 'Thrusters' });
+    expect(hintText(fresh, 'weight')).toBe('');
+  });
+});
+
 describe('blockColumns', () => {
   const cols = (loggingType: Parameters<typeof tableColumns>[0]) => tableColumns(loggingType, 'lb', false);
   const keys = (c: { key: string }[]) => c.map((x) => x.key);
@@ -304,8 +372,8 @@ describe('blockColumns', () => {
     expect(keys(blockColumns('run', cols('timed'), 'ft'))).toEqual(['previous', 'durationS', 'tick']);
   });
 
-  it("heads an event's distance with its unit", () => {
-    expect(blockColumns('event', cols('weighted_distance'), 'yd').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'LB', 'YD', 'TIME', '✓']);
+  it("heads an event's distance with its unit, and its previous LAST, which fits beside three inputs at 320 (design gate #11)", () => {
+    expect(blockColumns('event', cols('weighted_distance'), 'yd').map((c) => c.header)).toEqual(['SET', 'LAST', 'LB', 'YD', 'TIME', '✓']);
   });
 
   it('keeps the columns of intervals, technique and plain sets', () => {
@@ -326,8 +394,8 @@ describe("a metcon's words", () => {
   it('says the format and every move as one sentence', () => {
     const parts = metconParts(amrap, 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run');
     expect(metconVoice(parts)).toBe('AMRAP 10 minutes: 10 Goblet squats, 10 Push-ups (scaled), 200 metres Run.');
-    const fr = metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)');
-    expect(metconVoice(fr)).toBe('For Time, 8 minute cap: Thrusters, 95 or 65 pounds, Pull-ups (scaled as needed).');
+    const fr = metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)', 'kg');
+    expect(metconVoice(fr)).toBe('21-15-9 for time, 8 minute cap: 21-15-9 Thrusters, 43 or 29.5 kilograms, 21-15-9 Pull-ups (scaled as needed).');
     const row: MetconRule = { format: 'AMRAP', workMinutes: 12, elements: ['Row (erg)'], capMinutes: null };
     expect(metconVoice(metconParts(row, 'Metcon · AMRAP 12 min: 12-cal row'))).toBe('AMRAP 12 minutes: 12 calories Row (erg).');
   });

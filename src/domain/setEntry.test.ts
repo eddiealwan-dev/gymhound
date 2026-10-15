@@ -633,14 +633,20 @@ describe('the three program logging types (R607)', () => {
       });
     });
 
-    it('a For Time score needs a time, and keeps nothing else', () => {
+    it('a For Time score needs a time, and keeps the load of its main move when there is one (ruling R-g3)', () => {
       expect(resolveTick({ loggingType: 'for_time', entered: none, target: null, placeholders: none })).toBeNull();
-      expect(resolveTick({ loggingType: 'for_time', entered: { ...none, weight: 95, durationS: 462 }, target: 95, placeholders: none })).toEqual({
-        weight: null,
+      expect(resolveTick({ loggingType: 'for_time', entered: { ...none, weight: 43, durationS: 462 }, target: null, placeholders: none })).toEqual({
+        weight: 43,
         reps: null,
         durationS: 462,
         distance: null,
       });
+      expect(resolveTick({ loggingType: 'for_time', entered: { ...none, durationS: 462 }, target: null, placeholders: none })?.weight).toBeNull();
+    });
+
+    it("an AMRAP score keeps the load typed, else last time's suggested, else none (ruling R-g3)", () => {
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6, weight: 16 }, target: null, placeholders: none })).toMatchObject({ reps: 6, weight: 16 });
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6 }, target: null, placeholders: { ...none, weight: 16 } })).toMatchObject({ weight: 16 });
     });
   });
 

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { eq } from 'drizzle-orm';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import RoutineDetailScreen from '../../../app/(tabs)/routines/[id]';
@@ -90,6 +90,19 @@ describe('the active program under its card (R634, R616, R636)', () => {
     expect(shown.indexOf('Week 1 of 12')).toBeLessThan(shown.indexOf('Barbell back squat'));
   });
 
+  it("names #20's easy runs by their role, and a metcon's column by its minutes or cap (design gate #19, #20)", () => {
+    mockPro = true;
+    insertProgram(mockDb, 'program-hybrid-athlete');
+    setActiveProgram(mockDb, 'program-hybrid-athlete', NOW);
+    const runs = texts(mount('program-hybrid-athlete'));
+    expect(runs).toEqual(expect.arrayContaining(['Warm-up run', 'Cool-down run']));
+    insertProgram(mockDb, 'program-crossfit-performance');
+    setActiveProgram(mockDb, 'program-crossfit-performance', NOW);
+    const metcons = texts(mount('program-crossfit-performance'));
+    expect(metcons).toEqual(expect.arrayContaining(['12 min', '8 min cap']));
+    expect(metcons).not.toContain('For Time');
+  });
+
   it("an inactive program's card names no exercise, in its text or its labels", () => {
     insertProgram(mockDb, BF);
     insertProgram(mockDb, 'program-dumbbell-full-body');
@@ -112,6 +125,25 @@ describe('the active program under its card (R634, R616, R636)', () => {
     const routine = mockDb.select().from(routines).where(eq(routines.id, BF)).get()!;
     expect(routine.runStartedAt).not.toBe(NOW);
     expect(buttons(tree, 'Start over')[0].props.accessibilityLabel).toBe('Start Barbell Foundations over at week 1');
+  });
+
+  it('puts Start over and Duplicate side by side as quiet buttons, the state a word and a mark (design gate #23)', () => {
+    insertProgram(mockDb, BF);
+    setActiveProgram(mockDb, BF, NOW);
+    const tree = mount(BF);
+    const startOver = buttons(tree, 'Start over')[0];
+    const duplicate = buttons(tree, 'Duplicate')[0];
+    expect(startOver.props.variant).toBe('quiet');
+    expect(duplicate.props.variant).toBe('quiet');
+    let row = startOver.parent;
+    while (row && StyleSheet.flatten(row.props.style)?.flexDirection !== 'row') row = row.parent;
+    expect(row!.findAllByType(Button).map((b) => b.props.label)).toEqual(['Start over', 'Duplicate']);
+    expect(StyleSheet.flatten(row!.props.style)).toMatchObject({ flexWrap: 'wrap' });
+  });
+
+  it("a Pro program's card on free says so under its band (design gate #22)", () => {
+    insertProgram(mockDb, 'program-strongman-prep');
+    expect(texts(mount('program-strongman-prep'))).toContain('Part of GymHound Pro.');
   });
 
   it('says when a lift has dropped back twice in this run (R614)', () => {

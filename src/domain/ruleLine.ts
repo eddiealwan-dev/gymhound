@@ -6,12 +6,13 @@
 
 import type { AddSetRule, ProgramWeek, RuleKind, WeekKind, WeeklyRule } from '../seed/programTypes';
 import { formatRest } from './dates';
+import { enDashRanges, secondsAsMinutes } from './programCard';
 import { MARK_LABELS } from './labels';
-import type { Gear } from './plates';
+import { nearestLoadable, type Gear } from './plates';
 import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
-import { convertIncrement, formatWeight, isZeroWeight } from './units';
+import { convertIncrement, formatWeight, isZeroWeight, loadsInUnit } from './units';
 
 export type Rule = NonNullable<OutcomeInput['rule']>;
 
@@ -54,9 +55,11 @@ const isLoaded = (loggingType: LoggingType): boolean => !UNLOADED.includes(loggi
 
 /** An AMRAP score as "6 + 4", or "6" with no extra reps; a For Time score as "7:42" (R607). Null with no score. */
 function lastScore(last: LastSummary, loggingType: LoggingType): string | null {
-  if (loggingType === 'for_time') return last.durationS === null ? null : formatRest(last.durationS);
+  // With the load of the main move when it was logged (ruling R-g3): "6 + 4 at 16 kg".
+  const at = last.weight && last.weightUnit ? ` at ${formatWeight(last.weight, last.weightUnit)}` : '';
+  if (loggingType === 'for_time') return last.durationS === null ? null : `${formatRest(last.durationS)}${at}`;
   if (last.reps === null) return null;
-  return last.extraReps === undefined || last.extraReps === null ? `${last.reps}` : `${last.reps} + ${last.extraReps}`;
+  return `${last.extraReps === undefined || last.extraReps === null ? `${last.reps}` : `${last.reps} + ${last.extraReps}`}${at}`;
 }
 
 /** "5 km in 25:30", or whichever of the two was logged; null for neither. */
@@ -204,6 +207,10 @@ export type ProgramRule = {
   kind: RuleKind;
   /** A carry's distance unit (R607), ft or yd; null for any other slot. */
   carryUnit: 'ft' | 'yd' | null;
+  /** What one set of a moving event is (design gate #5): a carry, or a push for a sled. Absent reads as a carry. */
+  eventWord?: 'carry' | 'push';
+  /** A technique slot run as an EMOM (its note starts "EMOM"): its rule is every minute clean (design gate #4). */
+  emom?: boolean;
   /** Normal sessions in a row with every set hit before a raise: 2 for Atlas stone load (R623). */
   sessionsToRaise: 1 | 2;
   /** The increment was halved after the slot's first miss in this run (R612). */
@@ -333,6 +340,33 @@ export function slotNoteText(note: string, catalogName: string, kind: RuleKind):
 }
 
 /**
+ * A slot's note as the session shows it (design gate #17, #20, #24; ruling R-g4): loads in the session unit (to the
+ * nearest 0.5 kg), seconds of a minute or more as a clock ("120 s" → "2:00", as the format line says it), and number
+ * ranges with an en dash. The words are the documents'.
+ */
+export function sessionNoteText(note: string, unit: WeightUnit): string {
+  return enDashRanges(secondsAsMinutes(loadsInUnit(note, unit)));
+}
+
+/** The easy runs either side of the work (#20), named by their note: "Warm-up run", "Cool-down run" (ruling R-g4). */
+const RUN_ROLES: readonly { starts: RegExp; name: string; only: RegExp }[] = [
+  { starts: /^warm-up\b/i, name: 'Warm-up run', only: /^warm-up\.?$/i },
+  { starts: /^cool-down\b/i, name: 'Cool-down run', only: /^cool-down\.?$/i },
+];
+
+/**
+ * What a slot is called where it shows, with the note it keeps: an easy run whose note says it is the warm-up or the
+ * cool-down is the "Warm-up run" or the "Cool-down run", and a note that said only that goes, since the name now does.
+ * Every other slot keeps its name and note.
+ */
+export function slotName(name: string, note: string | null): { name: string; note: string | null } {
+  if (name !== 'Easy run' || note === null) return { name, note };
+  const role = RUN_ROLES.find((r) => r.starts.test(note.trim()));
+  if (!role) return { name, note };
+  return { name: role.name, note: role.only.test(note.trim()) ? null : note };
+}
+
+/**
  * What Change rung on the program's page says (R618): the slot moves from the next workout and starts at the bottom of
  * the rung's range; only a weighted rung has a weight, which starts fresh.
  */
@@ -370,7 +404,13 @@ function unloadableRaise(rule: Rule, loggingType: LoggingType, load: LoadContext
   const wanted = planned.weight + increment;
   const loads = raisedFrom(planned, rule, loggingType, load.equipment, load.gear).weight;
   if (Math.abs(loads - wanted) < 1e-6) return null;
-  return `Your plates make ${formatWeight(loads, planned.unit)}; add ${plateSize(increment / 2, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
+  const make = `Your plates make ${formatWeight(loads, planned.unit)}`;
+  // A pair of half the raise loads it only from a weight the plates make today; otherwise no plate would (W2 review).
+  if (Math.abs(nearestLoadable(planned.weight, load.gear.bar, load.gear.plates) - planned.weight) > 1e-6) return `${make}.`;
+  const half = increment / 2;
+  // Already owned, it is the number of them, not their size, that stops the raise: one more pair loads it.
+  const owned = Object.entries(load.gear.plates).some(([size, pairs]) => pairs > 0 && Math.abs(Number(size) - half) < 1e-6);
+  return `${make}; add ${owned ? 'another pair of ' : ''}${plateSize(half, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
 }
 
 /** The types whose sets have a weight column (LB, +LB, −LB). */
@@ -392,8 +432,9 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   const plates = unloadableRaise(rule, loggingType, load);
   const add = `add ${inc}${halved}.${plates === null ? '' : ` ${plates}`}`;
   if (loggingType === 'weighted_distance') {
-    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, ${add} A marked day holds the weight.`;
+    return `If every ${p.eventWord ?? 'carry'} covers ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on a normal day, ${add} A marked day holds the weight.`;
   }
+  if (p.emom) return `Make every minute clean on a normal day and next time adds ${inc}${halved}.${plates === null ? '' : ` ${plates}`} A marked day holds the weight.`;
   if (loggingType === 'assisted') {
     return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;
   }
@@ -402,19 +443,28 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   return `If every working set ${hits} ${days}, ${add} A marked day holds the weight.`;
 }
 
+/** A library name that is a compound adjective written open: "Band assisted pull-up" reads "Band-assisted pull-up". */
+const compound = (name: string): string => name.replace(/^(band) assisted\b/i, '$1-assisted');
+
+/** An exercise's name inside a sentence (design gate #24): lower case unless it starts with a proper adjective. */
+const inSentence = (name: string): string => {
+  const n = compound(name);
+  return PROPER_FIRST.test(n) ? n : `${n.charAt(0).toLowerCase()}${n.slice(1)}`;
+};
+
 /** A ladder's line (R618): its rung and what comes next, or the top rung. */
 function ladderSentence(p: ProgramRule, rule: Rule | null, loggingType: LoggingType, unit: WeightUnit, load?: LoadContext): string {
   const rungs = p.rungs ?? [];
   const at = Math.min(Math.max(0, p.rung ?? 0), Math.max(0, rungs.length - 1));
   const rung = rungs[at];
   if (!rung) return "No weight to add. Beat last time's reps.";
-  const head = `Rung ${at + 1} of ${rungs.length}: ${rung.name}.`;
+  const head = `Rung ${at + 1} of ${rungs.length}: ${compound(rung.name)}.`;
   if (rung.weighted && rule) return `${head} ${loadSentence({ ...p, halved: false }, rule, loggingType, unit, load)}`;
   const next = rungs[at + 1];
   if (!next) return `${head} Top rung. Keep adding ${rung.timed ? 'time' : 'reps'}.`;
   const top = rule?.repMax ?? rung.repMax;
   const hit = rung.timed ? `Hold ${top} s` : `Hit ${top}`;
-  return `${head} ${hit} on every set on a normal day and next time is ${next.name} at ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
+  return `${head} ${hit} on every set on a normal day and next time is ${inSentence(next.name)}, ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
 }
 
 /** A run's line (R620): the week's target, which follows the program week, not performance. */
@@ -424,7 +474,11 @@ function runSentence(p: ProgramRule, rule: Rule): string {
   const share = p.weekInfo?.runShare ?? 1;
   const lighter = share < 1 ? ` That's ${pct(share)}% on this lighter week.` : '';
   if (weekly.kind === 'seconds') {
-    return `Week ${p.week}: ${formatRest(rule.repMin)}.${lighter} Adds ${formatRest(weekly.stepS)} a week up to ${formatRest(weekly.capS)}.`;
+    // The clock and the suggested time say this week's target, so the line says how it grows and next week's (gate #18).
+    const next = Math.min(weekly.startS + p.week * weekly.stepS, weekly.capS);
+    const now = Math.min(weekly.startS + (p.week - 1) * weekly.stepS, weekly.capS);
+    const lighterNow = share < 1 ? `${pct(share)}% of the time this lighter week. ` : '';
+    return `${lighterNow}Adds ${formatRest(weekly.stepS)} a week, up to ${formatRest(weekly.capS)}. Next week ${formatRest(next)}${next === now ? ' again' : ''}.`;
   }
   return `Week ${p.week}: ${rule.setCount} × ${formatRest(rule.repMin)}.${lighter} Adds a set a week up to ${weekly.capSets}, then ${weekly.stepS} s a set.`;
 }
@@ -539,7 +593,8 @@ function loadRead(a: ProgramReadInput): string | null {
   const raised = raisedFrom(planned, rule, loggingType, a.equipment, a.gear);
   const to = formatWeight(raised.weight, raised.unit);
   let normal: string;
-  if (loggingType === 'weighted_distance') normal = `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} on every run on a normal day and next time is ${to}.`;
+  if (loggingType === 'weighted_distance') normal = `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on every ${p.eventWord ?? 'carry'} on a normal day and next time is ${to}.`;
+  else if (p.emom) normal = `Every minute clean on a normal day and next time is ${to}.`;
   else if (p.sessionsToRaise === 2) {
     const every = rule.repMax === 1 ? 'Do every single' : `Hit ${rule.repMax} on every set`;
     normal = `${every} on two normal days in a row and the weight goes to ${to}.`;

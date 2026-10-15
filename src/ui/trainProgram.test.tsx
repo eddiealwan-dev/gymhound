@@ -22,6 +22,12 @@ type Read = {
 };
 let mockRead: Read;
 
+/** The phone's text size: the test renderer's own 2 unless a test sets the default size. */
+let mockFontScale = 2;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }),
+}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ useIsPro: () => false }));
 jest.mock('./pro/openPaywall', () => ({ useOpenPaywall: () => jest.fn() }));
@@ -146,15 +152,28 @@ describe('Up next for a program (§18.29)', () => {
     mockRead.upNext = upNext({}, [
       exercise('re-bench', 'Barbell bench press', { nextWeight: 135, nextWeightUnit: 'lb' }),
       exercise('re-yoke', 'Yoke carry', { loggingType: 'weighted_distance', equipment: 'other', setCount: 4, repMin: 50, repMax: 50, schemeExtra: { distanceUnit: 'ft' } }),
-      exercise('re-metcon', 'AMRAP 10: goblet squat, push-up, run', { loggingType: 'rounds', equipment: 'other', setCount: 1, repMin: 4, repMax: 7, schemeExtra: { metcon: { format: 'AMRAP', workMinutes: 10 } } }),
+      exercise('re-metcon', 'AMRAP 10: goblet squat, push-up, run', { loggingType: 'rounds', equipment: 'other', setCount: 1, repMin: 4, repMax: 7, schemeExtra: { metcon: { format: 'AMRAP', workMinutes: 10, capMinutes: null } } }),
       exercise('re-run', 'Long run', { loggingType: 'timed', equipment: 'bodyweight', setCount: 1, repMin: 4200, repMax: 4200, schemeExtra: { clock: true } }),
     ]);
     const shown = lines(mount());
     expect(shown).toContain('Barbell bench press');
     expect(shown).toContain('Yoke carry');
     expect(shown).toContain('4×50 ft · —');
-    expect(shown).toContain('AMRAP 10 min');
+    expect(shown).toContain('10 min');
+    expect(shown).not.toContain('AMRAP 10 min');
     expect(shown).toContain('70:00');
+  });
+
+  it("keeps a metcon's minutes in the scheme column beside its long name, not on a line under it (design gate #19)", () => {
+    mockRead.upNext = upNext({}, [
+      exercise('re-metcon', 'AMRAP 12: wall ball, toes-to-bar, row', { loggingType: 'rounds', equipment: 'other', setCount: 1, repMin: 4, repMax: 7, schemeExtra: { metcon: { format: 'AMRAP', workMinutes: 12, capMinutes: null } } }),
+    ]);
+    mockFontScale = 1;
+    const tree = mount();
+    mockFontScale = 2;
+    const name = tree.root.findAllByType(Text).find((n) => n.props.children === 'AMRAP 12: wall ball, toes-to-bar, row')!;
+    expect(StyleSheet.flatten(name.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+    expect(StyleSheet.flatten(name.parent!.parent!.props.style)).toMatchObject({ flexWrap: 'nowrap' });
   });
 
   describe('the reactive deload (R627)', () => {

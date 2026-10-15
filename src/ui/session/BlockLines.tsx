@@ -18,43 +18,43 @@ export function FormatLine({ text }: { text: string }) {
   );
 }
 
-type MetconProps = { parts: { format: string; elements: MetconElement[]; subtitle: string | null } };
+type MetconProps = { parts: { format: string; elements: MetconElement[] } };
 
 /**
- * A metcon's format and moves (R-t7b2): the format line, the program's full name for it when the list can't say it all,
- * then one line per move with its amount in its own Barlow column ("10", "200 m", "12 cal") and its load muted after the
- * name. One element for VoiceOver, read as a sentence. At large text the amount column grows and the names wrap.
+ * A metcon's format and moves (R-t7b2, design gate #2): the format line ("21-15-9 for time · 8 min cap"), then one line
+ * per move with its amount in its own Barlow column ("10", "200 m", "21-15-9") and its load muted after the name, in the
+ * session unit. A list with no amounts at all (no name to read them from) has no amount column. One element for
+ * VoiceOver, read as a sentence. At large text the amount column grows and the names wrap.
  */
 export function MetconLines({ parts }: MetconProps) {
   const { colors } = useTheme();
-  const voice = metconVoice(parts);
+  const amounts = parts.elements.some((e) => e.amount !== null);
   return (
-    <View accessible accessibilityLabel={parts.subtitle === null ? voice : `${voice} ${parts.subtitle}`} style={{ marginTop: UNDER_NAME_ROW, gap: 4 }}>
+    <View accessible accessibilityLabel={metconVoice(parts)} style={{ marginTop: UNDER_NAME_ROW, gap: 4 }}>
       <Body weight={600}>{parts.format}</Body>
-      {parts.subtitle !== null ? (
-        <Body muted style={{ fontSize: 14 }}>
-          {parts.subtitle}
-        </Body>
-      ) : null}
-      <View style={{ gap: 4, marginTop: 4 }}>
-        {parts.elements.map((e, i) => (
-          <View key={`${i}:${e.name}`} testID="metcon-move" style={{ flexDirection: 'row', alignItems: 'baseline', columnGap: 12 }}>
-            {/* The amount column: as wide as "200 m" at the default size, wider as the text grows. */}
-            <Num weight={600} style={{ fontSize: 17, minWidth: 48, color: colors.text }}>
-              {e.amount ?? ''}
-            </Num>
-            <Body style={{ flexShrink: 1 }}>
-              {e.name}
-              {e.load !== null ? (
-                <Body muted>
-                  {' · '}
-                  {e.load}
-                </Body>
+      {parts.elements.length > 0 ? (
+        <View style={{ gap: 4, marginTop: 4 }}>
+          {parts.elements.map((e, i) => (
+            <View key={`${i}:${e.name}`} testID="metcon-move" style={{ flexDirection: 'row', alignItems: 'baseline', columnGap: 12 }}>
+              {/* The amount column: as wide as "200 m" at the default size, wider as the text grows ("21-15-9"). */}
+              {amounts ? (
+                <Num weight={600} style={{ fontSize: 17, minWidth: 48, color: colors.text }}>
+                  {e.amount ?? ''}
+                </Num>
               ) : null}
-            </Body>
-          </View>
-        ))}
-      </View>
+              <Body style={{ flexShrink: 1 }}>
+                {e.name}
+                {e.load !== null ? (
+                  <Body muted>
+                    {' · '}
+                    {e.load}
+                  </Body>
+                ) : null}
+              </Body>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

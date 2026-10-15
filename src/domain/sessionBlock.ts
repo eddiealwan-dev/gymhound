@@ -4,8 +4,9 @@ import { spokenRest } from './rest';
 import { TIMED_RUN_IDS } from './restKind';
 import { metconText } from './ruleLine';
 import { weightText } from './setEntry';
-import { DISTANCE_WORDS, type Column, type RowModel } from './setTable';
+import { DISTANCE_WORDS, type Column, type InputKey, type RowModel } from './setTable';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
+import { convertWeight, loadsInUnit, roundToHalf } from './units';
 import type { WorkPlan, WorkStep } from './workClock';
 
 /**
@@ -35,8 +36,8 @@ export type BlockInput = {
 /** The runs that are intervals: sets of hard work with easy between. */
 export const INTERVAL_IDS: ReadonlySet<string> = new Set(['interval-run', 'bike-intervals', 'rower-intervals']);
 
-/** The quiet line on a technique slot's block (the owner's words). */
-export const TECHNIQUE_LINE = 'Technique · not counted';
+/** The quiet line on a technique slot's block: what isn't counted, so it never reads as the rule not counting (design gate #4). */
+export const TECHNIQUE_LINE = 'Technique set: not counted toward weekly volume.';
 
 export function blockKindOf(ex: BlockInput): BlockKind {
   const p = ex.program;
@@ -50,16 +51,26 @@ export function blockKindOf(ex: BlockInput): BlockKind {
 
 export type MetconElement = { amount: string | null; name: string; load: string | null };
 
+/** A metcon's scheme as its format line says it: "21-15-9 for time", "3 rounds for time"; null for plain For Time. */
+const FOR_TIME_SCHEME = /^((?:\d+-)+\d+|\d+ rounds) for time$/;
+/** A rep scheme ("21-15-9"): each move without its own amount is done for it. */
+const REP_SCHEME = /^(?:\d+-)+\d+$/;
+
 /**
- * A metcon's block (R-t7b2): the format line and the moves from the slot's structured rule, with each move's amount
- * ("10", "200 m", "12 cal") and load ("95/65 lb") read from the program's name for it where they match. When the list
- * can't say everything the name does (a move without an amount, rounds or a rep scheme), the name is the subtitle.
+ * A metcon's block (R-t7b2, design gate #2): the format line and the moves from the slot's structured rule, with each
+ * move's amount ("10", "200 m", "12 cal", or the rep scheme "21-15-9") and load ("43 / 29.5 kg", in the session unit,
+ * ruling R-g4) read from the program's name for it. The format line carries the scheme and the cap ("21-15-9 for time · 8
+ * min cap", "3 rounds for time · 12 min cap"). When the name can't give every move an amount, the full name is the
+ * format line and there is no list, never an empty amount column. With no name to read, the moves are listed bare.
  */
-export function metconParts(rule: MetconRule, catalogName: string): { format: string; elements: MetconElement[]; subtitle: string | null } {
-  const format = rule.format === 'AMRAP' ? `AMRAP ${rule.workMinutes} min` : rule.capMinutes !== null ? `For Time · ${rule.capMinutes} min cap` : 'For Time';
+export function metconParts(rule: MetconRule, catalogName: string, unit: WeightUnit = 'lb'): { format: string; elements: MetconElement[] } {
   const text = metconText(catalogName);
   const colon = text.indexOf(':');
   const scheme = colon < 0 ? '' : text.slice(0, colon).trim().toLowerCase();
+  const named = FOR_TIME_SCHEME.exec(scheme)?.[1] ?? null;
+  const cap = rule.capMinutes !== null ? ` · ${rule.capMinutes} min cap` : '';
+  const format = rule.format === 'AMRAP' ? `AMRAP ${rule.workMinutes} min` : named !== null ? `${named} for time${cap}` : `For Time${cap}`;
+  const repScheme = named !== null && REP_SCHEME.test(named) ? named : null;
   const body = colon < 0 ? '' : text.slice(colon + 1).replace(/\s*\(cap \d+ min\)\s*$/i, '');
   const parts = body
     .split(/,\s*|\s+and\s+/)
@@ -67,12 +78,12 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     .filter((p) => p !== '')
     .map((p) => {
       const m = /^(\d+(?:\s?m|-cal|\s?cal)?)\s+(.+)$/.exec(p);
-      const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : null;
+      const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : repScheme;
       const rest = m ? m[2] : p;
       const loadMatch = /\s*\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest);
       // The program's own words for the move, without the load its column shows: "goblet squats", "push-ups (scaled)".
       const words = (loadMatch ? rest.replace(loadMatch[0], '') : rest).trim();
-      return { amount, rest: rest.toLowerCase(), words, load: loadMatch?.[1] ?? null, used: false };
+      return { amount, rest: rest.toLowerCase(), words, load: loadMatch ? loadsInUnit(loadMatch[1], unit) : null, used: false };
     });
   const elements = rule.elements.map((element): MetconElement => {
     const name = element.replace(/\s*\(metcon\)\s*$/i, '').trim();
@@ -85,9 +96,22 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     const own = `${part.words.charAt(0).toUpperCase()}${part.words.slice(1)}`;
     return { amount: part.amount, name: [own, ...asides].join(' '), load: part.load };
   });
-  const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time';
-  const complete = plain && elements.every((e) => e.amount !== null);
-  return { format, elements, subtitle: complete || text === '' ? null : text };
+  if (text === '') return { format, elements };
+  const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time' || named !== null;
+  if (plain && elements.every((e) => e.amount !== null)) return { format, elements };
+  return { format: text, elements: [] };
+}
+
+/** Moves that take a load in the metcons (a dumbbell, a kettlebell, a bar or a ball). */
+const LOADED_MOVE = /\b(goblet|thruster|wall ball|snatch|swing|clean|kettlebell|dumbbell|barbell|deadlift|press|sandbag)\b/i;
+
+/**
+ * The metcon's main weighted move (ruling R-g3): the first of its moves that takes a load, as an index into its
+ * elements; null when none does (Cindy's pull-ups, push-ups and squats). Its load is logged on the score.
+ */
+export function metconLoadMove(rule: MetconRule): number | null {
+  const at = rule.elements.findIndex((e) => LOADED_MOVE.test(e));
+  return at < 0 ? null : at;
 }
 
 /** The word a timed slot is called by: a walk, a ride, a row, else a run. */
@@ -96,11 +120,6 @@ export function runNoun(exerciseId: string): string {
   if (exerciseId === 'bike-intervals') return 'Ride';
   if (exerciseId === 'rower-intervals') return 'Row';
   return 'Run';
-}
-
-/** A run's format line: "Run 29:00". */
-export function runFormat(exerciseId: string, targetS: number): string {
-  return `${runNoun(exerciseId)} ${formatRest(targetS)}`;
 }
 
 /** Intervals' format line: "6 × 3:00 hard / 2:00 easy", or "8 × 1:00 hard" with no easy part. */
@@ -113,6 +132,18 @@ export function intervalFormat(sets: number, workS: number, easyS: number | null
 export function easySecondsOf(note: string | null): number | null {
   const m = note ? /(\d+)\s*s\s+easy/i.exec(note) : null;
   return m ? Number(m[1]) : null;
+}
+
+/**
+ * An EMOM's format line (design gate #3): "EMOM 10 min · 2 reps every minute", from a note that starts "EMOM 10" and
+ * says the work after a colon, else from the rule's reps ("EMOM 10 min · 1–2 reps every minute"). Null for no EMOM.
+ */
+export function emomFormat(note: string | null, rule: { repMin: number; repMax: number } | null): string | null {
+  const m = note ? /^EMOM\s+(\d+)\s*(?::\s*(.+))?$/i.exec(note.trim()) : null;
+  if (!m) return null;
+  const reps = rule === null ? null : rule.repMin === rule.repMax ? `${rule.repMin}` : `${rule.repMin}–${rule.repMax}`;
+  const work = m[2]?.trim() || (reps === null ? null : `${reps} ${reps === '1' ? 'rep' : 'reps'} every minute`);
+  return work ? `EMOM ${m[1]} min · ${work}` : `EMOM ${m[1]} min`;
 }
 
 /** An EMOM's minutes, from a note that starts "EMOM 10". */
@@ -169,13 +200,25 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
   }
 }
 
-/** The line an event's rule adds (t7-design.md): what a tick means on a carry, a yoke or a sled. */
+/** The line an event's rule adds (t7-design.md): what a tick means on a carry, a yoke or a sandbag. */
 export const EVENT_LINE = 'A drop ends the set: log what you carried unbroken.';
+
+/** What a tick means on a moving event (design gate #5): a carry ends at a drop; a sled push at a stop. */
+export function eventLine(word: 'carry' | 'push' = 'carry'): string {
+  return word === 'push' ? 'A stop ends the set: log what you pushed unbroken.' : EVENT_LINE;
+}
 
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
 
 /** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
-export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string };
+export type BlockRowOptions = {
+  unit: WeightUnit;
+  targetS?: number | null;
+  noun?: string;
+  eventWord?: 'carry' | 'push';
+  /** A metcon's main weighted move, as its list names it ("Thrusters"): its load goes on the score (ruling R-g3). */
+  loadName?: string | null;
+};
 
 /**
  * A block's own take on its set rows (t7-design.md). A metcon's score suggests nothing (last time stays beside it) and
@@ -186,21 +229,35 @@ export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?
 export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions): RowModel[] {
   switch (kind) {
     case 'metcon':
-      return rows.map((row) => ({
-        ...row,
-        spokenAs: 'Score',
-        placeholders: { weight: null, reps: null, durationS: null, distance: null, ...(row.loggingType === 'rounds' ? { extraReps: null } : {}) },
-      }));
+      return rows.map((row) => {
+        // The load of the main move is optional, and suggests last time's in the unit shown (ruling R-g3).
+        const last = row.matched;
+        const load = o.loadName && last?.weight != null ? (last.weightUnit === o.unit || last.weightUnit === null ? last.weight : roundToHalf(convertWeight(last.weight, last.weightUnit, o.unit))) : null;
+        return {
+          ...row,
+          spokenAs: 'Score',
+          placeholders: { weight: load, reps: null, durationS: null, distance: null, ...(row.loggingType === 'rounds' ? { extraReps: null } : {}) },
+          ...(o.loadName ? { optional: ['weight'] as InputKey[], loadName: o.loadName } : {}),
+        };
+      });
     case 'run':
     case 'intervals': {
       const target = o.targetS ?? null;
       return rows.map((row) => {
         const suggested = row.set.setType === 'working' && target !== null ? { ...row, placeholders: { ...row.placeholders, durationS: target } } : row;
-        return kind === 'run' ? { ...suggested, spokenAs: o.noun ?? 'Run' } : suggested;
+        // Every time a run shows is a clock, "0:08" too, as its clock and format line say them (design gate #15).
+        const last = row.matched?.durationS ?? null;
+        const clocked: RowModel = { ...suggested, clockTimes: true, previous: last === null ? row.previous : formatRest(last) };
+        return kind === 'run' ? { ...clocked, spokenAs: o.noun ?? 'Run' } : clocked;
       });
     }
     case 'event':
-      return rows.map((row) => ({ ...row, ...eventPrevious(row, o.unit), optional: ['durationS'], tickLabel: `Set ${row.label} carried drop-free` }));
+      return rows.map((row) => ({
+        ...row,
+        ...eventPrevious(row, o.unit),
+        optional: ['durationS'],
+        tickLabel: o.eventWord === 'push' ? `Set ${row.label} pushed without a stop` : `Set ${row.label} carried drop-free`,
+      }));
     default:
       return rows;
   }
@@ -214,7 +271,8 @@ function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previou
   const distance = p.distanceUnit === (row.distanceUnit ?? p.distanceUnit) ? `${p.distance}` : `${p.distance} ${p.distanceUnit}`;
   const said = `${p.weight} ${WEIGHT_WORDS[weightUnit]} for ${p.distance} ${DISTANCE_WORDS[p.distanceUnit]}`;
   return {
-    previous: `${weightText(p.weight, weightUnit, unit)} × ${distance}`,
+    // A no-break space after the ×, so a narrow column wraps it as "140" over "× 50" (design gate #11).
+    previous: `${weightText(p.weight, weightUnit, unit)} × ${distance}`,
     previousLabel: p.durationS === null ? said : `${said} in ${spokenRest(p.durationS)}`,
   };
 }
@@ -223,9 +281,17 @@ function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previou
  * A block's columns: a metcon's score and a run have one row, so no SET chip; an event heads its distance with its
  * unit ("FT", "YD"). The rest keep the set table's.
  */
-export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit): Column[] {
+export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit, metconLoadUnit: WeightUnit | null = null): Column[] {
+  if (kind === 'metcon' && metconLoadUnit !== null) {
+    // The load of the main weighted move, before the score, headed by the unit as a set row's weight is (ruling R-g3).
+    const rest = columns.filter((c) => c.key !== 'set');
+    return [rest[0], { key: 'weight', header: metconLoadUnit.toUpperCase() }, ...rest.slice(1)];
+  }
   if (kind === 'metcon' || kind === 'run') return columns.filter((c) => c.key !== 'set');
-  if (kind === 'event') return columns.map((c) => (c.key === 'distance' ? { ...c, header: eventDistanceUnit.toUpperCase() } : c));
+  // Beside three inputs, PREVIOUS can't fit at 320 wide, so an event heads it LAST (design gate #11).
+  if (kind === 'event') {
+    return columns.map((c) => (c.key === 'distance' ? { ...c, header: eventDistanceUnit.toUpperCase() } : c.key === 'previous' ? { ...c, header: 'LAST' } : c));
+  }
   return columns;
 }
 
