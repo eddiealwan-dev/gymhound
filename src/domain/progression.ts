@@ -2,10 +2,15 @@
  * The progression rule (spec 7.3, with 18.7): what one exercise's finished sets mean for next time. A marked day
  * is an exercise flagged Something off. The working weight keeps the unit of the set it came from, and the next
  * weight uses that unit, with the increment converted by the gym convention (R62).
+ *
+ * A slot of one of the twenty programs (§18.29) passes more, all optional, so a §7.3 caller (your own routine, R628)
+ * gets exactly what it always did: a special week that holds (R617), misses and the reset (R613), two all-hit
+ * sessions before a raise (R623), and weight and distance (R607).
  */
 
+import { countedSets, isMiss, resetWeight, setMeasure } from './programRules';
 import { raiseLoadable, type Gear } from './plates';
-import type { Equipment, LoggingType, SetType, WeightUnit } from './types';
+import type { DistanceUnit, Equipment, LoggingType, SetType, WeightUnit } from './types';
 import { convertIncrement, isZeroWeight, sameWeight, toKg } from './units';
 
 export { raiseLoadable };
@@ -17,21 +22,62 @@ export type OutcomeInput = {
   plannedWeight: number | null; plannedUnit: WeightUnit | null;
   loggingType: LoggingType; equipment: Equipment;
   marked: boolean;
-  sets: readonly { setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null; reps: number | null; durationS: number | null }[];
+  /** `distance` and `distanceUnit` are read for `weighted_distance` only. */
+  sets: readonly {
+    setType: SetType; done: boolean; weight: number | null; weightUnit: WeightUnit | null; reps: number | null; durationS: number | null;
+    distance?: number | null; distanceUnit?: DistanceUnit | null;
+  }[];
   gear: { lb: Gear; kg: Gear };
+  /** The program week the workout started in (R617): a week that holds gives `held_week`. Null or absent: a normal week. */
+  week?: { holds: boolean } | null;
+  /**
+   * Misses in a row before this session, from the slot's finished history since the run started (R613, `missStreak`).
+   * Read only with `missesToReset`.
+   */
+  missesBefore?: number;
+  /**
+   * Misses in a row that reset the weight: 3 in a Beginner program, 2 otherwise (R613). Passing it marks a program
+   * slot: without it nothing is a miss and nothing resets (R628).
+   */
+  missesToReset?: 2 | 3;
+  /** The reset's multiplier: 0.9 (the default), or 0.95 for Strength Peaking's top sets. */
+  resetMultiplier?: number;
+  /** The slot's full increment, in the rule's increment unit, that a reset off a barbell rounds down to. Default: the rule's. */
+  resetStep?: number;
+  /** All-hit normal sessions in a row before a raise: 2 for Atlas stone load (R623), else 1 (the default). */
+  sessionsToRaise?: 1 | 2;
+  /** With `sessionsToRaise` 2: the slot's previous normal session hit every set (`isAllHit`) and did not raise. */
+  previousAllHit?: boolean;
+  /** The bottom of the range for a miss, where it is not the rule's `repMin`. */
+  repMinForMiss?: number;
+  /** The slot's distance unit for `weighted_distance` (ft or yd); absent, each set's distance is read in its own unit. */
+  distanceUnit?: DistanceUnit;
 };
-export type OutcomeResult = { workingWeight: number | null; workingUnit: WeightUnit | null; outcome: Outcome; nextWeight: number | null; nextUnit: WeightUnit | null };
+/** `missed`: a program slot's normal session was a miss (R613), kept on the workout exercise for the count. */
+export type OutcomeResult = {
+  workingWeight: number | null;
+  workingUnit: WeightUnit | null;
+  outcome: Outcome;
+  nextWeight: number | null;
+  nextUnit: WeightUnit | null;
+  missed: boolean;
+};
 
 type Load = { value: number; unit: WeightUnit };
+
+/** Logging types with no load and no rule: timed holds and runs, distance and time, and the metcon scores (R622). */
+function hasNoLoad(loggingType: LoggingType): boolean {
+  return loggingType === 'timed' || loggingType === 'distance_time' || loggingType === 'rounds' || loggingType === 'for_time';
+}
 
 /**
  * The easiest load among the counted sets (step 2): the lowest weight, or the highest assistance for `assisted`,
  * compared in kg (loads within 0.01 kg are the same; the first is kept). An empty load counts as 0 in the plan's
  * unit, else the first counted set's unit, else lb.
- * Null for timed and distance_time, and when nothing was counted.
+ * Null for timed, distance_time and the metcon scores, and when nothing was counted.
  */
 function workingLoad(input: OutcomeInput, counted: OutcomeInput['sets']): Load | null {
-  if (input.loggingType === 'timed' || input.loggingType === 'distance_time') return null;
+  if (hasNoLoad(input.loggingType)) return null;
   const emptyUnit = input.plannedUnit ?? counted.find((s) => s.weightUnit !== null)?.weightUnit ?? 'lb';
   const easier = input.loggingType === 'assisted' ? (a: number, b: number) => a > b : (a: number, b: number) => a < b;
   let easiest: Load | null = null;
@@ -44,32 +90,69 @@ function workingLoad(input: OutcomeInput, counted: OutcomeInput['sets']): Load |
   return easiest;
 }
 
+/**
+ * Step 4, all hit: at least `set_count` counted sets, each at or over `rep_max` (seconds for weight and time, distance
+ * for weight and distance). False without a rule. The caller keeps it for `previousAllHit` (R623).
+ */
+export function isAllHit(input: OutcomeInput): boolean {
+  const { rule } = input;
+  if (!rule) return false;
+  const counted = countedSets(input.sets);
+  return (
+    counted.length >= rule.setCount && counted.every((s) => setMeasure(s, input.loggingType, input.distanceUnit) >= rule.repMax)
+  );
+}
+
 export function computeOutcome(input: OutcomeInput): OutcomeResult {
   const { rule, loggingType } = input;
   // Step 1: counted sets.
-  const counted = input.sets.filter((s) => s.done && (s.setType === 'working' || s.setType === 'failure'));
+  const counted = countedSets(input.sets);
   const working = workingLoad(input, counted);
-  const result = (outcome: Outcome, next: Load | null): OutcomeResult => ({
+  const result = (outcome: Outcome, next: Load | null, missed = false): OutcomeResult => ({
     workingWeight: working?.value ?? null,
     workingUnit: working?.unit ?? null,
     outcome,
     nextWeight: next?.value ?? null,
     nextUnit: next?.unit ?? null,
+    missed,
   });
   const planned: Load | null =
     input.plannedWeight !== null && input.plannedUnit !== null ? { value: input.plannedWeight, unit: input.plannedUnit } : null;
 
-  // Step 3.
-  if (!rule || loggingType === 'timed' || loggingType === 'distance_time') return result('no_rule', null);
+  // Step 3. A metcon's score has no automatic rule (R622).
+  if (!rule || hasNoLoad(loggingType)) return result('no_rule', null);
+  // A special week that holds keeps the plan and is never a miss (R617).
+  if (input.week?.holds) return result('held_week', planned ?? working);
+  // Step 5: a marked day holds the plan, and is never a miss (R615).
+  if (input.marked) return result('held_marked', planned ?? working);
   if (!working) return result('no_sets', planned);
 
-  // Step 4: all hit.
-  const allHit =
-    counted.length >= rule.setCount &&
-    counted.every((s) => ((loggingType === 'weighted_time' ? s.durationS : s.reps) ?? 0) >= rule.repMax);
+  // R613: a miss counts only on a program slot (R628).
+  const missesToReset = input.missesToReset;
+  const missed =
+    missesToReset !== undefined &&
+    isMiss({
+      setCount: rule.setCount,
+      repMin: input.repMinForMiss ?? rule.repMin,
+      loggingType,
+      sets: input.sets,
+      marked: false,
+      weekHolds: false,
+      distanceUnit: input.distanceUnit,
+    });
+  if (missed) {
+    // More assistance is not a drop of 10%: an assisted slot holds, and the miss still counts.
+    if ((input.missesBefore ?? 0) + 1 >= missesToReset && loggingType !== 'assisted') {
+      const step = convertIncrement(input.resetStep ?? rule.increment, rule.incrementUnit, working.unit);
+      const next = resetWeight(working, input.resetMultiplier ?? 0.9, step, input.equipment === 'barbell', input.gear[working.unit]);
+      return result('reset', { value: next, unit: working.unit }, true);
+    }
+    return result('held', working, true);
+  }
 
-  // Step 5: a marked day holds the plan.
-  if (input.marked) return result('held_marked', planned ?? working);
+  // Step 4: all hit, for as many normal sessions in a row as the slot needs (R623).
+  const allHit = isAllHit(input) && ((input.sessionsToRaise ?? 1) === 1 || input.previousAllHit === true);
+
   // Step 7: missed, or nothing to add.
   if (!allHit || rule.increment <= 0) return result('held', working);
 
