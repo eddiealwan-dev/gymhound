@@ -37,27 +37,15 @@ const PICK_ONE = 'Set one active and Train lines up its next workout.';
 /** Over New routine while you have none of your own (R401). */
 const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
-/**
- * The mark on a Pro program's row for a free lifter (R525): a small outlined tag, smaller than a pill button so it reads
- * as a mark on the row, not an action. On DESIGN.md's tokens: the label type, a Seam edge (Strong Seam is for controls),
- * field corners and 8/4 padding. Never red.
- */
-function ProMark() {
-  const { colors } = useTheme();
-  return (
-    <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}>
-      <Body weight={600} style={{ fontSize: 14, letterSpacing: 0.5 }}>
-        Pro
-      </Body>
-    </View>
-  );
-}
+/** A row's line with no-break spaces inside each part, so a "·" never ends a line ("3 days a week · 12 weeks"). */
+const unbroken = (line: string) => line.split(' · ').map((part) => part.replace(/ /g, ' ')).join(' · ');
 
 /**
  * One of the twenty programs (R633): its 48pt picture, its name (a line may break after a slash) and "3 days a week ·
- * 12 weeks · Beginner", all one 44pt+ target that opens its card, where Set active lives. A Pro program for a free
- * lifter carries the Pro mark (R525), the program in use the Active mark; at a large text size the mark drops under
- * the line rather than squeezing the name. ⋯ at the end opens the program's options (R542).
+ * 12 weeks · Beginner", all one 44pt+ target that opens its card, where Set active lives. The name and the line take
+ * the whole width between the picture and the chevron at every text size (design gate #1): a Pro program for a free
+ * lifter ends its line with "· Pro" (R525), and the program in use has "✓ Active" on a line of its own under it, in
+ * body strong. A state is a word and a mark, never a pill (R636). ⋯ at the end opens the program's options (R542).
  */
 function ProgramRow({
   routine,
@@ -71,10 +59,8 @@ function ProgramRow({
   onOptions: () => void;
 }) {
   const { colors } = useTheme();
-  const stacked = useStackedRow();
   const line = routineLine(routine);
   const active = routine.isActive && !locked;
-  const mark = locked ? <ProMark /> : active ? <ActiveBadge /> : null;
   const state = locked ? 'part of GymHound Pro' : active ? 'active' : null;
   return (
     <View
@@ -96,14 +82,20 @@ function ProgramRow({
         style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.8 : 1 })}
       >
         <ProgramPicture programId={program.id} label={program.picture.label} kind="thumb" decorative />
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View testID="program-row-text" style={{ flex: 1, minWidth: 0 }}>
           <Body weight={600}>{breakableName(routine.name)}</Body>
           <Body muted style={{ fontSize: 14 }}>
-            {line}
+            {unbroken(locked ? `${line} · Pro` : line)}
           </Body>
-          {stacked && mark !== null ? <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>{mark}</View> : null}
+          {active ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+              <Ionicons name="checkmark" size={16} color={colors.text} />
+              <Body weight={600} style={{ fontSize: 14, color: colors.text }}>
+                Active
+              </Body>
+            </View>
+          ) : null}
         </View>
-        {stacked ? null : mark}
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
       <Pressable

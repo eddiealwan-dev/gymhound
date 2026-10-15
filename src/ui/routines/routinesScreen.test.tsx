@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { setActiveProgram } from '../../db/repositories/programRunRepo';
-import { Image, StyleSheet, Text } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import Routines from '../../../app/(tabs)/routines/index';
@@ -182,7 +182,8 @@ describe("Routines: a program's row (R633)", () => {
     expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 46, height: 46 });
     const name = row.findAll((n) => n.type === Text && n.props.children === 'Barbell Foundations')[0];
     expect(StyleSheet.flatten(name.props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16 });
-    const line = row.findAll((n) => n.type === Text && n.props.children === '3 days a week · 12 weeks · Beginner')[0];
+    // No-break spaces inside each part, so a "·" never ends a line (design gate #1).
+    const line = row.findAll((n) => n.type === Text && n.props.children === '3 days a week · 12 weeks · Beginner')[0];
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontSize: 14, color: '#a39d90' });
     expect(buttons(tree, 'Set active')).toHaveLength(0);
     // A program with no picture yet has none, and its row closes up.
@@ -195,12 +196,17 @@ describe("Routines: a program's row (R633)", () => {
     expect(row.findAll((n) => n.type === Text && n.props.children === 'Advanced Upper/​Lower DUP')).toHaveLength(1);
   });
 
-  it('the program in use says Active in its row, and its label says so', () => {
+  it('the program in use says Active on a line under its line, in body strong, and its label says so (design gate #1)', () => {
     mockRoutines = TWENTY.map((r) => (r.id === 'program-lean-out' ? { ...r, isActive: true } : r));
     const tree = mount();
     const row = rowTarget(tree, 'Lean Out');
     expect(row.props.accessibilityLabel).toBe('Lean Out, 4 days a week · 10 weeks · Intermediate, active');
-    expect(row.findAll((n) => n.type === Text && n.props.children === 'Active')).toHaveLength(1);
+    const active = row.findAll((n) => n.type === Text && n.props.children === 'Active');
+    expect(active).toHaveLength(1);
+    expect(StyleSheet.flatten(active[0].props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#f1ece2' });
+    // It sits in the text column, under the line, not in a column of its own beside the chevron.
+    const column = row.findAll((n) => n.type === View && n.props.testID === 'program-row-text')[0];
+    expect(column.findAll((n) => n.type === Text && n.props.children === 'Active')).toHaveLength(1);
   });
 
   it('⋯ opens its options, read as "Options for {name}", a 44pt target', () => {
@@ -214,20 +220,18 @@ describe("Routines: a program's row (R633)", () => {
 });
 
 describe('Routines: a Pro program on free (R525)', () => {
-  it('shows the Pro pill in its row, says so to VoiceOver, and See Pro in its options', () => {
+  it('ends its line with "Pro", says so to VoiceOver, and See Pro in its options (design gate #1)', () => {
     mockPro = false;
     mockRoutines = TWENTY;
     const tree = mount();
     const row = rowTarget(tree, 'Advanced Upper/Lower DUP');
     expect(row.props.accessibilityLabel).toBe('Advanced Upper/Lower DUP, 4 days a week · 6 weeks · Advanced, part of GymHound Pro');
-    const pill = row.findAll((n) => n.type === Text && n.props.children === 'Pro')[0];
-    expect(pill).toBeDefined();
-    // On DESIGN.md's tokens: the label type, a Seam edge (Strong Seam is for controls), field corners, 8/4 padding.
-    expect(StyleSheet.flatten(pill.props.style)).toMatchObject({ fontSize: 14, letterSpacing: 0.5 });
-    let tag = pill.parent;
-    while (tag && StyleSheet.flatten(tag.props.style)?.borderWidth === undefined) tag = tag.parent;
-    expect(StyleSheet.flatten(tag!.props.style)).toMatchObject({ borderColor: '#2e2a23', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 });
-    // The pill is a mark in the row, not a button of its own, and never red.
+    const line = row.findAll((n) => n.type === Text && n.props.children === '4 days a week · 6 weeks · Advanced · Pro')[0];
+    expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontSize: 14, color: '#a39d90' });
+    // A state is a word, never a pill: nothing in the row has an edge but the picture's.
+    const edged = row.findAll((n) => n.type === View && (StyleSheet.flatten(n.props.style)?.borderWidth ?? 0) > 0);
+    expect(edged.every((n) => StyleSheet.flatten(n.props.style)?.width === 48)).toBe(true);
+    // The mark is in the row's line, not a button of its own, and never red.
     expect(buttons(tree, 'Pro')).toHaveLength(0);
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
     act(() => tree.root.findAll((n) => n.props.accessibilityLabel === 'Options for Advanced Upper/Lower DUP' && typeof n.props.onPress === 'function')[0].props.onPress());
@@ -235,17 +239,21 @@ describe('Routines: a Pro program on free (R525)', () => {
     expect(buttons(tree, 'Set active')).toHaveLength(0);
   });
 
-  it('with Pro there is no Pro pill', () => {
+  it('with Pro the line does not say Pro', () => {
     const tree = mount();
-    expect(rowTarget(tree, 'Advanced Upper/Lower DUP').findAll((n) => n.type === Text && n.props.children === 'Pro')).toHaveLength(0);
+    expect(rowTarget(tree, 'Advanced Upper/Lower DUP').findAll((n) => n.type === Text && n.props.children === '4 days a week · 6 weeks · Advanced')).toHaveLength(1);
   });
 
-  it('at a large text size the pill drops under the line instead of squeezing the name', () => {
+  it('gives the name and line the whole width between the picture and the chevron, at every size', () => {
     mockPro = false;
-    mockFontScale = 2;
-    const tree = mount();
-    const row = rowTarget(tree, 'Advanced Upper/Lower DUP');
-    expect(row.findAll((n) => n.type === Text && n.props.children === 'Pro')).toHaveLength(1);
-    expect(row.findAll((n) => n.type === Text && n.props.children === 'Advanced Upper/​Lower DUP')).toHaveLength(1);
+    for (const scale of [1, 2]) {
+      mockFontScale = scale;
+      const tree = mount();
+      const row = rowTarget(tree, 'Advanced Upper/Lower DUP');
+      const column = row.findAll((n) => n.type === View && n.props.testID === 'program-row-text')[0];
+      expect(StyleSheet.flatten(column.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+      // Every text in the row is in that column: no mark beside it.
+      expect(row.findAll((n) => n.type === Text).length).toBe(column.findAll((n) => n.type === Text).length);
+    }
   });
 });
