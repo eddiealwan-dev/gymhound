@@ -66,25 +66,24 @@ const OWN_PICTURES = {
   5: { exerciseId: 'barbell-row', frame: 0, label: 'Barbell row' }, // bent over, the pull
   6: { exerciseId: 'barbell-front-squat', frame: 1, label: 'Front squat' }, // the bottom
   7: { exerciseId: 'barbell-romanian-deadlift', frame: 0, label: 'Romanian deadlift' }, // the hinge
-  8: { exerciseId: 'fedb-one-arm-kettlebell-swings', frame: 1, label: 'Kettlebell swing' }, // the one-arm swing's photo
-  9: { exerciseId: 'fedb-rowing-stationary', frame: 1, label: 'Rowing machine' }, // the finish
-  10: { exerciseId: 'barbell-hip-thrust', frame: 1, label: 'Hip thrust' }, // the top
+  8: { exerciseId: 'fedb-one-arm-kettlebell-swings', frame: 0, label: 'Kettlebell swing' }, // the one-arm swing's photo; the bell in the hands
+  9: { exerciseId: 'fedb-recumbent-bike', frame: 0, label: 'Recumbent bike' }, // Bike intervals; the rowing machine's photos show a brand name
+  10: { exerciseId: 'glute-bridge', frame: 1, label: 'Glute bridge' }, // the top; both hip thrust frames are dominated by the plate
   11: { exerciseId: 'barbell-bench-press', frame: 1, label: 'Bench press' }, // bar at the chest
   12: { exerciseId: 'barbell-deadlift', frame: 1, label: 'Deadlift' }, // the lockout
   13: { exerciseId: 'dumbbell-one-arm-row', frame: 1, label: 'One-arm dumbbell row' }, // the pull; landscape, so nothing is enlarged
   14: { exerciseId: 'fedb-kneeling-hip-flexor', frame: 1, label: 'Kneeling hip flexor stretch' }, // closest to the couch stretch
   15: { exerciseId: 'barbell-curl', frame: 1, label: 'Barbell curl' }, // the top
-  16: { exerciseId: 'fedb-muscle-up', frame: 1, label: 'Muscle-up' }, // through the rings
+  16: { exerciseId: 'fedb-kettlebell-pistol-squat', frame: 1, label: 'Pistol squat' }, // the bottom; the muscle-up and ring photos show a gym logo
   17: { exerciseId: 'fedb-push-press', frame: 1, label: 'Push press' }, // the dip
   18: { exerciseId: 'fedb-snatch', frame: 0, label: 'Snatch' }, // the bottom, wide grip
-  19: { exerciseId: 'fedb-atlas-stones', frame: 1, label: 'Atlas stones' }, // stone to the chest
+  19: { exerciseId: 'fedb-sled-push', frame: 1, label: 'Sled push' }, // the push; the atlas stone, yoke and carry photos show a car, a pale wall or shirt text
   20: { exerciseId: 'fedb-running-treadmill', frame: 1, label: 'Running on a treadmill' }, // side on
 };
 
 /** Where 'attention' misses the lifter (a plate or a machine draws it), the square crop to use instead, in source px. */
 const THUMB_CROP = {
-  'barbell-hip-thrust': { left: 150, top: 10, size: 210 },
-  'fedb-rowing-stationary': { left: 120, top: 0, size: 240 },
+  // none needed with the current picks; e.g. 'photo-id': { left: 120, top: 0, size: 240 },
 };
 
 /** Program id to { exerciseId, frame }, from programMapping.ts's PICTURES (keyed by program number) or the copy above. */
