@@ -53,13 +53,17 @@ export function weekInfoOf(program: Program, week: number | null, kind: WeekKind
   );
 }
 
-/** The types whose first slot makes a lifting day: a load the warm-up's percentages are of (R645). */
-const LIFTED: readonly LoggingType[] = ['weighted', 'weighted_time', 'weighted_distance'];
+/**
+ * The type whose first slot makes a lifting day: weight and reps, a bar or dumbbell lift whose working weight the
+ * warm-up's percentages are of (R645). A carry or a loaded hold has none (ruling R-w2b).
+ */
+const LIFTED: readonly LoggingType[] = ['weighted'];
 
 /**
- * Whether a slot shows the warm-up line (R626, R645, ruling R-t2b): each lifting day's first slot, but not a run, a
- * metcon, a hold (#16's skill holds, a timed rung), a Mobility move, or a bodyweight or calisthenics movement (a
- * ladder, a pull-up), whose percentages have no working weight to be of.
+ * Whether a slot shows the warm-up line (R626, R645, rulings R-t2b, R-w2a, R-w2b): each lifting day's first slot when it
+ * is a weighted, non-ladder bar or dumbbell lift; not a carry, a loaded hold, a run, a metcon, a hold (#16's skill
+ * holds, a timed rung), a Mobility move, or a bodyweight or calisthenics movement (a ladder, a pull-up), whose
+ * percentages have no working weight to be of.
  */
 export function showsWarmUp(program: Program, slot: ProgramSlot, loggingType: LoggingType): boolean {
   if (!slot.warmUpLine || program.id === MOBILITY) return false;

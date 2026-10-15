@@ -138,7 +138,7 @@ describe('the warm-up line (R626, ruling R-t2b)', () => {
 
   it('shows on lifting days only: not a run, a metcon, a skill hold or a Mobility move', () => {
     expect(shown(BF, 0)).toBe(true);
-    expect(shown('program-strongman-prep', 2)).toBe(true);
+    expect(shown('program-strongman-prep', 0)).toBe(true);
     expect(shown('program-hybrid-athlete', 2, 'timed')).toBe(false);
     expect(shown('program-crossfit-performance', 3)).toBe(false);
     expect(shown('program-mobility-for-lifters', 0)).toBe(false);
@@ -152,8 +152,16 @@ describe('the warm-up line (R626, ruling R-t2b)', () => {
     expect(bodyweight(CALI, 1)).toBe(false);
     expect(bodyweight('program-advanced-calisthenics', 1)).toBe(false);
     expect(bodyweight('program-crossfit-performance', 1)).toBe(false);
-    expect(shown('program-strongman-prep', 2, 'weighted_distance')).toBe(true);
     expect(shown('program-kettlebell-strength-conditioning', 1)).toBe(true);
+  });
+
+  it("never shows on a day that opens with a carry or a loaded hold: its percentages are of a bar's working weight (ruling R-w2b)", () => {
+    // #19's Thu Events A (yoke) and Sat Events B (farmer's carry).
+    expect(shown('program-strongman-prep', 2, 'weighted_distance')).toBe(false);
+    expect(shown('program-strongman-prep', 3, 'weighted_distance')).toBe(false);
+    expect(shown('program-strongman-prep', 2, 'weighted_time')).toBe(false);
+    const strongman = PROGRAMS.find((p) => p.id === 'program-strongman-prep')!;
+    expect(strongman.days.map((d) => showsWarmUp(strongman, d.slots[0], d.slots[0].targetUnit === 'feet' ? 'weighted_distance' : 'weighted'))).toEqual([true, true, false, false]);
   });
 
   it('never shows under a slot that is not the first of its day', () => {
