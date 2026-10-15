@@ -130,13 +130,12 @@ const rung = (
 ): NewExerciseRow => row(id, name, loggingType, equipment, pattern, primary, secondary);
 
 /**
- * Appendix B's 60 rungs the library lacks, by ladder, in rung order. Bodyweight plus unless the ladder is timed;
+ * Appendix B's 59 rungs the library lacks, by ladder, in rung order. Bodyweight plus unless the ladder is timed;
  * equipment is bodyweight, band, or other for rings and the ab wheel (the app has no rings, as the library files ring
  * dips under other).
  */
 export const RUNG_NEW: readonly NewExerciseRow[] = [
-  // Pull-up (#3)
-  rung('scapular-pull-up', 'Scapular pull-up', 'bodyweight_plus', 'bodyweight', 'vertical_pull', PULL_UP),
+  // Pull-up (#3). Its first rung, the scapular pull-up, is the library's own `fedb-scapular-pull-up` (with photos).
   rung('arch-hang', 'Arch hang', 'timed', 'bodyweight', 'vertical_pull', PULL_UP),
   rung('negative-pull-up', 'Negative pull-up', 'bodyweight_plus', 'bodyweight', 'vertical_pull', PULL_UP),
   // Pull-up (#17, CrossFit scaling)
@@ -219,7 +218,7 @@ export const RUNG_NEW: readonly NewExerciseRow[] = [
 
 /** The ids of Appendix A's 48, whose steps are in CATALOG_STEPS (Task 3). */
 export const CATALOG_NEW_IDS: readonly string[] = CATALOG_NEW.map((e) => e.id);
-/** The ids of Appendix B's 60 rungs, whose steps are in RUNG_STEPS (Task 4). */
+/** The ids of Appendix B's 59 new rungs, whose steps are in RUNG_STEPS (Task 4). */
 export const RUNG_NEW_IDS: readonly string[] = RUNG_NEW.map((e) => e.id);
 
 /**

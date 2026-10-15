@@ -75,7 +75,8 @@ const CATALOG: Readonly<Record<string, LoggingType>> = {
 
 // Appendix B: the rungs the library lacks, by ladder; bodyweight plus unless the ladder marks them timed.
 const RUNGS: Readonly<Record<string, readonly string[]>> = {
-  'pull-up #3': ['scapular-pull-up', 'arch-hang', 'negative-pull-up'],
+  // The first rung, the scapular pull-up, is the library's own `fedb-scapular-pull-up` (controller ruling, Task 1).
+  'pull-up #3': ['arch-hang', 'negative-pull-up'],
   'pull-up #17': ['ring-row', 'chest-to-bar-pull-up'],
   squat: ['assisted-squat', 'shrimp-squat'],
   dip: ['support-hold', 'negative-dip'],
@@ -117,17 +118,17 @@ function isSentenceCase(name: string): boolean {
 }
 
 describe('NEW_EXERCISES (§18.29, R602, R604)', () => {
-  it('has 108 entries with unique ids, none already in libraryIds.json or the library', () => {
-    expect(NEW_EXERCISES).toHaveLength(108);
-    expect(byId.size).toBe(108);
+  it('has 107 entries with unique ids, none already in libraryIds.json or the library', () => {
+    expect(NEW_EXERCISES).toHaveLength(107);
+    expect(byId.size).toBe(107);
     const library = new Set(LIBRARY_EXERCISES.map((e) => e.id));
     expect(NEW_EXERCISES.filter((e) => LISTED.includes(e.id) || library.has(e.id)).map((e) => e.id)).toEqual([]);
   });
 
-  it('is the 48 catalog exercises of Appendix A and the 60 rungs of Appendix B, with their logging types', () => {
+  it('is the 48 catalog exercises of Appendix A and the 59 new rungs of Appendix B, with their logging types', () => {
     expect([...CATALOG_NEW_IDS].sort()).toEqual(Object.keys(CATALOG).sort());
     const rungIds = Object.values(RUNGS).flat();
-    expect(rungIds).toHaveLength(60);
+    expect(rungIds).toHaveLength(59);
     expect([...RUNG_NEW_IDS].sort()).toEqual([...rungIds].sort());
     expect(NEW_EXERCISES.map((e) => e.id)).toEqual([...CATALOG_NEW_IDS, ...RUNG_NEW_IDS]);
     for (const [id, type] of Object.entries(CATALOG)) expect([id, byId.get(id)?.loggingType]).toEqual([id, type]);
@@ -185,14 +186,8 @@ describe('NEW_EXERCISES (§18.29, R602, R604)', () => {
   it('gives no new exercise the name or alias of another exercise, so the picker never shows two of one name', () => {
     const taken = new Map<string, string>();
     for (const e of LIBRARY_EXERCISES) for (const word of [e.name, ...e.aliases]) taken.set(word.toLowerCase(), e.id);
-    // Awaiting the controller's ruling (Task 1 report): Appendix B lists `scapular-pull-up` as new, but the library
-    // already has the same movement, with photos and steps, as `fedb-scapular-pull-up`. The likely fix is to drop the
-    // new one and use the library's as the rung (107 new exercises, 59 rungs).
-    const PENDING_RULING: Readonly<Record<string, string>> = { 'scapular-pull-up': 'fedb-scapular-pull-up' };
-    for (const e of NEW_EXERCISES) {
-      expect([e.id, taken.get(e.name.toLowerCase()) ?? null]).toEqual([e.id, PENDING_RULING[e.id] ?? null]);
-    }
-    expect(new Set(NEW_EXERCISES.map((e) => e.name.toLowerCase())).size).toBe(108);
+    for (const e of NEW_EXERCISES) expect([e.id, taken.get(e.name.toLowerCase()) ?? null]).toEqual([e.id, null]);
+    expect(new Set(NEW_EXERCISES.map((e) => e.name.toLowerCase())).size).toBe(107);
   });
 
   it('has no source, no aliases of its own, and its steps from the two step files (empty until written)', () => {

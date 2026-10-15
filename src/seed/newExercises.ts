@@ -1,4 +1,4 @@
-// The Program Library v2's 108 new exercises (spec §18.29, R602–R606) with their form demo steps: the rows of
+// The Program Library v2's 107 new exercises (spec §18.29, R602–R606) with their form demo steps: the rows of
 // src/seed/newExerciseData.ts plus the steps of src/seed/steps/ (Tasks 3 and 4). Seed version 9 adds them, and they
 // join libraryIds.json so they can never be dropped (R604).
 import type { LibraryExercise } from './libraryMapping';
@@ -23,7 +23,7 @@ function withSteps(e: NewExerciseRow, steps: Readonly<Record<string, readonly st
   };
 }
 
-/** Appendix A's 48 then Appendix B's 60, each with no free-exercise-db source. */
+/** Appendix A's 48 then Appendix B's 59, each with no free-exercise-db source. */
 export const NEW_EXERCISES: readonly LibraryExercise[] = [
   ...CATALOG_NEW.map((e) => withSteps(e, CATALOG_STEPS)),
   ...RUNG_NEW.map((e) => withSteps(e, RUNG_STEPS)),
