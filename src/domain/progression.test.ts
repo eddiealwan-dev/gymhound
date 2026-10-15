@@ -384,6 +384,31 @@ describe('computeOutcome for a program slot (§18.29)', () => {
     expect(at()).toMatchObject({ outcome: 'reset', nextWeight: 47.5, nextUnit: 'lb' });
   });
 
+  it('rounds a reset to the full increment when the session ran a halved one (fullIncrement)', () => {
+    const halved = { ...RULE, increment: 2.5 };
+    const sets = [lb(55, 8), lb(55, 5), lb(55, 8)];
+    const result = computeOutcome(input({ rule: halved, plannedWeight: 55, sets, missesToReset: 2, missesBefore: 1, fullIncrement: 5 }));
+    // 55 × 0.9 = 49.5: down to a multiple of 5 is 45, not 47.5.
+    expect(result).toMatchObject({ outcome: 'reset', nextWeight: 45, nextUnit: 'lb', missed: true });
+  });
+
+  it('a slot with increment 0 never resets: held, and the miss is still recorded', () => {
+    const repsOnly = { ...RULE, increment: 0 };
+    const sets = [lb(0, 8), lb(0, 8), lb(0, 4)];
+    expect(computeOutcome(input({ rule: repsOnly, plannedWeight: 0, equipment: 'bodyweight', loggingType: 'bodyweight_plus', sets, missesToReset: 2, missesBefore: 1 }))).toEqual({
+      workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb', missed: true,
+    });
+    const weighted = computeOutcome(input({ rule: repsOnly, plannedWeight: 100, sets: [lb(100, 8), lb(100, 4), lb(100, 8)], missesToReset: 2, missesBefore: 1 }));
+    expect(weighted).toMatchObject({ outcome: 'held', nextWeight: 100, missed: true });
+  });
+
+  it('is held, not reset, when the reset weight is not lower than the working weight (the empty bar)', () => {
+    const sets = [lb(45, 8), lb(45, 8), lb(45, 3)];
+    expect(computeOutcome(input({ equipment: 'barbell', plannedWeight: 45, sets, missesToReset: 2, missesBefore: 1 }))).toEqual({
+      workingWeight: 45, workingUnit: 'lb', outcome: 'held', nextWeight: 45, nextUnit: 'lb', missed: true,
+    });
+  });
+
   it('converts the reset step to the working unit by the gym convention', () => {
     const sets = [kg(55, 8), kg(55, 5), kg(55, 8)];
     const result = computeOutcome(input({ plannedWeight: 55, plannedUnit: 'kg', sets, missesToReset: 2, missesBefore: 1, resetStep: 5 }));
@@ -398,7 +423,6 @@ describe('computeOutcome for a program slot (§18.29)', () => {
     expect(computeOutcome(beginner({ week: { holds: true }, sets: ALL_HIT_135, plannedWeight: null, plannedUnit: null }))).toMatchObject({
       outcome: 'held_week', nextWeight: 135, nextUnit: 'lb', missed: false,
     });
-    expect(computeOutcome(beginner({ week: { holds: true }, sets: [] }))).toMatchObject({ outcome: 'held_week', nextWeight: 135, missed: false });
     // A week that runs the normal rules (a note-only week) changes nothing.
     expect(computeOutcome(beginner({ week: { holds: false }, sets: ALL_HIT_135 }))).toMatchObject({ outcome: 'raised', nextWeight: 140 });
   });
@@ -406,6 +430,18 @@ describe('computeOutcome for a program slot (§18.29)', () => {
   it('marked is held_marked and not a miss', () => {
     expect(computeOutcome(beginner({ marked: true, sets: MISS_135, missesBefore: 2 }))).toEqual({
       workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+  });
+
+  it('no counted sets is no_sets before a holding week or a mark (§7.3 order)', () => {
+    // Skipped in a test week (R617): no_sets, the plan kept.
+    expect(computeOutcome(beginner({ week: { holds: true }, sets: [] }))).toEqual({
+      workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+    expect(computeOutcome(beginner({ marked: true, sets: [lb(135, 8, { done: false })] }))).toMatchObject({ outcome: 'no_sets', nextWeight: 135 });
+    // Your own routine, no program inputs: a marked exercise with nothing done is no_sets, as before this phase.
+    expect(computeOutcome(input({ marked: true, sets: [lb(95, 5, { setType: 'warmup' })] }))).toEqual({
+      workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb', missed: false,
     });
   });
 

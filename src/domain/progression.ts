@@ -42,7 +42,12 @@ export type OutcomeInput = {
   missesToReset?: 2 | 3;
   /** The reset's multiplier: 0.9 (the default), or 0.95 for Strength Peaking's top sets. */
   resetMultiplier?: number;
-  /** The slot's full increment, in the rule's increment unit, that a reset off a barbell rounds down to. Default: the rule's. */
+  /**
+   * The slot's full increment, in the rule's increment unit, when the session's rule carries a halved one (R612). A reset
+   * off a barbell rounds down to it, and a slot whose full increment is 0 never resets. Default: the rule's increment.
+   */
+  fullIncrement?: number;
+  /** The step a reset off a barbell rounds down to, in the rule's increment unit, where it is not the full increment. */
   resetStep?: number;
   /** All-hit normal sessions in a row before a raise: 2 for Atlas stone load (R623), else 1 (the default). */
   sessionsToRaise?: 1 | 2;
@@ -64,6 +69,8 @@ export type OutcomeResult = {
 };
 
 type Load = { value: number; unit: WeightUnit };
+
+const toHundredths = (v: number): number => Math.round(v * 100);
 
 /** Logging types with no load and no rule: timed holds and runs, distance and time, and the metcon scores (R622). */
 function hasNoLoad(loggingType: LoggingType): boolean {
@@ -119,13 +126,14 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
   const planned: Load | null =
     input.plannedWeight !== null && input.plannedUnit !== null ? { value: input.plannedWeight, unit: input.plannedUnit } : null;
 
-  // Step 3. A metcon's score has no automatic rule (R622).
+  // Step 3. A metcon's score has no automatic rule (R622). Nothing counted is no_sets, on a holding week (a skipped
+  // exercise, R617) and a marked day too.
   if (!rule || hasNoLoad(loggingType)) return result('no_rule', null);
+  if (!working) return result('no_sets', planned);
   // A special week that holds keeps the plan and is never a miss (R617).
   if (input.week?.holds) return result('held_week', planned ?? working);
   // Step 5: a marked day holds the plan, and is never a miss (R615).
   if (input.marked) return result('held_marked', planned ?? working);
-  if (!working) return result('no_sets', planned);
 
   // R613: a miss counts only on a program slot (R628).
   const missesToReset = input.missesToReset;
@@ -141,11 +149,13 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
       distanceUnit: input.distanceUnit,
     });
   if (missed) {
-    // More assistance is not a drop of 10%: an assisted slot holds, and the miss still counts.
-    if ((input.missesBefore ?? 0) + 1 >= missesToReset && loggingType !== 'assisted') {
-      const step = convertIncrement(input.resetStep ?? rule.increment, rule.incrementUnit, working.unit);
+    // The miss always counts, but some slots hold instead of resetting: more assistance is not a drop of 10%, a slot
+    // with nothing to add (reps only) has no weight to drop, and a drop that loads no lighter (the empty bar) is none.
+    const fullIncrement = input.fullIncrement ?? rule.increment;
+    if ((input.missesBefore ?? 0) + 1 >= missesToReset && loggingType !== 'assisted' && fullIncrement > 0) {
+      const step = convertIncrement(input.resetStep ?? fullIncrement, rule.incrementUnit, working.unit);
       const next = resetWeight(working, input.resetMultiplier ?? 0.9, step, input.equipment === 'barbell', input.gear[working.unit]);
-      return result('reset', { value: next, unit: working.unit }, true);
+      if (toHundredths(next) < toHundredths(working.value)) return result('reset', { value: next, unit: working.unit }, true);
     }
     return result('held', working, true);
   }

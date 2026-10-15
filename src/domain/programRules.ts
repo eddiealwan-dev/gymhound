@@ -36,7 +36,8 @@ export function programWeek(finishedSessions: number, daysPerWeek: number): numb
 }
 
 /**
- * R617, R627: the special week a program week is, if any; null for a normal week and after the last week. `early` is
+ * R617, R627: the special week a program week is, if any; null for a normal week and once the block is done (after the
+ * last week, or after an early deload). `blockDone` tells those two nulls apart. `early` is
  * the reactive deload: when the lifter started it after `deloadAt` finished sessions, `session` (the finished sessions
  * before this one) from `deloadAt` up to `deloadAt + daysPerWeek - 1` is the deload (the plan's deload week, else a
  * half-set deload), and after it the block is done, so null.
@@ -55,6 +56,19 @@ export function weekInfo(
   }
   if (week > weeks) return null;
   return plan.find((w) => w.week === week) ?? null;
+}
+
+/**
+ * R616, R627: whether the block is done, so a null `weekInfo` means "12 weeks done." and Start over rather than a
+ * normal week: after the last week, or once the early deload's `daysPerWeek` sessions are finished.
+ */
+export function blockDone(
+  weeks: number,
+  week: number,
+  early: { deloadAt: number | null; session: number; daysPerWeek: number } | null,
+): boolean {
+  if (early && early.deloadAt !== null && early.session >= early.deloadAt + Math.max(1, early.daysPerWeek)) return true;
+  return week > weeks;
 }
 
 /** R617: a slot's sets on a half-set week, ceil(sets ÷ 2) and at least 1; a deload-exempt slot keeps its sets. */
@@ -83,13 +97,16 @@ export function isMiss(a: {
   return counted.length < a.setCount || counted.some((s) => setMeasure(s, a.loggingType, a.distanceUnit) < a.repMin);
 }
 
-/** R613: consecutive misses, newest last. Skipped sessions (marked, or a special week) neither count nor break the run. */
-export function missStreak(history: readonly { missed: boolean; skipped: boolean }[]): number {
+/**
+ * R613: consecutive misses, newest last. Skipped sessions (marked, or a special week) neither count nor break the run.
+ * A session whose outcome was `reset` (`reset: true`) ends the run: the count starts again after it.
+ */
+export function missStreak(history: readonly { missed: boolean; skipped: boolean; reset?: boolean }[]): number {
   let streak = 0;
   for (let i = history.length - 1; i >= 0; i--) {
     const session = history[i];
     if (session.skipped) continue;
-    if (!session.missed) break;
+    if (session.reset || !session.missed) break;
     streak++;
   }
   return streak;

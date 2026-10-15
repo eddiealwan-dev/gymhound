@@ -3,6 +3,7 @@ import {
   addSetNext,
   beatTwice,
   beatTwiceForTime,
+  blockDone,
   effectiveIncrement,
   isMiss,
   ladderNext,
@@ -60,6 +61,18 @@ describe('weekInfo (R617, R627)', () => {
       });
     }
     expect(weekInfo([DELOAD_6], 6, programWeek(17, 4), early(17))).toBeNull();
+  });
+
+  it('blockDone tells a normal week (null, not done) from the end of the block (null, done)', () => {
+    expect(blockDone(10, 9, null)).toBe(false);
+    expect(blockDone(10, 10, null)).toBe(false);
+    expect(blockDone(10, 11, null)).toBe(true);
+    expect(blockDone(10, 11, { deloadAt: null, session: 40, daysPerWeek: 4 })).toBe(true);
+    // #11's early deload from session 13: done from session 17, in week 5 of 6.
+    const early = (session: number) => ({ deloadAt: 13, session, daysPerWeek: 4 });
+    expect(blockDone(6, programWeek(16, 4), early(16))).toBe(false);
+    expect(blockDone(6, programWeek(17, 4), early(17))).toBe(true);
+    expect(blockDone(6, programWeek(12, 4), early(12))).toBe(false);
   });
 
   it('an early deload in a plan without one is a half-set deload', () => {
@@ -132,6 +145,13 @@ describe('missStreak (R613)', () => {
     expect(missStreak([{ missed: true, skipped: false }, { missed: false, skipped: true }, { missed: true, skipped: false }])).toBe(2);
     expect(missStreak([{ missed: true, skipped: false }, { missed: false, skipped: false }, { missed: true, skipped: false }])).toBe(1);
     expect(missStreak([{ missed: true, skipped: false }, { missed: false, skipped: false }])).toBe(0);
+  });
+
+  it('restarts after a reset: miss, miss, miss (reset), miss is 1, not 4', () => {
+    const miss = { missed: true, skipped: false };
+    expect(missStreak([miss, miss, { ...miss, reset: true }, miss])).toBe(1);
+    expect(missStreak([miss, miss, { ...miss, reset: true }])).toBe(0);
+    expect(missStreak([miss, { ...miss, reset: true }, { missed: false, skipped: true }, miss, miss])).toBe(2);
   });
 });
 
