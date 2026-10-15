@@ -149,6 +149,25 @@ describe('Settings: the length unit for body measurements (R639b)', () => {
   });
 });
 
+describe("Settings: choosing units stores that they're the lifter's (Train's units line)", () => {
+  const radio = (tree: ReactTestRenderer, label: string, index: number) =>
+    tree.root
+      .findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radiogroup' && n.props.accessibilityLabel === label)[0]
+      .findAll((n) => n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function')[index];
+
+  beforeEach(() => jest.mocked(setSetting).mockClear());
+
+  it('a weight or distance choice marks the units chosen', () => {
+    const tree = mount();
+    act(() => radio(tree, 'Weight', 1).props.onPress());
+    expect(setSetting).toHaveBeenCalledWith('db', 'unitsChosen', true);
+    jest.mocked(setSetting).mockClear();
+    act(() => radio(tree, 'Distance', 1).props.onPress());
+    expect(setSetting).toHaveBeenCalledWith('db', 'distanceUnit', 'km');
+    expect(setSetting).toHaveBeenCalledWith('db', 'unitsChosen', true);
+  });
+});
+
 describe('Settings: the default increment (spec 8.11, R124)', () => {
   it('offers 2.5, 5 and 10 lb for a lb lifter, with the stored 5 lb selected', () => {
     const tree = mount();

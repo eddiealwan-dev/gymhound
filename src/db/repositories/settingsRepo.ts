@@ -59,6 +59,8 @@ export type Settings = {
   lastCloudCopyAt: number | null;
   /** §18.15 (R407): Train's first-run line about units was dismissed. It only shows before the first finished workout. */
   hintUnitsDismissed: boolean;
+  /** The lifter has chosen a weight or distance unit in Settings, so Train's units line no longer credits the region. */
+  unitsChosen: boolean;
   /** §18.15 (R408): the session's first-run tip (the name opens the form demo, ⋯ holds rest and plates) was dismissed. */
   hintSessionDismissed: boolean;
   /** Round 12 (R566): the Profile's name and goal, '' when not given. */
@@ -120,6 +122,7 @@ const KEYS: Record<keyof Settings, string> = {
   healthBodyweight: 'health_bodyweight',
   lastCloudCopyAt: 'last_cloud_copy_at',
   hintUnitsDismissed: 'hint_units_dismissed',
+  unitsChosen: 'units_chosen',
   hintSessionDismissed: 'hint_session_dismissed',
   profileName: 'profile_name',
   profileGoal: 'profile_goal',
@@ -170,6 +173,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     healthBodyweight: false,
     lastCloudCopyAt: null,
     hintUnitsDismissed: false,
+    unitsChosen: false,
     hintSessionDismissed: false,
     profileName: '',
     profileGoal: '',

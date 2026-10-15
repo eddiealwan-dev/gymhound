@@ -129,6 +129,7 @@ function UnitsSection() {
           value={unit}
           onChange={(value) => {
             switchDisplayUnit(db, value);
+            setSetting(db, 'unitsChosen', true);
             bumpData();
           }}
         />
@@ -140,6 +141,7 @@ function UnitsSection() {
           value={distanceUnit}
           onChange={(value) => {
             setSetting(db, 'distanceUnit', value);
+            setSetting(db, 'unitsChosen', true);
             bumpData();
           }}
         />

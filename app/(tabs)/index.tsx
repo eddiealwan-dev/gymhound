@@ -50,9 +50,13 @@ import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
 
-/** Train's first-run line about units (R407): which ones the phone's region chose, and where to change them. */
-function unitsHintText(unit: WeightUnit, distanceUnit: DistanceUnit): string {
-  return `Weights are in ${unit} and distances in ${distanceUnit}, from your phone's region. Change them in Settings.`;
+/**
+ * Train's first-run line about units (R407): which ones the phone's region chose, and where to change them; once the
+ * lifter has chosen in Settings, that they are as set there.
+ */
+function unitsHintText(unit: WeightUnit, distanceUnit: DistanceUnit, chosen: boolean): string {
+  const units = `Weights are in ${unit} and distances in ${distanceUnit}`;
+  return chosen ? `${units}, as set in Settings.` : `${units}, from your phone's region. Change them in Settings.`;
 }
 
 /** What Train shows from the database. `weekStart` is the Monday on or before today. `gear` is the display unit's bar and plates. */
@@ -66,6 +70,7 @@ function readTrain(db: Db, weekStart: string) {
     distanceUnit: settings.distanceUnit,
     // Before the first finished workout, until dismissed, Train says which units it uses (R407).
     unitsHint: !settings.hintUnitsDismissed && trainingDates.length === 0,
+    unitsChosen: settings.unitsChosen,
     gear: gearFor(unit, settings),
     active:
       active === null
@@ -390,7 +395,7 @@ export default function Train() {
   // Focused only: Train stays mounted under the session, and every tick there bumps the data version. Reading the whole
   // active workout, Up next, every training date and the week's volume again on each tick was wasted while out of sight;
   // a bump while away is read when Train is back in view (R185).
-  const { unit, distanceUnit, unitsHint, gear, active, upNext, trainingDates, weekVolume } = useFocusedDbQuery(read);
+  const { unit, distanceUnit, unitsHint, unitsChosen, gear, active, upNext, trainingDates, weekVolume } = useFocusedDbQuery(read);
   const [blocked, setBlocked] = useState(false);
   /** Change routine was tapped while a workout runs (R80). */
   const [changeBlocked, setChangeBlocked] = useState(false);
@@ -457,7 +462,7 @@ export default function Train() {
       {unitsHint === true && active === null ? (
         <Hint
           style={{ marginTop: 16 }}
-          text={unitsHintText(unit, distanceUnit)}
+          text={unitsHintText(unit, distanceUnit, unitsChosen === true)}
           onDismiss={() => {
             setSetting(db, 'hintUnitsDismissed', true);
             bumpData();

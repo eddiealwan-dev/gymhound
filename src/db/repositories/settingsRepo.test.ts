@@ -46,6 +46,7 @@ const SPEC_KEYS = [
   'tester_answers',
   'theme',
   'unit',
+  'units_chosen',
   'water_goal_ml',
   'weekly_workout_goal',
   'work_timer',
