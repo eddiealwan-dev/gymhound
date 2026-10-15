@@ -7,15 +7,14 @@ import {
   type DraftSet,
   type WorkoutDraft,
 } from '../../domain/historyDraft';
-import { programById } from '../../seed/programs.generated';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { finishedWorkoutsAfter, programSlotOf, workoutSlotRows, type WorkoutTime } from './programRunRepo';
+import { programSlotOf } from './programRunRepo';
 import { recomputePrFlags } from './prRepo';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
-import { storeOutcomes } from './workoutsRepo';
+import { rerunLaterInRun, storeOutcomes } from './workoutsRepo';
 
 /**
  * Editing and deleting finished workouts (spec 7.12, R166–R170). Each write is one transaction that re-runs the rule
@@ -216,20 +215,6 @@ export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[]
   }
 }
 
-/**
- * After a history edit or delete of `workout` (§7.12): on one of the twenty programs, each later finished workout of
- * the program re-runs the rule on its exercises linked to `routineExerciseIds`, in time order, since a slot's misses in
- * a row, two-session raises, rungs and added sets read the sessions before it. Each keeps its own snapshot and week.
- * Your own routines need nothing: §7.3 reads only the workout itself (R628).
- */
-function recomputeLater(db: Db, workout: WorkoutTime & { routineId: string | null }, routineExerciseIds: readonly string[]): void {
-  if (workout.routineId === null || !programById(workout.routineId) || routineExerciseIds.length === 0) return;
-  for (const later of finishedWorkoutsAfter(db, workout.routineId, workout)) {
-    const linked = workoutSlotRows(db, later.id, [...new Set(routineExerciseIds)]);
-    if (linked.length > 0) storeOutcomes(db, later.id, linked);
-  }
-}
-
 /** Renumbers the workout's exercises, and each one's sets, 0, 1, 2… keeping their order. */
 function renumber(db: Db, workoutId: string): void {
   const blocks = db
@@ -336,7 +321,7 @@ export function saveWorkoutEdit(db: Db, draft: WorkoutDraft): void {
     storeOutcomes(tx, workout.id, changed);
     const after = linksOf(tx, workout.id);
     const slots = [...before.routineExerciseIds, ...after.routineExerciseIds];
-    recomputeLater(tx, workout, slots);
+    rerunLaterInRun(tx, workout, slots);
     recomputePrFlags(tx, [...new Set([...before.exerciseIds, ...after.exerciseIds])]);
     refreshNextWeights(tx, slots, laddersFollowing);
 
@@ -375,7 +360,7 @@ export function deleteFinishedWorkout(db: Db, workoutId: string): void {
     tx.delete(sets).where(inArray(sets.workoutExerciseId, blockIds)).run();
     tx.delete(workoutExercises).where(eq(workoutExercises.workoutId, workoutId)).run();
     tx.delete(workouts).where(eq(workouts.id, workoutId)).run();
-    recomputeLater(tx, workout, routineExerciseIds);
+    rerunLaterInRun(tx, workout, routineExerciseIds);
     recomputePrFlags(tx, exerciseIds);
     refreshNextWeights(tx, routineExerciseIds, laddersFollowing);
   });

@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import { toLocalDate } from '../../domain/dates';
 import { gearFor, planInUnit } from '../../domain/plates';
-import { addSetNext, countedSets, ladderNext, missStreak, setMeasure } from '../../domain/programRules';
+import { addSetNext, countedSets, effectiveIncrement, ladderNext, missStreak, setMeasure } from '../../domain/programRules';
 import { computeOutcome, isAllHit, type Outcome, type OutcomeInput, type OutcomeResult } from '../../domain/progression';
 import type { TickValues } from '../../domain/setEntry';
 import type { DistanceUnit, WeightUnit } from '../../domain/types';
@@ -22,7 +22,18 @@ import {
 import type { Db } from '../types';
 import { ActiveWorkoutExistsError, assertNoActiveWorkout, getActiveWorkoutId } from './activeWorkout';
 import { writePrFlags } from './prRepo';
-import { ensureRunStarted, isBefore, programSlotOf, runNow, slotSessions, type SlotSession } from './programRunRepo';
+import {
+  carryUnit,
+  ensureRunStarted,
+  finishedWorkoutsAfter,
+  isBefore,
+  programSlotOf,
+  runNow,
+  slotSessions,
+  workoutSlotRows,
+  type SlotSession,
+  type WorkoutTime,
+} from './programRunRepo';
 import { programRuleSnapshot, ruleOf } from './ruleSnapshot';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
@@ -126,7 +137,7 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
               week: run.week,
               weekInfo: run.weekInfo,
               unit,
-              missedInRun: slotSessions(tx, rule.id, run.runStartedAt).some((s) => s.missed),
+              missedInRun: slotSessions(tx, rule.id, run.runStartedAt, rule.exerciseId).some((s) => s.missed),
               secondsRaises:
                 slot.addSet?.then.kind === 'seconds' ? slotSessions(tx, rule.id, 0).filter((s) => s.outcome === 'raised').length : 0,
             })
@@ -248,13 +259,6 @@ function setsOf(db: Db, workoutExerciseId: string): SetRow[] {
 /** Sessions that neither count as a miss nor break a run of them (R613): marked, a holding week, nothing counted. */
 const skipped = (s: SlotSession) => s.outcome === 'held_marked' || s.outcome === 'held_week' || s.outcome === 'no_sets';
 
-/** The slot's distance unit for weight and distance (R607): ft or yd, from the program's target unit. */
-function slotDistanceUnit(slot: ProgramSlot): DistanceUnit | undefined {
-  if (slot.targetUnit === 'feet') return 'ft';
-  if (slot.targetUnit === 'yards') return 'yd';
-  return undefined;
-}
-
 /** A past workout exercise as the rule reads it: its own snapshot, sets and logging type, with `like`'s gear. */
 function inputOf(db: Db, workoutExerciseId: string, like: OutcomeInput): OutcomeInput {
   const row = db
@@ -282,34 +286,54 @@ function inputOf(db: Db, workoutExerciseId: string, like: OutcomeInput): Outcome
  */
 function programOutcome(
   db: Db,
-  a: { program: Program; slot: ProgramSlot; input: OutcomeInput; weekHolds: boolean; ruleRung: number | null; history: readonly SlotSession[] },
-): { result: OutcomeResult; nextRung: number | null; nextSetCount: number | null } {
+  a: {
+    program: Program;
+    slot: ProgramSlot;
+    exerciseId: string;
+    input: OutcomeInput;
+    weekHolds: boolean;
+    ruleRung: number | null;
+    history: readonly SlotSession[];
+    /** The workout is in the current run, so its halving is re-derived from history (an earlier run's is kept). */
+    inRun: boolean;
+  },
+): { result: OutcomeResult; nextRung: number | null; nextSetCount: number | null; ruleIncrement?: number } {
   const { program, slot, input, weekHolds, history } = a;
   const rule = input.rule;
-  const normal = history.filter((h) => !skipped(h));
-  const previous = normal.length > 0 ? normal[normal.length - 1] : undefined;
+  const previousOf = (h: readonly SlotSession[]) => h.filter((x) => !skipped(x)).at(-1);
+  const previous = previousOf(history);
   const counted = countedSets(input.sets);
   const status: Outcome = counted.length === 0 ? 'no_sets' : weekHolds ? 'held_week' : input.marked ? 'held_marked' : 'held';
   // The plain hold: nothing added and never a miss, with no weight on a timed set.
   const plain = (): OutcomeResult => ({ ...computeOutcome({ ...input, rule: rule && { ...rule, increment: 0 } }), outcome: status, missed: false });
   // The load rule's misses, halving's reset step and two-session raises (R612, R613, R623).
-  const loadInput = (fullIncrementLb: number): OutcomeInput => ({
-    ...input,
-    missesBefore: missStreak(history.map((h) => ({ missed: h.missed, skipped: skipped(h), reset: h.outcome === 'reset' }))),
-    missesToReset: program.missesToReset,
-    resetMultiplier: slot.resetMultiplier,
-    fullIncrement: rule ? convertIncrement(fullIncrementLb, 'lb', rule.incrementUnit) : undefined,
-    sessionsToRaise: slot.sessionsToRaise,
-    previousAllHit:
-      slot.sessionsToRaise === 2 &&
-      previous !== undefined &&
-      previous.outcome !== 'raised' &&
-      isAllHit(inputOf(db, previous.workoutExerciseId, input)),
-  });
+  const loadInput = (fullIncrementLb: number, h: readonly SlotSession[]): OutcomeInput => {
+    const before = previousOf(h);
+    return {
+      ...input,
+      missesBefore: missStreak(h.map((x) => ({ missed: x.missed, skipped: skipped(x), reset: x.outcome === 'reset' }))),
+      missesToReset: program.missesToReset,
+      resetMultiplier: slot.resetMultiplier,
+      fullIncrement: rule ? convertIncrement(fullIncrementLb, 'lb', rule.incrementUnit) : undefined,
+      sessionsToRaise: slot.sessionsToRaise,
+      previousAllHit:
+        slot.sessionsToRaise === 2 && before !== undefined && before.outcome !== 'raised' && isAllHit(inputOf(db, before.workoutExerciseId, input)),
+    };
+  };
 
   switch (slot.ruleKind) {
-    case 'load':
-      return { result: computeOutcome(loadInput(slot.incrementLb)), nextRung: null, nextSetCount: null };
+    case 'load': {
+      // After a Modify swap, only the current exercise's sessions are the slot's misses (R553, R613).
+      const own = history.filter((h) => h.exerciseId === a.exerciseId);
+      if (!rule) return { result: computeOutcome(loadInput(slot.incrementLb, own)), nextRung: null, nextSetCount: null };
+      // Halving is derived from history, so a recompute re-derives it (R612, §7.12): the full increment, halved after
+      // a miss earlier in the run. An earlier run's workout keeps the increment it ran.
+      const increment = a.inRun
+        ? effectiveIncrement(convertIncrement(slot.incrementLb, 'lb', rule.incrementUnit), slot.halveAfterFirstMiss, own.some((h) => h.missed))
+        : rule.increment;
+      const result = computeOutcome({ ...loadInput(slot.incrementLb, own), rule: { ...rule, increment } });
+      return { result, nextRung: null, nextSetCount: null, ruleIncrement: increment };
+    }
 
     case 'ladder': {
       const ladder = slot.ladder ?? [];
@@ -330,7 +354,7 @@ function programOutcome(
         return { result, nextRung: move.rung, nextSetCount: null };
       }
       // A weighted top rung runs the load rule with its own increment (R618); halving is for load slots only.
-      if (r.weightedIncrementLb !== null) return { result: computeOutcome(loadInput(r.weightedIncrementLb)), nextRung: rung, nextSetCount: null };
+      if (r.weightedIncrementLb !== null) return { result: computeOutcome(loadInput(r.weightedIncrementLb, history)), nextRung: rung, nextSetCount: null };
       return { result: plain(), nextRung: rung, nextSetCount: null };
     }
 
@@ -353,13 +377,21 @@ function programOutcome(
   }
 }
 
-function storeAll(db: Db, workoutId: string, only?: readonly string[]): StoredProgramOutcome[] {
+/** What every exercise of a store reads once: the gear in Settings now, and the program's run (null for none). */
+type StoreContext = { gear: OutcomeInput['gear']; run: ReturnType<typeof runNow> };
+
+function gearNow(db: Db): OutcomeInput['gear'] {
   const settings = getSettings(db);
-  const gear = { lb: gearFor('lb', settings), kg: gearFor('kg', settings) };
+  return { lb: gearFor('lb', settings), kg: gearFor('kg', settings) };
+}
+
+function storeAll(db: Db, workoutId: string, only?: readonly string[], context?: StoreContext): StoredProgramOutcome[] {
+  const gear = context?.gear ?? gearNow(db);
   const workout = db.select().from(workouts).where(eq(workouts.id, workoutId)).get();
-  const run = workout?.routineId ? runNow(db, workout.routineId) : null;
+  const run = context ? context.run : workout?.routineId ? runNow(db, workout.routineId) : null;
   // History counts from the run's start; a workout from before it (an earlier run) reads all the history before it.
-  const from = run && workout && workout.startedAt >= run.runStartedAt ? run.runStartedAt : 0;
+  const inRun = run !== null && workout !== undefined && workout.startedAt >= run.runStartedAt;
+  const from = run !== null && inRun ? run.runStartedAt : 0;
   const weekHolds = workout !== undefined && workout.weekKind !== null && workout.weekKind !== 'note';
   const rows = db
     .select({ we: workoutExercises, loggingType: exercises.loggingType, equipment: exercises.equipment })
@@ -387,17 +419,19 @@ function storeAll(db: Db, workoutId: string, only?: readonly string[]): StoredPr
     };
     // A program slot is one whose workout snapshotted a rule kind, on a routine that is one of the twenty (R628).
     const slot = we.ruleKind === null || !workout ? undefined : programSlotOf(workout.routineId, we.routineExerciseId);
-    const { result, nextRung, nextSetCount } =
+    const { result, nextRung, nextSetCount, ruleIncrement } =
       slot && run && workout && we.routineExerciseId !== null
         ? programOutcome(db, {
             program: run.program,
             slot,
-            input: { ...input, week: { holds: weekHolds }, distanceUnit: slotDistanceUnit(slot) },
+            exerciseId: we.exerciseId,
+            input: { ...input, week: { holds: weekHolds }, distanceUnit: carryUnit(slot) ?? undefined },
             weekHolds,
             ruleRung: we.ruleRung,
             history: slotSessions(db, we.routineExerciseId, from).filter((h) => h.id !== workout.id && isBefore(h, workout)),
+            inRun,
           })
-        : { result: computeOutcome(input), nextRung: null, nextSetCount: null };
+        : { result: computeOutcome(input), nextRung: null, nextSetCount: null, ruleIncrement: undefined };
     db.update(workoutExercises)
       .set({
         workingWeight: result.workingWeight,
@@ -408,6 +442,7 @@ function storeAll(db: Db, workoutId: string, only?: readonly string[]): StoredPr
         missed: result.missed,
         nextRung,
         nextSetCount,
+        ...(ruleIncrement === undefined ? {} : { ruleIncrement }),
       })
       .where(eq(workoutExercises.id, we.id))
       .run();
@@ -446,6 +481,26 @@ export function storeOutcomes(db: Db, workoutId: string, only?: readonly string[
     nextWeight,
     nextUnit,
   }));
+}
+
+/**
+ * After a history edit or delete of `workout` (§7.12) on one of the twenty programs: each later finished workout of the
+ * current run re-runs the rule on its exercises linked to `routineExerciseIds`, in time order, since a slot's misses in
+ * a row, halving, two-session raises, rungs and added sets read the sessions before it. Each keeps its own week. A
+ * workout from an earlier run changes nothing after it: earlier runs are history, and the current run reads only its
+ * own sessions. Your own routines need nothing, since §7.3 reads only the workout itself (R628).
+ */
+export function rerunLaterInRun(db: Db, workout: WorkoutTime & { routineId: string | null }, routineExerciseIds: readonly string[]): void {
+  if (workout.routineId === null || routineExerciseIds.length === 0) return;
+  const run = runNow(db, workout.routineId);
+  if (!run || workout.startedAt < run.runStartedAt) return;
+  const context: StoreContext = { gear: gearNow(db), run };
+  const slots = [...new Set(routineExerciseIds)];
+  for (const later of finishedWorkoutsAfter(db, workout.routineId, workout)) {
+    if (later.startedAt < run.runStartedAt) continue;
+    const linked = workoutSlotRows(db, later.id, slots);
+    if (linked.length > 0) storeAll(db, later.id, linked, context);
+  }
 }
 
 /**

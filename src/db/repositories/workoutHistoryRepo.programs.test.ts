@@ -7,7 +7,8 @@ import { routineExercises, workoutExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import { insertProgram, runSession } from '../testing/programFixture';
 import type { Db } from '../types';
-import { changeRung, setActiveProgram } from './programRunRepo';
+import { changeRung, setActiveProgram, startProgramOver } from './programRunRepo';
+import { getSettings, setSetting } from './settingsRepo';
 import { deleteFinishedWorkout, loadWorkoutDraft, saveWorkoutEdit } from './workoutHistoryRepo';
 import { startWorkoutFromDay } from './workoutsRepo';
 
@@ -107,5 +108,56 @@ describe('a history edit or delete on a program (§7.12)', () => {
     expect(slotRow(db, complex).nextSetCount).toBe(7);
     deleteFinishedWorkout(db, w2);
     expect(slotRow(db, complex).nextSetCount).toBe(6);
+  });
+
+  it('deleting the only miss restores the full increment on the later raise', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    // A pair of 1.25 lb plates, so a 2.5 lb raise loads as itself.
+    setSetting(db, 'platesLb', { ...getSettings(db).platesLb, '1.25': 1 });
+    const w1 = runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 4] } });
+    const w2 = runSession(db, BF_A, at(2), { [SQUAT_A]: { weight: 135, reps: [8, 8, 8] } });
+    expect(blockOf(db, w2, SQUAT_A)).toMatchObject({ ruleIncrement: 2.5, outcome: 'raised', nextWeight: 137.5 });
+
+    deleteFinishedWorkout(db, w1);
+    expect(blockOf(db, w2, SQUAT_A)).toMatchObject({ ruleIncrement: 5, outcome: 'raised', nextWeight: 140 });
+    expect(slotRow(db, SQUAT_A).nextWeight).toBe(140);
+  });
+
+  it('editing an earlier hit into a miss halves later raises', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    setSetting(db, 'platesLb', { ...getSettings(db).platesLb, '1.25': 1 });
+    const w1 = runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [8, 8, 8] } });
+    const w2 = runSession(db, BF_A, at(2), { [SQUAT_A]: { weight: 140, reps: [8, 8, 8] } });
+    expect(blockOf(db, w2, SQUAT_A)).toMatchObject({ ruleIncrement: 5, nextWeight: 145 });
+
+    const draft = loadWorkoutDraft(db, w1)!;
+    const weId = draft.exercises.find((e) => e.exerciseId === 'barbell-back-squat')!.workoutExerciseId;
+    saveWorkoutEdit(db, patchDraftSet(draft, weId, 2, { reps: 4 }));
+    expect(blockOf(db, w1, SQUAT_A)).toMatchObject({ missed: true, outcome: 'held', nextWeight: 135 });
+    expect(blockOf(db, w2, SQUAT_A)).toMatchObject({ ruleIncrement: 2.5, outcome: 'raised', nextWeight: 142.5 });
+    expect(slotRow(db, SQUAT_A).nextWeight).toBe(142.5);
+  });
+
+  it('editing a workout from an earlier run writes no reset into later old-run workouts', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    const w1 = runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 5] } });
+    runSession(db, BF_A, at(2), { [SQUAT_A]: { weight: 135, reps: [5, 5, 4] } });
+    const w3 = runSession(db, BF_A, at(3), { [SQUAT_A]: { weight: 135, reps: [5, 5, 4] } });
+    expect(blockOf(db, w3, SQUAT_A)).toMatchObject({ outcome: 'held', nextWeight: 135 });
+    startProgramOver(db, BF, at(4));
+
+    const draft = loadWorkoutDraft(db, w1)!;
+    const weId = draft.exercises.find((e) => e.exerciseId === 'barbell-back-squat')!.workoutExerciseId;
+    saveWorkoutEdit(db, patchDraftSet(draft, weId, 2, { reps: 4 }));
+    expect(blockOf(db, w1, SQUAT_A)).toMatchObject({ missed: true });
+    // The earlier run is history: its later workouts keep what they stored.
+    expect(blockOf(db, w3, SQUAT_A)).toMatchObject({ outcome: 'held', nextWeight: 135 });
+    expect(slotRow(db, SQUAT_A).nextWeight).toBe(135);
   });
 });

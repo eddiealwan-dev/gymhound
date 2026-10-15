@@ -7,6 +7,8 @@ import { seededDb } from '../testing/fixtures';
 import { fakeSessions, insertProgram, runSession } from '../testing/programFixture';
 import type { Db } from '../types';
 import { setActiveProgram } from './programRunRepo';
+import { swapRoutineExercise } from './routinesRepo';
+import { getActiveWorkoutView } from './workoutViewsRepo';
 import { discardWorkout, finishWorkout, startWorkoutFromDay } from './workoutsRepo';
 
 const HOUR = 3_600_000;
@@ -130,6 +132,40 @@ describe('misses, resets and halving (R612, R613)', () => {
     const id = startWorkoutFromDay(db, BF_A, at(4));
     // 13 × 0.9 = 11.7, down to a multiple of 2.5 kg: 10.
     expect(blockOf(db, id, curl)).toMatchObject({ ruleIncrement: 1.25, ruleIncrementUnit: 'kg', plannedWeight: 10, plannedUnit: 'kg' });
+  });
+});
+
+describe('a Modify swap on a program slot (R553, R612, R613)', () => {
+  it("after a swap, misses and halving count only the new exercise's sessions", () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 4] } });
+    runSession(db, BF_A, at(2), { [SQUAT_A]: { weight: 135, reps: [5, 5, 4] } });
+    swapRoutineExercise(db, SQUAT_A, 'barbell-front-squat');
+
+    const fresh = startWorkoutFromDay(db, BF_A, at(3));
+    expect(blockOf(db, fresh, SQUAT_A)).toMatchObject({ exerciseId: 'barbell-front-squat', ruleIncrement: 5 });
+    discardWorkout(db, fresh);
+    // The back squat's two misses don't count: this is the front squat's first miss, so it holds.
+    const w3 = runSession(db, BF_A, at(3), { [SQUAT_A]: { weight: 95, reps: [5, 5, 4] } });
+    expect(blockOf(db, w3, SQUAT_A)).toMatchObject({ outcome: 'held', missed: true, nextWeight: 95 });
+    const next = startWorkoutFromDay(db, BF_A, at(4));
+    expect(blockOf(db, next, SQUAT_A)).toMatchObject({ ruleIncrement: 2.5 });
+  });
+});
+
+describe('a carry in its slot unit (R607)', () => {
+  it('a first Yoke carry is entered in ft', () => {
+    const db = seededDb();
+    const SM = 'program-strongman-prep';
+    insertProgram(db, SM);
+    setActiveProgram(db, SM, NOW);
+    startWorkoutFromDay(db, `${SM}:thu-events-a`, at(1));
+    const view = getActiveWorkoutView(db)!;
+    expect(view.exercises.find((e) => e.exerciseId === 'yoke-carry')).toMatchObject({ slotDistanceUnit: 'ft' });
+    // A slot that is not a carry has none.
+    expect(view.exercises.find((e) => e.exerciseId !== 'yoke-carry')?.slotDistanceUnit ?? null).toBeNull();
   });
 });
 

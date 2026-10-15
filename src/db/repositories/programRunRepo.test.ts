@@ -6,6 +6,7 @@ import { fakeSessions, insertProgram, runSession } from '../testing/programFixtu
 import type { Db } from '../types';
 import { changeRung, programState, setActiveProgram, startEarlyDeload, startProgramOver } from './programRunRepo';
 import { getSettings } from './settingsRepo';
+import { deleteFinishedWorkout } from './workoutHistoryRepo';
 import { discardWorkout, startWorkoutFromDay } from './workoutsRepo';
 
 const HOUR = 3_600_000;
@@ -108,8 +109,8 @@ describe('the reactive deload (R627)', () => {
     runSession(db, `${DUP}:${lower.slug}`, NOW + DAY, { [squatSlot.id]: { weight: 225, reps: [3, 3, 3, 3] } });
     expect(programState(db, DUP)).toMatchObject({ week: 1, sessions: 2, mainMissesThisWeek: 2, done: false });
 
-    startEarlyDeload(db, DUP);
-    expect(routineRow(db, DUP).runDeloadAt).toBe(2);
+    startEarlyDeload(db, DUP, NOW + DAY + HOUR);
+    expect(routineRow(db, DUP).runDeloadAt).toBe(NOW + DAY + HOUR);
     expect(programState(db, DUP)).toMatchObject({ weekInfo: { kind: 'deload', halfSets: true }, done: false });
 
     program.days.forEach((day, i) => {
@@ -122,6 +123,36 @@ describe('the reactive deload (R627)', () => {
     });
 
     expect(programState(db, DUP)).toMatchObject({ sessions: 6, weekInfo: null, done: true });
+  });
+});
+
+describe('the reactive deload, anchored in time (R627, §7.12)', () => {
+  it('deleting a workout from before the tap does not stretch the deload', () => {
+    const db = seededDb();
+    const program = insertProgram(db, DUP);
+    setActiveProgram(db, DUP, NOW);
+    const [upper, lower] = program.days;
+    const first = runSession(db, `${DUP}:${upper.slug}`, NOW + HOUR, { [upper.slots[0].id]: { weight: 185, reps: [3, 3, 3, 3] } });
+    runSession(db, `${DUP}:${lower.slug}`, NOW + DAY, { [lower.slots[0].id]: { weight: 225, reps: [3, 3, 3, 3] } });
+    startEarlyDeload(db, DUP, NOW + DAY + HOUR);
+    program.days.forEach((day, i) => {
+      runSession(db, `${DUP}:${day.slug}`, NOW + (2 + i) * DAY, { [day.slots[0].id]: { weight: 100, reps: [12, 12] } });
+    });
+    expect(programState(db, DUP)).toMatchObject({ done: true });
+
+    deleteFinishedWorkout(db, first);
+    expect(programState(db, DUP)).toMatchObject({ sessions: 5, weekInfo: null, done: true });
+  });
+
+  it('mainMissesThisWeek counts each main lift once', () => {
+    const db = seededDb();
+    const program = insertProgram(db, DUP);
+    setActiveProgram(db, DUP, NOW);
+    const upper = program.days[0];
+    for (const n of [1, 2]) {
+      runSession(db, `${DUP}:${upper.slug}`, NOW + n * HOUR, { [upper.slots[0].id]: { weight: 185, reps: [3, 3, 3, 3] } });
+    }
+    expect(programState(db, DUP)).toMatchObject({ sessions: 2, mainMissesThisWeek: 1 });
   });
 });
 

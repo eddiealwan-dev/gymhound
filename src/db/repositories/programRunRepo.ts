@@ -62,8 +62,18 @@ export type SlotSession = WorkoutTime & {
   nextSetCount: number | null;
 };
 
-/** The finished sessions of a routine slot whose workout started at or after `from`, in time order. */
-export function slotSessions(db: Db, routineExerciseId: string, from: number): SlotSession[] {
+/** A carry slot's distance unit (R607): ft or yd from the program's target unit; null for any other slot. */
+export function carryUnit(slot: ProgramSlot | undefined): 'ft' | 'yd' | null {
+  if (slot?.targetUnit === 'feet') return 'ft';
+  if (slot?.targetUnit === 'yards') return 'yd';
+  return null;
+}
+
+/**
+ * The finished sessions of a routine slot whose workout started at or after `from`, in time order; with `exerciseId`,
+ * only those that logged it (after a Modify swap, the old exercise's sessions are not the slot's misses, R553).
+ */
+export function slotSessions(db: Db, routineExerciseId: string, from: number, exerciseId?: string): SlotSession[] {
   const rows = db
     .select({
       id: workouts.id,
@@ -81,7 +91,12 @@ export function slotSessions(db: Db, routineExerciseId: string, from: number): S
     .from(workoutExercises)
     .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
     .where(
-      and(eq(workoutExercises.routineExerciseId, routineExerciseId), eq(workouts.status, 'finished'), gte(workouts.startedAt, from)),
+      and(
+        eq(workoutExercises.routineExerciseId, routineExerciseId),
+        exerciseId === undefined ? undefined : eq(workoutExercises.exerciseId, exerciseId),
+        eq(workouts.status, 'finished'),
+        gte(workouts.startedAt, from),
+      ),
     )
     .all();
   return rows.sort((a, b) => (isBefore(a, b) ? -1 : isBefore(b, a) ? 1 : 0));
@@ -106,8 +121,13 @@ export function runNow(
   if (!routine || routine.runStartedAt === null) return null;
   const sessions = finishedWorkoutsSince(db, routineId, routine.runStartedAt);
   const week = programWeek(sessions.length, program.daysPerWeek);
+  // The deload starts after the sessions started before the tap: counted from the time, so deleting or adding a
+  // workout before it never stretches or shortens the deload (§7.12).
+  const runDeloadAt = routine.runDeloadAt;
   const early =
-    routine.runDeloadAt === null ? null : { deloadAt: routine.runDeloadAt, session: sessions.length, daysPerWeek: program.daysPerWeek };
+    runDeloadAt === null
+      ? null
+      : { deloadAt: sessions.filter((s) => s.startedAt < runDeloadAt).length, session: sessions.length, daysPerWeek: program.daysPerWeek };
   return {
     program,
     runStartedAt: routine.runStartedAt,
@@ -195,23 +215,26 @@ export function programState(db: Db, routineId: string): ProgramState | null {
     const lastWeek = weekOf(sessions.length - 1);
     const inWeek = new Set(sessions.filter((_, i) => weekOf(i) === lastWeek).map((s) => s.id));
     const mains = new Set(program.days.flatMap((d) => d.slots.filter((s) => s.isMain).map((s) => s.id)));
-    mainMissesThisWeek = rows.filter(
-      (r) => r.missed && inWeek.has(r.workoutId) && r.routineExerciseId !== null && mains.has(r.routineExerciseId),
-    ).length;
+    // Main lifts, not sessions: one slot that missed twice in the week is one lift (R627).
+    mainMissesThisWeek = new Set(
+      rows
+        .filter((r) => r.missed && inWeek.has(r.workoutId) && r.routineExerciseId !== null && mains.has(r.routineExerciseId))
+        .map((r) => r.routineExerciseId),
+    ).size;
   }
 
   return { week: run.week, weekInfo: run.weekInfo, done: run.done, sessions: sessions.length, mainMissesThisWeek, resetsBySlot };
 }
 
 /**
- * Start deload (R627): the next `daysPerWeek` sessions are the deload, counted from the sessions finished now, and the
- * block ends after them. Nothing happens for a routine with no run, or once a deload is pending.
+ * Start deload (R627): the tap's time, `now`, is stored; the next `daysPerWeek` sessions started after it are the
+ * deload, and the block ends after them. Nothing happens for a routine with no run, or once a deload is pending.
  */
-export function startEarlyDeload(db: Db, routineId: string): void {
+export function startEarlyDeload(db: Db, routineId: string, now: number): void {
   const run = runNow(db, routineId);
   if (!run) return;
   db.update(routines)
-    .set({ runDeloadAt: run.sessions.length })
+    .set({ runDeloadAt: now })
     .where(and(eq(routines.id, routineId), isNull(routines.runDeloadAt)))
     .run();
 }
