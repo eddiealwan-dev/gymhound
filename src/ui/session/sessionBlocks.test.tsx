@@ -228,14 +228,14 @@ const headers = (tree: ReactTestRenderer) =>
   tree.root.findAll((n) => n.type === Text && StyleSheet.flatten(n.props.style)?.fontSize === 10).map((n) => [n.props.children].flat().join(''));
 
 describe('a metcon is one block: its format, its moves, its clock and one score (Task 7b)', () => {
-  it("is called by the program's label, with the format and each move's amount in its own column", () => {
+  it("is called by the program's label, with the format and each move's amount in its own column, in the program's words", () => {
     const tree = mount(metconA());
     const shown = shownText(tree);
     expect(shown).toContain('Metcon A');
     expect(shown).not.toContain('AMRAP 10: goblet squat, push-up, run');
-    expect(shown).toEqual(expect.arrayContaining(['AMRAP 10 min', '10', 'Goblet squat', '200 m', 'Run']));
+    expect(shown).toEqual(expect.arrayContaining(['AMRAP 10 min', '10', 'Goblet squats', 'Push-ups (scaled)', '200 m', 'Run']));
     expect(labels(tree)).toContain('Show form for Metcon A');
-    expect(labels(tree)).toContain('AMRAP 10 minutes: 10 Goblet squat, 10 Push-up, 200 metres Run.');
+    expect(labels(tree)).toContain('AMRAP 10 minutes: 10 Goblet squats, 10 Push-ups (scaled), 200 metres Run.');
   });
 
   it('keeps the rule line to its second half, the note after it', () => {

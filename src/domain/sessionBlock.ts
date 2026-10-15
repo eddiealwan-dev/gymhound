@@ -69,8 +69,10 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
       const m = /^(\d+(?:\s?m|-cal|\s?cal)?)\s+(.+)$/.exec(p);
       const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : null;
       const rest = m ? m[2] : p;
-      const load = /\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest)?.[1] ?? null;
-      return { amount, rest: rest.toLowerCase(), load, used: false };
+      const loadMatch = /\s*\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest);
+      // The program's own words for the move, without the load its column shows: "goblet squats", "push-ups (scaled)".
+      const words = (loadMatch ? rest.replace(loadMatch[0], '') : rest).trim();
+      return { amount, rest: rest.toLowerCase(), words, load: loadMatch?.[1] ?? null, used: false };
     });
   const elements = rule.elements.map((element): MetconElement => {
     const name = element.replace(/\s*\(metcon\)\s*$/i, '').trim();
@@ -78,7 +80,10 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     const part = parts.find((p) => !p.used && p.rest.startsWith(stem));
     if (!part) return { amount: null, name, load: null };
     part.used = true;
-    return { amount: part.amount, name, load: part.load };
+    // The move as the program writes it (plural where written, "(scaled)" kept), with the rule's own asides it lacks.
+    const asides = (name.match(/\([^)]*\)/g) ?? []).filter((a) => !part.words.toLowerCase().includes(a.toLowerCase()));
+    const own = `${part.words.charAt(0).toUpperCase()}${part.words.slice(1)}`;
+    return { amount: part.amount, name: [own, ...asides].join(' '), load: part.load };
   });
   const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time';
   const complete = plain && elements.every((e) => e.amount !== null);
