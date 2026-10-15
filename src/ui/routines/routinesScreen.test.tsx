@@ -177,7 +177,9 @@ describe("Routines: a program's row (R633)", () => {
     const row = rowTarget(tree, 'Barbell Foundations');
     const image = row.findByType(Image);
     expect(image.props.source).toBe(2);
-    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 48, height: 48 });
+    // A 48pt frame; the photo fills it inside the 1px border.
+    expect(StyleSheet.flatten(image.parent!.props.style)).toMatchObject({ width: 48, height: 48, borderWidth: 1 });
+    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 46, height: 46 });
     const name = row.findAll((n) => n.type === Text && n.props.children === 'Barbell Foundations')[0];
     expect(StyleSheet.flatten(name.props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16 });
     const line = row.findAll((n) => n.type === Text && n.props.children === '3 days a week · 12 weeks · Beginner')[0];
@@ -220,6 +222,11 @@ describe('Routines: a Pro program on free (R525)', () => {
     expect(row.props.accessibilityLabel).toBe('Advanced Upper/Lower DUP, 4 days a week · 6 weeks · Advanced, part of GymHound Pro');
     const pill = row.findAll((n) => n.type === Text && n.props.children === 'Pro')[0];
     expect(pill).toBeDefined();
+    // On DESIGN.md's tokens: the label type, a Seam edge (Strong Seam is for controls), field corners, 8/4 padding.
+    expect(StyleSheet.flatten(pill.props.style)).toMatchObject({ fontSize: 14, letterSpacing: 0.5 });
+    let tag = pill.parent;
+    while (tag && StyleSheet.flatten(tag.props.style)?.borderWidth === undefined) tag = tag.parent;
+    expect(StyleSheet.flatten(tag!.props.style)).toMatchObject({ borderColor: '#2e2a23', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 });
     // The pill is a mark in the row, not a button of its own, and never red.
     expect(buttons(tree, 'Pro')).toHaveLength(0);
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');

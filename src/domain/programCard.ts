@@ -105,10 +105,13 @@ export function citationParts(text: string): { text: string; cite: boolean }[] {
   return parts;
 }
 
-/** The site a source lives on, as the Sources sheet names it: "https://www.sportrxiv.org/…" is "sportrxiv.org". */
+/**
+ * The site a source lives on, as the Sources sheet names it: "https://www.sportrxiv.org/…" is "sportrxiv.org", and a
+ * mobile or mail host is its site ("m.youtube.com" is "youtube.com").
+ */
 export function siteOf(url: string): string {
   const host = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split(/[/?#:]/)[0].toLowerCase();
-  return host.replace(/^www\./, '');
+  return host.replace(/^(?:www|m|mail)\./, '');
 }
 
 /** The sources a program lists, in number order (R631). */

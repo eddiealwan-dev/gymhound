@@ -35,8 +35,8 @@ export function ProgramPicture({
       importantForAccessibility={decorative ? 'no-hide-descendants' : 'yes'}
       style={{ ...size, borderRadius: 8, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', backgroundColor: colors.surfaceRaised }}
     >
-      {/* The frame's border sits inside its size, so the photo fills what is left of it. */}
-      <Image source={kind === 'card' ? picture.card : picture.thumb} accessible={false} resizeMode="cover" style={{ ...size, marginTop: -1, marginLeft: -1 }} />
+      {/* The frame's 1px border sits inside its size, so the photo fills what is left of it and never covers the edge. */}
+      <Image source={kind === 'card' ? picture.card : picture.thumb} accessible={false} resizeMode="cover" style={{ width: size.width - 2, height: size.height - 2 }} />
     </View>
   );
 }

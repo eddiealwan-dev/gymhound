@@ -112,6 +112,14 @@ describe('the program card (R630)', () => {
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
   });
 
+  it('sets the details 12pt apart', () => {
+    const tree = mount(11);
+    const level = tree.root.findAll((n) => n.type === Text && n.props.accessibilityLabel === 'Level: Advanced')[0];
+    let group = level.parent;
+    while (group && StyleSheet.flatten(group.props.style)?.gap === undefined) group = group.parent;
+    expect(StyleSheet.flatten(group!.props.style)).toMatchObject({ marginTop: 16, gap: 12 });
+  });
+
   it('shows the text without what the app lacks, and minutes for long seconds (ruling R-w3): #1, #3, #20', () => {
     const all = (n: number) => shownText(mount(n)).join('\n');
     expect(all(1)).toContain('Schedule: Two days (A, B) alternate three times a week: A-B-A, then B-A-B. Each day runs 1.5 times a week on average.');

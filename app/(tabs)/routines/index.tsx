@@ -39,13 +39,14 @@ const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
 /**
  * The mark on a Pro program's row for a free lifter (R525): a small outlined tag, smaller than a pill button so it reads
- * as a mark on the row, not an action. Never red.
+ * as a mark on the row, not an action. On DESIGN.md's tokens: the label type, a Seam edge (Strong Seam is for controls),
+ * field corners and 8/4 padding. Never red.
  */
 function ProMark() {
   const { colors } = useTheme();
   return (
-    <View style={{ borderColor: colors.borderStrong, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' }}>
-      <Body weight={600} style={{ fontSize: 13 }}>
+    <View style={{ borderColor: colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}>
+      <Body weight={600} style={{ fontSize: 14, letterSpacing: 0.5 }}>
         Pro
       </Body>
     </View>

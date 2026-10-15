@@ -78,7 +78,7 @@ export function ProgramCard({ program, footer }: { program: Program; footer: Rea
         <Body weight={600}>{summaryLine(program)}</Body>
       </View>
 
-      <View style={{ marginTop: 16, gap: 8 }}>
+      <View style={{ marginTop: 16, gap: 12 }}>
         {detailRows(program).map((row) => (
           <Cited key={row.label} lead={`${row.label}: `} text={row.value} />
         ))}

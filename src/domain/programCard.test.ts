@@ -105,6 +105,9 @@ describe('sites and citations (R631)', () => {
     expect(siteOf('https://pmc.ncbi.nlm.nih.gov/articles/PMC8884877/')).toBe('pmc.ncbi.nlm.nih.gov');
     expect(siteOf('http://WWW.StrongerByScience.com?x=1')).toBe('strongerbyscience.com');
     expect(siteOf('https://thefitness.wiki#gzclp')).toBe('thefitness.wiki');
+    expect(siteOf('https://m.youtube.com/watch?v=x')).toBe('youtube.com');
+    expect(siteOf('https://mail.example.org/a')).toBe('example.org');
+    expect(siteOf('https://mailchimp.com')).toBe('mailchimp.com');
   });
 
   it('citationSpeech reads each marker as "source n" for VoiceOver', () => {
