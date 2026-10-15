@@ -150,6 +150,7 @@ describe('getFinishSummary', () => {
       durationMs: 72 * MINUTE,
       volume: 675,
       setCount: 2,
+      scoreCount: 0,
       // One working set of the four missed: the bench holds at what was lifted.
       next: [{ workoutExerciseId: expect.any(String), name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
       // Your own routine's lines are `next` as `finishLine` says them.

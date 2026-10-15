@@ -82,6 +82,8 @@ export type FinishSummary = {
   volume: number;
   /** How many sets were done, warm-ups included. */
   setCount: number;
+  /** How many of those were a metcon's score, which the summary counts as a score, not a set (design gate #6). */
+  scoreCount?: number;
   /** Next time's weight for each exercise with a rule and a next weight, in workout order (spec 8.5, R64). */
   next: NextTime[];
   /** The personal bests set in this workout (R105), in workout order: one per exercise and kind. Empty when none. */
@@ -361,6 +363,7 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     durationMs: workout.finishedAt - workout.startedAt,
     volume: totalVolume(workoutSets, displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
+    scoreCount: workoutSets.filter((s) => s.done && (s.loggingType === 'rounds' || s.loggingType === 'for_time')).length,
     next,
     prs: getWorkoutPrs(db, workoutId),
     lines: programFinishLines(db, workout, next),

@@ -314,7 +314,8 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     const dayA = program.days[0];
     const metcon = dayA.slots.find((s) => s.ruleKind === 'metcon')!;
     const id = runSession(db, `${program.id}:${dayA.slug}`, at(1), { [metcon.id]: { reps: [5] } });
-    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: expect.stringMatching(/ — 5$/), why: null });
+    // Its outcome and its rule, in the lift lines' style (design gate #6).
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: 'AMRAP 10 — 5 rounds. Beat it twice in a row to go heavier.', why: null });
   });
 
   it('a metcon beaten twice in a row says so (R622)', () => {
@@ -332,9 +333,50 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     });
     expect(linesOf(db, last)).toContainEqual({
       workoutExerciseId: expect.any(String),
-      text: expect.stringMatching(/ — 7$/),
+      text: 'AMRAP 10 — 7 rounds.',
       why: 'You beat your score twice in a row. Go heavier or take the next scaling step.',
     });
+  });
+});
+
+describe('the finish lines of the new blocks (design gate #6)', () => {
+  const linesOf = (db: Db, id: string) => getFinishSummary(db, id, 'lb').lines ?? [];
+
+  it('a For Time score says its time, with the load of its main move when logged', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, program.id, NOW);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const fran = tue.slots.find((s) => s.ruleKind === 'metcon')!;
+    const id = runSession(db, `${program.id}:${tue.slug}`, at(1), { [fran.id]: { seconds: [13], weight: 95 } });
+    expect(linesOf(db, id).map((l) => l.text)).toContain('21-15-9 for time — 0:13 at 95 lb. Beat it twice in a row to go heavier.');
+  });
+
+  it('an easy run says next week\'s time, and intervals next week\'s sets', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const run = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
+    const tueId = runSession(db, `${program.id}:${tue.slug}`, at(1), { [run.id]: { seconds: [1500] } });
+    expect(linesOf(db, tueId).map((l) => l.text)).toContain('Easy run — next time 27:00.');
+    const wed = program.days.find((d) => d.name.startsWith('Wed'))!;
+    const [warm, intervals, cool] = wed.slots;
+    const wedId = runSession(db, `${program.id}:${wed.slug}`, at(2), { [warm.id]: { seconds: [600] }, [intervals.id]: { seconds: [180, 180, 180, 180, 180, 180] }, [cool.id]: { seconds: [600] } });
+    const texts = linesOf(db, wedId).map((l) => l.text);
+    expect(texts).toContain('Interval run — next time 7 × 3:00.');
+    // The warm-up and cool-down jogs stay the same every week: nothing to say.
+    expect(texts.some((t) => t.startsWith('Warm-up run') || t.startsWith('Cool-down run'))).toBe(false);
+  });
+
+  it('counts a score as a score, not a set', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-foundations');
+    setActiveProgram(db, program.id, NOW);
+    const dayA = program.days[0];
+    const [squat, , , metcon] = dayA.slots;
+    const id = runSession(db, `${program.id}:${dayA.slug}`, at(1), { [squat.id]: { weight: 95, reps: [5, 5, 5] }, [metcon.id]: { reps: [5] } });
+    expect(getFinishSummary(db, id, 'lb')).toMatchObject({ setCount: 4, scoreCount: 1 });
   });
 });
 
