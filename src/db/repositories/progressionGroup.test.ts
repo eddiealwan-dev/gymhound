@@ -3,6 +3,7 @@
 // exercise with the same range, target unit and rule kind shares its next weight, misses, halving, resets, rung and
 // added sets across days. Slots whose range or kind differ stay independent; your own routines are unchanged (R628).
 import { asc, eq } from 'drizzle-orm';
+import { patchDraftSet } from '../../domain/historyDraft';
 import { gearFor } from '../../domain/plates';
 import { programTodaysRead } from '../../domain/ruleLine';
 import { exercises, routineDays, routineExercises, routines, workoutExercises } from '../schema';
@@ -13,7 +14,7 @@ import { changeRung, progressionGroup, setActiveProgram } from './programRunRepo
 import { programPageOf } from './programViewRepo';
 import { getUpNext, swapRoutineExercise } from './routinesRepo';
 import { getSettings, setSetting } from './settingsRepo';
-import { deleteFinishedWorkout } from './workoutHistoryRepo';
+import { deleteFinishedWorkout, loadWorkoutDraft, saveWorkoutEdit } from './workoutHistoryRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
 import { discardWorkout, startWorkoutFromDay } from './workoutsRepo';
 
@@ -238,7 +239,7 @@ describe('one progression for the same lift on different days (R625, R-w1)', () 
     expect(progressionGroup(db, fri).sort()).toEqual([wed, fri].sort());
   });
 
-  it('a Modify swap on one day groups by the exercise now in the slot, one slot per day', () => {
+  it('a Modify swap on one day groups by the exercise now in the slot, never two slots of one day', () => {
     const db = barbellFoundations();
     const BENCH_A = `${BF_A}:barbell-bench-press`;
     swapRoutineExercise(db, SQUAT_B, 'barbell-front-squat');
@@ -252,7 +253,8 @@ describe('one progression for the same lift on different days (R625, R-w1)', () 
     swapRoutineExercise(db, BENCH_A, 'barbell-back-squat');
     expect(progressionGroup(db, SQUAT_A).sort()).toEqual([SQUAT_A, SQUAT_B].sort());
     expect(progressionGroup(db, BENCH_A).sort()).toEqual([BENCH_A, SQUAT_B].sort());
-    expect(progressionGroup(db, SQUAT_B)).toHaveLength(2);
+    // Symmetric: B shares with each squat on A, and the two on A do not share with each other.
+    expect(progressionGroup(db, SQUAT_B).sort()).toEqual([SQUAT_B, SQUAT_A, BENCH_A].sort());
   });
 
   it("a slot swapped back to the squat rejoins the squat's progression and takes its next weight", () => {
@@ -289,5 +291,67 @@ describe('one progression for the same lift on different days (R625, R-w1)', () 
     expect(blockOf(db, last, SQUAT_B)).toMatchObject({ outcome: 'reset' });
     const squat = db.select({ name: exercises.name }).from(exercises).where(eq(exercises.id, 'barbell-back-squat')).get()!.name;
     expect(programPageOf(db, BF)!.droppedTwice).toEqual([squat]);
+  });
+});
+
+/** Edits set `index` of the `exerciseId` block of a finished workout to `reps`, as History's editor saves it. */
+function editReps(db: Db, workoutId: string, exerciseId: string, index: number, reps: number): void {
+  const draft = loadWorkoutDraft(db, workoutId)!;
+  const weId = draft.exercises.find((e) => e.exerciseId === exerciseId)!.workoutExerciseId;
+  saveWorkoutEdit(db, patchDraftSet(draft, weId, index, { reps }));
+}
+
+describe("a lift's progression reads its sessions on any day, through swaps and rung changes (R625 amended)", () => {
+  it('miss on A, miss on B, B swapped to another lift, miss on A: the third miss in a row resets', () => {
+    const db = barbellFoundations();
+    runSession(db, BF_A, at(1), { [SQUAT_A]: miss(135) });
+    runSession(db, BF_B, at(2), { [SQUAT_B]: miss(135) });
+    swapRoutineExercise(db, SQUAT_B, 'barbell-front-squat');
+    const third = runSession(db, BF_A, at(3), { [SQUAT_A]: miss(135) });
+    expect(blockOf(db, third, SQUAT_A)).toMatchObject({ outcome: 'reset', nextWeight: 120 });
+    expect(slotRow(db, SQUAT_A).nextWeight).toBe(120);
+  });
+
+  it("an edit on A after B's swap keeps A at B's raise", () => {
+    const db = barbellFoundations();
+    const first = runSession(db, BF_A, at(1), { [SQUAT_A]: hit(135) });
+    runSession(db, BF_B, at(2), { [SQUAT_B]: hit(140) });
+    expect([slotRow(db, SQUAT_A).nextWeight, slotRow(db, SQUAT_B).nextWeight]).toEqual([145, 145]);
+    swapRoutineExercise(db, SQUAT_B, 'barbell-front-squat');
+    editReps(db, first, 'barbell-back-squat', 2, 8);
+    expect(slotRow(db, SQUAT_A).nextWeight).toBe(145);
+  });
+
+  describe('a ladder after Change rung', () => {
+    const CALI = 'program-calisthenics-foundations';
+    const a = `${CALI}:a:assisted-squat`;
+    const b = `${CALI}:b:assisted-squat`;
+    /** A moves both days to rung 1, then B moves both to rung 2, and Change rung puts B back on rung 0. */
+    function climbedThenChanged(db: Db) {
+      const program = insertProgram(db, CALI);
+      setActiveProgram(db, CALI, NOW);
+      const ladder = program.days[0].slots.find((s) => s.id === a)!.ladder!;
+      const first = runSession(db, `${CALI}:a`, at(1), { [a]: { reps: [8, 8, 8] } });
+      const second = runSession(db, `${CALI}:b`, at(2), { [b]: { reps: [8, 8, 8] } });
+      expect([slotRow(db, a).ladderRung, slotRow(db, b).ladderRung]).toEqual([2, 2]);
+      changeRung(db, b, 0);
+      return { ladder, first, second };
+    }
+
+    it("an edit on A keeps A on the rung B's session moved it to", () => {
+      const db = seededDb();
+      const { ladder, first } = climbedThenChanged(db);
+      editReps(db, first, ladder[0].exerciseId, 0, 8);
+      expect(slotRow(db, a)).toMatchObject({ ladderRung: 2, exerciseId: ladder[2].exerciseId });
+      expect(slotRow(db, b)).toMatchObject({ ladderRung: 0, exerciseId: ladder[0].exerciseId });
+    });
+
+    it("an edit to B's session, which no longer reaches the top, moves A back while B keeps the rung it was given", () => {
+      const db = seededDb();
+      const { ladder, second } = climbedThenChanged(db);
+      editReps(db, second, ladder[1].exerciseId, 0, 6);
+      expect(slotRow(db, a)).toMatchObject({ ladderRung: 1, exerciseId: ladder[1].exerciseId });
+      expect(slotRow(db, b)).toMatchObject({ ladderRung: 0, exerciseId: ladder[0].exerciseId });
+    });
   });
 });

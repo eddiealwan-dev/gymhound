@@ -12,7 +12,7 @@ import { PREMADE_ORDER, RETIRED_PREMADES } from '../../seed/routines';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { joinGroupNextWeight, programState, progressionGroup } from './programRunRepo';
+import { historySlots, joinGroupNextWeight, programState } from './programRunRepo';
 import { slotScheme } from './programViewRepo';
 import { getSettings, setSetting } from './settingsRepo';
 
@@ -490,8 +490,8 @@ export function saveRoutine(db: Db, draft: RoutineDraft, now: number): string {
 /**
  * The outcome, mark, working weight and next weight of the latest finished workout exercise run from
  * `routineExerciseId` with the exercise the slot holds now, `exerciseId` (R74); all null when it has never been
- * finished (or was finished before the rule wrote outcomes). On a program, from any slot sharing its progression: the
- * same lift on another day (R625 as amended).
+ * finished (or was finished before the rule wrote outcomes). On a program, from the lift's sessions on any day
+ * (`historySlots`, R625 as amended).
  */
 function lastResult(db: Db, routineExerciseId: string, exerciseId: string): LastResult {
   return (
@@ -508,7 +508,7 @@ function lastResult(db: Db, routineExerciseId: string, exerciseId: string): Last
       .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
       .where(
         and(
-          inArray(workoutExercises.routineExerciseId, progressionGroup(db, routineExerciseId)),
+          inArray(workoutExercises.routineExerciseId, historySlots(db, routineExerciseId)),
           eq(workoutExercises.exerciseId, exerciseId),
           eq(workouts.status, 'finished'),
         ),

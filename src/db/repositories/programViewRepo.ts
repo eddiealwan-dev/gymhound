@@ -83,10 +83,14 @@ const skipped = (s: SlotSession) => s.outcome === 'held_marked' || s.outcome ===
 
 /**
  * The slot's misses in a row before now, in the run (R613), counted as the engine counts them: a load slot's by the
- * exercise now in it (after a Modify swap), a ladder's weighted top rung over the slot's history.
+ * exercise now in it (after a Modify swap), a ladder's weighted top rung over the sessions on that rung. On a program,
+ * the lift's sessions on any day (R625 as amended).
  */
-function missesBefore(db: Db, routineExerciseId: string, runStartedAt: number, exerciseId?: string): number {
-  const history = slotSessions(db, routineExerciseId, runStartedAt, exerciseId);
+function missesBefore(db: Db, routineExerciseId: string, runStartedAt: number, by: { exerciseId: string } | { rung: number }): number {
+  const history =
+    'exerciseId' in by
+      ? slotSessions(db, routineExerciseId, runStartedAt, by.exerciseId)
+      : slotSessions(db, routineExerciseId, runStartedAt).filter((h) => (h.ruleRung ?? 0) === by.rung);
   return missStreak(history.map((h) => ({ missed: h.missed, skipped: skipped(h), reset: h.outcome === 'reset' })));
 }
 
@@ -114,9 +118,9 @@ export function programRuleOf(
     a.runStartedAt === null
       ? 0
       : a.ruleKind === 'load'
-        ? missesBefore(db, a.routineExerciseId, a.runStartedAt, a.exerciseId)
+        ? missesBefore(db, a.routineExerciseId, a.runStartedAt, { exerciseId: a.exerciseId })
         : weightedRung
-          ? missesBefore(db, a.routineExerciseId, a.runStartedAt)
+          ? missesBefore(db, a.routineExerciseId, a.runStartedAt, { rung: a.ruleRung ?? 0 })
           : 0;
   return {
     kind: a.ruleKind,
@@ -342,6 +346,7 @@ export function slotScheme(
   routineId: string,
   row: {
     routineExerciseId: string;
+    exerciseId: string;
     setCount: number;
     repMin: number;
     repMax: number;
@@ -362,7 +367,8 @@ export function slotScheme(
     weekInfo,
     unit: row.incrementUnit,
     missedInRun: false,
-    secondsRaises: slot.addSet?.then.kind === 'seconds' ? slotSessions(db, row.routineExerciseId, 0).filter((s) => s.outcome === 'raised').length : 0,
+    secondsRaises:
+      slot.addSet?.then.kind === 'seconds' ? slotSessions(db, row.routineExerciseId, 0, row.exerciseId).filter((s) => s.outcome === 'raised').length : 0,
   });
   const unit = carryUnit(slot);
   const extra: RepSchemeExtra = {
@@ -409,6 +415,7 @@ export function programPageOf(db: Db, routineId: string): ProgramPageView | null
   const rows = db
     .select({
       routineExerciseId: routineExercises.id,
+      exerciseId: routineExercises.exerciseId,
       name: exercises.name,
       setCount: routineExercises.setCount,
       repMin: routineExercises.repMin,
