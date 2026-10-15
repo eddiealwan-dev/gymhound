@@ -4,6 +4,7 @@ import type { ProgramWeek } from '../seed/programTypes';
 import {
   addSetLine,
   BEAT_TWICE,
+  changeRungNote,
   finishLine,
   LADDER_DOWN_WHY,
   ladderMoveLine,
@@ -657,8 +658,12 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     expect(read(plank, rule, null, { loggingType: 'timed' })).toBeNull();
   });
 
-  it('reps only: no weight to add', () => {
-    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe("No weight to add. Beat last time's reps.");
+  it('reps only, or no increment, over a weight column: beat the reps, weight only if you want it', () => {
+    const optional = "Beat last time's reps. Add weight only if you want to.";
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe(optional);
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'weighted')).toBe(optional);
+    expect(line(program(), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe(optional);
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'timed')).toBe("No weight to add. Beat last time's reps.");
   });
 
   it('runs follow the week (R620)', () => {
@@ -768,6 +773,20 @@ describe('the week line (R616, R617, Appendix D)', () => {
   it('a note week is its note; a normal week has none', () => {
     expect(weekLine(week('note', 'Base: events at moderate loads.'))).toBe('Base: events at moderate loads.');
     expect(weekLine(null)).toBeNull();
+  });
+});
+
+describe("Change rung's note on the program's page (R618)", () => {
+  const rung = (name: string, weighted = false): RungWords => ({ name, timed: false, repMin: 5, repMax: 8, weighted });
+
+  it('a bodyweight ladder starts at the bottom of its range, with no weight to speak of', () => {
+    expect(changeRungNote([rung('Push-up'), rung('Archer push-up')])).toBe('Changes it from the next workout. It starts at the bottom of its range.');
+  });
+
+  it('a ladder with a weighted top rung says that rung starts its weight fresh', () => {
+    expect(changeRungNote([rung('Pull-up'), rung('Weighted pull-up', true)])).toBe(
+      "Changes it from the next workout. It starts at the bottom of its range; a weighted rung's weight starts fresh.",
+    );
   });
 });
 

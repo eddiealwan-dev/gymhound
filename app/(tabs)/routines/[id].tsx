@@ -12,6 +12,7 @@ import type { Program } from '../../../src/seed/programTypes';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
+import { changeRungNote } from '../../../src/domain/ruleLine';
 import { graduationLine, programWeekText, startOverQuestion } from '../../../src/domain/upNext';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
@@ -317,7 +318,7 @@ export default function RoutineDetailScreen() {
       <ModifySheet
         target={changingRung === null ? null : { exerciseId: changingRung.exerciseId, name: changingRung.name, programExerciseId: null, inUse: [] }}
         ladder={changingRung === null ? null : (page?.slots[changingRung.id]?.ladder ?? null)}
-        note="Changes it from the next workout. Its next weight starts fresh."
+        note={changeRungNote(changingRung === null ? [] : (page?.slots[changingRung.id]?.ladder?.rungs ?? []))}
         onChoose={() => setChangingRung(null)}
         onChooseRung={(rung) => {
           if (changingRung) changeRung(db, changingRung.id, rung);

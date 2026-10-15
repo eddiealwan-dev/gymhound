@@ -332,6 +332,15 @@ export function slotNoteText(note: string, catalogName: string, kind: RuleKind):
   return text === '' ? null : text;
 }
 
+/**
+ * What Change rung on the program's page says (R618): the slot moves from the next workout and starts at the bottom of
+ * the rung's range; only a weighted rung has a weight, which starts fresh.
+ */
+export function changeRungNote(rungs: readonly RungWords[]): string {
+  const head = 'Changes it from the next workout. It starts at the bottom of its range';
+  return rungs.some((r) => r.weighted) ? `${head}; a weighted rung's weight starts fresh.` : `${head}.`;
+}
+
 /** "One miss so far. One more and next time drops 10%." (R613): today's warning before a reset. */
 function missWarning(p: ProgramRule): string | null {
   if (p.missesBefore < 1 || p.missesToReset <= p.missesBefore) return null;
@@ -364,9 +373,20 @@ function unloadableRaise(rule: Rule, loggingType: LoggingType, load: LoadContext
   return `Your plates make ${formatWeight(loads, planned.unit)}; add ${plateSize(increment / 2, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
 }
 
+/** The types whose sets have a weight column (LB, +LB, −LB). */
+const WEIGHT_COLUMN: readonly LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'weighted_time', 'weighted_distance'];
+
+/**
+ * A program slot whose rule adds no weight: over a weight column the weight is the lifter's to add or not, so the line
+ * doesn't say "No weight to add" over it (the walkthrough's calisthenics day).
+ */
+function noLoadSentence(loggingType: LoggingType): string {
+  return WEIGHT_COLUMN.includes(loggingType) ? "Beat last time's reps. Add weight only if you want to." : "No weight to add. Beat last time's reps.";
+}
+
 /** The load rule's sentence (§7.3 with R612, R623 and R607's carries), with what the plates load (ruling R-w2). */
 function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit: WeightUnit, load?: LoadContext): string {
-  if (rule.increment <= 0) return "No weight to add. Beat last time's reps.";
+  if (rule.increment <= 0) return noLoadSentence(loggingType);
   const inc = formatWeight(convertIncrement(rule.increment, rule.incrementUnit, unit), unit);
   const halved = p.halved ? ' (halved after the first miss)' : '';
   const plates = unloadableRaise(rule, loggingType, load);
@@ -442,7 +462,7 @@ export function programRuleSentence(a: {
     case 'load':
       return rule ? loadSentence(p, rule, loggingType, unit, load) : ruleSentence(a);
     case 'reps_only':
-      return "No weight to add. Beat last time's reps.";
+      return noLoadSentence(loggingType);
     case 'hold':
       return `Add 5 s a session up to ${rule?.repMax ?? 60} s.`;
     case 'ladder':

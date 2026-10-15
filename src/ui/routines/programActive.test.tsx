@@ -138,6 +138,7 @@ describe('the active program under its card (R634, R616, R636)', () => {
     const sheet = tree.root.findAllByType(ModifySheet).find((s) => Boolean(s.props.ladder))!;
     expect(sheet.props.ladder).toMatchObject({ current: 0, sets: 3 });
     expect(sheet.props.ladder.rungs.map((r: { name: string }) => r.name)).toContain('Weighted pull-up');
+    expect(sheet.props.note).toBe("Changes it from the next workout. It starts at the bottom of its range; a weighted rung's weight starts fresh.");
     act(() => sheet.props.onChooseRung(4));
     expect(mockDb.select().from(routineExercises).where(eq(routineExercises.id, PULL_LADDER)).get()).toMatchObject({ ladderRung: 4, exerciseId: 'pull-up' });
   });
