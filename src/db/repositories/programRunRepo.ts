@@ -1,5 +1,6 @@
-import { and, asc, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { blockDone, programWeek, weekInfo } from '../../domain/programRules';
+import type { WeightUnit } from '../../domain/types';
 import { programById } from '../../seed/programs.generated';
 import type { Program, ProgramSlot, ProgramWeek } from '../../seed/programTypes';
 import { routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
@@ -26,6 +27,91 @@ export function programSlotOf(routineId: string | null, routineExerciseId: strin
     slotsByProgram.set(program.id, slots);
   }
   return slots.get(routineExerciseId);
+}
+
+/** What makes two program slots one progression (R625, ruling R-w1): the rule kind, the range and target unit, the
+ * exercise now in the slot and, for a ladder, the same rungs and the rung it is on. */
+function progressionKey(slot: ProgramSlot, row: { exerciseId: string; ladderRung: number | null }): string {
+  const ladder = slot.ladder ? `${JSON.stringify(slot.ladder)}@${row.ladderRung ?? 0}` : '';
+  return [slot.ruleKind, slot.repMin, slot.repMax, slot.targetUnit, row.exerciseId, ladder].join('|');
+}
+
+/** A second slot of one exercise on a day (`…@2`, R625): its own progression, never shared. */
+const isRepeatSlot = (slot: ProgramSlot) => slot.id.includes('@');
+
+/**
+ * The slots that share one progression with a routine slot (R625 as amended by ruling R-w1): on one of the twenty
+ * programs, a slot on each other day with the same rule kind, range and target unit whose exercise is now the same
+ * (after a Modify swap or a ladder's rung change, the exercise in the slot now), and for a ladder the same rungs on the
+ * same rung. They share next weight, misses, halving, resets, the two-session raise, the rung and added sets: each
+ * reads the group's history. Slots whose range or kind differ stay their own (#6's two bench ranges, #12's top set and
+ * back-off), as does a repeat slot (`@2`). One slot a day: never another slot on the slot's own day, and on another day
+ * that holds two matches (after a Modify swap), the first. Just the slot itself for your own routines (R628) and a slot
+ * that no longer exists. The slot comes first.
+ */
+export function progressionGroup(db: Db, routineExerciseId: string): string[] {
+  const own = db
+    .select({
+      routineId: routineDays.routineId,
+      dayId: routineExercises.routineDayId,
+      exerciseId: routineExercises.exerciseId,
+      ladderRung: routineExercises.ladderRung,
+    })
+    .from(routineExercises)
+    .innerJoin(routineDays, eq(routineDays.id, routineExercises.routineDayId))
+    .where(eq(routineExercises.id, routineExerciseId))
+    .get();
+  const slot = own ? programSlotOf(own.routineId, routineExerciseId) : undefined;
+  if (!own || !slot || isRepeatSlot(slot)) return [routineExerciseId];
+  const key = progressionKey(slot, own);
+  const rows = db
+    .select({
+      id: routineExercises.id,
+      dayId: routineExercises.routineDayId,
+      exerciseId: routineExercises.exerciseId,
+      ladderRung: routineExercises.ladderRung,
+    })
+    .from(routineExercises)
+    .innerJoin(routineDays, eq(routineDays.id, routineExercises.routineDayId))
+    .where(eq(routineDays.routineId, own.routineId))
+    .orderBy(asc(routineDays.position), asc(routineExercises.position))
+    .all();
+  const group = [routineExerciseId];
+  const days = new Set([own.dayId]);
+  for (const r of rows) {
+    if (days.has(r.dayId)) continue;
+    const s = programSlotOf(own.routineId, r.id);
+    if (s === undefined || isRepeatSlot(s) || progressionKey(s, r) !== key) continue;
+    group.push(r.id);
+    days.add(r.dayId);
+  }
+  return group;
+}
+
+/**
+ * The next weight of the slot's progression (`progressionGroup`): the slot's own, else the first other slot's that has
+ * one (a slot that just joined it by a Modify swap or Change rung has none of its own). Null when none has one.
+ */
+export function groupNextWeight(db: Db, routineExerciseId: string): { weight: number; unit: WeightUnit | null } | null {
+  const group = progressionGroup(db, routineExerciseId);
+  const rows = db
+    .select({ id: routineExercises.id, weight: routineExercises.nextWeight, unit: routineExercises.nextWeightUnit })
+    .from(routineExercises)
+    .where(and(inArray(routineExercises.id, group), isNotNull(routineExercises.nextWeight)))
+    .all();
+  const row = group.map((id) => rows.find((r) => r.id === id)).find((r) => r !== undefined);
+  return row && row.weight !== null ? { weight: row.weight, unit: row.unit } : null;
+}
+
+/** A slot that has joined a progression (a Modify swap or Change rung onto the lift another day runs) takes its next
+ * weight, so Up next and the next workout plan it (R625 as amended). Nothing changes for a slot with no group. */
+export function joinGroupNextWeight(db: Db, routineExerciseId: string): void {
+  const plan = groupNextWeight(db, routineExerciseId);
+  if (!plan) return;
+  db.update(routineExercises)
+    .set({ nextWeight: plan.weight, nextWeightUnit: plan.unit })
+    .where(and(eq(routineExercises.id, routineExerciseId), isNull(routineExercises.nextWeight)))
+    .run();
 }
 
 /** A finished workout's place in time: history is ordered by finish, then start, then id (as `refreshNextWeights`). */
@@ -70,10 +156,13 @@ export function carryUnit(slot: ProgramSlot | undefined): 'ft' | 'yd' | null {
 }
 
 /**
- * The finished sessions of a routine slot whose workout started at or after `from`, in time order; with `exerciseId`,
- * only those that logged it (after a Modify swap, the old exercise's sessions are not the slot's misses, R553).
+ * The finished sessions of a routine slot's progression (`progressionGroup`: the slot, and on a program the slots on
+ * other days that share it, R625 as amended) whose workout started at or after `from`, in time order; with
+ * `exerciseId`, only those that logged it (after a Modify swap, the old exercise's sessions are not the slot's misses,
+ * R553).
  */
 export function slotSessions(db: Db, routineExerciseId: string, from: number, exerciseId?: string): SlotSession[] {
+  const group = progressionGroup(db, routineExerciseId);
   const rows = db
     .select({
       id: workouts.id,
@@ -92,7 +181,7 @@ export function slotSessions(db: Db, routineExerciseId: string, from: number, ex
     .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
     .where(
       and(
-        eq(workoutExercises.routineExerciseId, routineExerciseId),
+        inArray(workoutExercises.routineExerciseId, group),
         exerciseId === undefined ? undefined : eq(workoutExercises.exerciseId, exerciseId),
         eq(workouts.status, 'finished'),
         gte(workouts.startedAt, from),
@@ -180,7 +269,7 @@ export type ProgramState = {
    * trains again. 0 before the first session.
    */
   mainMissesThisWeek: number;
-  /** Resets of each slot in this run, by routine exercise id (R614). */
+  /** Resets of each slot's progression (`progressionGroup`) in this run, by routine exercise id (R614). */
   resetsBySlot: Record<string, number>;
 };
 
@@ -204,9 +293,12 @@ export function programState(db: Db, routineId: string): ProgramState | null {
           .where(inArray(workoutExercises.workoutId, ids))
           .all();
 
+  // A reset counts for every slot of its progression: the squat dropped back on day A and on day B is one lift
+  // dropped back twice (R614, R625 as amended).
   const resetsBySlot: Record<string, number> = {};
   for (const r of rows) {
-    if (r.outcome === 'reset' && r.routineExerciseId !== null) resetsBySlot[r.routineExerciseId] = (resetsBySlot[r.routineExerciseId] ?? 0) + 1;
+    if (r.outcome !== 'reset' || r.routineExerciseId === null) continue;
+    for (const id of progressionGroup(db, r.routineExerciseId)) resetsBySlot[id] = (resetsBySlot[id] ?? 0) + 1;
   }
 
   let mainMissesThisWeek = 0;
@@ -241,7 +333,8 @@ export function startEarlyDeload(db: Db, routineId: string, now: number): void {
 
 /**
  * Change rung (R618): the ladder slot moves to `rung` (0-based) and logs that rung's exercise from the next workout. Its
- * next weight is cleared, since it was the old rung's. Throws for a slot that is not a ladder or a rung it lacks.
+ * next weight is cleared, since it was the old rung's; on a rung another day of the program is on, it takes that
+ * progression's (R625 as amended). Throws for a slot that is not a ladder or a rung it lacks.
  */
 export function changeRung(db: Db, routineExerciseId: string, rung: number): void {
   const row = db
@@ -257,6 +350,7 @@ export function changeRung(db: Db, routineExerciseId: string, rung: number): voi
     .set({ ladderRung: rung, exerciseId: ladder[rung].exerciseId, nextWeight: null, nextWeightUnit: null })
     .where(eq(routineExercises.id, routineExerciseId))
     .run();
+  joinGroupNextWeight(db, routineExerciseId);
 }
 
 /** The finished workouts of a routine after `w` in time order (for a history edit's recompute, §7.12). */

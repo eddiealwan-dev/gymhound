@@ -10,7 +10,7 @@ import {
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { programSlotOf } from './programRunRepo';
+import { programSlotOf, progressionGroup } from './programRunRepo';
 import { recomputePrFlags } from './prRepo';
 import { rememberSavedWorkout } from './savedWorkoutsRepo';
 import { getSettings } from './settingsRepo';
@@ -131,7 +131,7 @@ function slotWithProgram(db: Db, id: string) {
  * The newest finished workout exercise linked to a routine slot that ran a rule (by finish time, then start, then
  * workout id, then the later block), of `exerciseId` when given. The active workout's rows are never read.
  */
-function newestLinked(db: Db, id: string, exerciseId?: string) {
+function newestLinked(db: Db, ids: readonly string[], exerciseId?: string) {
   return db
     .select({
       exerciseId: workoutExercises.exerciseId,
@@ -145,7 +145,7 @@ function newestLinked(db: Db, id: string, exerciseId?: string) {
     .innerJoin(workouts, eq(workouts.id, workoutExercises.workoutId))
     .where(
       and(
-        eq(workoutExercises.routineExerciseId, id),
+        inArray(workoutExercises.routineExerciseId, [...ids]),
         exerciseId === undefined ? undefined : eq(workoutExercises.exerciseId, exerciseId),
         eq(workouts.status, 'finished'),
         isNotNull(workoutExercises.outcome),
@@ -158,16 +158,31 @@ function newestLinked(db: Db, id: string, exerciseId?: string) {
 }
 
 /**
+ * Each of `routineExerciseIds` and every slot sharing its progression (`progressionGroup`, R625 as amended), with that
+ * progression: an edit to the squat on day A re-reads day B's squat too.
+ */
+function withGroups(db: Db, routineExerciseIds: readonly string[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const id of new Set(routineExerciseIds)) {
+    if (groups.has(id)) continue;
+    const group = progressionGroup(db, id);
+    for (const member of group) if (!groups.has(member)) groups.set(member, group);
+    groups.set(id, group);
+  }
+  return groups;
+}
+
+/**
  * The ladder slots among `routineExerciseIds` whose rung follows their history (R618): the rung their newest finished
  * session moved them to, or no session yet. One the lifter moved with Change rung since then is not among them, so a
  * history edit keeps the lifter's rung. Read before an edit or a delete changes anything.
  */
 export function laddersFollowingHistory(db: Db, routineExerciseIds: readonly string[]): Set<string> {
   const following = new Set<string>();
-  for (const id of new Set(routineExerciseIds)) {
+  for (const id of withGroups(db, routineExerciseIds).keys()) {
     const slot = slotWithProgram(db, id);
     if (slot?.program?.ruleKind !== 'ladder') continue;
-    const newest = newestLinked(db, id);
+    const newest = newestLinked(db, progressionGroup(db, id));
     if (!newest || (newest.nextRung ?? newest.ruleRung ?? 0) === (slot.ladderRung ?? 0)) following.add(id);
   }
   return following;
@@ -182,16 +197,20 @@ export function laddersFollowingHistory(db: Db, routineExerciseIds: readonly str
  *
  * A program slot's progress follows the same newest session (§18.29): an added-sets slot takes its next set count
  * (R619), and a ladder slot in `laddersFollowing` (`laddersFollowingHistory`, read before the change) takes its next
- * rung, that rung's exercise and its next weight from the newest session on any rung (R618).
+ * rung, that rung's exercise and its next weight from the newest session on any rung (R618). On a program, each slot
+ * reads its whole progression's sessions (the same lift on other days, R625 as amended), and the slots sharing it are
+ * refreshed too.
  */
 export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[], laddersFollowing: ReadonlySet<string> = new Set()): void {
-  for (const id of new Set(routineExerciseIds)) {
+  // The groups as they are before any slot moves: a ladder's group follows its rung, which this loop changes.
+  const groups = withGroups(db, routineExerciseIds);
+  for (const [id, group] of groups) {
     const slot = slotWithProgram(db, id);
     if (!slot) continue;
     const ladder = slot.program?.ruleKind === 'ladder' ? slot.program.ladder : null;
     if (ladder) {
       if (!laddersFollowing.has(id)) continue;
-      const newest = newestLinked(db, id);
+      const newest = newestLinked(db, group);
       if (!newest) continue;
       const rung = newest.nextRung ?? newest.ruleRung ?? 0;
       if (!ladder[rung]) continue;
@@ -203,7 +222,7 @@ export function refreshNextWeights(db: Db, routineExerciseIds: readonly string[]
     }
     const addSet = slot.program?.ruleKind === 'add_set';
     if (slot.nextWeight === null && !addSet) continue;
-    const newest = newestLinked(db, id, slot.exerciseId);
+    const newest = newestLinked(db, group, slot.exerciseId);
     if (!newest) continue;
     db.update(routineExercises)
       .set({

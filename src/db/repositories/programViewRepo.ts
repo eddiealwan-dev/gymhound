@@ -434,7 +434,8 @@ export function programPageOf(db: Db, routineId: string): ProgramPageView | null
       scheme,
       ladder: slot.ladder ? { rungs: rungWordsOf(db, slot.ladder), current: row.ladderRung ?? 0, sets: slot.sets } : null,
     };
-    if ((state.resetsBySlot[row.routineExerciseId] ?? 0) >= 2) droppedTwice.push(row.name);
+    // One line a lift: the slots sharing a progression on other days count the same resets (R625 as amended).
+    if ((state.resetsBySlot[row.routineExerciseId] ?? 0) >= 2 && !droppedTwice.includes(row.name)) droppedTwice.push(row.name);
   }
   return {
     week: state.week,

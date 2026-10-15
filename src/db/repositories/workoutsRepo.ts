@@ -27,7 +27,9 @@ import {
   ensureRunStarted,
   finishedWorkoutsAfter,
   isBefore,
+  groupNextWeight,
   programSlotOf,
+  progressionGroup,
   runNow,
   slotSessions,
   workoutSlotRows,
@@ -150,6 +152,9 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
               ruleKind: null,
               ruleRung: null,
             };
+      // A program slot with no plan of its own takes its progression's (R625 as amended): the same lift on another day.
+      const plan =
+        rule.nextWeight !== null ? { weight: rule.nextWeight, unit: rule.nextWeightUnit } : slot ? groupNextWeight(tx, rule.id) : null;
       const workoutExerciseId = newId();
       tx.insert(workoutExercises)
         .values({
@@ -167,11 +172,8 @@ export function startWorkoutFromDay(db: Db, routineDayId: string, now: number): 
           ruleIncrementUnit: snapshot.incrementUnit,
           ruleKind: snapshot.ruleKind,
           ruleRung: snapshot.ruleRung,
-          plannedWeight:
-            rule.nextWeight === null
-              ? null
-              : planInUnit(rule.nextWeight, rule.nextWeightUnit ?? unit, unit, equipment === 'barbell', bar, plates),
-          plannedUnit: rule.nextWeight === null ? null : unit,
+          plannedWeight: plan === null ? null : planInUnit(plan.weight, plan.unit ?? unit, unit, equipment === 'barbell', bar, plates),
+          plannedUnit: plan === null ? null : unit,
         })
         .run();
       for (let position = 0; position < snapshot.setCount; position++) {
@@ -495,7 +497,8 @@ export function rerunLaterInRun(db: Db, workout: WorkoutTime & { routineId: stri
   const run = runNow(db, workout.routineId);
   if (!run || workout.startedAt < run.runStartedAt) return;
   const context: StoreContext = { gear: gearNow(db), run };
-  const slots = [...new Set(routineExerciseIds)];
+  // The slots sharing a progression with the edited ones re-run too: the same lift on another day (R625 as amended).
+  const slots = [...new Set(routineExerciseIds.flatMap((id) => progressionGroup(db, id)))];
   for (const later of finishedWorkoutsAfter(db, workout.routineId, workout)) {
     if (later.startedAt < run.runStartedAt) continue;
     const linked = workoutSlotRows(db, later.id, slots);
@@ -508,11 +511,14 @@ export function rerunLaterInRun(db: Db, workout: WorkoutTime & { routineId: stri
  * routine exercise it came from, if that slot still holds the same exercise (R74). At finish the workout is the newest
  * finished one of each of its slots, so its own outcomes are the slots' next weights (7.3). An added-sets slot also
  * takes its next set count (R619). A ladder slot that is still on the rung and exercise the workout logged moves to the
- * next rung, its exercise and its next weight (R618); one moved by Change rung since is left alone.
+ * next rung, its exercise and its next weight (R618); one moved by Change rung since is left alone. A program slot
+ * writes every slot of its progression (`progressionGroup`, R625 as amended), under the same conditions.
  */
 function writeOutcomes(db: Db, workoutId: string): void {
   for (const o of storeAll(db, workoutId)) {
     if (o.routineExerciseId === null) continue;
+    // A program slot writes its whole progression: the same lift on the other days too (R625 as amended).
+    const ids = o.slot ? progressionGroup(db, o.routineExerciseId) : [o.routineExerciseId];
     const ladder = o.slot?.ladder;
     if (o.slot?.ruleKind === 'ladder' && ladder) {
       const rung = o.nextRung ?? o.ruleRung ?? 0;
@@ -522,7 +528,7 @@ function writeOutcomes(db: Db, workoutId: string): void {
         .set({ ladderRung: rung, exerciseId: ladder[rung].exerciseId, nextWeight: o.nextWeight, nextWeightUnit: o.nextUnit })
         .where(
           and(
-            eq(routineExercises.id, o.routineExerciseId),
+            inArray(routineExercises.id, ids),
             eq(routineExercises.exerciseId, o.exerciseId),
             loggedRung === 0
               ? or(isNull(routineExercises.ladderRung), eq(routineExercises.ladderRung, 0))
@@ -536,7 +542,7 @@ function writeOutcomes(db: Db, workoutId: string): void {
     // Only while the routine slot still holds this exercise (R74).
     db.update(routineExercises)
       .set({ nextWeight: o.nextWeight, nextWeightUnit: o.nextUnit, ...(o.nextSetCount === null ? {} : { nextSetCount: o.nextSetCount }) })
-      .where(and(eq(routineExercises.id, o.routineExerciseId), eq(routineExercises.exerciseId, o.exerciseId)))
+      .where(and(inArray(routineExercises.id, ids), eq(routineExercises.exerciseId, o.exerciseId)))
       .run();
   }
 }
