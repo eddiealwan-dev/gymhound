@@ -152,6 +152,8 @@ describe('getFinishSummary', () => {
       setCount: 2,
       // One working set of the four missed: the bench holds at what was lifted.
       next: [{ workoutExerciseId: expect.any(String), name: 'Barbell bench press', loggingType: 'weighted', outcome: 'held', nextWeight: 135, nextUnit: 'lb', mark: null }],
+      // Your own routine's lines are `next` as `finishLine` says them.
+      lines: [{ workoutExerciseId: expect.any(String), text: 'Barbell bench press — holds at 135 lb', why: null }],
       // 135 x 5 beats Oct 1's 100 x 5: the heaviest set and the best estimated 1RM.
       prs: [
         { exerciseId: 'barbell-bench-press', name: 'Barbell bench press', loggingType: 'weighted', kind: 'heaviest', weight: 135, weightUnit: 'lb', reps: 5, durationS: null, localDate: '2026-10-06' },

@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { setActiveProgram } from '../db/repositories/programRunRepo';
 import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -30,6 +31,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   deleteRoutine: jest.fn(),
   duplicateRoutine: jest.fn(() => 'copy-1'),
 }));
+jest.mock('../db/repositories/programRunRepo', () => ({ setActiveProgram: jest.fn(), changeRung: jest.fn(), startProgramOver: jest.fn() }));
 jest.mock('../state/routineShare', () => ({ shareRoutine: jest.fn(() => Promise.resolve('shared')) }));
 // The saved workouts group has its own tests (savedWorkouts.test.tsx).
 jest.mock('../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
@@ -81,7 +83,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   mockRoutines = [routine('fb', 'Full body', true), routine('ppl', 'Push/pull/legs', false)];
   jest.mocked(router.push).mockClear();
-  jest.mocked(setActiveRoutine).mockClear();
+  jest.mocked(setActiveProgram).mockClear();
   jest.mocked(duplicateRoutine).mockClear();
   jest.mocked(deleteRoutine).mockClear();
   jest.mocked(bumpData).mockClear();
@@ -99,7 +101,7 @@ describe('Routines: Set active (R80, Round 5)', () => {
 
     press(tree, 'Set active');
 
-    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'ppl');
+    expect(setActiveProgram).toHaveBeenCalledWith('db', 'ppl', expect.any(Number));
     expect(bumpData).toHaveBeenCalled();
     expect(shownText(tree)).not.toContain('Workout in progress');
   });
@@ -110,7 +112,7 @@ describe('Routines: Set active (R80, Round 5)', () => {
 
     press(tree, 'Set active');
 
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
     const shown = shownText(tree);
     expect(shown).toContain('Workout in progress');
     expect(shown).toContain('Finish or discard the workout in progress before changing routines.');
@@ -134,7 +136,7 @@ describe('Routines: Set active (R80, Round 5)', () => {
     expect(router.push).not.toHaveBeenCalled();
     act(() => void jest.advanceTimersByTime(1000));
     expect(router.push).toHaveBeenCalledWith('/session');
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
   });
 });
 
@@ -272,7 +274,7 @@ describe('Routines: free programs and Pro programs (§18.21, R520, R525)', () =>
     const tree = mount();
     expect(buttons(tree, 'Pro').length).toBeGreaterThan(0);
     press(tree, 'Pro');
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
     expect(shownText(tree).some((t) => /is part of GymHound Pro\. Free includes Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters./.test(t))).toBe(true);
   });
 });
@@ -330,7 +332,7 @@ describe('Routines: ⋯ on each row (Round 9, R542)', () => {
     expect(shown).not.toContain('Edit');
     expect(shown).not.toContain('Delete routine');
     choose(tree, 'Set active');
-    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'ppl');
+    expect(setActiveProgram).toHaveBeenCalledWith('db', 'ppl', expect.any(Number));
   });
 
   it('the routine in use has no Set active in its sheet', () => {

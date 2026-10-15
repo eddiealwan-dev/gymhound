@@ -347,6 +347,11 @@ describe('clampRule', () => {
 
   const rule = { setCount: 3, repMin: 8, repMax: 12, increment: 5 };
 
+  it('keeps the range within an hour of seconds, what a code carries (ruling R-t9a: a copied 90:00 long run saves as 60:00)', () => {
+    expect(clampRule({ ...rule, repMin: 3600, repMax: 5400 })).toMatchObject({ repMin: 3600, repMax: 3600 });
+    expect(clampRule({ ...rule, repMin: 4000, repMax: 5400 })).toMatchObject({ repMin: 3600, repMax: 3600 });
+  });
+
   it('keeps sets a whole number from 1 to 10', () => {
     expect(clampRule({ ...rule, setCount: 0 }).setCount).toBe(1);
     expect(clampRule({ ...rule, setCount: 25 }).setCount).toBe(10);

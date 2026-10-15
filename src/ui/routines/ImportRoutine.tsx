@@ -7,6 +7,7 @@ import { importSharedRoutine, previewShared, sharedFromDecoded } from '../../db/
 import { getRoutineDetail } from '../../db/repositories/routinesRepo';
 import { decodeRoutine, PROGRAM_NOT_HERE, SHARE_CODE_ERRORS } from '../../domain/routineShare';
 import { announce } from '../../platform/announce';
+import { programById } from '../../seed/programs.generated';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
 import { useRoutineLimit } from '../RoutineLimit';
@@ -100,7 +101,10 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
         >
           <Label>Program</Label>
           <Body weight={600}>{program.name}</Body>
-          <Body muted>{`${program.days.length} ${program.days.length === 1 ? 'day' : 'days'} · already in your Routines`}</Body>
+          {/* A retired program is on Routines only while someone uses it (R598), so its preview says it is retired. */}
+          <Body muted>
+            {`${program.days.length} ${program.days.length === 1 ? 'day' : 'days'} · ${programById(program.id) ? 'already in your Routines' : 'retired. Open program shows its page.'}`}
+          </Body>
         </View>
       ) : null}
       {preview !== null ? (

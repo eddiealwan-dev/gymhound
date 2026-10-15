@@ -1,6 +1,7 @@
 import { setRestSeconds } from '../db/repositories/exercisePrefsRepo';
 import { setExerciseNote } from '../db/repositories/exercisesRepo';
 import { flagUnmarkedShortOnFood, setFoodOfferShown } from '../db/repositories/foodOfferRepo';
+import { changeRungToday } from '../db/repositories/programViewRepo';
 import { getSettings } from '../db/repositories/settingsRepo';
 import {
   addExerciseToWorkout,
@@ -251,6 +252,12 @@ export function addExercise(db: Db, exerciseId: string): void {
 /** Swaps the exercise for another in place. The new exercise brings its own note. */
 export function replaceWith(db: Db, workoutExerciseId: string, exerciseId: string): void {
   replaceExercise(db, workoutExerciseId, exerciseId);
+  bumpData();
+}
+
+/** Change rung in a workout (R618): the ladder slot and today's exercise move to the rung; today's sets start fresh. */
+export function changeRungTo(db: Db, workoutExerciseId: string, rung: number): void {
+  changeRungToday(db, workoutExerciseId, rung);
   bumpData();
 }
 

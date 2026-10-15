@@ -26,6 +26,17 @@ describe('MARK_LABELS', () => {
 });
 
 describe('formatRepScheme', () => {
+  it("a program's carries, scores and runs (R607, R620): the distance unit, the format, a clock", () => {
+    expect(formatRepScheme(4, 50, 50, 'weighted_distance', { distanceUnit: 'ft' })).toBe('4×50 ft');
+    expect(formatRepScheme(4, 40, 40, 'weighted_distance', { distanceUnit: 'yd' })).toBe('4×40 yd');
+    expect(formatRepScheme(1, 4, 7, 'rounds', { metcon: { format: 'AMRAP', workMinutes: 12 } })).toBe('AMRAP 12 min');
+    expect(formatRepScheme(1, 8, 12, 'for_time', { metcon: { format: 'For Time', workMinutes: 10 } })).toBe('For Time');
+    expect(formatRepScheme(1, 4, 7, 'rounds')).toBe('AMRAP');
+    expect(formatRepScheme(1, 8, 12, 'for_time')).toBe('For Time');
+    expect(formatRepScheme(1, 1740, 1740, 'timed', { clock: true })).toBe('29:00');
+    expect(formatRepScheme(6, 180, 180, 'timed', { clock: true })).toBe('6×3:00');
+  });
+
   it('shows sets by the rep range', () => {
     expect(formatRepScheme(3, 8, 12, 'weighted')).toBe('3×8–12');
     expect(formatRepScheme(4, 5, 8, 'bodyweight_plus')).toBe('4×5–8');

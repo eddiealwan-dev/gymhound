@@ -116,6 +116,32 @@ describe('the finish summary (8.5, R64)', () => {
     expect(text.slice(logged + 1)).toEqual([...lines, 'Save as a workout', 'Done']);
   });
 
+  it("a program's lines (§18.29): the reset line and the metcon line, each with its why muted under it", () => {
+    const reset = { workoutExerciseId: 'we1', name: 'Barbell back squat', loggingType: 'weighted' as const, outcome: 'reset' as const, nextWeight: 160, nextUnit: 'lb' as const, mark: null };
+    mockRead = {
+      unit: 'lb',
+      summary: {
+        ...pushA([reset]),
+        lines: [
+          { workoutExerciseId: 'we1', text: 'Barbell back squat — next time 160 lb ↓', why: 'Missed the bottom of the range 2 times in a row, so next time drops 10% to 160 lb.' },
+          { workoutExerciseId: 'we2', text: 'AMRAP 10: goblet squat, push-up, run — 7 + 3', why: 'You beat your score twice in a row. Go heavier or take the next scaling step.' },
+        ],
+      },
+    };
+    const tree = mount();
+    const text = shownText(tree);
+    const logged = text.indexOf('3 sets');
+    expect(text.slice(logged + 1, logged + 5)).toEqual([
+      'Barbell back squat — next time 160 lb ↓',
+      'Missed the bottom of the range 2 times in a row, so next time drops 10% to 160 lb.',
+      'AMRAP 10: goblet squat, push-up, run — 7 + 3',
+      'You beat your score twice in a row. Go heavier or take the next scaling step.',
+    ]);
+    // The why is muted, under its line.
+    const why = tree.root.findAll((n) => n.props.children === 'You beat your score twice in a row. Go heavier or take the next scaling step.' && n.props.muted === true);
+    expect(why.length).toBeGreaterThan(0);
+  });
+
   it('shows no next-time line when no exercise has a rule', () => {
     mockRead = { unit: 'lb', summary: pushA([]) };
     const text = shownText(mount());

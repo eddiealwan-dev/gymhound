@@ -11,6 +11,7 @@ const SPEC_KEYS = [
   'bar_lb',
   'default_increment_kg',
   'default_increment_lb',
+  'deload_offer_dismissed',
   'distance_unit',
   'fuel_targets',
   'health_bodyweight',

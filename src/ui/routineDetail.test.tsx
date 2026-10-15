@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { setActiveProgram } from '../db/repositories/programRunRepo';
 import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -38,6 +39,7 @@ jest.mock('../db/repositories/routinesRepo', () => ({
   duplicateRoutine: jest.fn(),
   deleteRoutine: jest.fn(),
 }));
+jest.mock('../db/repositories/programRunRepo', () => ({ setActiveProgram: jest.fn(), changeRung: jest.fn(), startProgramOver: jest.fn() }));
 jest.mock('../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
 jest.mock('./Footer', () => ({ Footer: () => null }));
@@ -207,7 +209,7 @@ describe('Routine detail: Set active (R80)', () => {
 
     press(tree, 'Set active');
 
-    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'premade-ppl-6');
+    expect(setActiveProgram).toHaveBeenCalledWith('db', 'premade-ppl-6', expect.any(Number));
     expect(bumpData).toHaveBeenCalled();
   });
 
@@ -217,7 +219,7 @@ describe('Routine detail: Set active (R80)', () => {
 
     press(tree, 'Set active');
 
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
     expect(shownText(tree)).toContain('Workout in progress');
   });
 });
@@ -337,7 +339,7 @@ describe('Routine detail: free and Pro (§18.21)', () => {
     expect(buttons(tree, 'Set active')).toHaveLength(0);
     press(tree, 'See Pro');
     expect(router.push).toHaveBeenCalledWith('/paywall');
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
   });
 
   it('free: a routine of your own kept after Pro ended can be read and deleted, but Edit explains instead (R523)', () => {

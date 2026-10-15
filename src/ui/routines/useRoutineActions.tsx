@@ -3,9 +3,11 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
-import { deleteRoutine, duplicateRoutine, setActiveRoutine } from '../../db/repositories/routinesRepo';
+import { setActiveProgram } from '../../db/repositories/programRunRepo';
+import { deleteRoutine, duplicateRoutine } from '../../db/repositories/routinesRepo';
 import { getActiveWorkoutId } from '../../db/repositories/workoutsRepo';
-import { canUseRoutine, lockedRoutineReason } from '../../domain/routineLimit';
+import { canSeeProgramExercises, canUseRoutine, lockedRoutineReason } from '../../domain/routineLimit';
+import { SHARE_TOO_LONG } from '../../domain/routineShare';
 import { announce } from '../../platform/announce';
 import { useIsPro } from '../../platform/entitlements';
 import { bumpData } from '../../state/dataVersion';
@@ -49,7 +51,8 @@ export function useRoutineActions(onDeleted?: () => void) {
         setBlocked(true);
         return;
       }
-      setActiveRoutine(db, routine.id);
+      // One of the twenty starts its run at week 1 when it has none; a run it has continues (R616, R636).
+      setActiveProgram(db, routine.id, Date.now());
       bumpData();
     });
 
@@ -77,6 +80,8 @@ export function useRoutineActions(onDeleted?: () => void) {
     void shareRoutine(db, routine.id).then((result) => {
       // shareRoutine has logged the error already.
       if (result === 'failed') fail('share', routine.id, "Couldn't open the share sheet. Try again.", null);
+      // A copy with a target past what a code carries says why, rather than to try again (ruling R-t9a).
+      if (result === 'too_long') fail('share', routine.id, SHARE_TOO_LONG, null);
     });
   };
 
@@ -144,7 +149,8 @@ export function RoutineOptionsSheet({
         {locked ? <Button label="See Pro" onPress={then(() => openPaywall())} /> : null}
         {!locked && routine !== null && !routine.isActive ? <Button label="Set active" variant="secondary" onPress={then(actions.setActive)} /> : null}
         {routine !== null && !routine.isPremade ? <Button label="Edit" variant="secondary" onPress={then(actions.edit)} /> : null}
-        <Button label="Duplicate" variant="secondary" onPress={then(actions.duplicate)} />
+        {/* Duplicate copies the exercises, so a program offers it only while they show: the active one (R634, R635). */}
+        {routine !== null && canSeeProgramExercises(routine, pro) ? <Button label="Duplicate" variant="secondary" onPress={then(actions.duplicate)} /> : null}
         <Button label="Share routine" variant="secondary" onPress={then(actions.share)} />
         {routine !== null && !routine.isPremade ? <Button label="Delete routine" variant="secondary" onPress={then(actions.askDelete)} /> : null}
         <Button label="Cancel" variant="quiet" onPress={onClose} />

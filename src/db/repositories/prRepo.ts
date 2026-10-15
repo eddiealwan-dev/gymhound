@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { computePrFlags, pickHighlights, type PrCandidate, type PrHighlight } from '../../domain/prs';
+import { computePrFlags, NO_PR_EXERCISES, pickHighlights, type PrCandidate, type PrHighlight } from '../../domain/prs';
 import type { LoggingType } from '../../domain/types';
 import { exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -57,7 +57,8 @@ export function recomputePrFlags(db: Db, exerciseIds: readonly string[]): void {
       )
       .all();
 
-    const flags = computePrFlags(loggingType, rows);
+    // No PR marks for the run exercises (R608): every flag is 0.
+    const flags = NO_PR_EXERCISES.includes(exerciseId) ? new Map<string, number>() : computePrFlags(loggingType, rows);
     // At most 16 flag values: one UPDATE per value per chunk, however long the history.
     const changed = new Map<number, string[]>();
     for (const row of rows) {

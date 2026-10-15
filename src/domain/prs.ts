@@ -109,6 +109,20 @@ function measure(loggingType: LoggingType, s: PrCandidate): Measured | null {
   }
 }
 
+/**
+ * The run exercises of the programs (R608): logged as timed sets, but a 40-minute run is not a "longest hold", so they
+ * get no PR marks.
+ */
+export const NO_PR_EXERCISES: readonly string[] = [
+  'easy-run',
+  'interval-run',
+  'tempo-run',
+  'long-run',
+  'bike-intervals',
+  'rower-intervals',
+  'incline-treadmill-walk',
+];
+
 /** Earlier sets at one logged load: the most reps, and the rep counts that have an e1RM. */
 type LoadBucket = { load: Load; maxReps: number; e1rmReps: Set<number> };
 

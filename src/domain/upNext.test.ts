@@ -1,6 +1,19 @@
 import type { Gear } from './plates';
 import type { Equipment, LoggingType, WeightUnit } from './types';
-import { dayTitle, startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from './upNext';
+import {
+  dayTitle,
+  DELOAD_OFFER,
+  firstSentence,
+  graduationLine,
+  programWeekText,
+  startDayLabel,
+  startOverQuestion,
+  upNextDayHasWeight,
+  upNextLoad,
+  upNextNeedsWeights,
+  upNextOutcome,
+  upNextSubtitle,
+} from './upNext';
 
 /** The default bars and plate pairs in Settings. */
 const LB_GEAR: Gear = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 } };
@@ -227,5 +240,34 @@ describe('dayTitle and startDayLabel', () => {
   it('reads Start {day}', () => {
     expect(startDayLabel('Upper/lower', 'Upper A')).toBe('Start Upper A');
     expect(startDayLabel('5×5', 'B')).toBe('Start 5×5 B');
+  });
+});
+
+describe('a program on Up next (R616, R627, R614)', () => {
+  it('the week, or the block done', () => {
+    expect(programWeekText({ week: 3, weeks: 12, done: false })).toBe('Week 3 of 12');
+    expect(programWeekText({ week: 13, weeks: 12, done: true })).toBe('12 weeks done.');
+  });
+
+  it('leads the subtitle with the week', () => {
+    expect(upNextSubtitle({ localDate: '2026-10-07' }, false, 'en-GB', 'Week 3 of 12')).toBe('Week 3 of 12 · Last time: WED 7 OCT');
+    expect(upNextSubtitle(null, true, 'en-GB', 'Week 1 of 12')).toBe('Week 1 of 12 · First time on this day. Pick weights as you go.');
+  });
+
+  it('the first sentence of After this program, without its citations', () => {
+    expect(firstSentence('Run it again from your current weights. When two different lifts have each needed two resets, graduate [22][23].')).toBe(
+      'Run it again from your current weights.',
+    );
+    expect(firstSentence('Move to #12 Strength Peaking for a meet [22]. Or run it again.')).toBe('Move to #12 Strength Peaking for a meet.');
+  });
+
+  it('the words of the offer, Start over and the graduation line', () => {
+    expect(DELOAD_OFFER).toBe('Two main lifts missed this week. Start the deload week now?');
+    expect(startOverQuestion('Barbell Foundations')).toBe('Start Barbell Foundations over at week 1? Your weights stay.');
+    expect(graduationLine('Barbell back squat')).toBe('Barbell back squat has dropped back twice in this run. See After this program.');
+  });
+
+  it('a carry needs a load (R607)', () => {
+    expect(upNextNeedsWeights([{ loggingType: 'weighted_distance', nextWeight: null, nextWeightUnit: null }])).toBe(true);
   });
 });

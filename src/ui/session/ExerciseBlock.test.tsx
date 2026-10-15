@@ -11,6 +11,7 @@ import { ExerciseBlock } from './ExerciseBlock';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow, SUGGESTED_HINT } from './SetRow';
 import { BODY_MAX_SCALE } from '../Text';
+import type { ProgramRule } from '../../domain/ruleLine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1814,5 +1815,82 @@ describe('ExerciseBlock: a superset says so in words (R100)', () => {
 
     expect(texts(tree, 'Rest after Ab roller')).toHaveLength(0);
     expect(tree.root.findAllByType(RestInline)).toHaveLength(1);
+  });
+});
+
+describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
+  /** A Barbell Foundations squat: the load rule of a Beginner program, 3 misses to a reset. */
+  const programRule = (over: Partial<ProgramRule> = {}): ProgramRule => ({
+    kind: 'load',
+    carryUnit: null,
+    sessionsToRaise: 1,
+    halved: false,
+    missesBefore: 0,
+    missesToReset: 3,
+    resetMultiplier: 0.9,
+    week: 3,
+    weekInfo: null,
+    sets: 3,
+    rung: null,
+    rungs: null,
+    addSet: null,
+    weekly: null,
+    metconText: null,
+    manualText: null,
+    ...over,
+  });
+  const squat = (program: WorkoutExerciseView['program']): WorkoutExerciseView => ({
+    ...bench([set('s0', 0)]),
+    name: 'Barbell back squat',
+    rule: { setCount: 3, repMin: 5, repMax: 8, increment: 2.5, incrementUnit: 'lb' },
+    plannedWeight: 135,
+    plannedUnit: 'lb',
+    program,
+  });
+
+  it("reads the rule by its kind, with today's read, then the slot's note muted", () => {
+    const tree = mount(squat({ rule: programRule({ halved: true, missesBefore: 1 }), warmUp: false, note: 'Beginner squat: 5 lb per session, not 10' }));
+    const shown = shownText(tree);
+    const line =
+      'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
+    expect(shown).toContain(line);
+    expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('Beginner squat: 5 lb per session, not 10'));
+    expect(shown.indexOf('Beginner squat: 5 lb per session, not 10')).toBeLessThan(shown.indexOf('SET'));
+  });
+
+  it('shows the warm-up line only on the first slot', () => {
+    const first = shownText(mount(squat({ rule: programRule(), warmUp: true, note: null })));
+    expect(first).toContain(
+      '5 min easy cardio or dynamic prep, then about 40% × 8, 60% × 5, 80% × 3 before work sets. One light feeder set before each later compound.',
+    );
+    const later = shownText(mount(squat({ rule: programRule(), warmUp: false, note: null })));
+    expect(later.filter((s) => s.startsWith('5 min easy cardio'))).toEqual([]);
+  });
+
+  it('a ladder slot offers Change rung in place of Modify, labelled for VoiceOver', () => {
+    const rungs = [
+      { name: 'Scapular pull-up', timed: false, repMin: 5, repMax: 8, weighted: false },
+      { name: 'Arch hang', timed: true, repMin: 10, repMax: 30, weighted: false },
+    ];
+    const onOpenModify = jest.fn();
+    let tree!: ReactTestRenderer;
+    act(() => {
+      tree = create(
+        <ExerciseBlock
+          {...block(squat({ rule: programRule({ kind: 'ladder', rung: 0, rungs }), warmUp: false, note: null })).props}
+          onOpenModify={onOpenModify}
+        />,
+      );
+    });
+    expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Modify Barbell back squat: swap in another exercise').length).toBe(0);
+    const change = byLabel(tree, 'Change rung for Barbell back squat');
+    expect(shownText(tree)).toContain('Change rung');
+    act(() => change.props.onPress());
+    expect(onOpenModify).toHaveBeenCalled();
+  });
+
+  it('your own routine reads as it always has', () => {
+    const tree = mount({ ...squat(null), rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' } });
+    expect(shownText(tree)).toContain('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb.');
   });
 });
