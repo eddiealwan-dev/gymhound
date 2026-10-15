@@ -510,6 +510,36 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
+  describe('a raise the plates you own cannot load (ruling R-w2)', () => {
+    const loadLine = (p: ProgramRule, rule: Rule, planned: number | null, equipment: Equipment = 'barbell', gear: Gear = LB_GEAR, loggingType: LoggingType = 'weighted') =>
+      programRuleSentence({
+        program: p,
+        rule,
+        loggingType,
+        unit: 'lb',
+        last: null,
+        load: { planned: planned === null ? null : { weight: planned, unit: 'lb' }, equipment, gear },
+      });
+    const HALVED: Rule = { ...RULE_LB, increment: 2.5 };
+
+    it('says what will load and why, and its number is the read\'s next weight', () => {
+      expect(loadLine(program({ halved: true }), HALVED, 135)).toBe(
+        'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). ' +
+          'Your plates make 140 lb; add 1.25 lb plates in Settings to load 137.5 lb. A marked day holds the weight.',
+      );
+      expect(read(program({ halved: true }), HALVED, 135, { equipment: 'barbell' })).toBe('Hit 8s on a normal day and next time is 140 lb.');
+    });
+
+    it('adds nothing when the plates load the raise, off a barbell, or with no plan yet', () => {
+      const withFractions: Gear = { bar: 45, plates: { ...LB_GEAR.plates, '1.25': 1 } };
+      const plain = 'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight.';
+      expect(loadLine(program({ halved: true }), HALVED, 135, 'barbell', withFractions)).toBe(plain);
+      expect(loadLine(program({ halved: true }), HALVED, 135, 'dumbbell')).toBe(plain);
+      expect(loadLine(program({ halved: true }), HALVED, null)).toBe(plain);
+      expect(loadLine(program(), RULE_LB, 135)).toBe('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.');
+    });
+  });
+
   it('load before any miss reads as the rule always has', () => {
     expect(line(program(), RULE_LB)).toBe('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.');
   });

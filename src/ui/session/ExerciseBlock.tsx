@@ -279,7 +279,14 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const program = ex.program ?? null;
   const read = program ? programTodaysRead({ ...readInput, program: program.rule, last }) : todaysRead(readInput);
   const sentence = program
-    ? programRuleSentence({ program: program.rule, rule: ex.rule, loggingType: ex.loggingType, unit, last })
+    ? programRuleSentence({
+        program: program.rule,
+        rule: ex.rule,
+        loggingType: ex.loggingType,
+        unit,
+        last,
+        load: { planned: readInput.planned, equipment: ex.equipment, gear },
+      })
     : ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last });
   /** A ladder slot changes its rung where any other exercise is modified (R618). */
   const ladder = program?.rule.kind === 'ladder';

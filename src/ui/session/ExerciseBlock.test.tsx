@@ -1853,8 +1853,9 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
   it("reads the rule by its kind, with today's read, then the slot's note muted", () => {
     const tree = mount(squat({ ...SLOT, rule: programRule({ halved: true, missesBefore: 1 }), warmUp: false, note: 'Beginner squat: 5 lb per session, not 10' }));
     const shown = shownText(tree);
+    // The default plates can't load 137.5 lb, so the line says what they make, the read's 140 lb (ruling R-w2).
     const line =
-      'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
+      'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). Your plates make 140 lb; add 1.25 lb plates in Settings to load 137.5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
     expect(shown).toContain(line);
     expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('Beginner squat: 5 lb per session, not 10'));
     expect(shown.indexOf('Beginner squat: 5 lb per session, not 10')).toBeLessThan(shown.indexOf('SET'));
