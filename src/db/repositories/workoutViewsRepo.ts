@@ -212,6 +212,8 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       ruleRung: we.ruleRung,
       rule: ruleOf(we),
       loggingType: exercise.loggingType,
+      equipment: exercise.equipment,
+      pattern: exercise.pattern,
     })),
   );
   const setsByExercise = new Map<string, SetView[]>();

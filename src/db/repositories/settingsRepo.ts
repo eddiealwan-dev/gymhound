@@ -2,6 +2,7 @@ import type { BellSound, DistanceUnit, FuelTargets, LengthUnit, MeasurementSyste
 import { lengthUnitFor } from '../../domain/body';
 import { DEFAULT_WIDGETS } from '../../domain/profile';
 import { defaultUnitFor } from '../../domain/units';
+import type { WorkTimer } from '../../domain/workClock';
 import { settings } from '../schema';
 import type { Db } from '../types';
 
@@ -79,6 +80,11 @@ export type Settings = {
   testerAnswers: unknown;
   /** §18.29 (R627): the reactive deload's offer answered Not now, for this program's run and week; null for none. */
   deloadOfferDismissed: string | null;
+  /**
+   * Task 7b: the work clock of a metcon, a run, intervals or an EMOM, while one is started: when its work starts and how
+   * long it has been paused, never a counter (`workClock.ts`). One at a time; null when none.
+   */
+  workTimer: WorkTimer | null;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -125,6 +131,7 @@ const KEYS: Record<keyof Settings, string> = {
   reviewLastCheck: 'review_last_check',
   testerAnswers: 'tester_answers',
   deloadOfferDismissed: 'deload_offer_dismissed',
+  workTimer: 'work_timer',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -174,6 +181,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     reviewLastCheck: null,
     testerAnswers: [],
     deloadOfferDismissed: null,
+    workTimer: null,
   };
 }
 

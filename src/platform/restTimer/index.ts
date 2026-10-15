@@ -64,3 +64,20 @@ export function getRestTimerSurface(): RestTimerSurface {
   phoneSurface ??= makePhoneSurface();
   return phoneSurface;
 }
+
+/**
+ * The work clock's cues on a locked phone (Task 7b, R-t7b1): every bell still to come, each its own notification.
+ * Scheduling replaces the ones before; cancel takes them all down (Pause, Done, Reset, Finish, Discard).
+ */
+export interface WorkCueSurface {
+  schedule(cues: readonly { at: number; title: string }[], withSound: boolean, sound?: BellSound): Promise<void>;
+  cancel(): Promise<void>;
+}
+
+const noopCues: WorkCueSurface = { schedule: async () => {}, cancel: async () => {} };
+
+/** The cue surface: nothing on web; the notifications on the phone (loaded only off web, as the rest surface is). */
+export function getWorkCueSurface(): WorkCueSurface {
+  if (Platform.OS === 'web') return noopCues;
+  return (require('./expoGoNotification') as typeof import('./expoGoNotification')).workCueNotifications;
+}

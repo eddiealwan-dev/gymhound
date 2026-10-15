@@ -35,7 +35,9 @@ import {
 } from '../db/repositories/workoutsRepo';
 import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
-import { restAfterMinus15, restAfterPlus15, restAfterTick, restLengthFor, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
+import { restAfterMinus15, restAfterPlus15, restAfterTick, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
+import { restLengthOf } from '../domain/restKind';
+import { blockKindOf } from '../domain/sessionBlock';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import type { BellSound, DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
@@ -44,6 +46,7 @@ import { getRestTimerSurface, type RestTimerSurface } from '../platform/restTime
 import { takeSnapshotSafely } from './backup';
 import { afterFinish } from './nativeServices';
 import { bumpData } from './dataVersion';
+import { clearWorkClock, emomRunsFor } from './workClockActions';
 
 /**
  * What a screen calls to change the session. Each one writes, then bumps the data version so screens read again.
@@ -105,8 +108,13 @@ export function tick(
   const view = getActiveWorkoutView(db);
   let restStarted: number | null = null;
   let waitsFor: string | null = null;
+  // A metcon's score or a run ends its clock: it has done its job (Task 7b).
+  const kind = blockKindOf(ex);
+  if (kind === 'metcon' || kind === 'run') clearWorkClock(db, ex.id);
   if (view) {
-    const length = restLengthFor(ex.restSeconds, settings.restSeconds);
+    // R639: none after a metcon or a run, else the lifter's own rest, else the slot's kind; while an EMOM runs, the
+    // minute is the rest. Your own routines rest as before.
+    const length = emomRunsFor(db, ex.id, now) ? 0 : restLengthOf(ex, settings.restSeconds);
     const change = restAfterTick(view.exercises, ex.id, now, length);
     applyRest(db, view.id, change, restAlert(settings), set.id);
     if (change.kind === 'start') restStarted = length;
@@ -225,6 +233,7 @@ export function finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'
     throw e;
   }
   onSurface((surface) => surface.cancel());
+  clearWorkClock(db);
   takeSnapshotSafely(db, Date.now());
   // Phase 7: the Health write-out and the iCloud copy, in the background. Nothing in Expo Go (R307, R303).
   afterFinish(db);
@@ -236,6 +245,7 @@ export function finish(db: Db, workoutId: string): 'finished' | 'nothing_ticked'
 export function discard(db: Db, workoutId: string): void {
   discardWorkout(db, workoutId);
   onSurface((surface) => surface.cancel());
+  clearWorkClock(db);
   bumpData();
 }
 
@@ -252,18 +262,21 @@ export function addExercise(db: Db, exerciseId: string): void {
 /** Swaps the exercise for another in place. The new exercise brings its own note. */
 export function replaceWith(db: Db, workoutExerciseId: string, exerciseId: string): void {
   replaceExercise(db, workoutExerciseId, exerciseId);
+  clearWorkClock(db, workoutExerciseId);
   bumpData();
 }
 
 /** Change rung in a workout (R618): the ladder slot and today's exercise move to the rung; today's sets start fresh. */
 export function changeRungTo(db: Db, workoutExerciseId: string, rung: number): void {
   changeRungToday(db, workoutExerciseId, rung);
+  clearWorkClock(db, workoutExerciseId);
   bumpData();
 }
 
 /** Deletes the exercise and its sets from the workout. */
 export function removeFromWorkout(db: Db, workoutExerciseId: string): void {
   removeExercise(db, workoutExerciseId);
+  clearWorkClock(db, workoutExerciseId);
   bumpData();
 }
 
