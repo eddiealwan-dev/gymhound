@@ -14,7 +14,7 @@ export const V8_SEEDED_AT = Date.UTC(2026, 9, 5);
 
 /**
  * Writes what seed version 8 left on a phone, as far as the programs need: the library (before §18.29's new exercises
- * and aliases) and the nine programs, none retired, each from its first day with no progress, then records version 8.
+ * and aliases) and the nine old programs, none retired, each from its first day with no progress, then records version 8.
  * The foods are left out; any later seed writes them. Running `runSeed` after this is a phone updating to version 9.
  */
 export function writeSeedV8(db: Db, now: number = V8_SEEDED_AT): void {

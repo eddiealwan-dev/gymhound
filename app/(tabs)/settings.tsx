@@ -608,7 +608,7 @@ function ProSection() {
         <Body>{isDebugPro ? 'Pro is on for testing.' : 'Pro is on.'}</Body>
       ) : (
         <View style={{ gap: 8 }}>
-          <Body>Free includes four programs, Stats and logging. Pro adds every program, your own routines, saved workouts and Fuel.</Body>
+          <Body>Free includes five programs, Stats and logging. Pro adds every program, your own routines, saved workouts and Fuel.</Body>
           <Button label="See Pro" onPress={openPaywall} />
         </View>
       )}

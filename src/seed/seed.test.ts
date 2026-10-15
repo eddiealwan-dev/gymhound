@@ -386,7 +386,7 @@ describe('seed version 9 over a version 8 database (§18.29)', () => {
     return { db, workoutId };
   }
 
-  it('starts from the nine programs version 8 wrote, none retired', () => {
+  it('starts from the nine old programs version 8 wrote, none retired', () => {
     const db = seededV8Db();
     expect(getSettings(db).seedVersion).toBe(8);
     expect(db.select().from(routines).all().map((r) => [r.id, r.retired]).sort()).toEqual(V8_ORDER.map((id) => [id, false]).sort());
