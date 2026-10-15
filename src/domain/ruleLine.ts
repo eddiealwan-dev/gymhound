@@ -332,6 +332,15 @@ export function slotNoteText(note: string, catalogName: string, kind: RuleKind):
   return text === '' ? null : text;
 }
 
+/**
+ * What Change rung on the program's page says (R618): the slot moves from the next workout and starts at the bottom of
+ * the rung's range; only a weighted rung has a weight, which starts fresh.
+ */
+export function changeRungNote(rungs: readonly RungWords[]): string {
+  const head = 'Changes it from the next workout. It starts at the bottom of its range';
+  return rungs.some((r) => r.weighted) ? `${head}; a weighted rung's weight starts fresh.` : `${head}.`;
+}
+
 /** "One miss so far. One more and next time drops 10%." (R613): today's warning before a reset. */
 function missWarning(p: ProgramRule): string | null {
   if (p.missesBefore < 1 || p.missesToReset <= p.missesBefore) return null;
@@ -340,30 +349,67 @@ function missWarning(p: ProgramRule): string | null {
   return `${so} ${word(p.missesToReset - p.missesBefore)} more and next time drops ${pct(1 - p.resetMultiplier)}%.`;
 }
 
-/** The load rule's sentence (§7.3 with R612, R623 and R607's carries). */
-function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit: WeightUnit): string {
-  if (rule.increment <= 0) return "No weight to add. Beat last time's reps.";
+/**
+ * Today's plan and the bar and plates it is loaded with, so the rule line can say when the plates can't load the raise
+ * (ruling R-w2). `planned` is in the display unit, as the read shows it.
+ */
+export type LoadContext = { planned: Load | null; equipment: Equipment; gear: Gear };
+
+/** A plate's size, which may be a fraction of a pound or kilo: "1.25 lb", "0.625 kg". */
+const plateSize = (v: number, u: WeightUnit): string => `${Number(v.toFixed(3))} ${u}`;
+
+/**
+ * When a barbell raise can't be loaded with the plates you own (ruling R-w2): "Your plates make 140 lb; add 1.25 lb
+ * plates in Settings to load 137.5 lb." Its number is the read's next weight (`raisedFrom`, as the finish rounds it).
+ * Null when the plates load the raise, off a barbell, for assistance, or with no plan yet.
+ */
+function unloadableRaise(rule: Rule, loggingType: LoggingType, load: LoadContext | undefined): string | null {
+  const planned = load?.planned ?? null;
+  if (!load || !planned || load.equipment !== 'barbell' || loggingType === 'assisted') return null;
+  const increment = convertIncrement(rule.increment, rule.incrementUnit, planned.unit);
+  const wanted = planned.weight + increment;
+  const loads = raisedFrom(planned, rule, loggingType, load.equipment, load.gear).weight;
+  if (Math.abs(loads - wanted) < 1e-6) return null;
+  return `Your plates make ${formatWeight(loads, planned.unit)}; add ${plateSize(increment / 2, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
+}
+
+/** The types whose sets have a weight column (LB, +LB, −LB). */
+const WEIGHT_COLUMN: readonly LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'weighted_time', 'weighted_distance'];
+
+/**
+ * A program slot whose rule adds no weight: over a weight column the weight is the lifter's to add or not, so the line
+ * doesn't say "No weight to add" over it (the walkthrough's calisthenics day).
+ */
+function noLoadSentence(loggingType: LoggingType): string {
+  return WEIGHT_COLUMN.includes(loggingType) ? "Beat last time's reps. Add weight only if you want to." : "No weight to add. Beat last time's reps.";
+}
+
+/** The load rule's sentence (§7.3 with R612, R623 and R607's carries), with what the plates load (ruling R-w2). */
+function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit: WeightUnit, load?: LoadContext): string {
+  if (rule.increment <= 0) return noLoadSentence(loggingType);
   const inc = formatWeight(convertIncrement(rule.increment, rule.incrementUnit, unit), unit);
   const halved = p.halved ? ' (halved after the first miss)' : '';
+  const plates = unloadableRaise(rule, loggingType, load);
+  const add = `add ${inc}${halved}.${plates === null ? '' : ` ${plates}`}`;
   if (loggingType === 'weighted_distance') {
-    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, add ${inc}${halved}.`;
+    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, ${add} A marked day holds the weight.`;
   }
   if (loggingType === 'assisted') {
     return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;
   }
   const hits = loggingType === 'weighted_time' ? `reaches ${rule.repMax} s` : `hits ${rule.repMax}`;
   const days = p.sessionsToRaise === 2 ? 'on two normal days in a row' : 'on a normal day';
-  return `If every working set ${hits} ${days}, add ${inc}${halved}. A marked day holds the weight.`;
+  return `If every working set ${hits} ${days}, ${add} A marked day holds the weight.`;
 }
 
 /** A ladder's line (R618): its rung and what comes next, or the top rung. */
-function ladderSentence(p: ProgramRule, rule: Rule | null, loggingType: LoggingType, unit: WeightUnit): string {
+function ladderSentence(p: ProgramRule, rule: Rule | null, loggingType: LoggingType, unit: WeightUnit, load?: LoadContext): string {
   const rungs = p.rungs ?? [];
   const at = Math.min(Math.max(0, p.rung ?? 0), Math.max(0, rungs.length - 1));
   const rung = rungs[at];
   if (!rung) return "No weight to add. Beat last time's reps.";
   const head = `Rung ${at + 1} of ${rungs.length}: ${rung.name}.`;
-  if (rung.weighted && rule) return `${head} ${loadSentence({ ...p, halved: false }, rule, loggingType, unit)}`;
+  if (rung.weighted && rule) return `${head} ${loadSentence({ ...p, halved: false }, rule, loggingType, unit, load)}`;
   const next = rungs[at + 1];
   if (!next) return `${head} Top rung. Keep adding ${rung.timed ? 'time' : 'reps'}.`;
   const top = rule?.repMax ?? rung.repMax;
@@ -401,18 +447,26 @@ const progresses = (p: ProgramRule): boolean => p.kind === 'load' || p.kind === 
  * halving and carries, a ladder's rung, a hold's step, a run's week, a metcon's format, added sets and the manual
  * rules' own words. On a holding week (R617) the slots that progress say the week holds them.
  */
-export function programRuleSentence(a: { program: ProgramRule; rule: Rule | null; loggingType: LoggingType; unit: WeightUnit; last: LastSummary | null }): string {
-  const { program: p, rule, loggingType, unit } = a;
+export function programRuleSentence(a: {
+  program: ProgramRule;
+  rule: Rule | null;
+  loggingType: LoggingType;
+  unit: WeightUnit;
+  last: LastSummary | null;
+  /** Today's plan and gear, so a raise the plates can't load says so (ruling R-w2). */
+  load?: LoadContext;
+}): string {
+  const { program: p, rule, loggingType, unit, load } = a;
   if (progresses(p) && p.weekInfo?.holds) return heldWeekLine(p.weekInfo);
   switch (p.kind) {
     case 'load':
-      return rule ? loadSentence(p, rule, loggingType, unit) : ruleSentence(a);
+      return rule ? loadSentence(p, rule, loggingType, unit, load) : ruleSentence(a);
     case 'reps_only':
-      return "No weight to add. Beat last time's reps.";
+      return noLoadSentence(loggingType);
     case 'hold':
       return `Add 5 s a session up to ${rule?.repMax ?? 60} s.`;
     case 'ladder':
-      return ladderSentence(p, rule, loggingType, unit);
+      return ladderSentence(p, rule, loggingType, unit, load);
     case 'add_set':
       return addSetSentence(p, rule, unit);
     case 'weekly_seconds':

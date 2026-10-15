@@ -8,6 +8,7 @@ import { doneWorkClock, pauseWorkClock, releaseWorkHold, resetWorkClock, resumeW
 import { Button } from '../Button';
 import { Body, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
+import { ClockPanel, ClockPills, ClockTrack } from './ClockPanel';
 import { useWorkNow } from './useWorkNow';
 
 type Props = {
@@ -64,28 +65,10 @@ export function WorkClock({ workoutId, workoutExerciseId, plan, timer, busy }: P
   })();
 
   return (
-    <View
+    <ClockPanel
       onLayout={ended ? undefined : (e) => setRunningHeight(e.nativeEvent.layout.height)}
-      style={{
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        columnGap: 8,
-        // The pills' 4pt hitSlops, stacked on two lines, must not overlap.
-        rowGap: 8,
-        minHeight: ended ? runningHeight : undefined,
-        marginTop: 12,
-        marginBottom: 4,
-        paddingLeft: 12,
-        paddingRight: 8,
-        paddingVertical: 6,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        backgroundColor: colors.surface,
-        overflow: 'hidden',
-      }}
+      minHeight={ended ? runningHeight : undefined}
+      margins={{ marginTop: 12, marginBottom: 4 }}
     >
       {ended ? (
         <View
@@ -122,18 +105,7 @@ export function WorkClock({ workoutId, workoutExerciseId, plan, timer, busy }: P
             </View>
           </View>
           {/* The pills wrap as one group, at the end, and among themselves when even a line of their own is too narrow. */}
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              rowGap: 8,
-              columnGap: 8,
-              maxWidth: '100%',
-              flexShrink: 0,
-            }}
-          >
+          <ClockPills>
             {pills.map((p) => (
               <Button
                 key={p.readAs}
@@ -145,21 +117,10 @@ export function WorkClock({ workoutId, workoutExerciseId, plan, timer, busy }: P
                 onPress={p.onPress}
               />
             ))}
-          </View>
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{
-              position: 'absolute',
-              left: 0,
-              bottom: 0,
-              height: 3,
-              width: `${Math.max(0, Math.min(1, state.fraction)) * 100}%`,
-              backgroundColor: colors.text,
-            }}
-          />
+          </ClockPills>
+          <ClockTrack fraction={state.fraction} />
         </>
       )}
-    </View>
+    </ClockPanel>
   );
 }

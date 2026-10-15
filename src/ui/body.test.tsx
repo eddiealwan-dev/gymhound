@@ -359,6 +359,14 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     press(tree, 'Save');
     expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 34, unit: 'in' })]);
 
+    // The same value typed again ("86.40", "86,4") is no change: the 34 in entry stays as logged.
+    for (const same of ['86.40', '86,4']) {
+      press(tree, 'Oct 10, 86.4 centimetres');
+      act(() => edit().props.onChangeText(same));
+      press(tree, 'Save');
+      expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 34, unit: 'in' })]);
+    }
+
     press(tree, 'Oct 10, 86.4 centimetres');
     act(() => edit().props.onChangeText('85'));
     press(tree, 'Save');

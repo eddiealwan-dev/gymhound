@@ -4,7 +4,7 @@ import { spokenRest } from './rest';
 import { TIMED_RUN_IDS } from './restKind';
 import { metconText } from './ruleLine';
 import { weightText } from './setEntry';
-import type { Column, RowModel } from './setTable';
+import { DISTANCE_WORDS, type Column, type RowModel } from './setTable';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
 import type { WorkPlan, WorkStep } from './workClock';
 
@@ -69,8 +69,10 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
       const m = /^(\d+(?:\s?m|-cal|\s?cal)?)\s+(.+)$/.exec(p);
       const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : null;
       const rest = m ? m[2] : p;
-      const load = /\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest)?.[1] ?? null;
-      return { amount, rest: rest.toLowerCase(), load, used: false };
+      const loadMatch = /\s*\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest);
+      // The program's own words for the move, without the load its column shows: "goblet squats", "push-ups (scaled)".
+      const words = (loadMatch ? rest.replace(loadMatch[0], '') : rest).trim();
+      return { amount, rest: rest.toLowerCase(), words, load: loadMatch?.[1] ?? null, used: false };
     });
   const elements = rule.elements.map((element): MetconElement => {
     const name = element.replace(/\s*\(metcon\)\s*$/i, '').trim();
@@ -78,7 +80,10 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     const part = parts.find((p) => !p.used && p.rest.startsWith(stem));
     if (!part) return { amount: null, name, load: null };
     part.used = true;
-    return { amount: part.amount, name, load: part.load };
+    // The move as the program writes it (plural where written, "(scaled)" kept), with the rule's own asides it lacks.
+    const asides = (name.match(/\([^)]*\)/g) ?? []).filter((a) => !part.words.toLowerCase().includes(a.toLowerCase()));
+    const own = `${part.words.charAt(0).toUpperCase()}${part.words.slice(1)}`;
+    return { amount: part.amount, name: [own, ...asides].join(' '), load: part.load };
   });
   const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time';
   const complete = plain && elements.every((e) => e.amount !== null);
@@ -119,6 +124,14 @@ export function emomMinutesOf(note: string | null): number | null {
 /** How many working sets intervals have today: each is one hard part. */
 const workingSets = (ex: BlockInput) => ex.sets.filter((s) => s.setType === 'working').length;
 
+/**
+ * A run's or an interval's target in seconds, the week's (R620): the rule's repMin, the one field its rule line, its
+ * clock, its format line and its suggested time all read, so they can't disagree. 0 for none.
+ */
+export function targetSecondsOf(ex: Pick<BlockInput, 'rule'>): number {
+  return ex.rule?.repMin ?? 0;
+}
+
 /** The clock a block runs, or null for a block with none (events, plain sets, technique sets without an EMOM). */
 export function workPlanFor(ex: BlockInput): WorkPlan | null {
   const p = ex.program;
@@ -130,11 +143,11 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
       return { kind: 'for_time', noun: 'For Time', steps: [{ kind: 'work', seconds: (m.capMinutes ?? m.workMinutes) * 60, set: 1 }] };
     }
     case 'run': {
-      const target = ex.rule?.repMin ?? 0;
+      const target = targetSecondsOf(ex);
       return target > 0 ? { kind: 'run', noun: runNoun(ex.exerciseId), steps: [{ kind: 'work', seconds: target, set: 1 }] } : null;
     }
     case 'intervals': {
-      const work = ex.rule?.repMin ?? 0;
+      const work = targetSecondsOf(ex);
       const sets = workingSets(ex);
       if (work <= 0 || sets === 0) return null;
       const easy = easySecondsOf(p?.note ?? null);
@@ -160,7 +173,6 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
 export const EVENT_LINE = 'A drop ends the set: log what you carried unbroken.';
 
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
-const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
 
 /** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
 export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string };

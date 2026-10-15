@@ -27,7 +27,8 @@ describe('the program picture (R632)', () => {
     const tree = render(<ProgramPicture programId="program-advanced-upper-lower-dup" label="Bench press" kind="card" />);
     const image = tree.root.findByType(Image);
     expect(image.props.source).toBe(11);
-    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 120, height: 80 });
+    // The photo fills the frame inside its 1px border, never over it.
+    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 118, height: 78 });
     const frame = tree.root.findByProps({ accessibilityLabel: 'Bench press photo' });
     expect(frame.props.accessibilityRole).toBe('image');
     expect(StyleSheet.flatten(frame.props.style)).toMatchObject({ borderRadius: 8, borderWidth: 1, borderColor: '#2e2a23', overflow: 'hidden' });
@@ -38,7 +39,7 @@ describe('the program picture (R632)', () => {
     const tree = render(<ProgramPicture programId="program-advanced-upper-lower-dup" label="Bench press" kind="thumb" decorative />);
     const image = tree.root.findByType(Image);
     expect(image.props.source).toBe(12);
-    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 48, height: 48 });
+    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 46, height: 46 });
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Bench press photo')).toHaveLength(0);
     expect(tree.root.findAll((n) => n.props.accessible === false).length).toBeGreaterThan(0);
   });

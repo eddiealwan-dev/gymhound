@@ -5,14 +5,20 @@ import type { Outcome } from './progression';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
 import { convertIncrement, formatWeight, isZeroWeight } from './units';
 
-/** What the Up next card needs of an exercise to say its load. */
-export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | null; nextWeightUnit: WeightUnit | null };
+/**
+ * What the Up next card needs of an exercise to say its load. `needsLoad` is false for a program slot whose rule adds
+ * no load (reps only, a bodyweight rung), whatever its type; absent, the type decides.
+ */
+export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | null; nextWeightUnit: WeightUnit | null; needsLoad?: boolean };
 
 /**
  * Types that need a load to be logged. Bodyweight-plus, timed and distance exercises do fine without one; a carry
  * (weight and distance, R607) needs its load.
  */
 const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assisted', 'weighted_distance'];
+
+/** Whether the exercise needs a load: its type does, unless a program slot's rule adds none. */
+const needsLoad = (exercise: UpNextLoadInput): boolean => exercise.needsLoad ?? NEEDS_LOAD.includes(exercise.loggingType);
 
 /** A weight and its unit, but not a bodyweight-plus exercise's 0 added load, which is no load (R75). */
 const hasWeight = (exercise: UpNextLoadInput): exercise is UpNextLoadInput & { nextWeight: number; nextWeightUnit: WeightUnit } =>
@@ -27,7 +33,7 @@ export function upNextDayHasWeight(exercises: readonly UpNextLoadInput[]): boole
 
 /** A day needs weights when some exercise's type needs a load and no exercise of the day has a weight. */
 export function upNextNeedsWeights(exercises: readonly UpNextLoadInput[]): boolean {
-  return exercises.some((exercise) => NEEDS_LOAD.includes(exercise.loggingType)) && !upNextDayHasWeight(exercises);
+  return exercises.some(needsLoad) && !upNextDayHasWeight(exercises);
 }
 
 /**
@@ -45,7 +51,7 @@ export function upNextLoad(
     const weight = planInUnit(exercise.nextWeight, exercise.nextWeightUnit, unit, exercise.equipment === 'barbell', gear.bar, gear.plates);
     return formatWeight(weight, unit);
   }
-  return dayHasWeight && NEEDS_LOAD.includes(exercise.loggingType) ? '—' : null;
+  return dayHasWeight && needsLoad(exercise) ? '—' : null;
 }
 
 /** What the Up next card needs of an exercise to say how it went last time. */

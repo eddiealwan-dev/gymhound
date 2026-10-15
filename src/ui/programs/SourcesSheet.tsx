@@ -42,9 +42,8 @@ function SourceRow({ source, failed, onOpen }: { source: ProgramSource; failed: 
           <Ionicons name="open-outline" size={14} color={colors.textMuted} />
         </Pressable>
         {failed ? (
-          <Body muted accessibilityLiveRegion="polite">
-            {FAILED}
-          </Body>
+          // Said once, by `announce` when the open fails; a live region as well would say it twice on Android.
+          <Body muted>{FAILED}</Body>
         ) : null}
       </View>
     </View>

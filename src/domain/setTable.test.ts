@@ -59,6 +59,12 @@ describe('tableColumns (brief Step 2)', () => {
     expect(headers('distance_time')).toEqual(['SET', 'PREVIOUS', 'DIST', 'TIME', '✓']);
   });
 
+  it("a carry heads its distance with the unit it is entered in, as the session's event does (R607)", () => {
+    expect(tableColumns('weighted_distance', 'lb', false, 'ft').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'LB', 'FT', 'TIME', '✓']);
+    expect(tableColumns('weighted_distance', 'kg', false, 'yd').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'KG', 'YD', 'TIME', '✓']);
+    expect(tableColumns('distance_time', 'lb', false, 'mi').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'DIST', 'TIME', '✓']);
+  });
+
   it('adds RPE after the inputs and before the tick only when it is shown', () => {
     expect(keys('weighted', 'lb', true)).toEqual(['set', 'previous', 'weight', 'reps', 'rpe', 'tick']);
     expect(headers('timed', 'lb', true)).toEqual(['SET', 'PREVIOUS', 'TIME', 'RPE', '✓']);
@@ -415,6 +421,22 @@ describe("buildRows: carrying today's values (spec 18.6)", () => {
     const rows = buildRows(exercise({ rule: null }), 'lb', LB_GEAR);
     for (const row of rows) expect(row.placeholders).toEqual({ weight: null, reps: null, durationS: null, distance: null });
     expect(readRow(rows[1], {}, 'lb', 'mi').tickable).toBe(false);
+  });
+});
+
+describe("a For Time score's hint reads as its Previous does (Task 7)", () => {
+  it('hints "0:45", not "45s", beside a Previous of "0:45"; a carry\'s time too', () => {
+    const [score] = buildRows(
+      exercise({ loggingType: 'for_time', rule: { repMax: 1 }, sets: [set('working')], previous: [prev(0, 'working', null, null, { durationS: 45 })] }),
+      'lb',
+      LB_GEAR,
+    );
+    expect(score.previous).toBe('0:45');
+    expect(hintText({ ...score, placeholders: { ...score.placeholders, durationS: 45 } }, 'durationS')).toBe('0:45');
+    const [carry] = buildRows(exercise({ loggingType: 'weighted_distance', rule: { repMax: 50 }, sets: [set('working')] }), 'lb', LB_GEAR, 'ft');
+    expect(hintText({ ...carry, placeholders: { ...carry.placeholders, durationS: 32 } }, 'durationS')).toBe('0:32');
+    const [hold] = buildRows(exercise({ loggingType: 'timed', rule: { repMax: 40 }, sets: [set('working')] }), 'lb', LB_GEAR);
+    expect(hintText({ ...hold, placeholders: { ...hold.placeholders, durationS: 40 } }, 'durationS')).toBe('40s');
   });
 });
 

@@ -59,12 +59,12 @@ describe('blockKindOf', () => {
 });
 
 describe('metconParts (R-t7b2)', () => {
-  it('takes the format and the moves from the structured rule, the amounts from the name where they match', () => {
+  it("takes the format and the moves from the structured rule, the amounts and the program's words from the name where they match", () => {
     expect(metconParts(amrap, 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run')).toEqual({
       format: 'AMRAP 10 min',
       elements: [
-        { amount: '10', name: 'Goblet squat', load: null },
-        { amount: '10', name: 'Push-up', load: null },
+        { amount: '10', name: 'Goblet squats', load: null },
+        { amount: '10', name: 'Push-ups (scaled)', load: null },
         { amount: '200 m', name: 'Run', load: null },
       ],
       subtitle: null,
@@ -74,7 +74,7 @@ describe('metconParts (R-t7b2)', () => {
   it('reads "12-cal" as 12 cal, and keeps the scaling words of the move', () => {
     const rule: MetconRule = { format: 'AMRAP', workMinutes: 12, elements: ['Wall ball', 'Toes-to-bar (scaled as needed)', 'Row (erg)'], capMinutes: null };
     expect(metconParts(rule, 'Metcon · AMRAP 12 min: 10 wall balls, 10 toes-to-bar, 12-cal row').elements).toEqual([
-      { amount: '10', name: 'Wall ball', load: null },
+      { amount: '10', name: 'Wall balls', load: null },
       { amount: '10', name: 'Toes-to-bar (scaled as needed)', load: null },
       { amount: '12 cal', name: 'Row (erg)', load: null },
     ]);
@@ -84,8 +84,8 @@ describe('metconParts (R-t7b2)', () => {
     expect(metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)')).toEqual({
       format: 'For Time · 8 min cap',
       elements: [
-        { amount: null, name: 'Thruster', load: '95/65 lb' },
-        { amount: null, name: 'Pull-up (scaled as needed)', load: null },
+        { amount: null, name: 'Thrusters', load: '95/65 lb' },
+        { amount: null, name: 'Pull-ups (scaled as needed)', load: null },
       ],
       subtitle: '21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)',
     });
@@ -325,9 +325,9 @@ describe("a metcon's words", () => {
 
   it('says the format and every move as one sentence', () => {
     const parts = metconParts(amrap, 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run');
-    expect(metconVoice(parts)).toBe('AMRAP 10 minutes: 10 Goblet squat, 10 Push-up, 200 metres Run.');
+    expect(metconVoice(parts)).toBe('AMRAP 10 minutes: 10 Goblet squats, 10 Push-ups (scaled), 200 metres Run.');
     const fr = metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)');
-    expect(metconVoice(fr)).toBe('For Time, 8 minute cap: Thruster, 95 or 65 pounds, Pull-up (scaled as needed).');
+    expect(metconVoice(fr)).toBe('For Time, 8 minute cap: Thrusters, 95 or 65 pounds, Pull-ups (scaled as needed).');
     const row: MetconRule = { format: 'AMRAP', workMinutes: 12, elements: ['Row (erg)'], capMinutes: null };
     expect(metconVoice(metconParts(row, 'Metcon · AMRAP 12 min: 12-cal row'))).toBe('AMRAP 12 minutes: 12 calories Row (erg).');
   });

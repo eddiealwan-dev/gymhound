@@ -59,6 +59,8 @@ export type Settings = {
   lastCloudCopyAt: number | null;
   /** §18.15 (R407): Train's first-run line about units was dismissed. It only shows before the first finished workout. */
   hintUnitsDismissed: boolean;
+  /** The lifter has chosen a weight or distance unit in Settings, so Train's units line no longer credits the region. */
+  unitsChosen: boolean;
   /** §18.15 (R408): the session's first-run tip (the name opens the form demo, ⋯ holds rest and plates) was dismissed. */
   hintSessionDismissed: boolean;
   /** Round 12 (R566): the Profile's name and goal, '' when not given. */
@@ -85,6 +87,11 @@ export type Settings = {
    * long it has been paused, never a counter (`workClock.ts`). One at a time; null when none.
    */
   workTimer: WorkTimer | null;
+  /**
+   * Clocks of the workout in progress that ended before another block's was started: each keeps its end line on its
+   * block until its score is ticked, or the workout ends. At most one a block.
+   */
+  workClocksEnded: WorkTimer[];
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -120,6 +127,7 @@ const KEYS: Record<keyof Settings, string> = {
   healthBodyweight: 'health_bodyweight',
   lastCloudCopyAt: 'last_cloud_copy_at',
   hintUnitsDismissed: 'hint_units_dismissed',
+  unitsChosen: 'units_chosen',
   hintSessionDismissed: 'hint_session_dismissed',
   profileName: 'profile_name',
   profileGoal: 'profile_goal',
@@ -132,6 +140,7 @@ const KEYS: Record<keyof Settings, string> = {
   testerAnswers: 'tester_answers',
   deloadOfferDismissed: 'deload_offer_dismissed',
   workTimer: 'work_timer',
+  workClocksEnded: 'work_clocks_ended',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -170,6 +179,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     healthBodyweight: false,
     lastCloudCopyAt: null,
     hintUnitsDismissed: false,
+    unitsChosen: false,
     hintSessionDismissed: false,
     profileName: '',
     profileGoal: '',
@@ -182,6 +192,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     testerAnswers: [],
     deloadOfferDismissed: null,
     workTimer: null,
+    workClocksEnded: [],
   };
 }
 

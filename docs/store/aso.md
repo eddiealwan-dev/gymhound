@@ -32,7 +32,7 @@ How the keywords were chosen:
 Then short sections, in the app's voice:
 - **The rule, in words.** If every working set hits the top of the range on a normal day, next time adds weight. It's written under every exercise, in every program, with why the weight went up or held. Change the weight or the rule yourself.
 - **Something off?** Rough sleep, sick, short on food, pain, cutting: you mark it and the weight holds instead of dropping. The rule and Something off are free.
-- **Routines.** All 20 programs, five of them free, each with its own card: a short description and the sources it cites. Or build your own. Share a routine with a link or a code.
+- **Routines.** All 20 programs, each with its own card: a short description and the sources it cites. Five are free: Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, Mobility for Lifters and CrossFit Foundations. Or build your own. Share a routine with a link or a code.
 - **990 exercises with steps and form demos, photos for most.** Add your own exercises and photos.
 - **Rest timer.** Per exercise, with -15s, +15s and Skip, with your chosen bell.
 - **Personal bests.** Marked as you set them, with share cards for PRs and your week.

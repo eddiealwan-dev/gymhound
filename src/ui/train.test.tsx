@@ -21,6 +21,7 @@ type Read = {
   unit: 'kg' | 'lb';
   distanceUnit?: 'km' | 'mi';
   unitsHint?: boolean;
+  unitsChosen?: boolean;
   gear: Gear;
   active: { name: string; startedAt: number; setsDone: number } | null;
   upNext: UpNext | null;
@@ -567,6 +568,13 @@ describe('Train: the first-run units line (R407)', () => {
   it('names lb and mi for a US phone', () => {
     mockRead = { ...mockRead, unit: 'lb', distanceUnit: 'mi', unitsHint: true };
     expect(lines(mount())).toContain("Weights are in lb and distances in mi, from your phone's region. Change them in Settings.");
+  });
+
+  it("after a choice in Settings it no longer says the phone's region chose them", () => {
+    mockRead = { ...mockRead, unit: 'kg', distanceUnit: 'km', unitsHint: true, unitsChosen: true };
+    const all = lines(mount());
+    expect(all).toContain('Weights are in kg and distances in km, as set in Settings.');
+    expect(all.join('\n')).not.toContain("phone's region");
   });
 
   it('dismissing it stores that for good and reads again', () => {

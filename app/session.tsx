@@ -20,6 +20,7 @@ import { joinsNextInSuperset, replaceNeedsConfirm, startsSuperset } from '../src
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { clockAt } from '../src/domain/workClock';
+import { clockFor } from '../src/state/workClockActions';
 import { useDbQuery } from '../src/state/dataVersion';
 import { changeRungTo, discard, finish, replaceWith } from '../src/state/sessionActions';
 import { ModifySheet } from '../src/ui/ModifySheet';
@@ -55,8 +56,8 @@ function toTrain() {
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
   const settings = getSettings(db);
-  const { unit, distanceUnit, musicApp, restSeconds, workTimer } = settings;
-  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds, workTimer };
+  const { unit, distanceUnit, musicApp, restSeconds, workTimer, workClocksEnded } = settings;
+  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds, workTimer, workClocksEnded };
 }
 
 /** The question open over the session, if any. Only one at a time. */
@@ -222,7 +223,7 @@ export default function Session() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Every write reads the workout again; what did not change keeps its objects, so only the blocks that changed draw again.
-  const { workout, unit, gear, distanceUnit, musicApp, restSeconds, workTimer } = useShareEqual(useDbQuery(readSession));
+  const { workout, unit, gear, distanceUnit, musicApp, restSeconds, workTimer, workClocksEnded } = useShareEqual(useDbQuery(readSession));
   /**
    * The exercise whose ⋯ menu is open, and what it opens on: its menu, its rest choices from the countdown, or its
    * Something off reasons from the name row (R81).
@@ -471,7 +472,8 @@ export default function Session() {
                 onOpenMark={openers.mark}
                 onOpenModify={openers.modify}
                 onOpenStats={openers.stats}
-                workTimer={clock !== null && clock.workoutExerciseId === ex.id ? clock : null}
+                // Its clock, or one that ended on it before another block's started, which keeps its end line.
+                workTimer={clockFor({ workTimer: clock, workClocksEnded }, workout.id, ex.id)}
                 clockBusy={clockGoing && clock?.workoutExerciseId !== ex.id}
               />
             );

@@ -59,7 +59,9 @@ function EntryEditor({ entry, lengthUnit, title, onClose }: { entry: BodyEntry; 
       announce('Check this number');
       return;
     }
-    if (parsed.value !== shown.value || shown.unit !== entry.unit) {
+    // The value it opened with, typed again ("86.40" for 86.4), is no change: an entry logged in the other unit keeps its
+    // own value and unit (a 34 in waist is not rewritten as 86.4 cm).
+    if (parsed.value !== shown.value) {
       updateBodyEntry(db, entry.kind, entry.id, parsed.value, shown.unit);
       bumpData();
     }

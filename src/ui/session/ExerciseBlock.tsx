@@ -21,6 +21,7 @@ import {
   metconTitle,
   runFormat,
   runNoun,
+  targetSecondsOf,
   TECHNIQUE_LINE,
   workPlanFor,
 } from '../../domain/sessionBlock';
@@ -227,12 +228,12 @@ export const ExerciseBlock = memo(function ExerciseBlock({
    */
   const kind = blockKindOf(ex);
   /** A run's or an interval's target, in seconds, from the week's snapshot. */
-  const targetS = kind === 'run' || kind === 'intervals' ? (ex.rule?.repMax ?? null) : null;
+  const targetS = (kind === 'run' || kind === 'intervals') && targetSecondsOf(ex) > 0 ? targetSecondsOf(ex) : null;
   /** An event's distance unit (ft, yd or m), which heads its column. */
   const entryUnit = entryDistanceUnit(ex, distanceUnit) ?? 'm';
   // The same columns while nothing they show changes, so a write to one set redraws its row alone.
   const columns = useMemo(
-    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe), entryUnit),
+    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe, entryUnit), entryUnit),
     [kind, ex.loggingType, unit, ex.showRpe, entryUnit],
   );
   // Each row's previous is worked out once for the whole block. A row equal to the one drawn before keeps its object,
@@ -279,7 +280,14 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const program = ex.program ?? null;
   const read = program ? programTodaysRead({ ...readInput, program: program.rule, last }) : todaysRead(readInput);
   const sentence = program
-    ? programRuleSentence({ program: program.rule, rule: ex.rule, loggingType: ex.loggingType, unit, last })
+    ? programRuleSentence({
+        program: program.rule,
+        rule: ex.rule,
+        loggingType: ex.loggingType,
+        unit,
+        last,
+        load: { planned: readInput.planned, equipment: ex.equipment, gear },
+      })
     : ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last });
   /** A ladder slot changes its rung where any other exercise is modified (R618). */
   const ladder = program?.rule.kind === 'ladder';

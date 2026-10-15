@@ -1,10 +1,11 @@
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import Train from '../../app/(tabs)/index';
 import { startEarlyDeload, startProgramOver } from '../db/repositories/programRunRepo';
 import { dismissDeloadOffer, type UpNext, type UpNextExercise, type UpNextProgram } from '../db/repositories/routinesRepo';
 import type { Gear } from '../domain/plates';
+import { WARM_UP_LINE } from '../domain/ruleLine';
 import { bumpData } from '../state/dataVersion';
 import { Button } from './Button';
 import { ConfirmSheet } from './Sheet';
@@ -122,6 +123,25 @@ describe('Up next for a program (§18.29)', () => {
     expect(shown).toContain('Deload week: half the sets, same weight. Nothing goes up or counts as a miss.');
   });
 
+  it("shows the warm-up line muted under a lifting day's first exercise, as the session does (R626, R645)", () => {
+    mockRead.upNext = upNext({}, [
+      exercise('re-squat', 'Barbell back squat', { nextWeight: 135, nextWeightUnit: 'lb', warmUp: true }),
+      exercise('re-bench', 'Barbell bench press', { nextWeight: 95, nextWeightUnit: 'lb' }),
+    ]);
+    const tree = mount();
+    const shown = lines(tree);
+    const at = shown.indexOf(WARM_UP_LINE);
+    expect(at).toBe(shown.indexOf('3×5–8 · 135 lb') + 1);
+    expect(shown.indexOf('Barbell bench press')).toBe(at + 1);
+    const line = tree.root.findAllByType(Text).find((n) => n.props.children === WARM_UP_LINE)!;
+    expect(StyleSheet.flatten(line.props.style)).toMatchObject({ color: '#a39d90', fontSize: 14 });
+    expect(line.props.numberOfLines).toBeUndefined();
+  });
+
+  it('shows no warm-up line on a day without one', () => {
+    expect(lines(mount())).not.toContain(WARM_UP_LINE);
+  });
+
   it("hides nothing of the active program's day (R634)", () => {
     mockRead.upNext = upNext({}, [
       exercise('re-bench', 'Barbell bench press', { nextWeight: 135, nextWeightUnit: 'lb' }),
@@ -171,6 +191,11 @@ describe('Up next for a program (§18.29)', () => {
     expect(ask.props).toMatchObject({ visible: true, confirmLabel: 'Start over', cancelLabel: 'Not now' });
     act(() => ask.props.onConfirm());
     expect(startProgramOver).toHaveBeenCalledWith('db', 'program-barbell-foundations', expect.any(Number));
+  });
+
+  it('the first sentence is read as the card shows the text (ruling R-w3)', () => {
+    mockRead.upNext = upNext({ done: true, week: 13, afterThisProgram: 'Full ladders are in Appendix A. Rest 90 s between rounds, then repeat.' });
+    expect(lines(mount())).toContain('12 weeks done. Rest 1:30 between rounds, then repeat.');
   });
 
   it('every new control has a VoiceOver label', () => {

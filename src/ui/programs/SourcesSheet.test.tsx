@@ -98,7 +98,10 @@ describe('the Sources sheet (R631)', () => {
     expect(shown.indexOf(FAILED)).toBeLessThan(shown.indexOf('[22]'));
     const line = tree.root.findAll((n) => n.type === Text && n.props.children === FAILED)[0];
     expect(StyleSheet.flatten(line.props.style).color).toBe('#a39d90');
+    // Said once: announced, and not a live region as well.
+    expect(announce).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith(FAILED);
+    expect(line.props.accessibilityLiveRegion).toBeUndefined();
   });
 
   it('every link is a 44pt target labelled "Open {site}", and Close (quiet, last) closes it', () => {

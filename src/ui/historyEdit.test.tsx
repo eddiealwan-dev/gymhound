@@ -539,21 +539,21 @@ describe('the history editor and the three program logging types (R607)', () => 
     return id;
   }
 
-  it("edits a carry's weight, distance in its own feet and optional time; a carry with no distance can't save", () => {
+  it("edits a carry's weight, distance in its own feet (said in full) and optional time; a carry with no distance can't save", () => {
     addProgramExercise('yoke-carry', 'Yoke carry', 'weighted_distance');
     const id = oneSet('yoke-carry', { weight: 315, distance: 50 }, 'ft');
     const tree = mount(id);
-    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'DIST', 'TIME']));
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'FT', 'TIME']));
     expect(field(tree, 'Yoke carry, set 1, weight in lb').props.value).toBe('315');
-    expect(field(tree, 'Yoke carry, set 1, distance in ft').props.value).toBe('50 ft');
+    expect(field(tree, 'Yoke carry, set 1, distance in feet').props.value).toBe('50 ft');
     expect(field(tree, 'Yoke carry, set 1, time').props.value).toBe('');
 
-    typeInto(tree, 'Yoke carry, set 1, distance in ft', '');
+    typeInto(tree, 'Yoke carry, set 1, distance in feet', '');
     press(tree, 'Save');
     expect(shown(tree)).toContain('Add distance to complete set');
     expect(setsOf(mockDb, id, 'yoke-carry')[0].distance).toBe(50);
 
-    typeInto(tree, 'Yoke carry, set 1, distance in ft', '60');
+    typeInto(tree, 'Yoke carry, set 1, distance in feet', '60');
     typeInto(tree, 'Yoke carry, set 1, time', '0:45');
     press(tree, 'Save');
     const [s] = setsOf(mockDb, id, 'yoke-carry');

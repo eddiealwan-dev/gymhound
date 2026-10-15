@@ -2,6 +2,7 @@ import { PermissionStatus } from 'expo';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { BellSound } from '../../domain/types';
+import { CUE_LIMIT } from '../../domain/workClock';
 import { isNativeBuild } from '../native/optional';
 import type { RestTimerSurface, WorkCueSurface } from './index';
 import { BELL_SOUNDS, bellChannelId, bellFile, lockScreenSound, QUIET_CHANNEL_ID, REST_CHANNEL_ID } from './lockScreenSound';
@@ -134,10 +135,9 @@ export const expoGoNotification: RestTimerSurface = {
 /**
  * The work clock's cues on the lock screen (Task 7b, R-t7b1): each one its own notification, "Go.", "Easy.", "Hard. 2 of
  * 6.", "Minute 4.", "Time.", with fixed identifiers, so every one can be cancelled after a reload or a kill. At most
- * `WORK_CUE_LIMIT` at once; iOS keeps 64 pending for the whole app, and the rest timer takes one.
+ * the work clock's `CUE_LIMIT` at once; iOS keeps 64 pending for the whole app, and the rest timer takes one.
  */
-const WORK_CUE_LIMIT = 30;
-const WORK_CUE_IDS = Array.from({ length: WORK_CUE_LIMIT }, (_, i) => `gymhound-work-${i}`);
+const WORK_CUE_IDS = Array.from({ length: CUE_LIMIT }, (_, i) => `gymhound-work-${i}`);
 
 async function cancelCues(): Promise<void> {
   await Promise.all(WORK_CUE_IDS.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
@@ -146,7 +146,7 @@ async function cancelCues(): Promise<void> {
 async function scheduleCues(cues: readonly { at: number; title: string }[], withSound: boolean, sound?: BellSound): Promise<void> {
   await cancelCues();
   if (!(await allowed())) return;
-  const ahead = cues.filter((c) => c.at > Date.now()).slice(0, WORK_CUE_LIMIT);
+  const ahead = cues.filter((c) => c.at > Date.now()).slice(0, CUE_LIMIT);
   if (ahead.length === 0) return;
   await restChannelsReady;
   const quiet = onAndroid && !withSound;

@@ -84,6 +84,17 @@ describe('the work clock rings its cues wherever the lifter is (Task 7b)', () =>
     expect(mockCalls).toHaveLength(7);
   });
 
+  it('stops reading the clock once the end has rung: an ended clock has nothing left to ring', () => {
+    mockState.timer = started(amrap2);
+    mount();
+    advance(LEAD_IN_MS + 1_000);
+    expect(jest.getTimerCount()).toBe(1);
+    advance(120_000);
+    expect(mockCalls).toContain('dealt 3 end');
+    advance(1_000);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   it('only catches up on a cue long past (the lock-screen notification rang it), and never rings it late', () => {
     mockState.timer = started(amrap2);
     jest.setSystemTime(T0 + LEAD_IN_MS + 30_000);

@@ -52,14 +52,18 @@ export function weekInfoOf(program: Program, week: number | null, kind: WeekKind
   );
 }
 
+/** The types whose first slot makes a lifting day: a load the warm-up's percentages are of (R645). */
+const LIFTED: readonly LoggingType[] = ['weighted', 'weighted_time', 'weighted_distance'];
+
 /**
- * Whether a slot shows the warm-up line (R626, ruling R-t2b): each lifting day's first slot, but not a run, a metcon,
- * a hold (#16's skill holds, a timed rung) or a Mobility move.
+ * Whether a slot shows the warm-up line (R626, R645, ruling R-t2b): each lifting day's first slot, but not a run, a
+ * metcon, a hold (#16's skill holds, a timed rung), a Mobility move, or a bodyweight or calisthenics movement (a
+ * ladder, a pull-up), whose percentages have no working weight to be of.
  */
 export function showsWarmUp(program: Program, slot: ProgramSlot, loggingType: LoggingType): boolean {
   if (!slot.warmUpLine || program.id === MOBILITY) return false;
-  if (slot.ruleKind === 'weekly_seconds' || slot.ruleKind === 'metcon' || slot.ruleKind === 'hold') return false;
-  return loggingType !== 'timed';
+  if (slot.ruleKind === 'weekly_seconds' || slot.ruleKind === 'metcon' || slot.ruleKind === 'hold' || slot.ruleKind === 'ladder') return false;
+  return LIFTED.includes(loggingType);
 }
 
 /** A ladder's rungs as its lines name them (R618), with each exercise's name from the library. */

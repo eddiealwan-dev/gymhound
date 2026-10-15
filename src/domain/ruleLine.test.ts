@@ -4,6 +4,7 @@ import type { ProgramWeek } from '../seed/programTypes';
 import {
   addSetLine,
   BEAT_TWICE,
+  changeRungNote,
   finishLine,
   LADDER_DOWN_WHY,
   ladderMoveLine,
@@ -510,6 +511,36 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
+  describe('a raise the plates you own cannot load (ruling R-w2)', () => {
+    const loadLine = (p: ProgramRule, rule: Rule, planned: number | null, equipment: Equipment = 'barbell', gear: Gear = LB_GEAR, loggingType: LoggingType = 'weighted') =>
+      programRuleSentence({
+        program: p,
+        rule,
+        loggingType,
+        unit: 'lb',
+        last: null,
+        load: { planned: planned === null ? null : { weight: planned, unit: 'lb' }, equipment, gear },
+      });
+    const HALVED: Rule = { ...RULE_LB, increment: 2.5 };
+
+    it('says what will load and why, and its number is the read\'s next weight', () => {
+      expect(loadLine(program({ halved: true }), HALVED, 135)).toBe(
+        'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). ' +
+          'Your plates make 140 lb; add 1.25 lb plates in Settings to load 137.5 lb. A marked day holds the weight.',
+      );
+      expect(read(program({ halved: true }), HALVED, 135, { equipment: 'barbell' })).toBe('Hit 8s on a normal day and next time is 140 lb.');
+    });
+
+    it('adds nothing when the plates load the raise, off a barbell, or with no plan yet', () => {
+      const withFractions: Gear = { bar: 45, plates: { ...LB_GEAR.plates, '1.25': 1 } };
+      const plain = 'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight.';
+      expect(loadLine(program({ halved: true }), HALVED, 135, 'barbell', withFractions)).toBe(plain);
+      expect(loadLine(program({ halved: true }), HALVED, 135, 'dumbbell')).toBe(plain);
+      expect(loadLine(program({ halved: true }), HALVED, null)).toBe(plain);
+      expect(loadLine(program(), RULE_LB, 135)).toBe('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.');
+    });
+  });
+
   it('load before any miss reads as the rule always has', () => {
     expect(line(program(), RULE_LB)).toBe('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.');
   });
@@ -532,10 +563,10 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
-  it('a carry says the distance and its unit', () => {
+  it('a carry says the distance and its unit, and that a marked day holds the weight', () => {
     const yoke = program({ carryUnit: 'ft' });
     const rule: Rule = { setCount: 4, repMin: 50, repMax: 50, increment: 10, incrementUnit: 'lb' };
-    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb.');
+    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb. A marked day holds the weight.');
     expect(read(yoke, rule, 320, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
       'Cover 50 ft on every run on a normal day and next time is 330 lb.',
     );
@@ -627,8 +658,12 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     expect(read(plank, rule, null, { loggingType: 'timed' })).toBeNull();
   });
 
-  it('reps only: no weight to add', () => {
-    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe("No weight to add. Beat last time's reps.");
+  it('reps only, or no increment, over a weight column: beat the reps, weight only if you want it', () => {
+    const optional = "Beat last time's reps. Add weight only if you want to.";
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe(optional);
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'weighted')).toBe(optional);
+    expect(line(program(), { ...RULE_LB, increment: 0 }, 'bodyweight_plus')).toBe(optional);
+    expect(line(program({ kind: 'reps_only' }), { ...RULE_LB, increment: 0 }, 'timed')).toBe("No weight to add. Beat last time's reps.");
   });
 
   it('runs follow the week (R620)', () => {
@@ -738,6 +773,20 @@ describe('the week line (R616, R617, Appendix D)', () => {
   it('a note week is its note; a normal week has none', () => {
     expect(weekLine(week('note', 'Base: events at moderate loads.'))).toBe('Base: events at moderate loads.');
     expect(weekLine(null)).toBeNull();
+  });
+});
+
+describe("Change rung's note on the program's page (R618)", () => {
+  const rung = (name: string, weighted = false): RungWords => ({ name, timed: false, repMin: 5, repMax: 8, weighted });
+
+  it('a bodyweight ladder starts at the bottom of its range, with no weight to speak of', () => {
+    expect(changeRungNote([rung('Push-up'), rung('Archer push-up')])).toBe('Changes it from the next workout. It starts at the bottom of its range.');
+  });
+
+  it('a ladder with a weighted top rung says that rung starts its weight fresh', () => {
+    expect(changeRungNote([rung('Pull-up'), rung('Weighted pull-up', true)])).toBe(
+      "Changes it from the next workout. It starts at the bottom of its range; a weighted rung's weight starts fresh.",
+    );
   });
 });
 

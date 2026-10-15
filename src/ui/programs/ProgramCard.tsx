@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { citationParts, citationSpeech, detailRows, summaryLine, titleOf } from '../../domain/programCard';
+import { cardText, cardWhy, citationParts, citationSpeech, detailRows, summaryLine, titleOf } from '../../domain/programCard';
 import type { Program } from '../../seed/programTypes';
 import { breakableName, useLargeText } from '../largeText';
 import { Body, Label, ScreenTitle } from '../Text';
@@ -56,7 +56,7 @@ function Bullet({ text }: { text: string }) {
 /**
  * A program's card (R630): its page on Routines, the documents' description in GymHound's design. Top to bottom: the
  * picture at the top left with the title beside it (under it at a large text size); the summary band; the details as
- * label and value; Why it works, How it progresses and After this program; a quiet Sources link to the Sources sheet
+ * label and value; Why it works, How it progresses and After this program (`cardText`, ruling R-w3); a quiet Sources link to the Sources sheet
  * (R631); then `footer`, the program's state and actions. Never its days or exercises: those show only once it is the
  * lifter's active program (R634), which the footer decides.
  */
@@ -78,7 +78,7 @@ export function ProgramCard({ program, footer }: { program: Program; footer: Rea
         <Body weight={600}>{summaryLine(program)}</Body>
       </View>
 
-      <View style={{ marginTop: 16, gap: 8 }}>
+      <View style={{ marginTop: 16, gap: 12 }}>
         {detailRows(program).map((row) => (
           <Cited key={row.label} lead={`${row.label}: `} text={row.value} />
         ))}
@@ -86,16 +86,16 @@ export function ProgramCard({ program, footer }: { program: Program; footer: Rea
 
       <Section title="Why it works">
         <View style={{ gap: 8 }}>
-          {program.whyItWorks.map((bullet) => (
+          {cardWhy(program).map((bullet) => (
             <Bullet key={bullet} text={bullet} />
           ))}
         </View>
       </Section>
       <Section title="How it progresses">
-        <Cited text={program.progressionNotes} />
+        <Cited text={cardText(program.progressionNotes)} />
       </Section>
       <Section title="After this program">
-        <Cited text={program.afterThisProgram} />
+        <Cited text={cardText(program.afterThisProgram)} />
       </Section>
 
       {count > 0 ? (

@@ -228,14 +228,14 @@ const headers = (tree: ReactTestRenderer) =>
   tree.root.findAll((n) => n.type === Text && StyleSheet.flatten(n.props.style)?.fontSize === 10).map((n) => [n.props.children].flat().join(''));
 
 describe('a metcon is one block: its format, its moves, its clock and one score (Task 7b)', () => {
-  it("is called by the program's label, with the format and each move's amount in its own column", () => {
+  it("is called by the program's label, with the format and each move's amount in its own column, in the program's words", () => {
     const tree = mount(metconA());
     const shown = shownText(tree);
     expect(shown).toContain('Metcon A');
     expect(shown).not.toContain('AMRAP 10: goblet squat, push-up, run');
-    expect(shown).toEqual(expect.arrayContaining(['AMRAP 10 min', '10', 'Goblet squat', '200 m', 'Run']));
+    expect(shown).toEqual(expect.arrayContaining(['AMRAP 10 min', '10', 'Goblet squats', 'Push-ups (scaled)', '200 m', 'Run']));
     expect(labels(tree)).toContain('Show form for Metcon A');
-    expect(labels(tree)).toContain('AMRAP 10 minutes: 10 Goblet squat, 10 Push-up, 200 metres Run.');
+    expect(labels(tree)).toContain('AMRAP 10 minutes: 10 Goblet squats, 10 Push-ups (scaled), 200 metres Run.');
   });
 
   it('keeps the rule line to its second half, the note after it', () => {
@@ -291,6 +291,14 @@ describe('a run is a timed effort with its own block', () => {
     expect(buttons(tree)).not.toContain('+ Set');
   });
 
+  it("reads its target from one field, as its rule line and clock do, when the range's ends differ", () => {
+    const base = run();
+    const tree = mount({ ...base, rule: { ...base.rule!, repMin: 1740, repMax: 1800 } });
+    expect(shownText(tree)).toContain('Run 29:00');
+    expect(clock(tree)[0].props.plan).toMatchObject({ steps: [{ seconds: 1740 }] });
+    expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
+  });
+
   it('steps intervals through hard and easy, the easy part from the note, with + Set only', () => {
     const tree = mount(intervals());
     expect(shownText(tree)).toContain('6 × 3:00 hard / 2:00 easy');
@@ -317,7 +325,8 @@ describe('an event reads as an event', () => {
   it("marks the time as optional with a faint dash", () => {
     const tree = mount(yoke());
     const time = field(tree, 'Set 1 time, optional');
-    expect(time.props.placeholder).toBe('22s');
+    // Last time's time, as a clock, as a carry's Previous reads it (Task 7).
+    expect(time.props.placeholder).toBe('0:22');
     const fresh = mount(exercise({ ...yoke(), previous: [] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' }));
     expect(field(fresh, 'Set 1 time, optional').props.placeholder).toBe('–');
   });

@@ -13,10 +13,11 @@ import { getActiveWorkoutView, getTrainingDates, getVolumeSetsSince } from '../.
 import type { Db } from '../../src/db/types';
 import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } from '../../src/domain/dates';
 import { formatRepScheme } from '../../src/domain/labels';
+import { cardText } from '../../src/domain/programCard';
 import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
 import type { DistanceUnit, WeightUnit } from '../../src/domain/types';
-import { weekLine } from '../../src/domain/ruleLine';
+import { WARM_UP_LINE, weekLine } from '../../src/domain/ruleLine';
 import {
   DELOAD_OFFER,
   firstSentence,
@@ -49,9 +50,13 @@ import { WorkoutInProgressSheet } from '../../src/ui/WorkoutInProgressSheet';
 
 const openSession = () => router.push('/session');
 
-/** Train's first-run line about units (R407): which ones the phone's region chose, and where to change them. */
-function unitsHintText(unit: WeightUnit, distanceUnit: DistanceUnit): string {
-  return `Weights are in ${unit} and distances in ${distanceUnit}, from your phone's region. Change them in Settings.`;
+/**
+ * Train's first-run line about units (R407): which ones the phone's region chose, and where to change them; once the
+ * lifter has chosen in Settings, that they are as set there.
+ */
+function unitsHintText(unit: WeightUnit, distanceUnit: DistanceUnit, chosen: boolean): string {
+  const units = `Weights are in ${unit} and distances in ${distanceUnit}`;
+  return chosen ? `${units}, as set in Settings.` : `${units}, from your phone's region. Change them in Settings.`;
 }
 
 /** What Train shows from the database. `weekStart` is the Monday on or before today. `gear` is the display unit's bar and plates. */
@@ -65,6 +70,7 @@ function readTrain(db: Db, weekStart: string) {
     distanceUnit: settings.distanceUnit,
     // Before the first finished workout, until dismissed, Train says which units it uses (R407).
     unitsHint: !settings.hintUnitsDismissed && trainingDates.length === 0,
+    unitsChosen: settings.unitsChosen,
     gear: gearFor(unit, settings),
     active:
       active === null
@@ -233,7 +239,7 @@ function ProgramUpNext({ upNext }: { upNext: UpNext }) {
       ) : null}
       {program.done ? (
         <View style={{ marginTop: 12, gap: 8 }}>
-          <Body>{`${programWeekText(program)} ${firstSentence(program.afterThisProgram)}`}</Body>
+          <Body>{`${programWeekText(program)} ${firstSentence(cardText(program.afterThisProgram))}`}</Body>
           <Button
             label="Start over"
             variant="secondary"
@@ -299,15 +305,20 @@ function UpNextCard({
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and
         // pushes the scheme to the right edge. The 14pt scheme sits on the 16pt name's baseline, not its top.
+        // A lifting day's first exercise has the warm-up line muted under it, as in the session (R626, R645); it wraps.
         return (
-          <View
-            key={exercise.routineExerciseId}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}
-          >
-            <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
-            <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
-              {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
-            </Body>
+          <View key={exercise.routineExerciseId}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, paddingVertical: 8 }}>
+              <Body style={{ flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minWidth: 0 }}>{exercise.name}</Body>
+              <Body muted style={{ fontSize: 14, fontVariant: ['tabular-nums'] }}>
+                {`${load === null ? scheme : `${scheme} · ${load}`}${outcome}`}
+              </Body>
+            </View>
+            {exercise.warmUp ? (
+              <Body muted style={{ fontSize: 14, marginBottom: 8 }}>
+                {WARM_UP_LINE}
+              </Body>
+            ) : null}
           </View>
         );
       })}
@@ -384,7 +395,7 @@ export default function Train() {
   // Focused only: Train stays mounted under the session, and every tick there bumps the data version. Reading the whole
   // active workout, Up next, every training date and the week's volume again on each tick was wasted while out of sight;
   // a bump while away is read when Train is back in view (R185).
-  const { unit, distanceUnit, unitsHint, gear, active, upNext, trainingDates, weekVolume } = useFocusedDbQuery(read);
+  const { unit, distanceUnit, unitsHint, unitsChosen, gear, active, upNext, trainingDates, weekVolume } = useFocusedDbQuery(read);
   const [blocked, setBlocked] = useState(false);
   /** Change routine was tapped while a workout runs (R80). */
   const [changeBlocked, setChangeBlocked] = useState(false);
@@ -451,7 +462,7 @@ export default function Train() {
       {unitsHint === true && active === null ? (
         <Hint
           style={{ marginTop: 16 }}
-          text={unitsHintText(unit, distanceUnit)}
+          text={unitsHintText(unit, distanceUnit, unitsChosen === true)}
           onDismiss={() => {
             setSetting(db, 'hintUnitsDismissed', true);
             bumpData();
