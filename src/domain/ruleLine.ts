@@ -8,7 +8,7 @@ import type { AddSetRule, ProgramWeek, RuleKind, WeekKind, WeeklyRule } from '..
 import { formatRest } from './dates';
 import { enDashRanges, secondsAsMinutes } from './programCard';
 import { MARK_LABELS } from './labels';
-import type { Gear } from './plates';
+import { nearestLoadable, type Gear } from './plates';
 import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
@@ -404,7 +404,13 @@ function unloadableRaise(rule: Rule, loggingType: LoggingType, load: LoadContext
   const wanted = planned.weight + increment;
   const loads = raisedFrom(planned, rule, loggingType, load.equipment, load.gear).weight;
   if (Math.abs(loads - wanted) < 1e-6) return null;
-  return `Your plates make ${formatWeight(loads, planned.unit)}; add ${plateSize(increment / 2, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
+  const make = `Your plates make ${formatWeight(loads, planned.unit)}`;
+  // A pair of half the raise loads it only from a weight the plates make today; otherwise no plate would (W2 review).
+  if (Math.abs(nearestLoadable(planned.weight, load.gear.bar, load.gear.plates) - planned.weight) > 1e-6) return `${make}.`;
+  const half = increment / 2;
+  // Already owned, it is the number of them, not their size, that stops the raise: one more pair loads it.
+  const owned = Object.entries(load.gear.plates).some(([size, pairs]) => pairs > 0 && Math.abs(Number(size) - half) < 1e-6);
+  return `${make}; add ${owned ? 'another pair of ' : ''}${plateSize(half, planned.unit)} plates in Settings to load ${formatWeight(wanted, planned.unit)}.`;
 }
 
 /** The types whose sets have a weight column (LB, +LB, −LB). */

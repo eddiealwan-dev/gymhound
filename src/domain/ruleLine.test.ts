@@ -536,6 +536,42 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
       expect(read(program({ halved: true }), HALVED, 135, { equipment: 'barbell' })).toBe('Hit 8s on a normal day and next time is 140 lb.');
     });
 
+    it('names the 0.625 kg pair a halved kg raise needs (W2 review)', () => {
+      const kgLine = programRuleSentence({
+        program: program({ halved: true }),
+        rule: { setCount: 3, repMin: 5, repMax: 8, increment: 1.25, incrementUnit: 'kg' },
+        loggingType: 'weighted',
+        unit: 'kg',
+        last: null,
+        load: { planned: { weight: 80, unit: 'kg' }, equipment: 'barbell', gear: KG_GEAR },
+      });
+      expect(kgLine).toBe(
+        'If every working set hits 8 on a normal day, add 1.25 kg (halved after the first miss). ' +
+          'Your plates make 82.5 kg; add 0.625 kg plates in Settings to load 81.25 kg. A marked day holds the weight.',
+      );
+    });
+
+    it("says so for a full raise the plates can't load (W2 review)", () => {
+      const no25: Gear = { bar: 45, plates: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1 } };
+      expect(loadLine(program(), RULE_LB, 135, 'barbell', no25)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 145 lb; add 2.5 lb plates in Settings to load 140 lb. A marked day holds the weight.',
+      );
+    });
+
+    it('when the number of plates, not their size, stops the raise, it asks for another pair of the size you own (W2 review)', () => {
+      const onePair: Gear = { bar: 45, plates: { '45': 4, '2.5': 1 } };
+      expect(loadLine(program(), RULE_LB, 140, 'barbell', onePair)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 225 lb; add another pair of 2.5 lb plates in Settings to load 145 lb. A marked day holds the weight.',
+      );
+    });
+
+    it("names no plate when today's weight itself isn't one your plates make", () => {
+      const onePair: Gear = { bar: 45, plates: { '45': 4, '2.5': 1 } };
+      expect(loadLine(program(), RULE_LB, 141, 'barbell', onePair)).toBe(
+        'If every working set hits 8 on a normal day, add 5 lb. Your plates make 225 lb. A marked day holds the weight.',
+      );
+    });
+
     it('adds nothing when the plates load the raise, off a barbell, or with no plan yet', () => {
       const withFractions: Gear = { bar: 45, plates: { ...LB_GEAR.plates, '1.25': 1 } };
       const plain = 'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight.';
