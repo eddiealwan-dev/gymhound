@@ -5,17 +5,20 @@ import { useDb } from '../db/DbProvider';
 import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import { photoFileExists, photoUri } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
+import { PHOTO_ALIAS } from '../seed/newExerciseData';
 import { useDataVersion } from '../state/dataVersion';
 
 /**
- * An exercise's start and end photo, or undefined when none is bundled: custom exercises and a few library ones (§18.8).
+ * An exercise's start and end photo, or undefined when none is bundled: custom exercises, a few library ones (§18.8)
+ * and the programs' new exercises but seven, which show the photos of one whose still looks the same (R605).
  * Only the screens that show photos (the picker, the form demo and the exercise editor) import this, so the photo index
  * (about 1,746 requires) stays off the app's launch path; the exercises repository does not know about photos.
  */
 export function exercisePhotos(id: string): readonly [ImageSourcePropType, ImageSourcePropType] | undefined {
   const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call(table, key);
   if (has(EXERCISE_PHOTOS, id)) return EXERCISE_PHOTOS[id];
-  return has(SHOWN_AS, id) ? EXERCISE_PHOTOS[SHOWN_AS[id].photosOf] : undefined;
+  if (has(SHOWN_AS, id)) return EXERCISE_PHOTOS[SHOWN_AS[id].photosOf];
+  return has(PHOTO_ALIAS, id) ? EXERCISE_PHOTOS[PHOTO_ALIAS[id]] : undefined;
 }
 
 /**

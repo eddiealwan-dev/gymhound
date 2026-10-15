@@ -6,7 +6,8 @@
 //   src/seed/library.generated.ts        every exercise with its steps and source id
 //   src/seed/exercisePhotos.generated.ts the start and end photo of each exercise, as static require() calls
 //   assets/exercises/{id}-0.webp, -1.webp the photos: longest side LONGEST_SIDE px, WebP at QUALITY
-//   src/seed/libraryIds.json             every id the library has ever had; new ids are appended
+//   src/seed/libraryIds.json             every id the library has ever had, the programs' new exercises (src/seed/
+//                                        newExerciseData.ts) included; new ids are appended
 // Each source photo is downloaded once into scripts/.cache/ (gitignored) and reused on later runs. Photos in
 // assets/exercises/ that no exercise uses any more are deleted. The TypeScript and the id list are written only once
 // every photo is done, so a failed download leaves them as they were. If a listed id has gone from the library (say,
@@ -23,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { SEED_EXERCISES } from '../src/seed/exercises.ts';
 import { buildLibrary, nextLibraryIds } from '../src/seed/libraryMapping.ts';
+import { CATALOG_NEW, RUNG_NEW } from '../src/seed/newExerciseData.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(ROOT, 'scripts', 'vendor', 'free-exercise-db', 'exercises.json');
@@ -120,8 +122,10 @@ async function main() {
   const source = JSON.parse(readFileSync(SOURCE, 'utf8'));
   const byId = new Map(source.map((e) => [e.id, e]));
   const library = buildLibrary(source, SEED_EXERCISES);
-  // Throws, before anything is written, if a listed id has gone from the library.
-  const ids = nextLibraryIds(existsSync(IDS_OUT) ? JSON.parse(readFileSync(IDS_OUT, 'utf8')) : [], library);
+  // Throws, before anything is written, if a listed id has gone from the library. The programs' new exercises (§18.29,
+  // R604) are bundled beside the library, not built from free-exercise-db, but their ids are listed too.
+  const listed = existsSync(IDS_OUT) ? JSON.parse(readFileSync(IDS_OUT, 'utf8')) : [];
+  const ids = nextLibraryIds(listed, [...library, ...CATALOG_NEW, ...RUNG_NEW]);
 
   // Two photos (start and end) for each exercise whose source has them.
   const jobs = [];

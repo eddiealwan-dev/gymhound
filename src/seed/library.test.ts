@@ -1,7 +1,8 @@
 import { EXERCISE_PHOTOS } from './exercisePhotos.generated';
 import { SEED_EXERCISES } from './exercises';
 import { LIBRARY_EXERCISES } from './library.generated';
-import { buildLibrary } from './libraryMapping';
+import { buildLibrary, nextLibraryIds } from './libraryMapping';
+import { NEW_EXERCISES } from './newExercises';
 import type { FedbExercise } from './libraryMapping';
 
 // The generated files are written only by scripts/build-library.mjs; these checks fail if they go stale or are edited.
@@ -32,16 +33,28 @@ describe('the generated library', () => {
 });
 
 describe('the library id list', () => {
-  // src/seed/libraryIds.json holds every id the library has ever had; history, notes and rest times are keyed by them.
+  // src/seed/libraryIds.json holds every id the library has ever had; history, notes and rest times are keyed by them,
+  // and a routine code names a library exercise by its place in it (R472), so it only ever grows at the end.
   const LISTED: string[] = require('./libraryIds.json');
+  /** Every exercise the seed bundles: the library and the programs' new exercises (§18.29, R604). */
+  const BUNDLED = [...LIBRARY_EXERCISES, ...NEW_EXERCISES];
+  /** How many ids the list held before §18.29. */
+  const BEFORE_PROGRAMS = 883;
 
   it('never loses an id, so updating the vendored free-exercise-db cannot orphan a logged exercise', () => {
-    const ids = new Set(LIBRARY_EXERCISES.map((e) => e.id));
+    const ids = new Set(BUNDLED.map((e) => e.id));
     expect(LISTED.filter((id) => !ids.has(id))).toEqual([]);
   });
 
   it('lists every id the library has, each once', () => {
     expect(new Set(LISTED).size).toBe(LISTED.length);
-    expect(LIBRARY_EXERCISES.map((e) => e.id).filter((id) => !LISTED.includes(id))).toEqual([]);
+    expect(BUNDLED.map((e) => e.id).filter((id) => !LISTED.includes(id))).toEqual([]);
+  });
+
+  it('libraryIds.json grew by 107 and lost none: the library first, as before, then the new exercises (R604)', () => {
+    expect(LISTED).toHaveLength(BEFORE_PROGRAMS + 107);
+    expect([...LISTED.slice(0, BEFORE_PROGRAMS)].sort()).toEqual(LIBRARY_EXERCISES.map((e) => e.id).sort());
+    expect(LISTED.slice(BEFORE_PROGRAMS)).toEqual(NEW_EXERCISES.map((e) => e.id).sort());
+    expect(nextLibraryIds(LISTED, BUNDLED)).toEqual(LISTED);
   });
 });

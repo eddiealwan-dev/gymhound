@@ -1,5 +1,15 @@
 /** @jest-environment node */
-import { decodeRoutine, encodeRoutine, encodeRoutineV1, RoutineNotShareable, signBytes } from './routineShare';
+import { PROGRAMS } from '../seed/programs.generated';
+import {
+  decodeRoutine,
+  encodePremade,
+  encodeRoutine,
+  encodeRoutineV1,
+  isShareablePremade,
+  PROGRAM_NOT_HERE,
+  RoutineNotShareable,
+  signBytes,
+} from './routineShare';
 import type { SharedRoutine, SharedSlot } from './routineShare';
 
 const LIBRARY = ['barbell-bench-press', 'barbell-back-squat', 'pull-up', 'plank'];
@@ -91,5 +101,42 @@ describe('routine codes, version 2 (§18.18, R472)', () => {
     expect(decodeRoutine(signBytes([...bytes, 0], 2), LIBRARY).ok).toBe(false);
     const repeatFirst = [1, 0, 1, 65, 0, 1, 1, 65, 1, 0, 8];
     expect(decodeRoutine(signBytes(repeatFirst, 2), LIBRARY)).toEqual({ ok: false, error: 'not_routine' });
+  });
+});
+
+describe('program codes (R472, §18.29 R601)', () => {
+  const bytesOf = (code: string) => [...Buffer.from(code.split('.')[1], 'base64url')];
+  const NINE = [
+    'premade-fullbody-3',
+    'premade-5x5-3',
+    'premade-dumbbell-3',
+    'premade-mobility-3',
+    'premade-ppl-6',
+    'premade-upperlower-4',
+    'premade-advancedfullbody-4',
+    'premade-brosplit-5',
+    'premade-calisthenics-3',
+  ];
+
+  it('share: program-barbell-foundations has place 9 and round-trips; an old place still reads; a missing retired id gives the message', () => {
+    const code = encodePremade('program-barbell-foundations');
+    expect(bytesOf(code).slice(0, 2)).toEqual([0, 9]);
+    expect(code.length).toBeLessThanOrEqual(12);
+    expect(decodeRoutine(code)).toEqual({ ok: true, code, routine: null, premadeId: 'program-barbell-foundations' });
+    // The twenty follow the nine at places 9 to 28, by program number; the nine keep 0 to 8.
+    PROGRAMS.forEach((p, i) => {
+      expect([p.id, bytesOf(encodePremade(p.id))[1]]).toEqual([p.id, 9 + i]);
+      const decoded = decodeRoutine(encodePremade(p.id));
+      expect([p.id, decoded.ok && decoded.premadeId]).toEqual([p.id, p.id]);
+    });
+    NINE.forEach((id, place) => {
+      expect([id, isShareablePremade(id), bytesOf(encodePremade(id))[1]]).toEqual([id, true, place]);
+      const old = signBytes([0, place], 2);
+      expect(decodeRoutine(old)).toEqual({ ok: true, code: old, routine: null, premadeId: id });
+    });
+    // A place past the twenty is a newer GymHound's program.
+    expect(decodeRoutine(signBytes([0, 29], 2))).toEqual({ ok: false, error: 'newer_version' });
+    // What Add from code says when the phone doesn't have the program a code names (a retired one, on a new install).
+    expect(PROGRAM_NOT_HERE).toBe('This program is no longer in GymHound.');
   });
 });

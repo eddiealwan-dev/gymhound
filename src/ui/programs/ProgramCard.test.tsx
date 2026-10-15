@@ -1,7 +1,7 @@
 import { Image, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { fixtureProgram } from '../../domain/programFixtures';
+import { PROGRAMS } from '../../seed/programs.generated';
 import { Body } from '../Text';
 import { ProgramCard } from './ProgramCard';
 
@@ -20,27 +20,20 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
   default: () => ({ width: 375, height: 812, scale: 3, fontScale: mockFontScale }),
 }));
-// Tasks 2 and 5 generate the real programs and pictures; until then both are empty.
-jest.mock('../../seed/programs.generated', () => {
-  const { FIXTURE_PROGRAMS, FIXTURE_SOURCES, FIXTURE_ORDER } = jest.requireActual('../../domain/programFixtures');
-  return {
-    PROGRAMS: FIXTURE_PROGRAMS,
-    PROGRAM_SOURCES: FIXTURE_SOURCES,
-    PROGRAM_ORDER: FIXTURE_ORDER,
-    programById: (id: string) => FIXTURE_PROGRAMS.find((p: { id: string }) => p.id === id),
-  };
-});
 jest.mock('../../seed/programPictures.generated', () => ({
   PROGRAM_PICTURES: { 'program-advanced-upper-lower-dup': { card: 11, thumb: 12 } },
 }));
 
-const DUP = fixtureProgram(11);
-const BARBELL = fixtureProgram(1);
+/** Program number `n` of the twenty. */
+const programNumber = (n: number) => PROGRAMS.find((p) => p.number === n)!;
+
+const DUP = programNumber(11);
+const BARBELL = programNumber(1);
 
 function mount(number = 11, footer: React.ReactNode = <Body>FOOTER</Body>): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(<ProgramCard program={fixtureProgram(number)} footer={footer} />);
+    tree = create(<ProgramCard program={programNumber(number)} footer={footer} />);
   });
   return tree;
 }
@@ -141,14 +134,28 @@ describe('the program card (R630)', () => {
   });
 
   it('shows no exercise names: the days and exercises show only on your active program (R634)', () => {
-    for (const number of [1, 11]) {
-      const tree = mount(number);
+    for (const program of PROGRAMS) {
+      const tree = mount(program.number);
       const shown = shownText(tree);
       const text = shown.join('\n');
-      for (const day of fixtureProgram(number).days) {
+      // The documents' own words may name a lift ("Deadlift: drop its increment..."); nothing else on the card does.
+      const own = [
+        program.goal,
+        program.equipment,
+        program.schedule,
+        program.specialWeeksText,
+        program.lineage,
+        ...program.whyItWorks,
+        program.progressionNotes,
+        program.afterThisProgram,
+      ].join('\n');
+      for (const day of program.days) {
         // #1's days are "A" and "B": no line is a day's name.
-        expect(shown).not.toContain(day.name);
-        for (const slot of day.slots) expect(text).not.toContain(slot.catalogName);
+        expect([program.id, day.name, shown.includes(day.name)]).toEqual([program.id, day.name, false]);
+        for (const slot of day.slots) {
+          expect([program.id, slot.catalogName, shown.includes(slot.catalogName)]).toEqual([program.id, slot.catalogName, false]);
+          if (text.includes(slot.catalogName)) expect([program.id, slot.catalogName, own.includes(slot.catalogName)]).toEqual([program.id, slot.catalogName, true]);
+        }
       }
     }
   });

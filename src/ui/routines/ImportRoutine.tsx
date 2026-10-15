@@ -5,7 +5,7 @@ import { TextInput, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { importSharedRoutine, previewShared, sharedFromDecoded } from '../../db/repositories/routineShareRepo';
 import { getRoutineDetail } from '../../db/repositories/routinesRepo';
-import { decodeRoutine, SHARE_CODE_ERRORS } from '../../domain/routineShare';
+import { decodeRoutine, PROGRAM_NOT_HERE, SHARE_CODE_ERRORS } from '../../domain/routineShare';
 import { announce } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
@@ -20,7 +20,8 @@ import { useTheme } from '../ThemeProvider';
  * find); then **Add routine**, which keeps to the free limit (R471) and opens the new routine. A code that doesn't
  * read says why in plain words (R470), once something has been pasted. `initial` fills the field (the link's page).
  * A code that names one of GymHound's programs (R472) adds nothing: every phone has the program, so **Open program**
- * opens it, free or Pro, and its page says whether it needs Pro. Render it once; it draws the limit sheet itself.
+ * opens it, free or Pro, and its page says whether it needs Pro; a retired one this phone never had says it is no
+ * longer in GymHound (R601). Render it once; it draws the limit sheet itself.
  */
 export function ImportRoutine({ initial = '', onCancel }: { initial?: string; onCancel: () => void }): ReactElement {
   const db = useDb();
@@ -90,7 +91,8 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
           {SHARE_CODE_ERRORS[decoded.error]}
         </Body>
       ) : null}
-      {decoded?.ok && decoded.premadeId !== null && program === null ? <Body muted>{SHARE_CODE_ERRORS.newer_version}</Body> : null}
+      {/* A program this phone doesn't have: a retired one, on a phone that never had it (R601). */}
+      {decoded?.ok && decoded.premadeId !== null && program === null ? <Body muted>{PROGRAM_NOT_HERE}</Body> : null}
       {program !== null ? (
         <View
           testID="import-preview"

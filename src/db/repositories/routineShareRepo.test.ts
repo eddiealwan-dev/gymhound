@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { decodeRoutine, encodePremade, encodeRoutine, encodeRoutineV1, isShareablePremade, shareMessage, SHARE_CODE_ERRORS, signBody, signBytes } from '../../domain/routineShare';
 import type { SharedRoutine } from '../../domain/routineShare';
 import { exercises, routines } from '../schema';
+import { RETIRED_PREMADES } from '../../seed/routines';
 import { seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { createCustomExercise } from './customExercisesRepo';
@@ -35,11 +36,17 @@ function roundTrip(from: Db, routineId: string, to: Db = seededDb(), encode = en
 }
 
 const premadeIds = (db: Db) => db.select({ id: routines.id }).from(routines).where(eq(routines.isPremade, true)).all().map((r) => r.id);
+/**
+ * The retired programs (R598), whose lists a code may still carry whole. One of the twenty is shared by its place only,
+ * never its list (R635); its own targets (a 90-minute run, 10 sets) can be past what a routine code carries.
+ */
+const retiredIds = (db: Db) => premadeIds(db).filter((id) => RETIRED_PREMADES.includes(id));
 
 describe('routine sharing (§18.18)', () => {
-  it('carries every premade through a code unchanged, as a routine of your own on the other phone', () => {
+  it('carries every retired program through a code unchanged, as a routine of your own on the other phone', () => {
     const db = seededDb();
-    for (const id of premadeIds(db)) {
+    expect(retiredIds(db)).toHaveLength(9);
+    for (const id of retiredIds(db)) {
       const { to, result } = roundTrip(db, id);
       expect([id, shape(to, result.routineId)]).toEqual([id, shape(db, id)]);
       expect(to.select().from(routines).where(eq(routines.id, result.routineId)).get()!.isPremade).toBe(false);
@@ -48,7 +55,7 @@ describe('routine sharing (§18.18)', () => {
 
   it('still reads a version 1 code, so a code sent before Round 8 adds the same routine (R472)', () => {
     const db = seededDb();
-    for (const id of premadeIds(db)) {
+    for (const id of retiredIds(db)) {
       const { to, code, result } = roundTrip(db, id, seededDb(), (r) => encodeRoutineV1(r));
       expect(code.startsWith('GH1.')).toBe(true);
       expect([id, shape(to, result.routineId)]).toEqual([id, shape(db, id)]);

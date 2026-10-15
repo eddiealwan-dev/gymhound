@@ -41,7 +41,15 @@ jest.mock('./ThemeProvider', () => {
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
 
-const routine = (id: string, name: string, isActive: boolean, isPremade = true): RoutineSummary => ({ id, name, isPremade, dayCount: 3, isActive });
+/** A premade that isn't one of the twenty is a retired program, listed under Earlier programs (R598). */
+const routine = (id: string, name: string, isActive: boolean, isPremade = true): RoutineSummary => ({
+  id,
+  name,
+  isPremade,
+  dayCount: 3,
+  isActive,
+  group: isPremade ? 'earlier' : 'yours',
+});
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -265,7 +273,7 @@ describe('Routines: free programs and Pro programs (§18.21, R520, R525)', () =>
     expect(buttons(tree, 'Pro').length).toBeGreaterThan(0);
     press(tree, 'Pro');
     expect(setActiveRoutine).not.toHaveBeenCalled();
-    expect(shownText(tree).some((t) => /is part of GymHound Pro\. Free includes Beginner full body, 5×5, Dumbbell full body and Mobility\./.test(t))).toBe(true);
+    expect(shownText(tree).some((t) => /is part of GymHound Pro\. Free includes Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters./.test(t))).toBe(true);
   });
 });
 

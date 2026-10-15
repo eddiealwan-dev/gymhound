@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { exerciseNotes, exercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import { LIBRARY_EXERCISES } from '../../seed/library.generated';
+import { NEW_EXERCISES } from '../../seed/newExercises';
 import { getExercise, getExerciseNote, listExercises, setExerciseNote } from './exercisesRepo';
 import { startWorkoutFromDay } from './workoutsRepo';
 import { getActiveWorkoutView } from './workoutViewsRepo';
@@ -32,10 +33,10 @@ describe('the launch path', () => {
 });
 
 describe('listExercises', () => {
-  it('returns every library exercise, alphabetical without regard to case, starting with 3/4 sit-up', () => {
+  it("returns every library exercise and the programs' new ones (§18.29), alphabetical without regard to case", () => {
     const rows = listExercises(seededDb());
-    expect(rows).toHaveLength(LIBRARY_EXERCISES.length);
-    expect(rows[0].name).toBe('3/4 sit-up');
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length + NEW_EXERCISES.length);
+    expect(rows[0].name).toBe('21-15-9 for time: thruster, pull-up');
     const names = rows.map((r) => r.name.toLowerCase());
     expect(names).toEqual([...names].sort());
   });
@@ -59,7 +60,7 @@ describe('listExercises', () => {
     const db = seededDb();
     db.update(exercises).set({ archived: true }).where(eq(exercises.id, 'plank')).run();
     const rows = listExercises(db);
-    expect(rows).toHaveLength(LIBRARY_EXERCISES.length - 1);
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length + NEW_EXERCISES.length - 1);
     expect(rows.some((r) => r.id === 'plank')).toBe(false);
   });
 
@@ -80,10 +81,10 @@ describe('listExercises', () => {
       })
       .run();
     const rows = listExercises(db);
-    expect(rows).toHaveLength(LIBRARY_EXERCISES.length + 1);
+    expect(rows).toHaveLength(LIBRARY_EXERCISES.length + NEW_EXERCISES.length + 1);
     const at = rows.findIndex((r) => r.id === 'custom-1');
     expect(rows[at]).toMatchObject({ name: 'aardvark curl', isCustom: true });
-    expect([rows[at - 1].name, rows[at + 1].name]).toEqual(['90/90 hamstring', 'Ab crunch machine']);
+    expect([rows[at - 1].name, rows[at + 1].name]).toEqual(['90/90 hip switch', 'Ab crunch machine']);
   });
 });
 

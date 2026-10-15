@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { SEED_EXERCISES } from '../seed/exercises';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
+import { NEW_EXERCISES } from '../seed/newExercises';
 import { PREMADE_ORDER, runSeed, SEED_VERSION } from '../seed/seed';
 import { getExercise, getExerciseNote } from './repositories/exercisesRepo';
 import { listRoutines } from './repositories/routinesRepo';
@@ -38,7 +39,10 @@ import type { Db } from './types';
 const NOW = new Date(2026, 9, 9, 9, 0).getTime();
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+/** Push/pull/legs' Push A, as seed version 1 wrote it (retired since §18.29, R598). */
 const PUSH_A = 'premade-ppl-6:push-a';
+/** A program day a current seed writes, the bench press its second exercise. */
+const DAY_A = 'program-barbell-foundations:a';
 
 let dir: string;
 let liveFile: string;
@@ -75,7 +79,7 @@ function openSeeded(file: string): { db: Db; close(): void } {
 
 /** Logs one set and finishes a Push A workout started at `at`. Returns its id. */
 function finishOne(db: Db, at: number): string {
-  const id = startWorkoutFromDay(db, PUSH_A, at);
+  const id = startWorkoutFromDay(db, DAY_A, at);
   const [first] = getActiveWorkoutView(db)!.exercises[0].sets;
   tickSet(db, first.id, { weight: 185, reps: 8, durationS: null, distance: null }, 'lb', at + 60_000, 'mi');
   finishWorkout(db, id, at + HOUR);
@@ -717,7 +721,7 @@ describe('startDatabase', () => {
 
     const db = result.db;
     expect(getSettings(db).seedVersion).toBe(SEED_VERSION);
-    expect(db.select().from(schema.exercises).all()).toHaveLength(LIBRARY_EXERCISES.length);
+    expect(db.select().from(schema.exercises).all()).toHaveLength(LIBRARY_EXERCISES.length + NEW_EXERCISES.length);
     const ids = new Set(db.select({ id: schema.exercises.id }).from(schema.exercises).all().map((e) => e.id));
     expect(SEED_EXERCISES.filter((e) => !ids.has(e.id))).toEqual([]);
     // Bench keeps its id and name, and gains its steps and source.
@@ -741,10 +745,11 @@ describe('startDatabase', () => {
     });
     expect(db.select().from(schema.routines).where(eq(schema.routines.id, 'premade-ppl-6')).get()).toMatchObject({
       nextDayIndex: 1,
-      retired: false,
+      retired: true,
     });
-    // 5×5 is one of the nine programs again (§18.21), and still the active routine.
-    expect(listRoutines(db).map((r) => r.id)).toEqual(PREMADE_ORDER);
+    // The six are retired (§18.29, R598): 5×5, still the active routine, and Push/pull/legs, which has a finished
+    // workout, are listed under Earlier programs after the twenty.
+    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, 'premade-5x5-3', 'premade-ppl-6']);
     expect(listRoutines(db).find((r) => r.isActive)?.id).toBe('premade-5x5-3');
   });
 

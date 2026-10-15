@@ -37,16 +37,6 @@ jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
-// Tasks 2 and 5 generate the real programs and pictures; until then both are empty.
-jest.mock('../../seed/programs.generated', () => {
-  const { FIXTURE_PROGRAMS, FIXTURE_SOURCES, FIXTURE_ORDER } = jest.requireActual('../../domain/programFixtures');
-  return {
-    PROGRAMS: FIXTURE_PROGRAMS,
-    PROGRAM_SOURCES: FIXTURE_SOURCES,
-    PROGRAM_ORDER: FIXTURE_ORDER,
-    programById: (id: string) => FIXTURE_PROGRAMS.find((p: { id: string }) => p.id === id),
-  };
-});
 jest.mock('../../seed/programPictures.generated', () => ({
   PROGRAM_PICTURES: { 'program-advanced-upper-lower-dup': { card: 11, thumb: 12 } },
 }));

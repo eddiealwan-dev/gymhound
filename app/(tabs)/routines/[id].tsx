@@ -15,7 +15,7 @@ import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
 import { BackLink } from '../../../src/ui/BackLink';
 import { Button } from '../../../src/ui/Button';
-import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/domain/routineLimit';
+import { canSeeProgramExercises, canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
 import { useOpenPaywall } from '../../../src/ui/pro/openPaywall';
 import { ModifySheet } from '../../../src/ui/ModifySheet';
@@ -117,9 +117,8 @@ export default function RoutineDetailScreen() {
   const locked = !canUseRoutine(routine, pro);
   const failed = actions.failed?.routineId === routine.id ? actions.failed : null;
   const program: Program | undefined = routine.isPremade ? programById(routine.id) : undefined;
-  // R634: a program's days show only while it is the active one and usable. (Task 9's `canSeeProgramExercises` is the
-  // shared predicate; this is the same rule.)
-  const showDays = program === undefined || (routine.isActive && !locked);
+  // R634: a program's days show only while it is the active one and usable; any other routine's always do.
+  const showDays = canSeeProgramExercises(routine, pro);
 
   return (
     <Screen>

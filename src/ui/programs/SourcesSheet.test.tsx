@@ -1,7 +1,7 @@
 import { Linking, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { fixtureProgram } from '../../domain/programFixtures';
+import { PROGRAMS } from '../../seed/programs.generated';
 import { announce } from '../../platform/announce';
 import { Button } from '../Button';
 import { SourcesSheet } from './SourcesSheet';
@@ -15,15 +15,10 @@ jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
-// Task 2 generates the real sources; until then the list is empty.
+// The sources out of order, so the sheet's own order is what's tested.
 jest.mock('../../seed/programs.generated', () => {
-  const { FIXTURE_PROGRAMS, FIXTURE_SOURCES, FIXTURE_ORDER } = jest.requireActual('../../domain/programFixtures');
-  return {
-    PROGRAMS: FIXTURE_PROGRAMS,
-    PROGRAM_SOURCES: [...FIXTURE_SOURCES].reverse(),
-    PROGRAM_ORDER: FIXTURE_ORDER,
-    programById: (id: string) => FIXTURE_PROGRAMS.find((p: { id: string }) => p.id === id),
-  };
+  const actual = jest.requireActual('../../seed/programs.generated');
+  return { ...actual, PROGRAM_SOURCES: [...actual.PROGRAM_SOURCES].reverse() };
 });
 
 const FAILED = "Couldn't open the link.";
@@ -31,7 +26,7 @@ const FAILED = "Couldn't open the link.";
 function mount(onClose = jest.fn()): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(<SourcesSheet program={fixtureProgram(1)} visible onClose={onClose} />);
+    tree = create(<SourcesSheet program={PROGRAMS[0]} visible onClose={onClose} />);
   });
   return tree;
 }

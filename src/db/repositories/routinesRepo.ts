@@ -4,7 +4,8 @@ import type { Outcome } from '../../domain/progression';
 import { clampRule, dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
 import type { RoutineDraft } from '../../domain/routineDraft';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
-import { PREMADE_ORDER } from '../../seed/routines';
+import { programById } from '../../seed/programs.generated';
+import { PREMADE_ORDER, RETIRED_PREMADES } from '../../seed/routines';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
@@ -26,13 +27,28 @@ export class InvalidDraftError extends Error {
   }
 }
 
+/**
+ * Where Routines lists a routine (§18.29): `program`, one of the twenty; `earlier`, a retired program someone still has
+ * (R598); `yours`, a routine of your own.
+ */
+export type RoutineGroup = 'program' | 'earlier' | 'yours';
+
 export type RoutineSummary = {
   id: string;
   name: string;
   isPremade: boolean;
   dayCount: number;
   isActive: boolean;
+  group: RoutineGroup;
 };
+
+/** A routine's group: a premade is a program while the seed has it and it isn't retired, else an earlier program. */
+function groupOf(r: { id: string; isPremade: boolean; retired: boolean }): RoutineGroup {
+  if (!r.isPremade) return 'yours';
+  return !r.retired && programById(r.id) !== undefined ? 'program' : 'earlier';
+}
+
+const GROUP_ORDER: readonly RoutineGroup[] = ['program', 'earlier', 'yours'];
 
 export type UpNextExercise = {
   routineExerciseId: string;
@@ -86,9 +102,9 @@ export type UpNext = {
 };
 
 /**
- * The premades in `PREMADE_ORDER`, then the retired premades still in use (by id), then the user's routines by
- * creation time. A retired premade (§18.8) is listed only while it is the active routine or a finished workout was
- * run from it.
+ * The twenty programs in `PREMADE_ORDER` (the free five first, R597), then the retired programs still in use (Earlier
+ * programs, R598: the nine in their old order, any other by id), then the user's routines by creation time. A retired
+ * premade (§18.8) is listed only while it is the active routine or a finished workout was run from it.
  */
 export function listRoutines(db: Db): RoutineSummary[] {
   const activeId = getSettings(db).activeRoutineId;
@@ -106,18 +122,20 @@ export function listRoutines(db: Db): RoutineSummary[] {
       .all()
       .map((w) => w.routineId),
   );
-  const premadeRank = (id: string) => {
-    const rank = PREMADE_ORDER.indexOf(id);
-    return rank === -1 ? PREMADE_ORDER.length : rank;
+  const rankIn = (order: readonly string[], id: string) => {
+    const rank = order.indexOf(id);
+    return rank === -1 ? order.length : rank;
   };
   const rows = db
     .select()
     .from(routines)
     .all()
-    .filter((r) => !r.retired || r.id === activeId || inHistory.has(r.id));
+    .filter((r) => !r.retired || r.id === activeId || inHistory.has(r.id))
+    .map((r) => ({ ...r, group: groupOf(r) }));
   rows.sort((a, b) => {
-    if (a.isPremade !== b.isPremade) return a.isPremade ? -1 : 1;
-    if (a.isPremade) return premadeRank(a.id) - premadeRank(b.id) || a.id.localeCompare(b.id);
+    if (a.group !== b.group) return GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group);
+    if (a.group === 'program') return rankIn(PREMADE_ORDER, a.id) - rankIn(PREMADE_ORDER, b.id) || a.id.localeCompare(b.id);
+    if (a.group === 'earlier') return rankIn(RETIRED_PREMADES, a.id) - rankIn(RETIRED_PREMADES, b.id) || a.id.localeCompare(b.id);
     return a.createdAt - b.createdAt || a.id.localeCompare(b.id);
   });
 
@@ -127,6 +145,7 @@ export function listRoutines(db: Db): RoutineSummary[] {
     isPremade: r.isPremade,
     dayCount: dayCounts.get(r.id) ?? 0,
     isActive: r.id === activeId,
+    group: r.group,
   }));
 }
 
@@ -217,15 +236,40 @@ export function userRoutineCount(db: Db): number {
 }
 
 /**
+ * The rule a copy of a program's slot starts from (R635): the slot's sets and base increment, and for a ladder the
+ * range of the rung the lifter is on (R618), whose exercise the slot already holds. A weighted top rung rises by its own
+ * increment in the slot's unit (lb, or half that in kg, R611). Any other slot keeps its row's range and increment,
+ * which the seed writes as the program's base rule; the lifter's progress (rung, added sets) is never copied.
+ */
+function programSlotRule(
+  routineId: string,
+  row: { id: string; repMin: number; repMax: number; increment: number; incrementUnit: WeightUnit; ladderRung: number | null },
+): { repMin: number; repMax: number; increment: number } {
+  const slot = programById(routineId)
+    ?.days.flatMap((d) => d.slots)
+    .find((s) => s.id === row.id);
+  const ladder = slot?.ladder ?? null;
+  if (ladder === null || ladder.length === 0) return { repMin: row.repMin, repMax: row.repMax, increment: row.increment };
+  const rung = ladder[Math.min(Math.max(row.ladderRung ?? 0, 0), ladder.length - 1)];
+  const lb = rung.weightedIncrementLb;
+  const increment = lb === null ? row.increment : row.incrementUnit === 'lb' ? lb : lb / 2;
+  return { repMin: rung.repMin, repMax: rung.repMax, increment };
+}
+
+/**
  * Copies a routine, premade or your own, as a routine of your own named "{name} copy", created at `now` and starting
  * from its first day. Every day and exercise is copied with a new id and the same rule and superset group, and with no
- * next weight: the copy's progress starts fresh. Returns the new routine's id. Throws when the routine does not exist.
- * The free limit is the caller's to check first (`canAddRoutine`).
+ * next weight: the copy's progress starts fresh, and it runs §7.3 as any routine of your own. One of the twenty programs
+ * copies its current exercises (a Modify swap, a ladder at its current rung) with their ranges and base increments
+ * (R635, `programSlotRule`), and no rung or added sets. Returns the new routine's id. Throws when the routine does not
+ * exist. The free limit is the caller's to check first (`canAddRoutine`); whether a program's exercises may be copied
+ * is too (`canSeeProgramExercises`).
  */
 export function duplicateRoutine(db: Db, routineId: string, now: number): string {
   return db.transaction((tx) => {
     const source = tx.select().from(routines).where(eq(routines.id, routineId)).get();
     if (!source) throw new Error(`No routine with id ${routineId}.`);
+    const isProgram = source.isPremade && programById(source.id) !== undefined;
 
     const id = newId();
     tx.insert(routines)
@@ -237,8 +281,10 @@ export function duplicateRoutine(db: Db, routineId: string, now: number): string
       const dayId = newId();
       tx.insert(routineDays).values({ id: dayId, routineId: id, name: day.name, position: day.position }).run();
       const rows = tx.select().from(routineExercises).where(eq(routineExercises.routineDayId, day.id)).all();
-      for (const { id: _id, routineDayId: _dayId, nextWeight: _weight, nextWeightUnit: _unit, ...rule } of rows) {
-        tx.insert(routineExercises).values({ ...rule, id: newId(), routineDayId: dayId }).run();
+      for (const row of rows) {
+        const { id: _id, routineDayId: _dayId, nextWeight: _weight, nextWeightUnit: _unit, ladderRung: _rung, nextSetCount: _sets, ...rule } = row;
+        const base = isProgram ? programSlotRule(routineId, row) : {};
+        tx.insert(routineExercises).values({ ...rule, ...base, id: newId(), routineDayId: dayId }).run();
       }
     }
     return id;

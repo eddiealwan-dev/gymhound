@@ -7,6 +7,7 @@ import { gearFor } from '../../domain/plates';
 import type { DayFromSaved } from '../../domain/savedWorkout';
 import { upNextDayHasWeight, upNextLoad } from '../../domain/upNext';
 import type { ExerciseMark, WeightUnit } from '../../domain/types';
+import { PROGRAMS } from '../../seed/programs.generated';
 import { PREMADE_ORDER, runSeed } from '../../seed/seed';
 import { routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import { seededDb } from '../testing/fixtures';
@@ -81,27 +82,29 @@ function insertUserRoutine(db: Db, id: string, createdAt: number): void {
 }
 
 describe('listRoutines', () => {
-  it('returns the premades in PREMADE_ORDER with their day counts', () => {
+  it('returns the twenty programs in PREMADE_ORDER with their day counts, in the program group', () => {
     const db = seededDb();
     const list = listRoutines(db);
     expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
-    expect(list.map((r) => r.dayCount)).toEqual([3, 2, 3, 3, 6, 4, 4, 5, 3]);
-    expect(list.every((r) => r.isPremade)).toBe(true);
+    expect(list.map((r) => r.dayCount)).toEqual(PREMADE_ORDER.map((id) => PROGRAMS.find((p) => p.id === id)!.days.length));
+    expect(list.every((r) => r.isPremade && r.group === 'program')).toBe(true);
     expect(list.every((r) => !r.isActive)).toBe(true);
-    expect(list.find((r) => r.id === PPL)).toEqual({
-      id: PPL,
-      name: 'Push/pull/legs',
+    expect(list[0]).toEqual({
+      id: 'program-barbell-foundations',
+      name: 'Barbell Foundations',
       isPremade: true,
-      dayCount: 6,
+      dayCount: 2,
       isActive: false,
+      group: 'program',
     });
   });
 
-  it('puts user routines after the premades, by created_at', () => {
+  it('puts user routines after the programs, by created_at, in Yours', () => {
     const db = seededDb();
     insertUserRoutine(db, 'user-late', 3_000);
     insertUserRoutine(db, 'user-early', 1_000);
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, 'user-early', 'user-late']);
+    expect(listRoutines(db).slice(-2).map((r) => r.group)).toEqual(['yours', 'yours']);
   });
 
   it('counts the days of a user routine, including none', () => {
@@ -113,11 +116,11 @@ describe('listRoutines', () => {
   });
 });
 
-describe('listRoutines after an upgrade retired No equipment (§18.8; 5×5 is back, §18.21)', () => {
+describe('listRoutines: Earlier programs (§18.8, §18.29 R598)', () => {
   const FIVE = 'premade-5x5-3';
   const NO_EQUIPMENT = 'premade-noequipment-3';
 
-  /** A database seed version 1 wrote, upgraded by the current seed. */
+  /** A database seed version 1 wrote, upgraded by the current seed: all six of its programs are retired. */
   const upgradedDb = () => {
     const db = seededV1Db();
     runSeed(db, NOW);
@@ -140,23 +143,19 @@ describe('listRoutines after an upgrade retired No equipment (§18.8; 5×5 is ba
       .run();
   };
 
-  it("lists the nine programs, free's four first, and hides the retired premade nobody uses", () => {
+  it('lists the twenty and hides the retired programs nobody uses', () => {
     const list = listRoutines(upgradedDb());
     expect(list.map((r) => r.id)).toEqual(PREMADE_ORDER);
-    expect(list.map((r) => r.name)).toEqual([
-      'Beginner full body',
-      '5×5',
-      'Dumbbell full body',
-      'Mobility',
-      'Push/pull/legs',
-      '4-day upper/lower',
-      'Advanced full body',
-      'Bro split',
-      'Calisthenics',
+    expect(list.map((r) => r.name).slice(0, 5)).toEqual([
+      'Barbell Foundations',
+      'Dumbbell Full Body',
+      'Minimalist Two-Day',
+      'CrossFit Foundations',
+      'Mobility for Lifters',
     ]);
   });
 
-  it('keeps showing a retired premade while it is the active routine, after the nine', () => {
+  it('keeps showing a retired program while it is the active routine, after the twenty, under Earlier programs', () => {
     const db = upgradedDb();
     setActiveRoutine(db, NO_EQUIPMENT);
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT]);
@@ -166,10 +165,11 @@ describe('listRoutines after an upgrade retired No equipment (§18.8; 5×5 is ba
       isPremade: true,
       dayCount: 3,
       isActive: true,
+      group: 'earlier',
     });
   });
 
-  it('keeps showing a retired premade a finished workout was run from, but not one only an unfinished workout uses', () => {
+  it('keeps showing a retired program a finished workout was run from, but not one only an unfinished workout uses', () => {
     const db = upgradedDb();
     workoutFrom(db, NO_EQUIPMENT, 'finished');
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT]);
@@ -178,13 +178,16 @@ describe('listRoutines after an upgrade retired No equipment (§18.8; 5×5 is ba
     expect(listRoutines(other).map((r) => r.id)).toEqual(PREMADE_ORDER);
   });
 
-  it('puts a retired premade it keeps after the nine, and the routines of your own last; 5×5 is one of the nine again', () => {
+  it('lists the earlier programs in their old order, any other after them by id, then the routines of your own', () => {
     const db = upgradedDb();
     insertUserRoutine(db, 'user-r', 1_000);
     workoutFrom(db, NO_EQUIPMENT, 'finished');
+    workoutFrom(db, PPL, 'finished');
     setActiveRoutine(db, FIVE);
-    expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, NO_EQUIPMENT, 'user-r']);
-    expect(listRoutines(db).filter((r) => r.isActive).map((r) => r.id)).toEqual([FIVE]);
+    const list = listRoutines(db);
+    expect(list.map((r) => r.id)).toEqual([...PREMADE_ORDER, FIVE, PPL, NO_EQUIPMENT, 'user-r']);
+    expect(list.slice(PREMADE_ORDER.length).map((r) => r.group)).toEqual(['earlier', 'earlier', 'earlier', 'yours']);
+    expect(list.filter((r) => r.isActive).map((r) => r.id)).toEqual([FIVE]);
   });
 
   it('never hides a routine of your own', () => {
@@ -506,7 +509,53 @@ describe('duplicateRoutine', () => {
       runDeloadAt: null,
       createdAt: NOW,
     });
+    // Push/pull/legs is retired (R598): Earlier programs lists it only while someone uses it, which a copy doesn't.
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, id]);
+    expect(listRoutines(db).find((r) => r.id === id)!.group).toBe('yours');
+  });
+
+  it('Duplicate of a program copies its current exercises with base rules into Yours', () => {
+    const db = seededDb();
+    const CF = 'program-calisthenics-foundations';
+    const program = PROGRAMS.find((p) => p.id === CF)!;
+    const ladder = program.days[0].slots.find((s) => s.ladder !== null && s.ladder[2].repMin !== s.repMin)!;
+    const added = program.days[0].slots.find((s) => s.ladder === null)!;
+    // The lifter's progress: a rung climbed (its exercise follows, R618), sets added (R619), a Modify swap and a weight.
+    db.update(routineExercises).set({ exerciseId: ladder.ladder![2].exerciseId, ladderRung: 2 }).where(eq(routineExercises.id, ladder.id)).run();
+    db.update(routineExercises).set({ nextSetCount: added.sets + 2, nextWeight: 50, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, added.id)).run();
+    db.update(routines).set({ runStartedAt: NOW, nextDayIndex: 1 }).where(eq(routines.id, CF)).run();
+    const swapped = program.days[1].slots[program.days[1].slots.length - 1];
+    db.update(routineExercises).set({ exerciseId: 'fedb-chin-up' }).where(eq(routineExercises.id, swapped.id)).run();
+
+    const id = duplicateRoutine(db, CF, NOW);
+
+    expect(db.select().from(routines).where(eq(routines.id, id)).get()).toEqual({
+      id,
+      name: 'Calisthenics Foundations copy',
+      isPremade: false,
+      nextDayIndex: 0,
+      retired: false,
+      runStartedAt: null,
+      runDeloadAt: null,
+      createdAt: NOW,
+    });
+    expect(listRoutines(db).find((r) => r.id === id)).toMatchObject({ group: 'yours', isPremade: false });
+    const copy = rowsOf(db, id);
+    expect(copy.map((d) => d.day.name)).toEqual(program.days.map((d) => d.name));
+    const slots = program.days.flatMap((d) => d.slots);
+    const rows = copy.flatMap((d) => d.exercises);
+    expect(rows).toHaveLength(slots.length);
+    // A ladder at its current rung, with that rung's range; nothing of the lifter's progress travels.
+    const rung = ladder.ladder![2];
+    const copiedLadder = rows[program.days[0].slots.indexOf(ladder)];
+    expect(copiedLadder).toMatchObject({ exerciseId: rung.exerciseId, setCount: ladder.sets, repMin: rung.repMin, repMax: rung.repMax, increment: 0 });
+    const copiedAdded = rows[program.days[0].slots.indexOf(added)];
+    expect(copiedAdded).toMatchObject({ exerciseId: added.exerciseId, setCount: added.sets, repMin: added.repMin, repMax: added.repMax });
+    expect(rows[rows.length - 1].exerciseId).toBe('fedb-chin-up');
+    expect(rows.every((r) => r.ladderRung === null && r.nextSetCount === null && r.nextWeight === null && r.nextWeightUnit === null)).toBe(true);
+    // The base increment in the lifter's unit, never a halved one.
+    const foundations = duplicateRoutine(db, 'program-barbell-foundations', NOW);
+    expect(rowsOf(db, foundations)[1].exercises.find((e) => e.exerciseId === 'barbell-deadlift')).toMatchObject({ increment: 10, incrementUnit: 'lb' });
   });
 
   it('copies every day and exercise with new ids, the same rules and superset groups, and no next weights', () => {

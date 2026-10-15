@@ -4,7 +4,7 @@ import { planImport } from '../../domain/importCsv';
 import { IMPORT_SAMPLES } from '../../domain/importSamples';
 import * as seed from '../../seed/seed';
 import * as schema from '../schema';
-import { seededDb } from '../testing/fixtures';
+import { freshSeededDb, seededDb } from '../testing/fixtures';
 import type { Db } from '../types';
 import { ERASED_TABLES, eraseAllData } from './eraseRepo';
 import { applyImport } from './importRepo';
@@ -43,7 +43,7 @@ describe('Profile → Delete all data (R568)', () => {
   });
 
   it('leaves the database as a fresh install has it', () => {
-    const fresh = seededDb();
+    const fresh = freshSeededDb();
     const db = seededDb();
     lived(db);
     expect(counts(db)).not.toEqual(counts(fresh));

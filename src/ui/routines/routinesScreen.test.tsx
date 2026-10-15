@@ -6,7 +6,7 @@ import Routines from '../../../app/(tabs)/routines/index';
 import type { RoutineSummary } from '../../db/repositories/routinesRepo';
 import { setActiveRoutine, userRoutineCount } from '../../db/repositories/routinesRepo';
 import { getActiveWorkoutId } from '../../db/repositories/workoutsRepo';
-import { FIXTURE_ORDER, FIXTURE_PROGRAMS } from '../../domain/programFixtures';
+import { PROGRAM_ORDER, PROGRAMS } from '../../seed/programs.generated';
 import { Button } from '../Button';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,16 +43,6 @@ jest.mock('../ThemeProvider', () => {
   const colors = { bg: '#100f0c', surface: '#1a1814', surfaceRaised: '#232019', border: '#2e2a23', text: '#f1ece2', textMuted: '#a39d90', red: '#E10600', textFaint: '#6d675c', borderStrong: '#736c60' };
   return { useTheme: () => ({ scheme: 'dark', colors }) };
 });
-// Tasks 2 and 5 generate the real programs and pictures; until then both are empty.
-jest.mock('../../seed/programs.generated', () => {
-  const { FIXTURE_PROGRAMS: programs, FIXTURE_SOURCES, FIXTURE_ORDER: order } = jest.requireActual('../../domain/programFixtures');
-  return {
-    PROGRAMS: programs,
-    PROGRAM_SOURCES: FIXTURE_SOURCES,
-    PROGRAM_ORDER: order,
-    programById: (id: string) => programs.find((p: { id: string }) => p.id === id),
-  };
-});
 jest.mock('../../seed/programPictures.generated', () => ({
   PROGRAM_PICTURES: {
     'program-barbell-foundations': { card: 1, thumb: 2 },
@@ -60,14 +50,19 @@ jest.mock('../../seed/programPictures.generated', () => ({
   },
 }));
 
-/** The twenty as listRoutines returns them, out of order, so the screen's own order is what's tested. */
-const TWENTY: RoutineSummary[] = [...FIXTURE_PROGRAMS]
-  .reverse()
-  .map((p) => ({ id: p.id, name: p.name, isPremade: true, dayCount: p.days.length || p.daysPerWeek, isActive: false }));
-const retired = (isActive = false): RoutineSummary => ({ id: 'premade-ppl-6', name: 'Push/pull/legs', isPremade: true, dayCount: 6, isActive });
-const mine: RoutineSummary = { id: 'mine', name: 'My split', isPremade: false, dayCount: 3, isActive: false };
+/** The twenty as listRoutines returns them: in Routines order (R597), each in the program group. */
+const TWENTY: RoutineSummary[] = PROGRAM_ORDER.map((id) => PROGRAMS.find((p) => p.id === id)!).map((p) => ({
+  id: p.id,
+  name: p.name,
+  isPremade: true,
+  dayCount: p.days.length,
+  isActive: false,
+  group: 'program',
+}));
+const retired = (isActive = false): RoutineSummary => ({ id: 'premade-ppl-6', name: 'Push/pull/legs', isPremade: true, dayCount: 6, isActive, group: 'earlier' });
+const mine: RoutineSummary = { id: 'mine', name: 'My split', isPremade: false, dayCount: 3, isActive: false, group: 'yours' };
 
-const nameOf = (id: string) => FIXTURE_PROGRAMS.find((p) => p.id === id)?.name ?? id;
+const nameOf = (id: string) => PROGRAMS.find((p) => p.id === id)?.name ?? id;
 
 function mount(): ReactTestRenderer {
   let tree!: ReactTestRenderer;
@@ -124,9 +119,18 @@ describe('Routines: the groups (R597, R598)', () => {
       expect([text, i]).not.toEqual([text, -1]);
       return i;
     };
-    const order = [at('Programs'), ...FIXTURE_ORDER.map((id) => at(nameOf(id))), at('Yours'), at('My split'), at('Saved workouts'), at('Earlier programs'), at('Push/pull/legs')];
+    const order = [at('Programs'), ...PROGRAM_ORDER.map((id) => at(nameOf(id))), at('Yours'), at('My split'), at('Saved workouts'), at('Earlier programs'), at('Push/pull/legs')];
     expect(order).toEqual([...order].sort((a, b) => a - b));
-    expect(FIXTURE_ORDER.slice(0, 5).map(nameOf)).toEqual(['Barbell Foundations', 'Dumbbell Full Body', 'Minimalist Two-Day', 'CrossFit Foundations', 'Mobility for Lifters']);
+    expect(PROGRAM_ORDER.slice(0, 5).map(nameOf)).toEqual(['Barbell Foundations', 'Dumbbell Full Body', 'Minimalist Two-Day', 'CrossFit Foundations', 'Mobility for Lifters']);
+  });
+
+  it("puts each routine under its own group's heading, whatever the list's order", () => {
+    mockRoutines = [mine, retired(), ...TWENTY];
+    const shown = shownText(mount());
+    expect(shown.indexOf('Barbell Foundations')).toBeGreaterThan(shown.indexOf('Programs'));
+    expect(shown.indexOf('Barbell Foundations')).toBeLessThan(shown.indexOf('Yours'));
+    expect(shown.indexOf('My split')).toBeGreaterThan(shown.indexOf('Yours'));
+    expect(shown.indexOf('Push/pull/legs')).toBeGreaterThan(shown.indexOf('Earlier programs'));
   });
 
   it('has no Earlier programs group while no retired program is in use', () => {

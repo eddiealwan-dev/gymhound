@@ -1,16 +1,6 @@
-import { FIXTURE_ORDER } from './programFixtures';
+import { PROGRAM_ORDER } from '../seed/programs.generated';
 import { PROGRAM_INFO, routineLine } from './programInfo';
 
-// The twenty from the documents (Task 2 generates the real ones; the stub is empty until then).
-jest.mock('../seed/programs.generated', () => {
-  const { FIXTURE_PROGRAMS, FIXTURE_SOURCES, FIXTURE_ORDER: order } = jest.requireActual('./programFixtures');
-  return {
-    PROGRAMS: FIXTURE_PROGRAMS,
-    PROGRAM_SOURCES: FIXTURE_SOURCES,
-    PROGRAM_ORDER: order,
-    programById: (id: string) => FIXTURE_PROGRAMS.find((p: { id: string }) => p.id === id),
-  };
-});
 
 /** The nine retired programs (R598), which keep their line for whoever still has one. */
 const RETIRED = [
@@ -27,7 +17,7 @@ const RETIRED = [
 
 describe('program lengths (R555, R633)', () => {
   it('gives every program, the twenty and the retired nine, a length of 4 to 12 weeks and a level', () => {
-    for (const id of [...FIXTURE_ORDER, ...RETIRED]) {
+    for (const id of [...PROGRAM_ORDER, ...RETIRED]) {
       expect([id, PROGRAM_INFO[id]?.weeks]).toEqual([id, expect.any(Number)]);
       expect(PROGRAM_INFO[id].weeks).toBeGreaterThanOrEqual(4);
       expect(PROGRAM_INFO[id].weeks).toBeLessThanOrEqual(12);
