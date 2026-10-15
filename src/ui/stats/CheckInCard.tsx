@@ -6,7 +6,7 @@ import { checkInReport, type CheckInReport } from '../../db/repositories/analyti
 import { progressPhotosSince } from '../../db/repositories/progressPhotosRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
-import { bodyUnit, formatBodyValue } from '../../domain/body';
+import { formatBodyValue } from '../../domain/body';
 import { formatEntryDate, mondayOf } from '../../domain/dates';
 import type { WeightUnit } from '../../domain/types';
 import { formatVolume } from '../../domain/volume';
@@ -167,8 +167,8 @@ export function CheckInCard({ today }: { today: string }): ReactElement | null {
             <View style={{ marginLeft: 34 }}>
               <BodyQuickEntry
                 kind="bodyweight"
-                unit={bodyUnit('bodyweight', unit)}
-                fieldLabel={`Bodyweight for this week's check-in, ${bodyUnit('bodyweight', unit)}`}
+                unit={unit}
+                fieldLabel={`Bodyweight for this week's check-in, ${unit}`}
                 buttonLabel="Log bodyweight for the check-in"
               />
             </View>

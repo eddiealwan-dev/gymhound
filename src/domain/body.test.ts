@@ -8,6 +8,8 @@ import {
   isBodyKind,
   lengthUnitFor,
   parseBodyValue,
+  shownEntry,
+  spokenBodyValue,
   type BodyEntry,
 } from './body';
 
@@ -40,16 +42,58 @@ describe('units per kind (R112)', () => {
     expect(lengthUnitFor('kg')).toBe('cm');
   });
 
-  it('gives an lb user lb, inches and %', () => {
-    expect(bodyUnit('bodyweight', 'lb')).toBe('lb');
-    for (const k of ['waist', 'chest', 'hips', 'arms', 'thighs', 'neck'] as const) expect(bodyUnit(k, 'lb')).toBe('in');
-    expect(bodyUnit('body_fat', 'lb')).toBe('%');
+  it('shows lengths in the chosen length unit, whatever the weight unit', () => {
+    expect(bodyUnit('bodyweight', 'lb', 'cm')).toBe('lb');
+    expect(bodyUnit('bodyweight', 'kg', 'in')).toBe('kg');
+    for (const k of ['waist', 'chest', 'hips', 'arms', 'thighs', 'neck'] as const) {
+      expect(bodyUnit(k, 'lb', 'in')).toBe('in');
+      expect(bodyUnit(k, 'lb', 'cm')).toBe('cm');
+      expect(bodyUnit(k, 'kg', 'in')).toBe('in');
+      expect(bodyUnit(k, 'kg', 'cm')).toBe('cm');
+    }
+    expect(bodyUnit('body_fat', 'lb', 'in')).toBe('%');
+    expect(bodyUnit('body_fat', 'kg', 'cm')).toBe('%');
+  });
+});
+
+describe('shownEntry (a logged entry keeps its unit and converts for display)', () => {
+  const waist = (value: number, unit: 'in' | 'cm'): BodyEntry => ({ id: 'w', kind: 'waist', localDate: '2026-10-01', measuredAt: 1, value, unit });
+
+  it('leaves a length already in the chosen unit as it is', () => {
+    expect(shownEntry(waist(34.5, 'in'), 'in')).toEqual(waist(34.5, 'in'));
   });
 
-  it('gives a kg user kg, centimetres and %', () => {
-    expect(bodyUnit('bodyweight', 'kg')).toBe('kg');
-    for (const k of ['waist', 'chest', 'hips', 'arms', 'thighs', 'neck'] as const) expect(bodyUnit(k, 'kg')).toBe('cm');
-    expect(bodyUnit('body_fat', 'kg')).toBe('%');
+  it('converts inches to centimetres and back, to 0.1', () => {
+    expect(shownEntry(waist(34, 'in'), 'cm')).toMatchObject({ value: 86.4, unit: 'cm' });
+    expect(shownEntry(waist(86.4, 'cm'), 'in')).toMatchObject({ value: 34, unit: 'in' });
+    expect(shownEntry(waist(85, 'cm'), 'in')).toMatchObject({ value: 33.5, unit: 'in' });
+  });
+
+  it('keeps the entry itself unchanged', () => {
+    const original = waist(34, 'in');
+    shownEntry(original, 'cm');
+    expect(original).toEqual(waist(34, 'in'));
+  });
+
+  it('leaves bodyweight and body fat alone', () => {
+    const weight: BodyEntry = { id: 'b', kind: 'bodyweight', localDate: '2026-10-01', measuredAt: 1, value: 180, unit: 'lb' };
+    const fat: BodyEntry = { id: 'f', kind: 'body_fat', localDate: '2026-10-01', measuredAt: 1, value: 18.5, unit: '%' };
+    expect(shownEntry(weight, 'cm')).toEqual(weight);
+    expect(shownEntry(fat, 'cm')).toEqual(fat);
+  });
+});
+
+describe('spokenBodyValue (VoiceOver reads the unit in full words)', () => {
+  it('says inches, centimetres, pounds, kilograms and percent', () => {
+    expect(spokenBodyValue(34.5, 'in')).toBe('34.5 inches');
+    expect(spokenBodyValue(86.36, 'cm')).toBe('86.4 centimetres');
+    expect(spokenBodyValue(182.5, 'lb')).toBe('182.5 pounds');
+    expect(spokenBodyValue(80, 'kg')).toBe('80 kilograms');
+    expect(spokenBodyValue(18.5, '%')).toBe('18.5 percent');
+  });
+
+  it('says one inch, not one inches', () => {
+    expect(spokenBodyValue(1, 'in')).toBe('1 inch');
   });
 });
 

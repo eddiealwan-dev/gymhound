@@ -23,6 +23,7 @@ const SPEC_KEYS = [
   'last_cloud_copy_at',
   'last_snapshot_at',
   'last_snapshot_error',
+  'length_unit',
   'music_app',
   'plates_kg',
   'plates_lb',
@@ -62,6 +63,12 @@ describe('defaultSettings', () => {
     expect(defaultSettings('metric')).toMatchObject({ unit: 'kg', distanceUnit: 'km' });
     expect(defaultSettings('uk')).toMatchObject({ unit: 'kg', distanceUnit: 'km' });
     expect(defaultSettings(null)).toMatchObject({ unit: 'kg', distanceUnit: 'km' });
+  });
+
+  it('gives inches to a lb device and centimetres to a kg one', () => {
+    expect(defaultSettings('us').lengthUnit).toBe('in');
+    expect(defaultSettings('metric').lengthUnit).toBe('cm');
+    expect(defaultSettings(null).lengthUnit).toBe('cm');
   });
 
   it('returns a fresh object each call', () => {
@@ -359,5 +366,36 @@ describe('the profile (R566, R567)', () => {
     setSetting(db, 'profilePhoto', 'profile-1.jpg');
     setSetting(db, 'weeklyWorkoutGoal', 3);
     expect(getSettings(db)).toMatchObject({ profileWidgets: ['body_weight'], profilePhoto: 'profile-1.jpg', weeklyWorkoutGoal: 3 });
+  });
+});
+
+describe('the length unit', () => {
+  it('follows the weight unit until the lifter picks one', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    expect(getSettings(db)).toMatchObject({ unit: 'lb', lengthUnit: 'in' });
+    setSetting(db, 'unit', 'kg');
+    expect(getSettings(db)).toMatchObject({ unit: 'kg', lengthUnit: 'cm' });
+  });
+
+  it('stays what the lifter picked when the weight unit changes, and persists', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    setSetting(db, 'lengthUnit', 'cm');
+    expect(getSettings(db).lengthUnit).toBe('cm');
+    setSetting(db, 'unit', 'kg');
+    setSetting(db, 'unit', 'lb');
+    expect(getSettings(db)).toMatchObject({ unit: 'lb', lengthUnit: 'cm' });
+    ensureSettings(db, 'metric');
+    expect(getSettings(db).lengthUnit).toBe('cm');
+  });
+
+  it('gives an existing lifter with no length row the unit that goes with their weight unit, not the phone', () => {
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    db.delete(settings).where(eq(settings.key, 'length_unit')).run();
+    setSetting(db, 'unit', 'lb');
+    ensureSettings(db, 'metric');
+    expect(getSettings(db).lengthUnit).toBe('in');
   });
 });

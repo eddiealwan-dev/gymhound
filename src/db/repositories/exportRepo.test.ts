@@ -312,6 +312,19 @@ describe('bodyCsvRows (R183)', () => {
     expect(rows.every((r) => r.length === BODY_CSV_COLUMNS.length)).toBe(true);
   });
 
+  it('writes each measurement in the unit it was logged in, inches and centimetres side by side', () => {
+    const db = seededDb();
+    addBodyEntry(db, 'waist', 34.5, 'in', at(9, 8));
+    addBodyEntry(db, 'waist', 86.4, 'cm', at(10, 8));
+
+    const rows = bodyCsvRows(db);
+
+    expect(rows.map((r) => [r[bcol('kind')], r[bcol('value')], r[bcol('unit')]])).toEqual([
+      ['waist', 34.5, 'in'],
+      ['waist', 86.4, 'cm'],
+    ]);
+  });
+
   it('writes the time measured at the offset given', () => {
     const db = seededDb();
     addBodyEntry(db, 'bodyweight', 180, 'lb', Date.UTC(2026, 9, 10, 13, 0));

@@ -13,6 +13,7 @@ const STARTING = {
   theme: 'system',
   unit: 'lb',
   distanceUnit: 'mi',
+  lengthUnit: 'in',
   defaultIncrementLb: 5,
   defaultIncrementKg: 2.5,
   restSeconds: 120,
@@ -108,6 +109,43 @@ describe('Settings: the segmented choices to VoiceOver', () => {
       ['lb', { checked: true }],
       ['kg', { checked: false }],
     ]);
+  });
+});
+
+describe('Settings: the length unit for body measurements (R639b)', () => {
+  const group = (tree: ReactTestRenderer, label: string) =>
+    tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radiogroup' && n.props.accessibilityLabel === label)[0];
+  const radios = (tree: ReactTestRenderer) =>
+    group(tree, 'Length')
+      .findAll((n) => typeof n.type === 'string' && n.props.accessibilityRole === 'radio')
+      .map((n) => [n.findAllByType(Text)[0].props.children, n.props.accessibilityLabel, n.props.accessibilityState]);
+
+  it('puts Length in Units after Weight and Distance, in and cm, read as inches and centimetres', () => {
+    const tree = mount();
+    const t = texts(tree);
+    expect(t.indexOf('Length')).toBeGreaterThan(t.indexOf('Distance'));
+    expect(t.indexOf('Length')).toBeLessThan(t.indexOf('Bar'));
+    expect(radios(tree)).toEqual([
+      ['in', 'inches', { checked: true }],
+      ['cm', 'centimetres', { checked: false }],
+    ]);
+  });
+
+  it('stores the choice, bumps, and shows it chosen', () => {
+    const tree = mount();
+    const cm = group(tree, 'Length').findAll((n) => n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function')[1];
+    act(() => cm.props.onPress());
+    expect(setSetting).toHaveBeenCalledWith('db', 'lengthUnit', 'cm');
+    expect(bumpData).toHaveBeenCalledTimes(1);
+    act(() => tree.update(<Settings />));
+    expect(radios(tree).map((r) => r[2])).toEqual([{ checked: false }, { checked: true }]);
+  });
+
+  it('leaves the weight unit alone', () => {
+    const tree = mount();
+    const cm = group(tree, 'Length').findAll((n) => n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function')[1];
+    act(() => cm.props.onPress());
+    expect(mockStored.unit).toBe('lb');
   });
 });
 

@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
 import { getSettings } from '../../src/db/repositories/settingsRepo';
 import { applyImport, previewImport, type ImportPreview, type ImportResult } from '../../src/db/repositories/importRepo';
+import { lengthUnitFor } from '../../src/domain/body';
 import { planImport, type ImportPlan, type SkippedRow } from '../../src/domain/importCsv';
 import type { SampleKind } from '../../src/domain/importSamples';
 import type { WeightUnit } from '../../src/domain/types';
@@ -103,9 +104,16 @@ export default function ImportData() {
   const [shown, setShown] = useState<Shown>({ step: 'start', message: null });
   const [busy, setBusy] = useState(false);
 
+  // A length the file doesn't give a unit for is in the length setting; if the weight unit chosen for the file is not the
+  // phone's, the length that goes with it (a file kept in lb is kept in inches).
   const options = (unit?: WeightUnit) => {
     const settings = getSettings(db);
-    return { weightUnit: unit ?? settings.unit, distanceUnit: settings.distanceUnit, dayFirst: deviceRegion() !== 'US' };
+    return {
+      weightUnit: unit ?? settings.unit,
+      distanceUnit: settings.distanceUnit,
+      lengthUnit: unit === undefined || unit === settings.unit ? settings.lengthUnit : lengthUnitFor(unit),
+      dayFirst: deviceRegion() !== 'US',
+    };
   };
 
   const read = (name: string, text: string, unit?: WeightUnit) => {

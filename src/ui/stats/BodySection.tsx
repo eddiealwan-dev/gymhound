@@ -5,9 +5,10 @@ import { Pressable, View } from 'react-native';
 import { latestBodyEntries, listBodyEntries } from '../../db/repositories/bodyRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
-import { BODY_KINDS, BODY_LABELS, bodyUnit, formatBodyValue } from '../../domain/body';
+import { BODY_KINDS, BODY_LABELS, bodyUnit, formatBodyValue, labelBodyValue, shownEntry } from '../../domain/body';
 import type { BodyEntry, BodyKind } from '../../domain/body';
 import { formatEntryDate, toLocalDate } from '../../domain/dates';
+import type { LengthUnit } from '../../domain/types';
 import { deviceLocale } from '../../platform/locale';
 import { useFocusedDbQuery } from '../../state/dataVersion';
 import { flushAll } from '../../state/draftFlush';
@@ -18,9 +19,10 @@ import { useTheme } from '../ThemeProvider';
 
 const MEASUREMENT_KINDS = BODY_KINDS.filter((kind) => kind !== 'bodyweight');
 
-/** Everything Body reads: the display unit, every bodyweight entry for the chart, and each kind's latest. */
+/** Everything Body reads: the weight and length units, every bodyweight entry for the chart, and each kind's latest. */
 function readBody(db: Db) {
-  return { unit: getSettings(db).unit, bodyweight: listBodyEntries(db, 'bodyweight'), latest: latestBodyEntries(db) };
+  const s = getSettings(db);
+  return { unit: s.unit, lengthUnit: s.lengthUnit, bodyweight: listBodyEntries(db, 'bodyweight'), latest: latestBodyEntries(db) };
 }
 
 function openKind(kind: BodyKind) {
@@ -29,16 +31,19 @@ function openKind(kind: BodyKind) {
 }
 
 /**
- * A measurement: its name, its latest "{value} · {date}" or "No entries", and a chevron to its detail. A logged value
- * shows in the unit it was logged in (spec §7, R112); only the chart converts.
+ * A measurement: its name, its latest "{value} · {date}" or "No entries", and a chevron to its detail. A length shows in
+ * the chosen length unit (R639b), converted from the unit it was logged in; the rest show as logged.
  */
-function MeasurementRow({ kind, entry, today, locale }: { kind: BodyKind; entry?: BodyEntry; today: string; locale: string }) {
+function MeasurementRow({ kind, entry, lengthUnit, today, locale }: { kind: BodyKind; entry?: BodyEntry; lengthUnit: LengthUnit; today: string; locale: string }) {
   const { colors } = useTheme();
-  const latest = entry ? `${formatBodyValue(entry.value, entry.unit)} · ${formatEntryDate(entry.localDate, today, locale)}` : null;
+  const shown = entry ? shownEntry(entry, lengthUnit) : null;
+  const date = entry ? formatEntryDate(entry.localDate, today, locale) : '';
+  const latest = shown ? `${formatBodyValue(shown.value, shown.unit)} · ${date}` : null;
+  const spoken = shown ? `${labelBodyValue(shown.value, shown.unit)}, ${date}` : 'No entries';
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${BODY_LABELS[kind]}, ${latest ? latest.replace(' · ', ', ') : 'No entries'}`}
+      accessibilityLabel={`${BODY_LABELS[kind]}, ${spoken}`}
       onPress={() => openKind(kind)}
       style={({ pressed }) => ({
         minHeight: 44,
@@ -72,10 +77,10 @@ function MeasurementRow({ kind, entry, today, locale }: { kind: BodyKind; entry?
  */
 export function BodySection(): ReactElement {
   const { colors } = useTheme();
-  const { unit: displayUnit, bodyweight, latest } = useFocusedDbQuery(readBody);
+  const { unit: displayUnit, lengthUnit, bodyweight, latest } = useFocusedDbQuery(readBody);
   const today = toLocalDate(Date.now());
   const locale = deviceLocale();
-  const weightUnit = bodyUnit('bodyweight', displayUnit);
+  const weightUnit = bodyUnit('bodyweight', displayUnit, lengthUnit);
   const lastWeight = latest.bodyweight;
 
   return (
@@ -110,7 +115,7 @@ export function BodySection(): ReactElement {
       <Label style={{ marginTop: 32, marginBottom: 8 }}>Measurements</Label>
       <View>
         {MEASUREMENT_KINDS.map((kind) => (
-          <MeasurementRow key={kind} kind={kind} entry={latest[kind]} today={today} locale={locale} />
+          <MeasurementRow key={kind} kind={kind} entry={latest[kind]} lengthUnit={lengthUnit} today={today} locale={locale} />
         ))}
       </View>
     </View>

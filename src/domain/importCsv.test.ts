@@ -38,6 +38,15 @@ describe('reading CSV (R565)', () => {
     expect(readHeader('protein_g')).toEqual({ base: 'protein', unit: 'g' });
   });
 
+  it('reads the length units a header names: in, inch, inches, cm, centimeters, centimetres', () => {
+    expect(readHeader('Waist (in)')).toEqual({ base: 'waist', unit: 'in' });
+    expect(readHeader('Waist (inch)')).toEqual({ base: 'waist', unit: 'in' });
+    expect(readHeader('waist_inches')).toEqual({ base: 'waist', unit: 'in' });
+    expect(readHeader('Waist (cm)')).toEqual({ base: 'waist', unit: 'cm' });
+    expect(readHeader('Waist (centimeters)')).toEqual({ base: 'waist', unit: 'cm' });
+    expect(readHeader('waist centimetres')).toEqual({ base: 'waist', unit: 'cm' });
+  });
+
   it('reads numbers as files write them', () => {
     expect(readNumber('82.5', false)).toBe(82.5);
     expect(readNumber('82,5', true)).toBe(82.5);
@@ -240,6 +249,52 @@ describe('body and food files (R565)', () => {
 
     const log = planImport(['Date,Weight (kg)', '2026-01-02,80.1'].join('\n'), OPTIONS);
     expect(log).toMatchObject({ kind: 'body', weightUnitKnown: true, entries: [{ kind: 'bodyweight', value: 80.1, unit: 'kg' }] });
+  });
+
+  it('reads inches and centimetres from the headers, one file with both', () => {
+    const file = ['Date,Waist (in),Chest (cm),Hips (inches),Arms (centimetres),Neck inch', '2026-10-01,34.5,102,40,35,15.5'].join('\n');
+    const plan = planImport(file, OPTIONS);
+    if (plan.kind !== 'body') throw new Error(plan.kind);
+    expect(plan.entries.map((e) => [e.kind, e.value, e.unit])).toEqual([
+      ['waist', 34.5, 'in'],
+      ['chest', 102, 'cm'],
+      ['hips', 40, 'in'],
+      ['arms', 35, 'cm'],
+      ['neck', 15.5, 'in'],
+    ]);
+  });
+
+  it('reads a unit column of in, inch, inches, cm, centimetres, in any case', () => {
+    const file = [
+      'date,kind,value,unit',
+      '2026-10-01,waist,34.5,in',
+      '2026-10-02,waist,34,Inch',
+      '2026-10-03,chest,41,INCHES',
+      '2026-10-04,hips,100,cm',
+      '2026-10-05,thighs,58,Centimetres',
+    ].join('\n');
+    const plan = planImport(file, OPTIONS);
+    if (plan.kind !== 'body') throw new Error(plan.kind);
+    expect(plan.entries.map((e) => [e.kind, e.value, e.unit])).toEqual([
+      ['waist', 34.5, 'in'],
+      ['waist', 34, 'in'],
+      ['chest', 41, 'in'],
+      ['hips', 100, 'cm'],
+      ['thighs', 58, 'cm'],
+    ]);
+  });
+
+  it('puts a length with no unit in the length unit given, or the one that goes with the weight unit', () => {
+    const file = ['date,waist', '2026-10-01,86'].join('\n');
+    const unitOf = (options: Parameters<typeof planImport>[1]) => {
+      const plan = planImport(file, options);
+      if (plan.kind !== 'body') throw new Error(plan.kind);
+      return plan.entries[0].unit;
+    };
+    expect(unitOf(OPTIONS)).toBe('in');
+    expect(unitOf({ ...OPTIONS, weightUnit: 'kg' })).toBe('cm');
+    expect(unitOf({ ...OPTIONS, lengthUnit: 'cm' })).toBe('cm');
+    expect(unitOf({ ...OPTIONS, weightUnit: 'kg', lengthUnit: 'in' })).toBe('in');
   });
 
   it("reads GymHound's food sample and a tracker's daily totals by meal", () => {
