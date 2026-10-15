@@ -5,6 +5,7 @@ import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import { photoFileExists } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
+import { NEW_EXERCISES, PHOTO_ALIAS } from '../seed/newExercises';
 import { bumpData, useDataVersion } from '../state/dataVersion';
 import { canHaveOwnPhotos, exercisePhotos, photoNote, useExercisePhotos } from './exercisePhotos';
 
@@ -46,6 +47,25 @@ describe('exercisePhotos', () => {
     expect(photoNote('fedb-weighted-sissy-squat')).toBeNull();
     expect(photoNote('constructor')).toBeNull();
     expect(canHaveOwnPhotos('sissy-squat')).toBe(false);
+  });
+});
+
+describe('PHOTO_ALIAS (§18.29, R605)', () => {
+  it("shows seven of the programs' new exercises the bundled photos of one whose still looks the same, with no note", () => {
+    expect(Object.keys(PHOTO_ALIAS)).toHaveLength(7);
+    for (const [id, photosOf] of Object.entries(PHOTO_ALIAS)) {
+      expect([id, exercisePhotos(id)]).toEqual([id, EXERCISE_PHOTOS[photosOf]]);
+      expect([id, exercisePhotos(id)]).not.toEqual([id, undefined]);
+      expect(photoNote(id)).toBeNull();
+      expect(canHaveOwnPhotos(id)).toBe(false);
+    }
+    expect(exercisePhotos('paused-back-squat')).toBe(EXERCISE_PHOTOS['barbell-back-squat']);
+  });
+
+  it('gives the other 100 new exercises none, so a phone build offers your own (R111)', () => {
+    const without = NEW_EXERCISES.filter((e) => !(e.id in PHOTO_ALIAS));
+    expect(without).toHaveLength(100);
+    for (const e of without) expect([e.id, exercisePhotos(e.id), canHaveOwnPhotos(e.id)]).toEqual([e.id, undefined, true]);
   });
 });
 

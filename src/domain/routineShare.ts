@@ -542,7 +542,11 @@ export function shareMessage(routineName: string, code: string, storeLink: strin
 // Version 2: compact (R472). The payload is bytes, not JSON: numbers as variable-length integers, names as UTF-8 with
 // their length first. A premade program travels as its place in a frozen table, so sharing one is a dozen characters.
 
-/** The premades a version 2 code can name, frozen: new programs are appended, never inserted. */
+/**
+ * The premades a version 2 code can name, frozen: new programs are appended, never inserted. The nine of §18.21 keep
+ * places 0–8 (retired since §18.29, R598, they still open where a phone has them); the twenty of §18.29 follow at
+ * places 9–28 by program number (R601).
+ */
 const PREMADES_V2: readonly string[] = [
   'premade-fullbody-3',
   'premade-5x5-3',
@@ -553,7 +557,33 @@ const PREMADES_V2: readonly string[] = [
   'premade-advancedfullbody-4',
   'premade-brosplit-5',
   'premade-calisthenics-3',
+  'program-barbell-foundations',
+  'program-dumbbell-full-body',
+  'program-calisthenics-foundations',
+  'program-minimalist-two-day',
+  'program-upper-lower-powerbuilding',
+  'program-push-pull-legs',
+  'program-full-body-three-day',
+  'program-kettlebell-strength-conditioning',
+  'program-lean-out',
+  'program-glute-lower-body-emphasis',
+  'program-advanced-upper-lower-dup',
+  'program-strength-peaking-block',
+  'program-dumbbell-full-body-ii',
+  'program-mobility-for-lifters',
+  'program-bro-split',
+  'program-advanced-calisthenics',
+  'program-crossfit-foundations',
+  'program-crossfit-performance',
+  'program-strongman-prep',
+  'program-hybrid-athlete',
 ];
+
+/**
+ * What Add from code says for a code naming a program this phone doesn't have (R601): a retired one, on a phone that
+ * never had it.
+ */
+export const PROGRAM_NOT_HERE = 'This program is no longer in GymHound.';
 
 /** The usual increments, in hundredths, frozen: a slot's flags name one by its place + 1 (0: the increment follows). */
 const INCREMENTS_V2: readonly number[] = [500, 1000, 250, 0, 125, 100, 200];

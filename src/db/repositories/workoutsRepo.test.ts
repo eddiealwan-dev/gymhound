@@ -21,6 +21,7 @@ import {
   workouts,
 } from '../schema';
 import { createTestDb } from '../testing/createTestDb';
+import { writeSeedV8 } from '../testing/seedV8';
 import { seededDb } from '../testing/fixtures';
 import { seededV1Db } from '../testing/seedV1';
 import type { Db } from '../types';
@@ -455,7 +456,8 @@ describe('finishWorkout', () => {
     const db = seededV1Db();
     runSeed(db, NOW);
     setActiveRoutine(db, 'premade-5x5-3');
-    expect(db.select().from(routines).where(eq(routines.id, 'premade-5x5-3')).get()).toMatchObject({ retired: false });
+    // Retired again by seed 9 (§18.29, R598), it keeps running for whoever has it.
+    expect(db.select().from(routines).where(eq(routines.id, 'premade-5x5-3')).get()).toMatchObject({ retired: true });
     expect(getUpNext(db)!.dayName).toBe('A');
 
     runDay(db, 'premade-5x5-3:a', NOW, 95, 5);
@@ -1212,6 +1214,7 @@ describe('restart', () => {
       const first = createTestDb(file);
       handles.push(first);
       ensureSettings(first.db, 'us');
+      writeSeedV8(first.db);
       runSeed(first.db, NOW);
       const id = startWorkoutFromDay(first.db, PUSH_A, NOW);
       const [set1] = setIds(first.db);

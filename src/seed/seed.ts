@@ -8,25 +8,40 @@ import { loadSeedFoods } from './foods';
 import type { SeedFood } from './foods';
 import type { LibraryExercise } from './libraryMapping';
 import { SEED_ROUTINES } from './routines';
-import type { SeedIncrement } from './routines';
 
 export { PREMADE_ORDER } from './routines';
 
 /**
  * Bump this when the bundled data changes. `runSeed` re-applies the seed once per version.
  * 1: the 55 exercises and six premades (phases 1 and 2). 2: the full library with steps and sources (§18.8). 3: hand-written steps for the six exercises without a source (R95) and the pike push-up wording. 4: imported steps without stray numbers, "You" typos or calorie claims (`STEP_FIXES`). 5: about 300 foods from USDA FoodData Central (R139). 6 and 7: the programs of §18.21 (5×5 back, the free four first). 8: about 8,000 more foods from USDA SR28, grocery staples, restaurant and fast-food items and branded groceries (R545).
+ * 9: the twenty programs of §18.29 with their 107 new exercises and the aliases they add (R606); the nine retire (R598).
  */
-export const SEED_VERSION = 8;
+export const SEED_VERSION = 9;
 
-/** The library is about 800 KB of data, so it is loaded only when the seed has to run, never at every start. */
+/**
+ * The library with the aliases §18.29 adds to existing exercises (R606), then the programs' new exercises (R604).
+ * The library is about 800 KB of data, so it is loaded only when the seed has to run, never at every start.
+ */
 function loadLibrary(): readonly LibraryExercise[] {
-  return (require('./library.generated') as typeof import('./library.generated')).LIBRARY_EXERCISES;
+  const { LIBRARY_EXERCISES } = require('./library.generated') as typeof import('./library.generated');
+  const { NEW_ALIASES, NEW_EXERCISES } = require('./newExercises') as typeof import('./newExercises');
+  return [...withAliases(LIBRARY_EXERCISES, NEW_ALIASES), ...NEW_EXERCISES];
 }
 
-function incrementFor(inc: SeedIncrement, s: Settings): number {
-  const base = s.unit === 'lb' ? s.defaultIncrementLb : s.defaultIncrementKg;
-  if (inc === 'none') return 0;
-  return inc === 'double' ? base * 2 : base;
+/** Each exercise with `added[id]` after its own aliases, any it already has left out. */
+export function withAliases(
+  library: readonly LibraryExercise[],
+  added: Readonly<Record<string, readonly string[]>>,
+): LibraryExercise[] {
+  return library.map((e) => {
+    const more = (added[e.id] ?? []).filter((a) => !e.aliases.some((own) => own.toLowerCase() === a.toLowerCase()));
+    return more.length === 0 ? e : { ...e, aliases: [...e.aliases, ...more] };
+  });
+}
+
+/** A slot's increment in the lifter's unit (R611): lb as the program has it, kg half that (5 lb ↔ 2.5 kg, 8 lb ↔ 4 kg). */
+function incrementFor(incrementLb: number, s: Settings): number {
+  return s.unit === 'lb' ? incrementLb : incrementLb / 2;
 }
 
 /** The value an upsert tried to insert into `column`, for its update. */
@@ -98,6 +113,7 @@ function upsertFoods(db: Db, seedFoods: readonly SeedFood[]): void {
 function upsertRoutines(db: Db, now: number, s: Settings): void {
   for (const routine of SEED_ROUTINES) {
     // `next_day_index` is progress, so a re-seed never resets it. A premade back in the seed is no longer retired.
+    // `run_started_at` and `run_deload_at` are never written either (R637).
     db.insert(routines)
       .values({ id: routine.id, name: routine.name, isPremade: true, nextDayIndex: 0, createdAt: now })
       .onConflictDoUpdate({ target: routines.id, set: { name: routine.name, retired: false } })
@@ -114,7 +130,7 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
         .run();
 
       day.exercises.forEach((entry, position) => {
-        const id = `${dayId}:${entry.exercise}`;
+        const id = entry.id;
         exerciseIds.push(id);
         const rule = {
           exerciseId: entry.exercise,
@@ -122,14 +138,15 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
           setCount: entry.sets,
           repMin: entry.reps[0],
           repMax: entry.reps[1],
-          increment: incrementFor(entry.inc, s),
+          increment: incrementFor(entry.incrementLb, s),
           incrementUnit: s.unit,
         };
-        // `next_weight` and `next_weight_unit` are left out of the update: they hold progress.
+        // `next_weight`, `next_weight_unit`, `ladder_rung` and `next_set_count` are never written: they hold progress (R637).
         db.insert(routineExercises)
           .values({ id, routineDayId: dayId, ...rule })
-          // The exercise is left out too: a row's id names the exercise the program has there, so the seed never needs to
-          // change it, and one you swapped with Modify (R553) stays swapped through an update.
+          // The exercise is left out of the update too: a row's id names the exercise the program has there, so the seed
+          // never needs to change it; one you swapped with Modify (R553) stays swapped through an update, and a ladder
+          // slot keeps the rung you are on (R618), its first rung being written only when the row is new.
           .onConflictDoUpdate({ target: routineExercises.id, set: { ...rule, exerciseId: undefined } })
           .run();
       });
@@ -147,7 +164,8 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
       .run();
   }
 
-  // A premade the seed no longer has is retired, never deleted: whoever has it active or in history keeps it whole.
+  // A premade the seed no longer has is retired, never deleted: whoever has it active or in history keeps it whole, and
+  // nothing of it is written again (§18.29 R598: the nine of seeds 6 to 8 retire this way, with their next weights).
   db.update(routines)
     .set({ retired: true })
     .where(and(eq(routines.isPremade, true), notInArray(routines.id, SEED_ROUTINES.map((r) => r.id))))
@@ -155,10 +173,11 @@ function upsertRoutines(db: Db, now: number, s: Settings): void {
 }
 
 /**
- * Upserts the library's exercises, the premade routines and the bundled foods by stable id, in one transaction, when
- * the stored `seed_version` is behind `SEED_VERSION`. Exercises and foods are never deleted, and user rows (your own
- * foods included) are never touched. A premade that continues loses the days and exercises the seed no longer has (the rest keep their ids and next weights); a
- * premade the seed no longer has is retired with all its rows.
+ * Upserts the library's exercises (with the programs' new ones), the twenty programs and the bundled foods by stable id,
+ * in one transaction, when the stored `seed_version` is behind `SEED_VERSION`. Exercises and foods are never deleted,
+ * and user rows (your own foods included) are never touched. A program that continues loses the days and exercises the
+ * seed no longer has (the rest keep their ids and progress); a premade the seed no longer has is retired with all its
+ * rows.
  */
 export function runSeed(db: Db, now: number): void {
   db.transaction((tx) => {

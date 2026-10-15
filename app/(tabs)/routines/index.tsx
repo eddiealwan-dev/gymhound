@@ -16,7 +16,7 @@ import { RoutineOptionsSheet, useRoutineActions } from '../../../src/ui/routines
 import { routineLine } from '../../../src/domain/programInfo';
 import { canUseRoutine, canUseSavedWorkouts } from '../../../src/domain/routineLimit';
 import { useIsPro } from '../../../src/platform/entitlements';
-import { PROGRAM_ORDER, programById } from '../../../src/seed/programs.generated';
+import { programById } from '../../../src/seed/programs.generated';
 import type { Program } from '../../../src/seed/programTypes';
 import { ProgramPicture } from '../../../src/ui/programs/ProgramPicture';
 import { Screen } from '../../../src/ui/Screen';
@@ -246,27 +246,20 @@ function SavedRow({ saved, locked, onStart }: { saved: SavedWorkoutSummary; lock
   );
 }
 
-/** Where a program sits in Routines' order: the free five first, then Pro by number (R597). */
-const programRank = (id: string) => {
-  const rank = PROGRAM_ORDER.indexOf(id);
-  return rank === -1 ? PROGRAM_ORDER.length + (programById(id)?.number ?? 0) : rank;
-};
-
 /**
  * Routines (§8.6): the twenty programs (the free five first, R597), then your own with **New routine**, then saved
  * workouts, then **Earlier programs**: the retired nine, listed only while one is active or has finished workouts
- * (R598; `listRoutines` leaves the others out). A program opens its card; a routine its detail. While a workout runs,
+ * (R598; `listRoutines` leaves the others out and gives each its group, in order). A program opens its card; a
+ * routine its detail. While a workout runs,
  * the routine can't change: Set active says to finish or discard it first (R80), rather than changing a routine Train
  * won't show until then. New routine keeps to the free limit (R88). Saved workouts (R122) are free and don't count
  * toward the limit (R118); Start waits for a workout in progress too.
  */
 export default function Routines() {
   const routines = useDbQuery(listRoutines);
-  const programs = routines
-    .filter((routine) => routine.isPremade && programById(routine.id) !== undefined)
-    .sort((a, b) => programRank(a.id) - programRank(b.id));
-  const earlier = routines.filter((routine) => routine.isPremade && programById(routine.id) === undefined);
-  const yours = routines.filter((routine) => !routine.isPremade);
+  const programs = routines.filter((routine) => routine.group === 'program');
+  const earlier = routines.filter((routine) => routine.group === 'earlier');
+  const yours = routines.filter((routine) => routine.group === 'yours');
   const noneActive = !routines.some((routine) => routine.isActive);
   const limit = useRoutineLimit();
   const saved = useDbQuery(listSavedWorkouts);

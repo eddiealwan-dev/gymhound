@@ -122,7 +122,7 @@ const field = (tree: ReactTestRenderer, label: string) => tree.root.findAllByTyp
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
-  mockRoutines = [{ id: 'fb', name: 'Full body', isPremade: true, dayCount: 3, isActive: true }];
+  mockRoutines = [{ id: 'fb', name: 'Full body', isPremade: true, dayCount: 3, isActive: true, group: 'earlier' }];
   mockSaved = [
     { id: 'legs', name: 'Legs', exerciseCount: 1, updatedAt: 0 },
     { id: 'push-a', name: 'Push A', exerciseCount: 3, updatedAt: 0 },

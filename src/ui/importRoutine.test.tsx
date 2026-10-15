@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import { sharedRoutineFor } from '../db/repositories/routineShareRepo';
 import { saveRoutine, userRoutineCount } from '../db/repositories/routinesRepo';
-import { seededDb } from '../db/testing/fixtures';
+import { freshSeededDb, seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { draftReducer, newDraft } from '../domain/routineDraft';
 import { encodePremade, encodeRoutine, shareMessage, signBytes } from '../domain/routineShare';
@@ -79,6 +79,22 @@ describe('Add from code (§18.18)', () => {
     expect(mockReplace).toHaveBeenCalledWith('/routines/premade-ppl-6');
     expect(userRoutineCount(mockDb)).toBe(0);
     mockPro = true;
+  });
+
+  it("a program's code opens it: the twenty share by place (R601)", () => {
+    mockPro = false;
+    const tree = render(encodePremade('program-bro-split'));
+    expect(allText(tree)).toContain('Bro Split');
+    act(() => tree.root.findByProps({ label: 'Open program' }).props.onPress());
+    expect(mockReplace).toHaveBeenCalledWith('/routines/program-bro-split');
+  });
+
+  it("a retired program's code on a phone that never had it says it is no longer in GymHound (R601)", () => {
+    mockDb = freshSeededDb();
+    const tree = render(shareMessage('Push/pull/legs', encodePremade('premade-ppl-6')));
+    expect(allText(tree)).toContain('This program is no longer in GymHound.');
+    expect(allText(tree)).not.toContain('newer version');
+    expect(tree.root.findByProps({ label: 'Add routine' }).props.disabled).toBe(true);
   });
 
   it('a program only a newer GymHound has says to update', () => {

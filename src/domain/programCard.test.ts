@@ -1,15 +1,18 @@
 import { citationParts, citationSpeech, detailRows, siteOf, sourcesFor, summaryLine, titleOf } from './programCard';
-import { FIXTURE_SOURCES, fixtureProgram } from './programFixtures';
+import { PROGRAM_SOURCES, PROGRAMS } from '../seed/programs.generated';
+/** Program number `n` of the twenty. */
+const programNumber = (n: number) => PROGRAMS.find((p) => p.number === n)!;
+
 
 describe('the program card (R630)', () => {
   it("summaryLine and titleOf for #11 match the owner's card example", () => {
-    const p = fixtureProgram(11);
+    const p = programNumber(11);
     expect(titleOf(p)).toBe('#11 · Advanced Upper/Lower DUP');
     expect(summaryLine(p)).toBe('4 days a week · 6 weeks · Advanced · Strength + size with daily undulating periodization');
   });
 
   it('detailRows has the eight labels in order, with the values as the documents write them', () => {
-    const p = fixtureProgram(11);
+    const p = programNumber(11);
     const rows = detailRows(p);
     expect(rows.map((r) => r.label)).toEqual([
       'Level',
@@ -60,8 +63,8 @@ describe('sites and citations (R631)', () => {
   });
 
   it("sourcesFor lists the program's sources in number order", () => {
-    const shuffled = [...FIXTURE_SOURCES].reverse();
-    expect(sourcesFor(fixtureProgram(1), shuffled).map((s) => s.id)).toEqual([1, 18, 22, 23, 24, 25, 26, 28]);
-    expect(sourcesFor(fixtureProgram(11), shuffled).map((s) => s.id)).toEqual([1, 10, 14, 15, 16, 18, 19]);
+    const shuffled = [...PROGRAM_SOURCES].reverse();
+    expect(sourcesFor(programNumber(1), shuffled).map((s) => s.id)).toEqual([1, 18, 22, 23, 24, 25, 26, 28]);
+    expect(sourcesFor(programNumber(11), shuffled).map((s) => s.id)).toEqual([1, 10, 14, 15, 16, 18, 19]);
   });
 });

@@ -118,11 +118,15 @@ function isSentenceCase(name: string): boolean {
 }
 
 describe('NEW_EXERCISES (§18.29, R602, R604)', () => {
-  it('has 107 entries with unique ids, none already in libraryIds.json or the library', () => {
+  it('has 107 entries with unique ids, none in the library, and every one in libraryIds.json, after the library', () => {
     expect(NEW_EXERCISES).toHaveLength(107);
     expect(byId.size).toBe(107);
     const library = new Set(LIBRARY_EXERCISES.map((e) => e.id));
-    expect(NEW_EXERCISES.filter((e) => LISTED.includes(e.id) || library.has(e.id)).map((e) => e.id)).toEqual([]);
+    expect(NEW_EXERCISES.filter((e) => library.has(e.id)).map((e) => e.id)).toEqual([]);
+    expect(NEW_EXERCISES.filter((e) => !LISTED.includes(e.id)).map((e) => e.id)).toEqual([]);
+    // The list lost none of the library's ids: each new id comes after them all.
+    const lastLibrary = Math.max(...LIBRARY_EXERCISES.map((e) => LISTED.indexOf(e.id)));
+    expect(NEW_EXERCISES.filter((e) => LISTED.indexOf(e.id) < lastLibrary).map((e) => e.id)).toEqual([]);
   });
 
   it('is the 48 catalog exercises of Appendix A and the 59 new rungs of Appendix B, with their logging types', () => {

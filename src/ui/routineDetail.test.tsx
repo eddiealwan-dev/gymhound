@@ -333,7 +333,7 @@ describe('Routine detail: free and Pro (§18.21)', () => {
   it("free: a Pro program says so under its name, offers See Pro instead of Set active, and sets nothing", () => {
     mockPro = false;
     const tree = mount();
-    expect(shownText(tree)).toContain('Push/pull/legs is part of GymHound Pro. Free includes Beginner full body, 5×5, Dumbbell full body and Mobility.');
+    expect(shownText(tree)).toContain('Push/pull/legs is part of GymHound Pro. Free includes Barbell Foundations, Dumbbell Full Body, Minimalist Two-Day, CrossFit Foundations and Mobility for Lifters.');
     expect(buttons(tree, 'Set active')).toHaveLength(0);
     press(tree, 'See Pro');
     expect(router.push).toHaveBeenCalledWith('/paywall');
