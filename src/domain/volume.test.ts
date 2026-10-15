@@ -23,6 +23,11 @@ describe('totalVolume (spec 7.9)', () => {
     expect(totalVolume([s({ loggingType: 'assisted' }), s({ loggingType: 'timed' })], 'kg')).toBe(0);
   });
 
+  it('none counted for the three program types (R608): a carry, an AMRAP score and a For Time score', () => {
+    expect(totalVolume([s({ loggingType: 'weighted_distance', reps: null }), s({ loggingType: 'weighted_distance', reps: 5 })], 'kg')).toBe(0);
+    expect(totalVolume([s({ loggingType: 'rounds', weight: null, reps: 6 }), s({ loggingType: 'for_time', weight: 40, reps: 5 })], 'kg')).toBe(0);
+  });
+
   it('adds nothing for a weight-and-time set', () => {
     expect(totalVolume([s({ loggingType: 'weighted_time', reps: null })], 'kg')).toBe(0);
     // Excluded by its logging type, not merely by having no reps.

@@ -8,7 +8,7 @@ import { chartSummary, markedSummary, pointsInRange, rangeChange } from '../../.
 import type { ChartRange } from '../../../src/domain/chart';
 import { calendarDayTitle, toLocalDate } from '../../../src/domain/dates';
 import { MARK_LABELS } from '../../../src/domain/labels';
-import { liftMetric, liftPoints, liftRecords, sessionText } from '../../../src/domain/liftStats';
+import { liftMetric, liftPoints, liftRecords, recordsOnlyLine, sessionText } from '../../../src/domain/liftStats';
 import type { LiftMetric, LiftPoint, LiftRecord, LiftSession } from '../../../src/domain/liftStats';
 import { formatDuration } from '../../../src/domain/setEntry';
 import type { LoggingType, WeightUnit } from '../../../src/domain/types';
@@ -176,7 +176,7 @@ export function LiftDetail({ id, fromWorkout = false }: { id: string; fromWorkou
       <ScreenTitle>{lift.name}</ScreenTitle>
       {metric === 'none' ? (
         <Body muted style={{ marginTop: 4 }}>
-          Distance and time show records only.
+          {recordsOnlyLine(lift.loggingType)}
         </Body>
       ) : (
         <>

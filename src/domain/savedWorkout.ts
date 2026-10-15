@@ -1,4 +1,4 @@
-import { clampRule } from './routineDraft';
+import { clampRule, NO_LOAD } from './routineDraft';
 import { formatPrevious } from './setEntry';
 import type { Equipment, LoggingType, SavedSet, WeightUnit } from './types';
 import { sameWeight, toKg } from './units';
@@ -64,18 +64,19 @@ export function savedSetsLine(sets: readonly SavedSet[], loggingType: LoggingTyp
 }
 
 /**
- * Logging types with no load for the rule to raise: their increment is 0. The same list as `NO_LOAD` in
- * `routineDraft.ts`, which stays private to that file.
+ * The value a set's rep range is made of: reps, seconds for holds, a carry's distance (R607), nothing for distance and
+ * time or a program's score.
  */
-const NO_LOAD: LoggingType[] = ['timed', 'distance_time'];
-
-/** The value a set's rep range is made of: reps, seconds for holds, nothing for distance and time. */
 function rangeValue(s: SavedSet, loggingType: LoggingType): number | null {
   switch (loggingType) {
     case 'timed':
     case 'weighted_time':
       return s.durationS;
+    case 'weighted_distance':
+      return s.distance;
     case 'distance_time':
+    case 'rounds':
+    case 'for_time':
       return null;
     default:
       return s.reps;

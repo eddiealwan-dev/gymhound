@@ -98,7 +98,8 @@ export function tick(
   if (values === null) return false;
   const now = Date.now();
   const weightUnit = entered.weight !== null ? (enteredUnit ?? unit) : unit;
-  const tickedDistanceUnit = entered.distance !== null ? (enteredDistanceUnit ?? distanceUnit) : distanceUnit;
+  // A distance from a placeholder is in the row's entry unit: a carry's own (R607), else the unit in Settings.
+  const tickedDistanceUnit = entered.distance !== null ? (enteredDistanceUnit ?? distanceUnit) : (row.distanceUnit ?? distanceUnit);
   tickSet(db, set.id, values, weightUnit, now, tickedDistanceUnit);
   const view = getActiveWorkoutView(db);
   let restStarted: number | null = null;

@@ -90,6 +90,7 @@ export function loadWorkoutDraft(db: Db, workoutId: string): WorkoutDraft | null
           durationS: sets.durationS,
           distance: sets.distance,
           distanceUnit: sets.distanceUnit,
+          extraReps: sets.extraReps,
           done: sets.done,
         })
         .from(sets)
@@ -111,6 +112,7 @@ function setValues(s: DraftSet, unit: { weight: DraftSet['weightUnit']; distance
     durationS: s.durationS,
     distance: s.distance,
     distanceUnit: s.distance === null ? null : (s.distanceUnit ?? unit.distance),
+    extraReps: s.extraReps ?? null,
     done: s.done,
   };
 }

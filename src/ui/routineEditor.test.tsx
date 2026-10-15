@@ -53,6 +53,9 @@ const LIBRARY = () => ({
   bench: { id: 'bench', name: 'Barbell bench press', loggingType: 'weighted' },
   row: { id: 'row', name: 'Barbell row', loggingType: 'weighted' },
   plank: { id: 'plank', name: 'Plank', loggingType: 'timed' },
+  yoke: { id: 'yoke', name: 'Yoke carry', loggingType: 'weighted_distance' },
+  amrap: { id: 'amrap', name: 'AMRAP 10', loggingType: 'rounds' },
+  fran: { id: 'fran', name: '21-15-9', loggingType: 'for_time' },
 });
 jest.mock('../db/repositories/exercisesRepo', () => ({ getExercise: (_db: unknown, id: string) => mockLibrary[id] ?? null }));
 let mockSaved: SavedWorkoutSummary[];
@@ -281,6 +284,32 @@ describe('the routine editor: a new routine (R89)', () => {
     expect(field(tree, 'Plank seconds to').props.value).toBe('60');
     expect(shownText(tree)).toContain('Seconds');
     expect(hasField(tree, 'Plank increment in kg')).toBe(false);
+  });
+
+  it('a carry from a program counts its distance and has an increment (R607)', () => {
+    const tree = mount('new');
+    press(tree, '+ Add day');
+    press(tree, 'Add exercise to Day 1');
+    pick('yoke');
+
+    expect(shownText(tree)).toContain('Distance');
+    expect(field(tree, 'Yoke carry distance from').props.value).toBe('20');
+    expect(field(tree, 'Yoke carry distance to').props.value).toBe('20');
+    expect(hasField(tree, 'Yoke carry increment in kg')).toBe(true);
+  });
+
+  it("a program's AMRAP or For Time score has no range and no increment (R607)", () => {
+    const tree = mount('new');
+    press(tree, '+ Add day');
+    press(tree, 'Add exercise to Day 1');
+    pick('amrap');
+    press(tree, 'Add exercise to Day 1');
+    pick('fran');
+
+    for (const name of ['AMRAP 10', '21-15-9']) {
+      expect(hasField(tree, `${name} reps from`)).toBe(false);
+      expect(hasField(tree, `${name} increment in kg`)).toBe(false);
+    }
   });
 
   it('drops a pick it did not ask for', () => {

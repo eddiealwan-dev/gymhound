@@ -5,7 +5,7 @@ import type { KeyboardTypeOptions, ViewStyle } from 'react-native';
 import { formatRest } from '../../domain/dates';
 import type { DraftProblem, DraftSet } from '../../domain/historyDraft';
 import { weightText } from '../../domain/setEntry';
-import { parseField, round2, type Column, type InputKey } from '../../domain/setTable';
+import { needLine, parseField, round2, type Column, type FieldKey, type InputKey } from '../../domain/setTable';
 import type { DistanceUnit, LoggingType, WeightUnit } from '../../domain/types';
 import { cellStyle, COLUMN_GAP, inputLook } from '../session/SetRow';
 import { Body, Num } from '../Text';
@@ -15,21 +15,14 @@ const KEYBOARD: Record<InputKey, KeyboardTypeOptions> = {
   weight: 'decimal-pad',
   distance: 'decimal-pad',
   reps: 'number-pad',
+  extraReps: 'number-pad',
   rpe: 'decimal-pad',
   // The time can be "90" or "1:30", so it needs the colon.
   durationS: 'numbers-and-punctuation',
 };
 
-/** The line over a row whose ticked set lacks a value on Save: the session's copy (spec 18.6). */
-const NEED_LINE: Record<DraftProblem['need'], string> = {
-  weight: 'Add weight to complete set',
-  reps: 'Add reps to complete set',
-  time: 'Add time to complete set',
-  distance: 'Add distance to complete set',
-};
-
 /** The input a problem points at. */
-const NEED_KEY: Record<DraftProblem['need'], InputKey> = { weight: 'weight', reps: 'reps', time: 'durationS', distance: 'distance' };
+const NEED_KEY: Record<DraftProblem['need'], FieldKey> = { weight: 'weight', reps: 'reps', time: 'durationS', distance: 'distance' };
 
 /** What the screen reader calls an input. A weight and a distance say the unit the set is in, which may not be the display unit. */
 function fieldName(key: InputKey, loggingType: LoggingType, weightUnit: WeightUnit, distanceUnit: DistanceUnit): string {
@@ -39,7 +32,10 @@ function fieldName(key: InputKey, loggingType: LoggingType, weightUnit: WeightUn
       if (loggingType === 'assisted') return `assistance in ${weightUnit}`;
       return `weight in ${weightUnit}`;
     case 'reps':
-      return 'reps';
+      // An AMRAP score's rounds are its reps (R607).
+      return loggingType === 'rounds' ? 'rounds' : 'reps';
+    case 'extraReps':
+      return 'extra reps';
     case 'durationS':
       return 'time';
     case 'distance':
@@ -66,6 +62,8 @@ function shownValue(set: DraftSet, key: InputKey, unit: WeightUnit, distanceUnit
       return set.durationS === null ? '' : set.durationS < 60 ? String(set.durationS) : formatRest(set.durationS);
     case 'reps':
       return set.reps === null ? '' : String(set.reps);
+    case 'extraReps':
+      return set.extraReps === null || set.extraReps === undefined ? '' : String(set.extraReps);
     case 'rpe':
       return set.rpe === null ? '' : String(set.rpe);
   }
@@ -84,16 +82,28 @@ export function readField(key: InputKey, text: string, ownUnit: string | null) {
 /**
  * The set's fields for a value read from `key`. A weight or distance keeps the set's own unit (a set with none takes the
  * display unit); clearing it clears the unit too, so what is typed next is in the display unit, as the session's
- * `fieldPatch` does.
+ * `fieldPatch` does. A carry's distance keeps its unit even when cleared: ft and yd are never the display unit (R607),
+ * and a carry with none takes m.
  */
-function patchFor(key: InputKey, value: number | null, set: DraftSet, unit: WeightUnit, distanceUnit: DistanceUnit): Partial<DraftSet> {
+function patchFor(
+  key: InputKey,
+  value: number | null,
+  set: DraftSet,
+  unit: WeightUnit,
+  distanceUnit: DistanceUnit,
+  loggingType: LoggingType,
+): Partial<DraftSet> {
+  const carry = loggingType === 'weighted_distance';
   switch (key) {
     case 'weight':
       return value === null ? { weight: null, weightUnit: null } : { weight: value, weightUnit: set.weightUnit ?? unit };
     case 'distance':
+      if (carry) return { distance: value, distanceUnit: set.distanceUnit ?? 'm' };
       return value === null ? { distance: null, distanceUnit: null } : { distance: value, distanceUnit: set.distanceUnit ?? distanceUnit };
     case 'reps':
       return { reps: value };
+    case 'extraReps':
+      return { extraReps: value };
     case 'durationS':
       return { durationS: value };
     case 'rpe':
@@ -134,7 +144,7 @@ export function EditSetRow({ exerciseName, loggingType, set, label, columns, uni
   /** Fields left holding a number that does not read. */
   const [left, setLeft] = useState<InputKey[]>([]);
   const ownWeightUnit = set.weightUnit ?? unit;
-  const ownDistanceUnit = set.distanceUnit ?? distanceUnit;
+  const ownDistanceUnit = set.distanceUnit ?? (loggingType === 'weighted_distance' ? 'm' : distanceUnit);
   const ownUnit = (key: InputKey) => (key === 'weight' ? ownWeightUnit : key === 'distance' ? ownDistanceUnit : null);
   const invalid = (Object.keys(texts) as InputKey[]).filter((key) => !readField(key, texts[key] ?? '', ownUnit(key)).valid);
 
@@ -151,7 +161,7 @@ export function EditSetRow({ exerciseName, loggingType, set, label, columns, uni
     setTexts((t) => ({ ...t, [key]: text }));
     setLeft((l) => l.filter((k) => k !== key));
     const parsed = readField(key, text, ownUnit(key));
-    if (parsed.valid) onPatch(patchFor(key, parsed.value, set, unit, distanceUnit));
+    if (parsed.valid) onPatch(patchFor(key, parsed.value, set, unit, distanceUnit, loggingType));
   };
 
   const leave = (key: InputKey) => {
@@ -170,7 +180,8 @@ export function EditSetRow({ exerciseName, loggingType, set, label, columns, uni
 
   const flagged = invalid.filter((key) => tried || left.includes(key));
   const needKey = need === null ? null : NEED_KEY[need];
-  const line = flagged.length > 0 ? 'Check this number' : need !== null ? NEED_LINE[need] : null;
+  // The session's copy (spec 18.6), in the type's words: rounds for an AMRAP score.
+  const line = flagged.length > 0 ? 'Check this number' : needKey !== null ? needLine(needKey, loggingType) : null;
 
   const input = (key: InputKey) => {
     const name = fieldName(key, loggingType, ownWeightUnit, ownDistanceUnit);

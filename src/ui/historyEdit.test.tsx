@@ -5,7 +5,7 @@ import { BackHandler, StyleSheet, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import EditWorkout from '../../app/(tabs)/history/edit/[id]';
-import { sets, workoutExercises, workouts } from '../db/schema';
+import { exercises, sets, workoutExercises, workouts } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { setSetting } from '../db/repositories/settingsRepo';
@@ -508,5 +508,81 @@ describe('the history editor', () => {
       return !!style && Object.values(style).some((v) => typeof v === 'string' && v.toUpperCase() === '#E10600');
     });
     expect(red).toHaveLength(0);
+  });
+});
+
+describe('the history editor and the three program logging types (R607)', () => {
+  /** An exercise of a program type, added the way the seed will add the new exercises (Task 9). */
+  function addProgramExercise(id: string, name: string, loggingType: 'weighted_distance' | 'rounds' | 'for_time'): void {
+    mockDb
+      .insert(exercises)
+      .values({ id, name, aliases: [], primaryMuscles: ['quads'], secondaryMuscles: [], equipment: 'other', pattern: 'carry', loggingType, isCustom: false, createdAt: NOW })
+      .run();
+  }
+
+  /** A finished workout with one set of `exerciseId`, ticked with `values`. */
+  function oneSet(exerciseId: string, values: { weight?: number; reps?: number; durationS?: number; distance?: number; extraReps?: number }, distanceUnit: 'ft' | 'mi' = 'mi'): string {
+    const id = startEmptyWorkout(mockDb, OCT_1);
+    const weId = addExerciseToWorkout(mockDb, id, exerciseId);
+    const [s] = getActiveWorkoutView(mockDb)!.exercises.find((e) => e.id === weId)!.sets;
+    tickSet(
+      mockDb,
+      s.id,
+      { weight: values.weight ?? null, reps: values.reps ?? null, durationS: values.durationS ?? null, distance: values.distance ?? null, extraReps: values.extraReps ?? null },
+      'lb',
+      OCT_1 + MINUTE,
+      distanceUnit,
+    );
+    finishWorkout(mockDb, id, OCT_1 + HOUR);
+    return id;
+  }
+
+  it("edits a carry's weight, distance in its own feet and optional time; a carry with no distance can't save", () => {
+    addProgramExercise('yoke-carry', 'Yoke carry', 'weighted_distance');
+    const id = oneSet('yoke-carry', { weight: 315, distance: 50 }, 'ft');
+    const tree = mount(id);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'DIST', 'TIME']));
+    expect(field(tree, 'Yoke carry, set 1, weight in lb').props.value).toBe('315');
+    expect(field(tree, 'Yoke carry, set 1, distance in ft').props.value).toBe('50 ft');
+    expect(field(tree, 'Yoke carry, set 1, time').props.value).toBe('');
+
+    typeInto(tree, 'Yoke carry, set 1, distance in ft', '');
+    press(tree, 'Save');
+    expect(shown(tree)).toContain('Add distance to complete set');
+    expect(setsOf(mockDb, id, 'yoke-carry')[0].distance).toBe(50);
+
+    typeInto(tree, 'Yoke carry, set 1, distance in ft', '60');
+    typeInto(tree, 'Yoke carry, set 1, time', '0:45');
+    press(tree, 'Save');
+    const [s] = setsOf(mockDb, id, 'yoke-carry');
+    expect([s.weight, s.distance, s.distanceUnit, s.durationS]).toEqual([315, 60, 'ft', 45]);
+  });
+
+  it("edits an AMRAP score's rounds and extra reps, and asks for the rounds in its own words", () => {
+    addProgramExercise('metcon-amrap-10', 'AMRAP 10', 'rounds');
+    const id = oneSet('metcon-amrap-10', { reps: 6, extraReps: 4 });
+    const tree = mount(id);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['ROUNDS', '+REPS']));
+    expect(field(tree, 'AMRAP 10, set 1, rounds').props.value).toBe('6');
+    expect(field(tree, 'AMRAP 10, set 1, extra reps').props.value).toBe('4');
+
+    typeInto(tree, 'AMRAP 10, set 1, extra reps', '5');
+    press(tree, 'Save');
+    expect(setsOf(mockDb, id, 'metcon-amrap-10')[0]).toMatchObject({ reps: 6, extraReps: 5 });
+
+    const again = mount(id);
+    typeInto(again, 'AMRAP 10, set 1, rounds', '');
+    press(again, 'Save');
+    expect(shown(again)).toContain('Add rounds to complete set');
+  });
+
+  it('edits a For Time score as m:ss', () => {
+    addProgramExercise('metcon-fran', '21-15-9', 'for_time');
+    const id = oneSet('metcon-fran', { durationS: 462 });
+    const tree = mount(id);
+    expect(field(tree, '21-15-9, set 1, time').props.value).toBe('7:42');
+    typeInto(tree, '21-15-9, set 1, time', '7:30');
+    press(tree, 'Save');
+    expect(setsOf(mockDb, id, 'metcon-fran')[0].durationS).toBe(450);
   });
 });

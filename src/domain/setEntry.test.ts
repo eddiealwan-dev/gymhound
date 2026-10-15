@@ -586,3 +586,135 @@ describe('formatPrevious (spec 8.4)', () => {
     });
   });
 });
+
+describe('the three program logging types (R607)', () => {
+  describe("each new type's ready rule", () => {
+    it('weight and distance needs a weight and a distance; the time is optional and kept when there is one', () => {
+      expect(resolveTick({ loggingType: 'weighted_distance', entered: { ...none, weight: 315 }, target: null, placeholders: none })).toBeNull();
+      expect(resolveTick({ loggingType: 'weighted_distance', entered: { ...none, distance: 50 }, target: null, placeholders: none })).toBeNull();
+      expect(resolveTick({ loggingType: 'weighted_distance', entered: { ...none, weight: 315, distance: 50 }, target: null, placeholders: none })).toEqual({
+        weight: 315,
+        reps: null,
+        durationS: null,
+        distance: 50,
+      });
+      expect(
+        resolveTick({ loggingType: 'weighted_distance', entered: { ...none, distance: 50, durationS: 32 }, target: 315, placeholders: none }),
+      ).toEqual({ weight: 315, reps: null, durationS: 32, distance: 50 });
+    });
+
+    it('an AMRAP score needs rounds; the extra reps are optional and kept', () => {
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, extraReps: 4 }, target: null, placeholders: none })).toBeNull();
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6 }, target: null, placeholders: none })).toEqual({
+        weight: null,
+        reps: 6,
+        durationS: null,
+        distance: null,
+        extraReps: null,
+      });
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6, extraReps: 4 }, target: null, placeholders: none })).toEqual({
+        weight: null,
+        reps: 6,
+        durationS: null,
+        distance: null,
+        extraReps: 4,
+      });
+      // 0 rounds and 12 reps is a score.
+      expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 0, extraReps: 12 }, target: null, placeholders: none })).toMatchObject({
+        reps: 0,
+        extraReps: 12,
+      });
+    });
+
+    it("an AMRAP score takes last time's rounds and extra reps as placeholders", () => {
+      expect(resolveTick({ loggingType: 'rounds', entered: none, target: null, placeholders: { ...none, reps: 6, extraReps: 4 } })).toMatchObject({
+        reps: 6,
+        extraReps: 4,
+      });
+    });
+
+    it('a For Time score needs a time, and keeps nothing else', () => {
+      expect(resolveTick({ loggingType: 'for_time', entered: none, target: null, placeholders: none })).toBeNull();
+      expect(resolveTick({ loggingType: 'for_time', entered: { ...none, weight: 95, durationS: 462 }, target: 95, placeholders: none })).toEqual({
+        weight: null,
+        reps: null,
+        durationS: 462,
+        distance: null,
+      });
+    });
+  });
+
+  describe('placeholders', () => {
+    it("weight and distance: last time's distance, else the rule's distance (in the slot's unit)", () => {
+      const last = P(1, 'working', 315, null, { distance: 50, distanceUnit: 'ft' });
+      expect(placeholdersFor({ previous: last, ruleRepMax: 60, loggingType: 'weighted_distance', unit: 'lb', distanceUnit: 'ft' })).toMatchObject({
+        weight: 315,
+        reps: null,
+        durationS: null,
+        distance: 50,
+      });
+      expect(placeholdersFor({ previous: null, ruleRepMax: 60, loggingType: 'weighted_distance', unit: 'lb', distanceUnit: 'ft' })).toMatchObject({
+        reps: null,
+        distance: 60,
+      });
+    });
+
+    it("an AMRAP score: last time's rounds and extra reps, never the rule's number", () => {
+      expect(placeholdersFor({ previous: null, ruleRepMax: 1, loggingType: 'rounds' })).toMatchObject({ reps: null, extraReps: null });
+      const last = P(1, 'working', null, 6, { extraReps: 4 });
+      expect(placeholdersFor({ previous: last, ruleRepMax: 1, loggingType: 'rounds' })).toMatchObject({ reps: 6, extraReps: 4 });
+    });
+
+    it("a For Time score: last time's time only, never the rule's number", () => {
+      expect(placeholdersFor({ previous: null, ruleRepMax: 12, loggingType: 'for_time' })).toMatchObject({ reps: null, durationS: null });
+      expect(placeholdersFor({ previous: P(1, 'working', null, null, { durationS: 462 }), ruleRepMax: 12, loggingType: 'for_time' })).toMatchObject({
+        reps: null,
+        durationS: 462,
+      });
+    });
+
+    it('carries the extra reps from the set above', () => {
+      const carried: Carried = { weight: null, weightUnit: null, reps: 5, durationS: null, distance: null, distanceUnit: null, extraReps: 3 };
+      expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'rounds', carried })).toMatchObject({ reps: 5, extraReps: 3 });
+    });
+  });
+
+  it('carryAbove carries the extra reps', () => {
+    const today = [
+      { setType: 'working' as const, weight: null, weightUnit: null, reps: 5, durationS: null, distance: null, distanceUnit: null, extraReps: 3 },
+      { setType: 'working' as const, weight: null, weightUnit: null, reps: null, durationS: null, distance: null, distanceUnit: null, extraReps: null },
+    ];
+    expect(carryAbove(today, 1)).toMatchObject({ reps: 5, extraReps: 3 });
+  });
+
+  describe('previous text for each', () => {
+    it('weight and distance: the distance, then the weight with its unit: "50 ft · 315 lb"', () => {
+      expect(formatPrevious(P(1, 'working', 315, null, { distance: 50, distanceUnit: 'ft' }), 'weighted_distance', 'lb')).toBe('50 ft · 315 lb');
+      expect(formatPrevious(P(1, 'working', 140, null, { weightUnit: 'kg', distance: 20, distanceUnit: 'm' }), 'weighted_distance', 'lb')).toBe('20 m · 140 kg');
+    });
+
+    it('weight and distance adds the time when there is one', () => {
+      expect(formatPrevious(P(1, 'working', 315, null, { distance: 50, distanceUnit: 'ft', durationS: 32 }), 'weighted_distance', 'lb')).toBe(
+        '50 ft · 315 lb · 0:32',
+      );
+    });
+
+    it('an AMRAP score: "6 + 4", or the rounds alone with no extra reps', () => {
+      expect(formatPrevious(P(1, 'working', null, 6, { extraReps: 4 }), 'rounds', 'lb')).toBe('6 + 4');
+      expect(formatPrevious(P(1, 'working', null, 6), 'rounds', 'lb')).toBe('6');
+      expect(formatPrevious(P(1, 'working', null, 0, { extraReps: 12 }), 'rounds', 'lb')).toBe('0 + 12');
+    });
+
+    it('a For Time score: m:ss, "7:42"', () => {
+      expect(formatPrevious(P(1, 'working', null, null, { durationS: 462 }), 'for_time', 'lb')).toBe('7:42');
+      expect(formatPrevious(P(1, 'working', null, null, { durationS: 45 }), 'for_time', 'lb')).toBe('0:45');
+    });
+
+    it('is empty when the set lacks what its type needs', () => {
+      expect(formatPrevious(P(1, 'working', 315, null), 'weighted_distance', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', null, null, { distance: 50, distanceUnit: 'ft' }), 'weighted_distance', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', null, null, { extraReps: 4 }), 'rounds', 'lb')).toBe('');
+      expect(formatPrevious(P(1, 'working', null, null), 'for_time', 'lb')).toBe('');
+    });
+  });
+});

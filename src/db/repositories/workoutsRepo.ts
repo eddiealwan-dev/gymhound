@@ -610,6 +610,8 @@ export function tickSet(
       durationS: v.durationS,
       distance: v.distance,
       distanceUnit: v.distance === null ? null : distanceUnit,
+      // An AMRAP score's extra reps (R607); every other type has none.
+      extraReps: v.extraReps ?? null,
       done: true,
       completedAt: now,
     })

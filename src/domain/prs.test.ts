@@ -227,6 +227,21 @@ describe('computePrFlags', () => {
     expect(flags.get('b')).toBe(0);
     expect(flags.get('c')).toBe(0);
   });
+
+  it('none for the three program types (R608): a heavier carry, a better score or a faster time flags nothing', () => {
+    const carry = [set('w1', 315, null, { durationS: 30 }), set('w2', 365, null, { durationS: 40 })];
+    const score = [set('w1', null, 5), set('w2', null, 7)];
+    const time = [timed('w1', 500), timed('w2', 900), timed('w3', 400)];
+    for (const [loggingType, sets] of [
+      ['weighted_distance', carry],
+      ['rounds', score],
+      ['for_time', time],
+    ] as const) {
+      const flags = computePrFlags(loggingType, sets);
+      expect([...flags.values()].every((f) => f === 0)).toBe(true);
+      expect(flags.size).toBe(sets.length);
+    }
+  });
 });
 
 function hl(over: Partial<PrHighlight>): PrHighlight {

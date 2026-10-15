@@ -24,7 +24,10 @@ export function toCsv(header: readonly string[], rows: CsvValue[][]): string {
   return `﻿${[header, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n')}`;
 }
 
-/** The columns of `gymhound-workouts-YYYY-MM-DD.csv`, in order (spec §11). */
+/**
+ * The columns of `gymhound-workouts-YYYY-MM-DD.csv`, in order (spec §11), then `extra_reps` last (R609): an AMRAP
+ * score's extra reps, its rounds being `reps`. A file from an older GymHound, without it, still imports.
+ */
 export const WORKOUT_CSV_COLUMNS = [
   'workout_id',
   'date',
@@ -47,6 +50,7 @@ export const WORKOUT_CSV_COLUMNS = [
   'distance_unit',
   'pr',
   'exercise_note',
+  'extra_reps',
 ] as const;
 
 const pad = (n: number, width = 2) => String(n).padStart(width, '0');
@@ -112,6 +116,8 @@ export type WorkoutCsvSet = {
   prFlags: number;
   /** The exercise's note as it was saved with the workout. */
   exerciseNote: string | null;
+  /** An AMRAP score's extra reps (R607); null for every other set. */
+  extraReps: number | null;
 };
 
 /**
@@ -152,6 +158,7 @@ export function buildWorkoutCsvRows(sets: readonly WorkoutCsvSet[], offsetAt: (e
       s.distanceUnit,
       prKinds(s.prFlags),
       text(s.exerciseNote),
+      s.extraReps,
     ];
   });
 }

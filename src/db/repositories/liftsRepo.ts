@@ -85,6 +85,7 @@ export function liftSessions(db: Db, exerciseId: string): LiftSession[] {
       durationS: sets.durationS,
       distance: sets.distance,
       distanceUnit: sets.distanceUnit,
+      extraReps: sets.extraReps,
     })
     .from(sets)
     .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))

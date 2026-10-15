@@ -473,6 +473,36 @@ describe('VoiceOver', () => {
       expect(textNodes(tree, name)[0].props.accessibilityRole).toBe('header');
     }
   });
+
+  it('shows and says the three program logging types (R607): a carry, an AMRAP score and a For Time score', () => {
+    const detail = pushA();
+    const block = (id: string, name: string, loggingType: 'weighted_distance' | 'rounds' | 'for_time', sets: WorkoutDetailSet[]) => ({
+      workoutExerciseId: id,
+      exerciseId: id,
+      name,
+      loggingType,
+      supersetGroup: null,
+      mark: null,
+      note: null,
+      showRpe: false,
+      sets,
+    });
+    detail.exercises = [
+      block('yoke', 'Yoke carry', 'weighted_distance', [
+        set({ id: 'y1', weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft' }),
+        set({ id: 'y2', weight: 315, weightUnit: 'lb', distance: 40, distanceUnit: 'yd', durationS: 32 }),
+      ]),
+      block('amrap', 'AMRAP 10', 'rounds', [set({ id: 'a1', reps: 6, extraReps: 4 })]),
+      block('fran', '21-15-9', 'for_time', [set({ id: 'f1', durationS: 462 })]),
+    ];
+    jest.mocked(getWorkoutDetail).mockReturnValue(detail);
+    const tree = mount();
+    for (const text of ['50 ft · 315 lb', '40 yd · 315 lb · 0:32', '6 + 4', '7:42']) expect(textNodes(tree, text)).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 50 feet, 315 lb')).toHaveLength(1);
+    expect(spoken(tree, 'Set 2, 40 yards, 315 lb, 32 seconds')).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 6 rounds and 4 reps')).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 7 minutes 42 seconds')).toHaveLength(1);
+  });
 });
 
 describe('the screen stays mounted across workouts', () => {

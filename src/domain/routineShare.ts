@@ -56,6 +56,9 @@ export const MAX_INCREMENT = 100;
  * The version-1 tables. They are frozen: a value added to GymHound later is appended, never inserted, so a code keeps
  * its meaning. A value missing here can't be shared as a custom exercise's field, and `encodeRoutine` throws for it.
  */
+// The six a custom exercise can have (R108). The three program types (R607) are never a custom's, and a program's
+// exercises travel by their library id, so the table stays as it is: a custom with one is refused, as any value
+// missing here is.
 const LOGGING_TYPES_V1: readonly LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'timed', 'weighted_time', 'distance_time'];
 const EQUIPMENT_V1: readonly Equipment[] = [
   'barbell',

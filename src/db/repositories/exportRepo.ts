@@ -49,6 +49,7 @@ export function workoutCsvRows(db: Db, offsetAt: (epochMs: number) => number = d
       distanceUnit: sets.distanceUnit,
       prFlags: sets.prFlags,
       exerciseNote: workoutExercises.note,
+      extraReps: sets.extraReps,
     })
     .from(sets)
     .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))

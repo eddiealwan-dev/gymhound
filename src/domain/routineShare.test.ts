@@ -72,6 +72,17 @@ describe('routine codes, version 2 (§18.18, R472)', () => {
     expect(decoded.ok && decoded.routine?.days[0].slots[0].supersetWithNext).toBe(false);
   });
 
+  it("carries a program's carry by its library id with its distance range; a custom never has a program type (R607)", () => {
+    const library = [...LIBRARY, 'yoke-carry'];
+    const yoke = { name: 'Strongman', customs: [], days: [{ name: 'Events', slots: [slot({ library: 'yoke-carry' }, { setCount: 4, repMin: 50, repMax: 150, increment: 10 })] }] };
+    const decoded = decodeRoutine(encodeRoutine(yoke, library), library);
+    expect(decoded.ok && decoded.routine).toEqual(yoke);
+    for (const loggingType of ['weighted_distance', 'rounds', 'for_time'] as const) {
+      const custom = { ...ROUTINE, customs: [{ ...ROUTINE.customs[0], loggingType }] };
+      expect(() => encodeRoutine(custom, LIBRARY)).toThrow(RoutineNotShareable);
+    }
+  });
+
   it('refuses bytes that are off, however well signed', () => {
     const good = encodeRoutine(ROUTINE, LIBRARY);
     const bytes = [...Buffer.from(good.split('.')[1], 'base64url')];

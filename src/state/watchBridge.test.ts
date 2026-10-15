@@ -1,8 +1,10 @@
 /** @jest-environment node */
+import { eq } from 'drizzle-orm';
 import { getActiveWorkoutView } from '../db/repositories/workoutViewsRepo';
+import { exercises } from '../db/schema';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
-import { parseWatchCommand, WATCH_PROTOCOL, type WatchCommand } from '../domain/watchProtocol';
+import { parseWatchCommand, PHONE_ONLY_LINE, WATCH_PROTOCOL, watchCanLog, type WatchCommand } from '../domain/watchProtocol';
 import { startFromDay } from './sessionActions';
 import { applyWatchCommand, watchStateFor } from './watchBridge';
 
@@ -67,6 +69,29 @@ describe('watchStateFor (R316)', () => {
     expect(workout!.total).toBe(view.exercises.reduce((n, ex) => n + ex.sets.length, 0));
     expect(workout!.next).toMatchObject({ exercise: view.exercises[0].name, weightUnit: 'lb', distanceUnit: 'mi' });
     expect(view.exercises[0].sets.map((s) => s.id)).toContain(workout!.next!.setId);
+  });
+});
+
+describe('the three program logging types are logged on the phone only (R607)', () => {
+  it('maps them to phone only, and every other type to the watch', () => {
+    for (const t of ['weighted_distance', 'rounds', 'for_time'] as const) expect(watchCanLog(t)).toBe(false);
+    for (const t of ['weighted', 'bodyweight_plus', 'assisted', 'timed', 'weighted_time', 'distance_time'] as const) expect(watchCanLog(t)).toBe(true);
+    expect(PHONE_ONLY_LINE).toBe('Log this one on your phone.');
+  });
+
+  it('shows their next set as phone only, and refuses a tick of it from the wrist', () => {
+    // Push A's first exercise, read as an AMRAP score.
+    db.update(exercises).set({ loggingType: 'rounds' }).where(eq(exercises.id, 'barbell-bench-press')).run();
+    startFromDay(db, PUSH_A);
+    const { id, next } = watchStateFor(db).workout!;
+    expect(next).toMatchObject({ loggingType: 'rounds', phoneOnly: true });
+    expect(applyWatchCommand(db, tickCmd(id, next!.setId, null, 6))).toBe('refused');
+    expect(getActiveWorkoutView(db)!.exercises[0].sets.find((s) => s.id === next!.setId)!.done).toBe(false);
+  });
+
+  it('shows any other set as one the watch can log', () => {
+    startFromDay(db, PUSH_A);
+    expect(watchStateFor(db).workout!.next).toMatchObject({ loggingType: 'weighted', phoneOnly: false });
   });
 });
 
