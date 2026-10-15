@@ -112,6 +112,19 @@ describe('the program card (R630)', () => {
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
   });
 
+  it('shows the text without what the app lacks, and minutes for long seconds (ruling R-w3): #1, #3, #20', () => {
+    const all = (n: number) => shownText(mount(n)).join('\n');
+    expect(all(1)).toContain('Schedule: Two days (A, B) alternate three times a week: A-B-A, then B-A-B. Each day runs 1.5 times a week on average.');
+    expect(all(1)).not.toContain('volume table');
+    const calisthenics = all(3);
+    expect(calisthenics).not.toMatch(/Appendix|app review/);
+    expect(calisthenics).toContain('with 1:30 rest; core 1:00 [37].');
+    expect(calisthenics).toContain('Then move to a weighted-calisthenics block (intermediate ladder:');
+    const hybrid = all(20);
+    expect(hybrid).toContain('easy runs +2:00 a week, long run +5:00 a week up to 90:00');
+    expect(hybrid).not.toContain('5,400 s');
+  });
+
   it('shows "Sources (8)" for #1, a quiet 44pt link that opens the Sources sheet', () => {
     const tree = mount(1);
     expect(shownText(tree)).toContain('Sources (8)');

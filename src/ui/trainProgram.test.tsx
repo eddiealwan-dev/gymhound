@@ -173,6 +173,11 @@ describe('Up next for a program (§18.29)', () => {
     expect(startProgramOver).toHaveBeenCalledWith('db', 'program-barbell-foundations', expect.any(Number));
   });
 
+  it('the first sentence is read as the card shows the text (ruling R-w3)', () => {
+    mockRead.upNext = upNext({ done: true, week: 13, afterThisProgram: 'Full ladders are in Appendix A. Rest 90 s between rounds, then repeat.' });
+    expect(lines(mount())).toContain('12 weeks done. Rest 1:30 between rounds, then repeat.');
+  });
+
   it('every new control has a VoiceOver label', () => {
     mockRead.upNext = upNext({ offerDeload: true });
     const tree = mount();

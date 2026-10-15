@@ -13,6 +13,7 @@ import { getActiveWorkoutView, getTrainingDates, getVolumeSetsSince } from '../.
 import type { Db } from '../../src/db/types';
 import { formatElapsed, formatTrainDate, greetingFor, mondayOf, toLocalDate } from '../../src/domain/dates';
 import { formatRepScheme } from '../../src/domain/labels';
+import { cardText } from '../../src/domain/programCard';
 import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
 import type { DistanceUnit, WeightUnit } from '../../src/domain/types';
@@ -233,7 +234,7 @@ function ProgramUpNext({ upNext }: { upNext: UpNext }) {
       ) : null}
       {program.done ? (
         <View style={{ marginTop: 12, gap: 8 }}>
-          <Body>{`${programWeekText(program)} ${firstSentence(program.afterThisProgram)}`}</Body>
+          <Body>{`${programWeekText(program)} ${firstSentence(cardText(program.afterThisProgram))}`}</Body>
           <Button
             label="Start over"
             variant="secondary"
