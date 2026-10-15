@@ -12,7 +12,8 @@ import type { Db } from '../types';
 import { changeRungToday, programPageOf, showsWarmUp } from './programViewRepo';
 import { changeRung, setActiveProgram, startEarlyDeload } from './programRunRepo';
 import { getActiveWorkoutView, getFinishSummary } from './workoutViewsRepo';
-import { startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { finishWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { programRuleSentence } from '../../domain/ruleLine';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -375,6 +376,24 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     expect(texts).toContain('Interval run — next time 7 × 3:00.');
     // The warm-up and cool-down jogs stay the same every week: nothing to say.
     expect(texts.some((t) => t.startsWith('Warm-up run') || t.startsWith('Cool-down run'))).toBe(false);
+  });
+
+  it("#20 week 3: the easy run's line and its finish line give the lighter week 4's time (R654)", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    fakeSessions(db, program.id, 2 * program.daysPerWeek, NOW + HOUR);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const run = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
+    const id = runSession(db, `${program.id}:${tue.slug}`, at(30), { [run.id]: { seconds: [1740] } }, false);
+    const rule = blockIn(db, run.id).program!.rule;
+    expect(rule.week).toBe(3);
+    expect(rule.nextWeekInfo).toMatchObject({ kind: 'lighter', runShare: 0.6 });
+    expect(
+      programRuleSentence({ program: rule, rule: { setCount: 1, repMin: 1740, repMax: 1740, increment: 0, incrementUnit: 'lb' }, loggingType: 'timed', unit: 'lb', last: null }),
+    ).toBe('Adds 2:00 a week, up to 40:00. Next week is lighter: 18:36.');
+    finishWorkout(db, id, at(30) + HOUR);
+    expect(linesOf(db, id).map((l) => l.text)).toContain('Easy run — next time 18:36.');
   });
 
   it('counts a score as a score, not a set', () => {

@@ -146,6 +146,7 @@ export function programRuleOf(
     resetMultiplier: slot.resetMultiplier,
     week: a.week,
     weekInfo: a.weekInfo,
+    nextWeekInfo: weekInfoFor(program.weekPlan, program.weeks, a.week + 1, null),
     sets: slot.sets,
     rung: slot.ladder ? (a.ruleRung ?? 0) : null,
     rungs: slot.ladder ? rungWordsOf(db, slot.ladder) : null,
