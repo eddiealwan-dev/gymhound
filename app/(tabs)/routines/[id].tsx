@@ -5,6 +5,8 @@ import { useDb } from '../../../src/db/DbProvider';
 import { getRoutineDetail, swapRoutineExercise } from '../../../src/db/repositories/routinesRepo';
 import { programExerciseId } from '../../../src/domain/alternatives';
 import { routineLine } from '../../../src/domain/programInfo';
+import { programById } from '../../../src/seed/programs.generated';
+import type { Program } from '../../../src/seed/programTypes';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
@@ -17,6 +19,7 @@ import { canUseRoutine, lockedRoutineReason, proReasonText } from '../../../src/
 import { useIsPro } from '../../../src/platform/entitlements';
 import { useOpenPaywall } from '../../../src/ui/pro/openPaywall';
 import { ModifySheet } from '../../../src/ui/ModifySheet';
+import { ProgramCard } from '../../../src/ui/programs/ProgramCard';
 import { useProGate } from '../../../src/ui/RoutineLimit';
 import { useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
 import { afterSheetCloses, Sheet } from '../../../src/ui/Sheet';
@@ -73,10 +76,19 @@ function DayCard({ day, onExercise }: { day: RoutineDetail['days'][number]; onEx
   );
 }
 
+/** Under a program's card while its days and exercises are hidden (R634). */
+const HIDDEN = "The days and exercises show once it's your active program.";
+
+/** Under a retired program's name (R598): it is listed under Earlier programs only while someone still has it. */
+const RETIRED = 'Retired. It keeps running for you, and its history stays.';
+
 /**
- * A routine (§8.6): its days and exercises, with **Set active** and **Duplicate**, and for your own **Edit** and
- * **Delete**. Premades are read-only but still progress when run. The actions are `useRoutineActions`, shared with the
- * ⋯ sheet on Routines (R542); Delete leaves for Routines.
+ * A routine (§8.6). One of the twenty programs is its card (R630): the documents' description, then its state and
+ * actions; its days and exercises show only while it is your active program and you can use it (R634), and until then
+ * the card ends with **Set active**, or for a Pro program on free R525's line and **See Pro**. Any other routine shows
+ * its days and exercises, with **Set active** and **Duplicate**, and for your own **Edit** and **Delete**; a retired
+ * program says it keeps running (R598). Premades are read-only but still progress when run. The actions are
+ * `useRoutineActions`, shared with the ⋯ sheet on Routines (R542); Delete leaves for Routines.
  */
 export default function RoutineDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -104,42 +116,76 @@ export default function RoutineDetailScreen() {
 
   const locked = !canUseRoutine(routine, pro);
   const failed = actions.failed?.routineId === routine.id ? actions.failed : null;
+  const program: Program | undefined = routine.isPremade ? programById(routine.id) : undefined;
+  // R634: a program's days show only while it is the active one and usable. (Task 9's `canSeeProgramExercises` is the
+  // shared predicate; this is the same rule.)
+  const showDays = program === undefined || (routine.isActive && !locked);
 
   return (
     <Screen>
       <BackLink label="Routines" onPress={toRoutines} />
-      <ScreenTitle>{breakableName(routine.name)}</ScreenTitle>
-      <Body muted style={{ fontSize: 14, marginTop: 4 }}>
-        {routineLine({ id: routine.id, isPremade: routine.isPremade, dayCount: routine.days.length })}
-      </Body>
-      <View style={{ gap: 8, marginTop: 24 }}>
-        {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : null}
-        {routine.isActive && !locked ? <ActiveBadge /> : <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />}
-        {/* Side by side when both fit; at a large text size the second drops under the first. */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <View style={{ flexGrow: 1 }}>
-            <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} />
-          </View>
-          {routine.isPremade ? null : (
-            <View style={{ flexGrow: 1 }}>
-              <Button label="Edit" variant="secondary" onPress={() => actions.edit(routine)} />
+      {program !== undefined ? (
+        <ProgramCard
+          program={program}
+          footer={
+            <View style={{ gap: 8 }}>
+              {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : showDays ? null : <Body muted>{HIDDEN}</Body>}
+              {showDays ? (
+                <ActiveBadge />
+              ) : (
+                <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />
+              )}
+              {/* Duplicate copies the exercises, so it is offered only while they show (R635). */}
+              {showDays ? <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} /> : null}
+              {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
+              <Button label="Share routine" variant="quiet" accessibilityLabel={`Share ${routine.name}`} onPress={() => actions.share(routine)} />
+              {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
             </View>
-          )}
-        </View>
-        {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
-        <Button
-          label="Share routine"
-          variant="quiet"
-          accessibilityLabel={`Share ${routine.name}`}
-          onPress={() => actions.share(routine)}
+          }
         />
-        {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
-      </View>
-      <View style={{ gap: 16, marginTop: 32 }}>
-        {routine.days.map((day) => (
-          <DayCard key={day.id} day={day} onExercise={setChosen} />
-        ))}
-      </View>
+      ) : (
+        <>
+          <ScreenTitle>{breakableName(routine.name)}</ScreenTitle>
+          <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+            {routineLine({ id: routine.id, isPremade: routine.isPremade, dayCount: routine.days.length })}
+          </Body>
+          {routine.isPremade ? (
+            <Body muted style={{ marginTop: 4 }}>
+              {RETIRED}
+            </Body>
+          ) : null}
+          <View style={{ gap: 8, marginTop: 24 }}>
+            {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : null}
+            {routine.isActive && !locked ? <ActiveBadge /> : <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />}
+            {/* Side by side when both fit; at a large text size the second drops under the first. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <View style={{ flexGrow: 1 }}>
+                <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} />
+              </View>
+              {routine.isPremade ? null : (
+                <View style={{ flexGrow: 1 }}>
+                  <Button label="Edit" variant="secondary" onPress={() => actions.edit(routine)} />
+                </View>
+              )}
+            </View>
+            {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
+            <Button
+              label="Share routine"
+              variant="quiet"
+              accessibilityLabel={`Share ${routine.name}`}
+              onPress={() => actions.share(routine)}
+            />
+            {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
+          </View>
+        </>
+      )}
+      {showDays ? (
+        <View style={{ gap: 16, marginTop: 32 }}>
+          {routine.days.map((day) => (
+            <DayCard key={day.id} day={day} onExercise={setChosen} />
+          ))}
+        </View>
+      ) : null}
       {routine.isPremade ? null : (
         // At the foot of the page, quiet and centred, as Delete workout is on a workout and Discard workout in the session.
         <View style={{ marginTop: 24 }}>

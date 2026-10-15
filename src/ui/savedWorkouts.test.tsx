@@ -141,7 +141,8 @@ describe('Routines: Saved workouts (R122)', () => {
 
     const shown = shownText(tree);
     expect(shown.indexOf('Saved workouts')).toBeGreaterThan(shown.indexOf('New routine'));
-    expect(shown.slice(shown.indexOf('Saved workouts') + 1)).toEqual(['Legs', '1 exercise', 'Start', 'Push A', '3 exercises', 'Start']);
+    // Earlier programs (the retired premade the mock has in use, R598) come after them.
+    expect(shown.slice(shown.indexOf('Saved workouts') + 1, shown.indexOf('Earlier programs'))).toEqual(['Legs', '1 exercise', 'Start', 'Push A', '3 exercises', 'Start']);
     const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Saved workouts')[0];
     expect(heading.props.accessibilityRole).toBe('header');
   });
@@ -150,7 +151,7 @@ describe('Routines: Saved workouts (R122)', () => {
     mockSaved = [];
     const shown = shownText(mount(<Routines />));
 
-    expect(shown.slice(shown.indexOf('Saved workouts') + 1)).toEqual(['Finish a workout and tap Save as a workout to keep it here.']);
+    expect(shown.slice(shown.indexOf('Saved workouts') + 1, shown.indexOf('Earlier programs'))).toEqual(['Finish a workout and tap Save as a workout to keep it here.']);
   });
 
   it('a row opens the saved workout', () => {
