@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { cardText, cardWhy, citationParts, citationSpeech, detailRows, summaryLine, titleOf } from '../../domain/programCard';
+import { cardText, cardWhy, citationParts, citationSpeech, detailRows, progressionParagraphs, summaryLine, titleOf } from '../../domain/programCard';
 import type { Program } from '../../seed/programTypes';
 import { breakableName, useLargeText } from '../largeText';
 import { Body, Label, ScreenTitle } from '../Text';
@@ -56,11 +56,12 @@ function Bullet({ text }: { text: string }) {
 /**
  * A program's card (R630): its page on Routines, the documents' description in GymHound's design. Top to bottom: the
  * picture at the top left with the title beside it (under it at a large text size); the summary band; the details as
- * label and value; Why it works, How it progresses and After this program (`cardText`, ruling R-w3); a quiet Sources link to the Sources sheet
+ * label and value (a Pro program on free says so under the band); Why it works, How it progresses (in short labelled
+ * paragraphs) and After this program (`cardText`, ruling R-w3); a quiet Sources link to the Sources sheet
  * (R631); then `footer`, the program's state and actions. Never its days or exercises: those show only once it is the
  * lifter's active program (R634), which the footer decides.
  */
-export function ProgramCard({ program, footer }: { program: Program; footer: ReactNode }) {
+export function ProgramCard({ program, footer, locked = false }: { program: Program; footer: ReactNode; locked?: boolean }) {
   const { colors } = useTheme();
   const stacked = useLargeText();
   const [sourcesOpen, setSourcesOpen] = useState(false);
@@ -77,6 +78,12 @@ export function ProgramCard({ program, footer }: { program: Program; footer: Rea
       <View style={{ marginTop: 16, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 12 }}>
         <Body weight={600}>{summaryLine(program)}</Body>
       </View>
+      {/* A Pro program on free says so where a reader who stops at the band sees it (design gate #22). */}
+      {locked ? (
+        <Body muted style={{ marginTop: 8 }}>
+          Part of GymHound Pro.
+        </Body>
+      ) : null}
 
       <View style={{ marginTop: 16, gap: 12 }}>
         {detailRows(program).map((row) => (
@@ -92,7 +99,12 @@ export function ProgramCard({ program, footer }: { program: Program; footer: Rea
         </View>
       </Section>
       <Section title="How it progresses">
-        <Cited text={cardText(program.progressionNotes)} />
+        {/* One short paragraph per labelled part of the rule, the label in body strong, words as written (ruling R-g1). */}
+        <View style={{ gap: 8 }}>
+          {progressionParagraphs(cardText(program.progressionNotes)).map((p, i) => (
+            <Cited key={i} text={p.text} lead={p.label === null ? undefined : `${p.label} `} />
+          ))}
+        </View>
       </Section>
       <Section title="After this program">
         <Cited text={cardText(program.afterThisProgram)} />

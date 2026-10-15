@@ -30,10 +30,10 @@ const programNumber = (n: number) => PROGRAMS.find((p) => p.number === n)!;
 const DUP = programNumber(11);
 const BARBELL = programNumber(1);
 
-function mount(number = 11, footer: React.ReactNode = <Body>FOOTER</Body>): ReactTestRenderer {
+function mount(number = 11, footer: React.ReactNode = <Body>FOOTER</Body>, locked = false): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
-    tree = create(<ProgramCard program={programNumber(number)} footer={footer} />);
+    tree = create(<ProgramCard program={programNumber(number)} footer={footer} locked={locked} />);
   });
   return tree;
 }
@@ -93,14 +93,15 @@ describe('the program card (R630)', () => {
       'Program length: 6 weeks',
       'Goal: Strength + size with daily undulating periodization',
       'Equipment: Full gym',
-      `Schedule: ${DUP.schedule}`,
+      // Ranges with an en dash (ruling R-g4, design gate #24): "4–8 reps", "10–20 reps".
+      `Schedule: ${DUP.schedule.replace('4-8', '4–8').replace('10-20', '10–20').replace('1-5', '1–5')}`,
       'Deload / special weeks: Week 6 (plus reactive)',
       `Lineage: ${DUP.lineage}`,
     ].map(at);
     const why = at('Why it works');
-    const bullets = DUP.whyItWorks.map(at);
+    const bullets = DUP.whyItWorks.map((b) => b.replace(/(\d)-(\d)/g, '$1–$2')).map(at);
     const how = at('How it progresses');
-    const progression = at(DUP.progressionNotes);
+    const progression = at('Heavy days: top of range on all sets → +5 lb upper / +10 lb lower; use 2.5 lb on bench and press when 5 lb fails.');
     const after = at('After this program');
     const afterText = at(DUP.afterThisProgram);
     const sources = at('Sources (7)');
@@ -110,6 +111,31 @@ describe('the program card (R630)', () => {
     );
     expect(bullets).toHaveLength(4);
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
+  });
+
+  it("splits How it progresses at the documents' labelled sentences, each label in body strong, 8pt apart (ruling R-g1)", () => {
+    const tree = mount(11);
+    const shown = shownText(tree);
+    for (const p of [
+      'Heavy days: top of range on all sets → +5 lb upper / +10 lb lower; use 2.5 lb on bench and press when 5 lb fails.',
+      "Light days: top of range on all sets → +5 lb. Each day's weights progress independently.",
+      "Stall rule: 2 consecutive misses → -10% on that day's entry only (Nuckols' DUP stall fix: reduce that day's weight and resume) [15].",
+    ]) {
+      expect(shown).toContain(p);
+    }
+    const lead = tree.root.findAll((n) => n.type === Text && n.props.children === 'Stall rule: ')[0];
+    expect(StyleSheet.flatten(lead.props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold' });
+    let group = lead.parent;
+    while (group && StyleSheet.flatten(group.props.style)?.gap === undefined) group = group.parent;
+    expect(StyleSheet.flatten(group!.props.style)).toMatchObject({ gap: 8 });
+  });
+
+  it('says a Pro program is Pro right under the band when it is locked (design gate #22)', () => {
+    const shown = shownText(mount(19, <Body>FOOTER</Body>, true));
+    expect(shown.indexOf('Part of GymHound Pro.')).toBe(shown.indexOf('4 days a week · 12 weeks · Intermediate · First/local strongman competition') + 1);
+    const line = mount(19, <Body>FOOTER</Body>, true).root.findAll((n) => n.type === Text && n.props.children === 'Part of GymHound Pro.')[0];
+    expect(StyleSheet.flatten(line.props.style)).toMatchObject({ color: '#a39d90', marginTop: 8 });
+    expect(shownText(mount(19))).not.toContain('Part of GymHound Pro.');
   });
 
   it('sets the details 12pt apart', () => {

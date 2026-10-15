@@ -437,19 +437,28 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   return `If every working set ${hits} ${days}, ${add} A marked day holds the weight.`;
 }
 
+/** A library name that is a compound adjective written open: "Band assisted pull-up" reads "Band-assisted pull-up". */
+const compound = (name: string): string => name.replace(/^(band) assisted\b/i, '$1-assisted');
+
+/** An exercise's name inside a sentence (design gate #24): lower case unless it starts with a proper adjective. */
+const inSentence = (name: string): string => {
+  const n = compound(name);
+  return PROPER_FIRST.test(n) ? n : `${n.charAt(0).toLowerCase()}${n.slice(1)}`;
+};
+
 /** A ladder's line (R618): its rung and what comes next, or the top rung. */
 function ladderSentence(p: ProgramRule, rule: Rule | null, loggingType: LoggingType, unit: WeightUnit, load?: LoadContext): string {
   const rungs = p.rungs ?? [];
   const at = Math.min(Math.max(0, p.rung ?? 0), Math.max(0, rungs.length - 1));
   const rung = rungs[at];
   if (!rung) return "No weight to add. Beat last time's reps.";
-  const head = `Rung ${at + 1} of ${rungs.length}: ${rung.name}.`;
+  const head = `Rung ${at + 1} of ${rungs.length}: ${compound(rung.name)}.`;
   if (rung.weighted && rule) return `${head} ${loadSentence({ ...p, halved: false }, rule, loggingType, unit, load)}`;
   const next = rungs[at + 1];
   if (!next) return `${head} Top rung. Keep adding ${rung.timed ? 'time' : 'reps'}.`;
   const top = rule?.repMax ?? rung.repMax;
   const hit = rung.timed ? `Hold ${top} s` : `Hit ${top}`;
-  return `${head} ${hit} on every set on a normal day and next time is ${next.name} at ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
+  return `${head} ${hit} on every set on a normal day and next time is ${inSentence(next.name)}, ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
 }
 
 /** A run's line (R620): the week's target, which follows the program week, not performance. */

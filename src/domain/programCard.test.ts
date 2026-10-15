@@ -1,4 +1,4 @@
-import { cardText, cardWhy, citationParts, citationSpeech, detailRows, siteOf, sourcesFor, summaryLine, titleOf } from './programCard';
+import { cardText, cardWhy, citationParts, enDashRanges, citationSpeech, detailRows, progressionParagraphs, siteOf, sourcesFor, summaryLine, titleOf } from './programCard';
 import { PROGRAM_SOURCES, PROGRAMS } from '../seed/programs.generated';
 /** Program number `n` of the twenty. */
 const programNumber = (n: number) => PROGRAMS.find((p) => p.number === n)!;
@@ -25,7 +25,8 @@ describe('the program card (R630)', () => {
       'Lineage',
     ]);
     expect(rows.slice(0, 5).map((r) => r.value)).toEqual(['Advanced', '4', '6 weeks', 'Strength + size with daily undulating periodization', 'Full gym']);
-    expect(rows[5].value).toBe(p.schedule);
+    // Ranges with an en dash (ruling R-g4); every other word as written.
+    expect(rows[5].value).toBe(enDashRanges(p.schedule));
     expect(rows[6].value).toBe('Week 6 (plus reactive)');
     expect(rows[7].value).toBe(p.lineage);
   });
@@ -51,7 +52,7 @@ describe("the card's text (ruling R-w3)", () => {
         'Band exercises progress by reps to the top of the range, then a stronger band. Pairs are supersetted (pull-up/squat, dip/hinge, row/push-up) with 1:30 rest; core 1:00 [37].',
     );
     expect(cardText(p.afterThisProgram)).toBe(
-      'Run until the top rungs are weighted. Then move to a weighted-calisthenics block (intermediate ladder: 3x6-12 windows on weighted rungs, pike push-up → wall handstand push-up chain for shoulders) or to #1 Barbell Foundations.',
+      'Run until the top rungs are weighted. Then move to a weighted-calisthenics block (intermediate ladder: 3x6–12 windows on weighted rungs, pike push-up → wall handstand push-up chain for shoulders) or to #1 Barbell Foundations.',
     );
   });
 
@@ -66,12 +67,12 @@ describe("the card's text (ruling R-w3)", () => {
   });
 
   it('seconds: under a minute stay as written; ranges and words of a minute or more read as minutes', () => {
-    expect(cardText('Rest 2-3 min on the two heavy lifts, 60-90 s on accessories [14].')).toBe('Rest 2-3 min on the two heavy lifts, 1:00-1:30 on accessories [14].');
+    expect(cardText('Rest 2-3 min on the two heavy lifts, 60-90 s on accessories [14].')).toBe('Rest 2–3 min on the two heavy lifts, 1:00–1:30 on accessories [14].');
     expect(cardText('Rest 60–90 s after that.')).toBe('Rest 1:00–1:30 after that.');
     expect(cardText('the incline walk progresses by +60 s to a cap of 1,800 s.')).toBe('the incline walk progresses by +1:00 to a cap of 30:00.');
     expect(cardText('Holds of 60 seconds or longer cost 4% (under 60 s cost 1%).')).toBe('Holds of 1:00 or longer cost 4% (under 1:00 cost 1%).');
     expect(cardText('12 x 30 s swing intervals, every 30 s, 3 x 30-45 s, slow the lowering to 3 seconds.')).toBe(
-      '12 x 30 s swing intervals, every 30 s, 3 x 30-45 s, slow the lowering to 3 seconds.',
+      '12 x 30 s swing intervals, every 30 s, 3 x 30–45 s, slow the lowering to 3 seconds.',
     );
   });
 
@@ -93,8 +94,60 @@ describe("the card's text (ruling R-w3)", () => {
 
   it('leaves text with nothing to drop or convert word for word', () => {
     const p = programNumber(11);
-    expect(cardText(p.progressionNotes)).toBe(p.progressionNotes);
-    expect(cardWhy(p)).toEqual(p.whyItWorks);
+    expect(cardText(p.progressionNotes)).toBe(p.progressionNotes.replace('1-2 min', '1–2 min'));
+    expect(cardWhy(p)).toEqual(p.whyItWorks.map(enDashRanges));
+  });
+});
+
+describe('the words on every card (ruling R-g4, design gate #24)', () => {
+  it('writes number ranges with an en dash, and keeps a word or a rep scheme hyphenated', () => {
+    expect(cardText(programNumber(1).progressionNotes)).not.toMatch(/\d-\d/);
+    expect(cardText('Top of range → 4-8 reps, then 10-20 reps; 1-hour race pace; A-B-A; 21-15-9.')).toBe(
+      'Top of range → 4–8 reps, then 10–20 reps; 1-hour race pace; A-B-A; 21-15-9.',
+    );
+    for (const p of PROGRAMS) {
+      const all = [...detailRows(p).map((r) => r.value), ...cardWhy(p), cardText(p.progressionNotes), cardText(p.afterThisProgram)].join(' ');
+      expect(all).not.toMatch(/(?<![\d-])\d+-\d+(?![\d-])/);
+    }
+  });
+
+  it('names a program it points to by its number alone', () => {
+    expect(cardText('then run #5 Upper/Lower Powerbuilding or #11 to build the base.')).toBe(
+      'then run #5 Upper/Lower Powerbuilding or #11 Advanced Upper/Lower DUP to build the base.',
+    );
+    for (const p of PROGRAMS) expect(cardText(p.afterThisProgram)).not.toMatch(/#\d+(?!\d)(?! [A-Z])/);
+  });
+});
+
+describe('How it progresses, in short paragraphs (ruling R-g1)', () => {
+  it("splits at the documents' own labelled sentences, the label apart and the words unchanged", () => {
+    const dup = progressionParagraphs(cardText(programNumber(11).progressionNotes));
+    expect(dup.map((p) => p.label)).toEqual(['Heavy days:', 'Light days:', 'Stall rule:', 'Reactive deload:']);
+    expect(dup[0].text).toBe('top of range on all sets → +5 lb upper / +10 lb lower; use 2.5 lb on bench and press when 5 lb fails.');
+    // An unlabelled sentence stays with the paragraph before it.
+    expect(dup[1].text).toBe("top of range on all sets → +5 lb. Each day's weights progress independently.");
+    expect(dup[3].text).toBe('if two main lifts miss in the same week, bring the deload week forward. Rest 3 min on heavy compounds, 1–2 min on light-day work [14].');
+  });
+
+  it("keeps every word: the paragraphs joined are the card's text", () => {
+    for (const p of PROGRAMS) {
+      const text = cardText(p.progressionNotes);
+      const joined = progressionParagraphs(text)
+        .map((x) => (x.label === null ? x.text : `${x.label} ${x.text}`))
+        .join(' ');
+      expect(joined).toBe(text);
+    }
+  });
+
+  it('#19 reads as barbell lifts, moving events and stones; a text with no labels is one paragraph', () => {
+    expect(progressionParagraphs(cardText(programNumber(19).progressionNotes)).map((p) => p.label)).toEqual([
+      'Barbell lifts:',
+      'Moving events (logged as sets × distance):',
+      'Stones/sandbags:',
+      'Starting points if you have nothing to go on:',
+    ]);
+    const plain = progressionParagraphs(cardText(programNumber(2).progressionNotes));
+    expect(plain[0].label).toBeNull();
   });
 });
 

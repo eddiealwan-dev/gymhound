@@ -632,15 +632,27 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
   const ladder = (rung: number, rungs: RungWords[] = PULL_UP_RUNGS) => program({ kind: 'ladder', rung, rungs });
   const LADDER_RULE: Rule = { setCount: 3, repMin: 5, repMax: 8, increment: 0, incrementUnit: 'lb' };
 
-  it('a ladder names its rung and the next one', () => {
+  it("a ladder names its rung and the next one, in the sentence's own case (design gate #24)", () => {
     expect(line(ladder(4), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 5 of 6: Pull-up. Hit 8 on every set on a normal day and next time is Weighted pull-up at 3 × 5.',
+      'Rung 5 of 6: Pull-up. Hit 8 on every set on a normal day and next time is weighted pull-up, 3 × 5.',
     );
     expect(line(ladder(0), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set on a normal day and next time is Arch hang at 3 × 10 s.',
+      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set on a normal day and next time is arch hang, 3 × 10 s.',
     );
     expect(line(ladder(1), { ...LADDER_RULE, repMin: 10, repMax: 30 }, 'timed')).toBe(
-      'Rung 2 of 6: Arch hang. Hold 30 s on every set on a normal day and next time is Negative pull-up at 3 × 5.',
+      'Rung 2 of 6: Arch hang. Hold 30 s on every set on a normal day and next time is negative pull-up, 3 × 5.',
+    );
+    // The library's "Band assisted pull-up" reads as the compound it is; a proper name keeps its capital.
+    const ring = [
+      { name: 'Ring row', timed: false, repMin: 5, repMax: 8, weighted: false },
+      { name: 'Band assisted pull-up', timed: false, repMin: 5, repMax: 8, weighted: false },
+      { name: 'Bulgarian split squat', timed: false, repMin: 5, repMax: 8, weighted: false },
+    ];
+    expect(line(ladder(0, ring), LADDER_RULE, 'bodyweight_plus')).toBe(
+      'Rung 1 of 3: Ring row. Hit 8 on every set on a normal day and next time is band-assisted pull-up, 3 × 5.',
+    );
+    expect(line(ladder(1, ring), LADDER_RULE, 'bodyweight_plus')).toBe(
+      'Rung 2 of 3: Band-assisted pull-up. Hit 8 on every set on a normal day and next time is Bulgarian split squat, 3 × 5.',
     );
   });
 

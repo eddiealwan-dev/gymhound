@@ -127,20 +127,41 @@ const RETIRED = 'Retired. It keeps running for you, and its history stays.';
  * weeks done."), the week's line, a line for each lift that dropped back twice in this run, and Start over, which asks
  * first.
  */
-function ActiveProgramState({ name, page, onStartOver }: { name: string; page: ProgramPageView | null; onStartOver: () => void }) {
-  if (page === null) return <ActiveBadge />;
+function ActiveProgramState({
+  name,
+  page,
+  onStartOver,
+  onDuplicate,
+}: {
+  name: string;
+  page: ProgramPageView | null;
+  onStartOver: () => void;
+  onDuplicate: () => void;
+}) {
   return (
     <View style={{ gap: 4 }}>
       <ActiveBadge />
-      <Body weight={600}>{programWeekText(page)}</Body>
-      {page.weekLine === null ? null : <Body muted>{page.weekLine}</Body>}
-      {page.droppedTwice.map((exercise) => (
-        <Body key={exercise} muted>
-          {graduationLine(exercise)}
-        </Body>
-      ))}
-      <View style={{ marginTop: 4 }}>
-        <Button label="Start over" variant="secondary" accessibilityLabel={`Start ${name} over at week 1`} onPress={onStartOver} />
+      {page === null ? null : (
+        <>
+          <Body weight={600}>{programWeekText(page)}</Body>
+          {page.weekLine === null ? null : <Body muted>{page.weekLine}</Body>}
+          {page.droppedTwice.map((exercise) => (
+            <Body key={exercise} muted>
+              {graduationLine(exercise)}
+            </Body>
+          ))}
+        </>
+      )}
+      {/*
+        A reset and a copy are quiet, side by side, so neither outweighs the state above them (design gate #23); Start
+        over still asks first. The row steps back by a quiet button's 20pt padding so "Start over" lines up with the text,
+        and wraps at a large text size.
+      */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 8, marginTop: 4, marginLeft: -20 }}>
+        {page === null ? null : (
+          <Button label="Start over" variant="quiet" accessibilityLabel={`Start ${name} over at week 1`} onPress={onStartOver} />
+        )}
+        <Button label="Duplicate" variant="quiet" onPress={onDuplicate} />
       </View>
     </View>
   );
@@ -193,16 +214,21 @@ export default function RoutineDetailScreen() {
       {program !== undefined ? (
         <ProgramCard
           program={program}
+          locked={locked}
           footer={
             <View style={{ gap: 8 }}>
               {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : showDays ? null : <Body muted>{HIDDEN}</Body>}
+              {/* Duplicate copies the exercises, so it is offered only while they show (R635). */}
               {showDays ? (
-                <ActiveProgramState name={routine.name} page={page} onStartOver={() => setAskStartOver(true)} />
+                <ActiveProgramState
+                  name={routine.name}
+                  page={page}
+                  onStartOver={() => setAskStartOver(true)}
+                  onDuplicate={() => actions.duplicate(routine)}
+                />
               ) : (
                 <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />
               )}
-              {/* Duplicate copies the exercises, so it is offered only while they show (R635). */}
-              {showDays ? <Button label="Duplicate" variant="secondary" onPress={() => actions.duplicate(routine)} /> : null}
               {failed?.action === 'copy' ? <Body muted>{failed.text}</Body> : null}
               <Button label="Share routine" variant="quiet" accessibilityLabel={`Share ${routine.name}`} onPress={() => actions.share(routine)} />
               {failed?.action === 'share' ? <Body muted>{failed.text}</Body> : null}
