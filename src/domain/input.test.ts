@@ -29,8 +29,17 @@ describe('parseDuration', () => {
     expect(parseDuration('1:03')).toBe(63);
   });
 
+  it('parses h:mm:ss for a long run or a capped For Time ("1:05:00" is 65 minutes)', () => {
+    expect(parseDuration('1:05:00')).toBe(3900);
+    expect(parseDuration('1:30:15')).toBe(5415);
+    expect(parseDuration('0:07:42')).toBe(462);
+  });
+
   it('rejects out-of-range seconds and blank input', () => {
     expect(parseDuration('1:75')).toBeNull();
+    expect(parseDuration('1:60:00')).toBeNull();
+    expect(parseDuration('1:05:75')).toBeNull();
+    expect(parseDuration('1:5:00')).toBeNull();
     expect(parseDuration('')).toBeNull();
   });
 });

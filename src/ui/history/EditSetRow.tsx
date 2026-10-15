@@ -5,7 +5,7 @@ import type { KeyboardTypeOptions, ViewStyle } from 'react-native';
 import { formatRest } from '../../domain/dates';
 import type { DraftProblem, DraftSet } from '../../domain/historyDraft';
 import { weightText } from '../../domain/setEntry';
-import { needLine, parseField, round2, type Column, type FieldKey, type InputKey } from '../../domain/setTable';
+import { DISTANCE_WORDS, needLine, parseField, round2, type Column, type FieldKey, type InputKey } from '../../domain/setTable';
 import type { DistanceUnit, LoggingType, WeightUnit } from '../../domain/types';
 import { cellStyle, COLUMN_GAP, inputLook } from '../session/SetRow';
 import { Body, Num } from '../Text';
@@ -39,7 +39,8 @@ function fieldName(key: InputKey, loggingType: LoggingType, weightUnit: WeightUn
     case 'durationS':
       return 'time';
     case 'distance':
-      return `distance in ${distanceUnit}`;
+      // In words: VoiceOver reads "ft" letter by letter.
+      return `distance in ${DISTANCE_WORDS[distanceUnit]}`;
     case 'rpe':
       return 'RPE';
   }

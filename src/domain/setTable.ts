@@ -334,6 +334,9 @@ export function valueText(row: RowModel, key: InputKey, unit: WeightUnit, distan
  * a target hints it over last time's weight (R49): a cleared weight shows what its tick logs. A ticked row too (B2):
  * clearing its weight takes the tick off, and the open row then shows the target.
  */
+/** The types whose Previous shows a time as a clock ("0:45"), so their hint does too. */
+const CLOCK_TIMES: readonly LoggingType[] = ['for_time', 'weighted_distance'];
+
 export function hintText(row: RowModel, key: InputKey): string {
   const { placeholders } = row;
   switch (key) {
@@ -343,7 +346,9 @@ export function hintText(row: RowModel, key: InputKey): string {
     case 'reps':
       return placeholders.reps === null ? '' : String(placeholders.reps);
     case 'durationS':
-      return placeholders.durationS === null ? '' : formatDuration(placeholders.durationS);
+      if (placeholders.durationS === null) return '';
+      // A score's or a carry's time hints as its Previous reads it ("0:45"); the other types as "45s" (Task 7).
+      return CLOCK_TIMES.includes(row.loggingType) ? formatRest(placeholders.durationS) : formatDuration(placeholders.durationS);
     case 'distance':
       return placeholders.distance === null ? '' : numberText(placeholders.distance);
     case 'extraReps':
@@ -435,7 +440,8 @@ export function needLine(key: FieldKey, loggingType: LoggingType): string {
 }
 
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
-const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
+/** Distance units in words, for VoiceOver: "ft" is read "feet". */
+export const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
 const PROGRAM_TYPES: readonly LoggingType[] = ['weighted_distance', 'rounds', 'for_time'];
 
 /**

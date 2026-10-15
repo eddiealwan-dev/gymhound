@@ -4,7 +4,7 @@ import { spokenRest } from './rest';
 import { TIMED_RUN_IDS } from './restKind';
 import { metconText } from './ruleLine';
 import { weightText } from './setEntry';
-import type { Column, RowModel } from './setTable';
+import { DISTANCE_WORDS, type Column, type RowModel } from './setTable';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
 import type { WorkPlan, WorkStep } from './workClock';
 
@@ -173,7 +173,6 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
 export const EVENT_LINE = 'A drop ends the set: log what you carried unbroken.';
 
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
-const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
 
 /** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
 export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string };

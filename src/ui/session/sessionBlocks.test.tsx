@@ -325,7 +325,8 @@ describe('an event reads as an event', () => {
   it("marks the time as optional with a faint dash", () => {
     const tree = mount(yoke());
     const time = field(tree, 'Set 1 time, optional');
-    expect(time.props.placeholder).toBe('22s');
+    // Last time's time, as a clock, as a carry's Previous reads it (Task 7).
+    expect(time.props.placeholder).toBe('0:22');
     const fresh = mount(exercise({ ...yoke(), previous: [] }, { rule: { kind: 'load', carryUnit: 'ft' }, restKind: 'heavy' }));
     expect(field(fresh, 'Set 1 time, optional').props.placeholder).toBe('–');
   });
