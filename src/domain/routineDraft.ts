@@ -77,8 +77,6 @@ export type DraftAction =
 
 export const MIN_SETS = 1;
 export const MAX_SETS = 10;
-/** The rep range's top: seconds for timed exercises, so up to an hour; what a share code carries (§18.18). */
-export const MAX_REPS = 3600;
 
 /** Where a new exercise starts, by logging type: sets and a rep range (seconds for timed ones). */
 const STARTING_SCHEME: Record<LoggingType, { setCount: number; repMin: number; repMax: number }> = {
@@ -200,14 +198,14 @@ const wholeAtLeast = (v: number, min: number, fallback: number) =>
   Number.isFinite(v) ? Math.max(min, Math.round(v)) : fallback;
 
 /**
- * A rule as it may be saved: sets a whole number from 1 to 10, reps whole from 1 to 3,600 with min ≤ max (a carry's
+ * A rule as it may be saved: sets a whole number from 1 to 10, reps whole and at least 1 with min ≤ max (a carry's
  * distance in ft, yd or m alike, R607), and the increment 0 or more; anything not a number becomes the lowest allowed. When min > max, `keep` names the end that
  * stays and the other moves to meet it. The reducer and `saveRoutine` both apply it.
  */
 export function clampRule<T extends RuleFields>(rule: T, keep: 'min' | 'max' = 'min'): T {
   const setCount = Math.min(MAX_SETS, wholeAtLeast(rule.setCount, MIN_SETS, MIN_SETS));
-  let repMin = Math.min(MAX_REPS, wholeAtLeast(rule.repMin, 1, 1));
-  let repMax = Math.min(MAX_REPS, wholeAtLeast(rule.repMax, 1, repMin));
+  let repMin = wholeAtLeast(rule.repMin, 1, 1);
+  let repMax = wholeAtLeast(rule.repMax, 1, repMin);
   if (repMin > repMax) {
     if (keep === 'max') repMin = repMax;
     else repMax = repMin;

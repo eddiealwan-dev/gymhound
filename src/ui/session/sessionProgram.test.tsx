@@ -79,7 +79,7 @@ const programWorkout = (done = false, weekLine: string | null = null) => ({
   name: 'Calisthenics Foundations A',
   startedAt: 1_000,
   restEndsAt: null,
-  program: { name: 'Calisthenics Foundations', week: 3, weeks: 12, weekLine },
+  program: { name: 'Calisthenics Foundations', week: 3, weeks: 12, weekLine, done: false },
   exercises: [pullUps(done)],
 });
 
@@ -105,8 +105,13 @@ describe('a program workout in the session (§18.29)', () => {
   });
 
   it('after the last week it says the block is done (R616)', () => {
-    mockWorkout = { ...programWorkout(), program: { name: 'Calisthenics Foundations', week: 13, weeks: 12, weekLine: null } };
+    mockWorkout = { ...programWorkout(), program: { name: 'Calisthenics Foundations', week: 13, weeks: 12, weekLine: null, done: true } };
     expect(texts(mount())).toContain('12 weeks done.');
+    // An early deload ends the block before the last week (R627): done, as Up next says.
+    mockWorkout = { ...programWorkout(), program: { name: 'Advanced Upper/Lower DUP', week: 2, weeks: 6, weekLine: null, done: true } };
+    const shown = texts(mount());
+    expect(shown).toContain('6 weeks done.');
+    expect(shown).not.toContain('Week 2 of 6');
   });
 
   it('a normal week shows the week alone; your own routine shows none', () => {

@@ -198,9 +198,9 @@ function SessionHeader({
  * A program's week at the top of the session (R616, R617): "Week 3 of 12", and the week's line muted under it when it
  * has one (a deload, a taper, a phase note). One stop for VoiceOver. It wraps at any text size.
  */
-function ProgramWeek({ week, weeks, line }: { week: number; weeks: number; line: string | null }) {
-  // After the last week the normal rules carry on until Start over (R616).
-  const head = programWeekText({ week, weeks, done: week > weeks });
+function ProgramWeek({ week, weeks, done, line }: { week: number; weeks: number; done: boolean; line: string | null }) {
+  // After the last week, or an early deload, the normal rules carry on until Start over (R616, R627).
+  const head = programWeekText({ week, weeks, done });
   return (
     <View accessible accessibilityLabel={line === null ? head : `${head}. ${line}`} style={{ marginBottom: 16, gap: 2 }}>
       <Body weight={600}>{head}</Body>
@@ -423,7 +423,9 @@ export default function Session() {
             paddingBottom: 16 + Math.max(dockHeight, insets.bottom),
           }}
         >
-          {workout.program ? <ProgramWeek week={workout.program.week} weeks={workout.program.weeks} line={workout.program.weekLine} /> : null}
+          {workout.program ? (
+            <ProgramWeek week={workout.program.week} weeks={workout.program.weeks} done={workout.program.done} line={workout.program.weekLine} />
+          ) : null}
           {workout.exercises.length > 0 ? <SessionTip /> : null}
           {workout.exercises.map((ex) => {
             // What is about one set goes only to the block that has it, so a tick redraws the blocks it changed, not all.

@@ -9,7 +9,7 @@ import { seededDb } from '../testing/fixtures';
 import { fakeSessions, insertProgram, runSession } from '../testing/programFixture';
 import type { Db } from '../types';
 import { changeRungToday, showsWarmUp } from './programViewRepo';
-import { setActiveProgram } from './programRunRepo';
+import { changeRung, setActiveProgram, startEarlyDeload } from './programRunRepo';
 import { getActiveWorkoutView, getFinishSummary } from './workoutViewsRepo';
 import { startWorkoutFromDay, tickSet } from './workoutsRepo';
 
@@ -39,7 +39,7 @@ describe('the session view of a program slot', () => {
     setActiveProgram(db, BF, NOW);
     startWorkoutFromDay(db, BF_A, at(1));
     const view = viewOf(db);
-    expect(view.program).toEqual({ name: 'Barbell Foundations', week: 1, weeks: 12, weekLine: null });
+    expect(view.program).toEqual({ name: 'Barbell Foundations', week: 1, weeks: 12, weekLine: null, done: false });
     const [first, second] = view.exercises;
     expect(first.program).toMatchObject({ warmUp: true, note: 'Beginner squat: 5 lb per session, not 10' });
     expect(first.program!.rule).toMatchObject({ kind: 'load', halved: false, missesBefore: 0, missesToReset: 3, week: 1 });
@@ -92,6 +92,39 @@ describe('the session view of a program slot', () => {
     const view = viewOf(db);
     expect(view.program ?? null).toBeNull();
     expect(view.exercises.every((e) => (e.program ?? null) === null)).toBe(true);
+  });
+});
+
+describe('a weighted top rung counts its misses as the engine does (R613, R618)', () => {
+  it("today's read can warn before a reset", () => {
+    const db = seededDb();
+    insertProgram(db, CALI);
+    setActiveProgram(db, CALI, NOW);
+    changeRung(db, PULL_LADDER, 5);
+    runSession(db, CALI_A, at(1), { [PULL_LADDER]: { weight: 10, reps: [4, 4, 4] } });
+    startWorkoutFromDay(db, CALI_A, at(2));
+    expect(blockIn(db, PULL_LADDER).program!.rule).toMatchObject({ rung: 5, missesBefore: 1 });
+  });
+});
+
+describe('the session knows the block is done after an early deload (R627, R616)', () => {
+  it('done once the deload sessions are finished, as Up next says', () => {
+    const db = seededDb();
+    const DUP = 'program-advanced-upper-lower-dup';
+    const program = insertProgram(db, DUP);
+    setActiveProgram(db, DUP, NOW);
+    startEarlyDeload(db, DUP, NOW + HOUR);
+    fakeSessions(db, DUP, program.daysPerWeek, NOW + 2 * HOUR);
+    startWorkoutFromDay(db, `${DUP}:${program.days[0].slug}`, at(5));
+    expect(viewOf(db).program).toMatchObject({ week: 2, done: true });
+  });
+
+  it('not done in an ordinary week', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    startWorkoutFromDay(db, BF_A, at(1));
+    expect(viewOf(db).program).toMatchObject({ done: false });
   });
 });
 
@@ -217,6 +250,16 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     db.update(routineExercises).set({ nextWeight: 100, nextWeightUnit: 'lb' }).where(eq(routineExercises.id, day.slots[0].id)).run();
     const id = runSession(db, `${program.id}:${day.slug}`, at(30), { [day.slots[0].id]: { weight: 100, reps: [5, 5] } });
     expect(linesOf(db, id)[0].text).toMatch(/ — holds at 100 lb · Deload week$/);
+  });
+
+  it('a metcon not yet beaten twice keeps its line, with no why (R622)', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-foundations');
+    setActiveProgram(db, program.id, NOW);
+    const dayA = program.days[0];
+    const metcon = dayA.slots.find((s) => s.ruleKind === 'metcon')!;
+    const id = runSession(db, `${program.id}:${dayA.slug}`, at(1), { [metcon.id]: { reps: [5] } });
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: expect.stringMatching(/ — 5$/), why: null });
   });
 
   it('a metcon beaten twice in a row says so (R622)', () => {

@@ -75,7 +75,7 @@ describe('Add from code (§18.18)', () => {
     expect(allText(tree)).toContain('Push/pull/legs');
     // A retired program is on Routines only while someone uses it (R598): the preview says it is retired, not that it
     // is on Routines, and Open program opens its page.
-    expect(allText(tree)).toContain('6 days · retired. Open program shows its page.');
+    expect(allText(tree)).toContain('6 days. Retired. Open program shows its page.');
     expect(allText(tree)).not.toContain('already in your Routines');
     const open = tree.root.findByProps({ label: 'Open program' });
     act(() => open.props.onPress());

@@ -25,7 +25,7 @@ import { programById } from '../../seed/programs.generated';
 import type { LadderRung, Program, ProgramSlot, ProgramWeek, RuleKind, WeekKind } from '../../seed/programTypes';
 import { exercises, routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
-import { carryUnit, changeRung, isBefore, programSlotOf, programState, slotSessions, type SlotSession } from './programRunRepo';
+import { carryUnit, changeRung, isBefore, programSlotOf, programState, runNow, slotSessions, type SlotSession } from './programRunRepo';
 import { programRuleSnapshot, type RuleSnapshot } from './ruleSnapshot';
 import { replaceExercise } from './workoutEditRepo';
 
@@ -81,8 +81,11 @@ export function rungWordsOf(db: Db, ladder: readonly LadderRung[]): RungWords[] 
 /** A finished session the miss count skips (R613): marked, a holding week, or nothing logged. As the engine reads it. */
 const skipped = (s: SlotSession) => s.outcome === 'held_marked' || s.outcome === 'held_week' || s.outcome === 'no_sets';
 
-/** The slot's misses in a row before now, in the run (R613), counted as the engine counts them. */
-function missesBefore(db: Db, routineExerciseId: string, runStartedAt: number, exerciseId: string): number {
+/**
+ * The slot's misses in a row before now, in the run (R613), counted as the engine counts them: a load slot's by the
+ * exercise now in it (after a Modify swap), a ladder's weighted top rung over the slot's history.
+ */
+function missesBefore(db: Db, routineExerciseId: string, runStartedAt: number, exerciseId?: string): number {
   const history = slotSessions(db, routineExerciseId, runStartedAt, exerciseId);
   return missStreak(history.map((h) => ({ missed: h.missed, skipped: skipped(h), reset: h.outcome === 'reset' })));
 }
@@ -105,12 +108,22 @@ export function programRuleOf(
 ): ProgramRule {
   const { program, slot, rule } = a;
   const full = rule ? convertIncrement(slot.incrementLb, 'lb', rule.incrementUnit) : 0;
+  // A weighted top rung runs the load rule (R618), so it warns before a reset as a load slot does.
+  const weightedRung = a.ruleKind === 'ladder' && slot.ladder?.[a.ruleRung ?? 0]?.weightedIncrementLb != null;
+  const misses =
+    a.runStartedAt === null
+      ? 0
+      : a.ruleKind === 'load'
+        ? missesBefore(db, a.routineExerciseId, a.runStartedAt, a.exerciseId)
+        : weightedRung
+          ? missesBefore(db, a.routineExerciseId, a.runStartedAt)
+          : 0;
   return {
     kind: a.ruleKind,
     carryUnit: carryUnit(slot),
     sessionsToRaise: slot.sessionsToRaise,
     halved: a.ruleKind === 'load' && slot.halveAfterFirstMiss && rule !== null && rule.increment > 0 && rule.increment < full - 1e-9,
-    missesBefore: a.ruleKind === 'load' && a.runStartedAt !== null ? missesBefore(db, a.routineExerciseId, a.runStartedAt, a.exerciseId) : 0,
+    missesBefore: misses,
     missesToReset: program.missesToReset,
     resetMultiplier: slot.resetMultiplier,
     week: a.week,
@@ -128,8 +141,11 @@ export function programRuleOf(
 /** A program slot in the session (§18.29): its rule's words, the warm-up line under the day's first slot and its note. */
 export type ProgramSlotView = { rule: ProgramRule; warmUp: boolean; note: string | null };
 
-/** The program a workout runs, as the top of the session shows it (R616, R617): "Week 3 of 12" and the week's line. */
-export type ProgramWorkoutView = { name: string; week: number; weeks: number; weekLine: string | null };
+/**
+ * The program a workout runs, as the top of the session shows it (R616, R617): "Week 3 of 12" and the week's line, or
+ * the block done (after the last week or an early deload, `blockDone`, as Up next says it).
+ */
+export type ProgramWorkoutView = { name: string; week: number; weeks: number; weekLine: string | null; done: boolean };
 
 /** The run's start, or null for a routine with no run. */
 function runStartOf(db: Db, routineId: string): number | null {
@@ -178,7 +194,8 @@ export function programPartsOf(
       note: slotNoteText(slot.note, slot.catalogName, slot.ruleKind),
     });
   }
-  return { workout: { name: program.name, week: workout.programWeek, weeks: program.weeks, weekLine: weekLine(weekInfo) }, slots };
+  const done = runNow(db, program.id)?.done ?? workout.programWeek > program.weeks;
+  return { workout: { name: program.name, week: workout.programWeek, weeks: program.weeks, weekLine: weekLine(weekInfo), done }, slots };
 }
 
 /**
@@ -300,9 +317,10 @@ export function programFinishLines(
         loggingType === 'for_time'
           ? beatTwiceForTime(scores.flatMap((x) => (x.seconds === null ? [] : [x.seconds])))
           : beatTwice(scores.map((x) => ({ rounds: x.rounds, extraReps: x.extraReps })));
-      if (beat && now) {
+      // The score, and why under it once it beat the last one twice in a row.
+      if (now && (loggingType !== 'for_time' || now.seconds !== null)) {
         const score = loggingType === 'for_time' ? formatRest(now.seconds ?? 0) : now.extraReps > 0 ? `${now.rounds} + ${now.extraReps}` : `${now.rounds}`;
-        push(`${name} — ${score}`, BEAT_TWICE_WHY);
+        push(`${name} — ${score}`, beat ? BEAT_TWICE_WHY : null);
       }
       continue;
     }

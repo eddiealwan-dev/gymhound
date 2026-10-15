@@ -5,7 +5,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import RoutineDetailScreen from '../../../app/(tabs)/routines/[id]';
 import { setActiveProgram } from '../../db/repositories/programRunRepo';
-import { duplicateRoutine } from '../../db/repositories/routinesRepo';
+import { duplicateRoutine, routineToDraft, saveRoutine } from '../../db/repositories/routinesRepo';
 import { routineExercises, routines } from '../../db/schema';
 import { seededDb } from '../../db/testing/fixtures';
 import { insertProgram, runSession } from '../../db/testing/programFixture';
@@ -172,6 +172,12 @@ describe('Duplicate is offered on a program only while it is active (R635)', () 
     expect(buttons(sheet({ id: 'premade-ppl-6', name: 'Push/pull/legs', isPremade: true, isActive: false }), 'Duplicate')).toHaveLength(1);
   });
 
+  it('a Pro program active on free keeps Duplicate hidden in the ⋯ sheet', () => {
+    mockPro = false;
+    expect(buttons(sheet({ id: 'program-bro-split', name: 'Bro Split', isPremade: true, isActive: true }), 'Duplicate')).toHaveLength(0);
+    expect(buttons(sheet({ id: BF, name: 'Barbell Foundations', isPremade: true, isActive: true }), 'Duplicate')).toHaveLength(1);
+  });
+
   it('on the page: only while the exercises show', () => {
     insertProgram(mockDb, BF);
     expect(buttons(mount(BF), 'Duplicate')).toHaveLength(0);
@@ -185,7 +191,9 @@ describe('sharing a copy past what a code carries (ruling R-t9a)', () => {
     mockPro = true;
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const copy = duplicateRoutine(mockDb, 'program-hybrid-athlete', NOW);
-    const tree = mount(copy);
+    // Your own routine with a 90:00 run, saved: it keeps its target (ruling R-t11a) and still says why.
+    const own = saveRoutine(mockDb, routineToDraft(mockDb, copy)!, NOW + 1);
+    const tree = mount(own);
     await act(async () => {
       buttons(tree, 'Share routine')[0].props.onPress();
     });

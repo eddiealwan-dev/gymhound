@@ -1,4 +1,5 @@
 import type { Gear } from './plates';
+import { PROGRAMS } from '../seed/programs.generated';
 import type { ProgramWeek } from '../seed/programTypes';
 import {
   addSetLine,
@@ -540,11 +541,18 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
+  it('weight and time says seconds as "45 s" (#8 Farmer\'s carry)', () => {
+    const rule: Rule = { setCount: 3, repMin: 30, repMax: 45, increment: 8, incrementUnit: 'lb' };
+    expect(line(program(), rule, 'weighted_time')).toBe('If every working set reaches 45 s on a normal day, add 8 lb. A marked day holds the weight.');
+    expect(read(program(), rule, 50, { loggingType: 'weighted_time' })).toBe('Reach 45 s on a normal day and next time is 58 lb.');
+  });
+
   it('two normal days in a row raise the Atlas stone (R623)', () => {
     const stone = program({ sessionsToRaise: 2 });
     const rule: Rule = { setCount: 5, repMin: 1, repMax: 1, increment: 10, incrementUnit: 'lb' };
     expect(line(stone, rule)).toBe('If every working set hits 1 on two normal days in a row, add 10 lb. A marked day holds the weight.');
-    expect(read(stone, rule, 200, { equipment: 'other' })).toBe('Hit 1s on two normal days in a row and then it is 210 lb.');
+    expect(read(stone, rule, 200, { equipment: 'other' })).toBe('Do every single on two normal days in a row and the weight goes to 210 lb.');
+    expect(read(stone, { ...rule, repMax: 3 }, 200, { equipment: 'other' })).toBe('Hit 3 on every set on two normal days in a row and the weight goes to 210 lb.');
   });
 
   it('a holding week: the week holds the weight, with no read', () => {
@@ -572,13 +580,13 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
 
   it('a ladder names its rung and the next one', () => {
     expect(line(ladder(4), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 5 of 6: Pull-up. Hit 8 on every set and next time is Weighted pull-up at 3 × 5.',
+      'Rung 5 of 6: Pull-up. Hit 8 on every set on a normal day and next time is Weighted pull-up at 3 × 5.',
     );
     expect(line(ladder(0), LADDER_RULE, 'bodyweight_plus')).toBe(
-      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set and next time is Arch hang at 3 × 10 s.',
+      'Rung 1 of 6: Scapular pull-up. Hit 8 on every set on a normal day and next time is Arch hang at 3 × 10 s.',
     );
     expect(line(ladder(1), { ...LADDER_RULE, repMin: 10, repMax: 30 }, 'timed')).toBe(
-      'Rung 2 of 6: Arch hang. Hold 30 s on every set and next time is Negative pull-up at 3 × 5.',
+      'Rung 2 of 6: Arch hang. Hold 30 s on every set on a normal day and next time is Negative pull-up at 3 × 5.',
     );
   });
 
@@ -590,6 +598,9 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
       'Pick a starting weight. Next time builds from it.',
     );
     expect(read(ladder(4), LADDER_RULE, null, { loggingType: 'bodyweight_plus' })).toBeNull();
+    expect(read({ ...ladder(5), missesBefore: 1 }, { ...LADDER_RULE, increment: 5 }, 10, { loggingType: 'bodyweight_plus' })).toBe(
+      'Hit 8s on a normal day and next time is 15 lb. One miss so far. One more and next time drops 10%.',
+    );
   });
 
   it('a top rung with no weighted step keeps adding reps', () => {
@@ -693,18 +704,35 @@ describe('the week line (R616, R617, Appendix D)', () => {
     );
   });
 
-  it("a note in the kind's own words is shown as it is", () => {
-    expect(weekLine(week('taper', 'Taper: half the sets, top sets at full weight.'))).toBe('Taper: half the sets, top sets at full weight.');
-    expect(weekLine(week('test', 'Test week: work up to a single on squat, bench and deadlift. Skip the accessories.'))).toBe(
-      'Test week: work up to a single on squat, bench and deadlift. Skip the accessories.',
-    );
-    expect(weekLine(week('mock_meet', 'Mock meet: a 4–5-event medley.'))).toBe('Mock meet: a 4–5-event medley.');
+  /** A program's own special week, as the documents give it (Appendix D). */
+  const planWeek = (number: number, week: number) => PROGRAMS.find((p) => p.number === number)!.weekPlan.find((w) => w.week === week)!;
+  const NOTHING = 'Nothing goes up or counts as a miss.';
+
+  it('#12 test week: its note, never "same weight"', () => {
+    expect(weekLine(planWeek(12, 6))).toBe(`Test week: work up to a single on squat, bench and deadlift. Skip the accessories. ${NOTHING}`);
+    expect(weekLine(planWeek(12, 5))).toBe(`Taper: half the sets, top sets at full weight. ${NOTHING}`);
   });
 
-  it('any other note follows the kind', () => {
-    expect(weekLine(week('lighter', 'Finish with a 5 km time trial and a rep-max test on the main lifts.', { runShare: 0.6 }))).toBe(
-      'Lighter week: half the sets, same weight, runs at 60% of the time. Nothing goes up or counts as a miss. Finish with a 5 km time trial and a rep-max test on the main lifts.',
+  it('#19 taper and mock meet: their notes, never "same weight"', () => {
+    expect(weekLine(planWeek(19, 11))).toBe(`Taper: events at 60–70% of contest weight. ${NOTHING}`);
+    expect(weekLine(planWeek(19, 9))).toBe(
+      `Mock meet: a 4–5-event medley at near-contest weights on Thursday and Saturday, 15–20 min between events. ${NOTHING}`,
     );
+    expect(weekLine(planWeek(19, 12))).toBe(`Meet week: light gym work early in the week, nothing heavy in the last 7–10 days. ${NOTHING}`);
+  });
+
+  it('#20 week 12: the lighter week with its note, never "same weight"', () => {
+    expect(weekLine(planWeek(20, 12))).toBe(
+      `Lighter week: half the sets, runs at 60% of the time. Finish with a 5 km time trial and a rep-max test on the main lifts. ${NOTHING}`,
+    );
+    expect(weekLine(planWeek(20, 4))).toBe(`Lighter week: half the sets, same weight, runs at 60% of the time. ${NOTHING}`);
+  });
+
+  it('a slot on such a week says the same as the week (R617)', () => {
+    const base = { kind: 'load' as const, carryUnit: null, sessionsToRaise: 1 as const, halved: false, missesBefore: 0, missesToReset: 2, resetMultiplier: 0.9, week: 6, sets: 3, rung: null, rungs: null, addSet: null, weekly: null, metconText: null, manualText: null };
+    const slot = programRuleSentence({ program: { ...base, weekInfo: planWeek(12, 6) }, rule: RULE_LB, loggingType: 'weighted', unit: 'lb', last: null });
+    expect(slot).toBe(weekLine(planWeek(12, 6)));
+    expect(slot).not.toContain('same weight');
   });
 
   it('a note week is its note; a normal week has none', () => {
@@ -752,6 +780,9 @@ describe('the warm-up line and slot notes (R626, R606)', () => {
 
   it('a weighted rung reads "Weighted …"', () => {
     expect(rungName('Pull-up', true)).toBe('Weighted pull-up');
+    // A name that starts with a proper adjective keeps it, said once.
+    expect(rungName('Bulgarian split squat', true)).toBe('Bulgarian split squat with weight');
+    expect(rungName('Natural glute ham raise', true)).toBe('Weighted natural glute ham raise');
     expect(rungName('Pull-up', false)).toBe('Pull-up');
   });
 });

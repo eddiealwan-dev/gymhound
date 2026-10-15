@@ -258,14 +258,27 @@ export function ladderDownWhy(timed: boolean, repMin: number): string {
 
 const pct = (share: number): number => Math.round(share * 100);
 
+/** What every holding week ends with (R617). */
+const NOTHING_GOES_UP = 'Nothing goes up or counts as a miss.';
+
 /**
- * What a holding week means for a slot (R617): "Deload week: half the sets, same weight. Nothing goes up or counts as a
- * miss." The runs of a lighter week are a share of their time.
+ * What a holding week means (R617), on Up next, at the top of the session and under each slot that progresses. A week
+ * with no note of its own is worded by its kind: "Deload week: half the sets, same weight. Nothing goes up or counts as
+ * a miss." A week with a note never says "same weight", since its note may say otherwise (a test, a taper, a
+ * time trial): a note that names the week is shown as the documents write it, any other follows the week's label, and
+ * both end "Nothing goes up or counts as a miss." The runs of a lighter week are a share of their time.
  */
 function heldWeekLine(info: ProgramWeek): string {
   const label = info.kind === 'note' ? 'This week' : WEEK_LABELS[info.kind];
-  const runs = info.runShare < 1 ? `, runs at ${pct(info.runShare)}% of the time` : '';
-  return `${label}: ${info.halfSets ? 'half the sets, ' : ''}same weight${runs}. Nothing goes up or counts as a miss.`;
+  const runs = info.runShare < 1 ? `runs at ${pct(info.runShare)}% of the time` : '';
+  const note = info.note.trim();
+  if (note === '') {
+    const parts = [info.halfSets ? 'half the sets' : null, 'same weight', runs || null].filter((x): x is string => x !== null);
+    return `${label}: ${parts.join(', ')}. ${NOTHING_GOES_UP}`;
+  }
+  if (info.kind !== 'note' && note.startsWith(OWN_WORDS[info.kind])) return `${note} ${NOTHING_GOES_UP}`;
+  const facts = [info.halfSets ? 'half the sets' : null, runs || null].filter((x): x is string => x !== null);
+  return facts.length === 0 ? `${label}: ${note} ${NOTHING_GOES_UP}` : `${label}: ${facts.join(', ')}. ${note} ${NOTHING_GOES_UP}`;
 }
 
 /** The words a special week's own note starts with when it names the week ("Taper: …", "Test week: …"). */
@@ -280,16 +293,13 @@ const OWN_WORDS: Record<Exclude<WeekKind, 'note'>, string> = {
 };
 
 /**
- * The week's line on Up next and at the top of the session (R616, R617, Appendix D): a note week is its note; a
- * special week whose note names it is the note as the documents write it; otherwise the week worded by its kind, then
- * any note. Null for a normal week.
+ * The week's line on Up next and at the top of the session (R616, R617, Appendix D): a note week is its note; a special
+ * week is `heldWeekLine`. Null for a normal week.
  */
 export function weekLine(info: ProgramWeek | null): string | null {
   if (info === null) return null;
-  const note = info.note.trim();
-  if (info.kind === 'note') return note === '' ? null : note;
-  if (note !== '' && note.startsWith(OWN_WORDS[info.kind])) return note;
-  return note === '' ? heldWeekLine(info) : `${heldWeekLine(info)} ${note}`;
+  if (info.kind === 'note') return info.note.trim() === '' ? null : info.note.trim();
+  return heldWeekLine(info);
 }
 
 /** A metcon's format and elements from its catalog name, without the "Metcon A ·" label (R622). */
@@ -297,9 +307,17 @@ export function metconText(catalogName: string): string {
   return catalogName.replace(/^Metcon(?: [A-Z0-9]+)? · /, '');
 }
 
-/** A weighted top rung is the same movement with load (R618): "Pull-up" → "Weighted pull-up". */
+/** Names that start with a proper adjective, which keeps its capital: the weighted rung is "… with weight". */
+const PROPER_FIRST = /^(Bulgarian|Romanian|Nordic|Turkish|Russian|Copenhagen|Zercher|Arnold) /;
+
+/**
+ * A weighted top rung is the same movement with load (R618), its name said once: "Pull-up" → "Weighted pull-up",
+ * "Bulgarian split squat" → "Bulgarian split squat with weight".
+ */
 export function rungName(name: string, weighted: boolean): string {
-  return weighted ? `Weighted ${name.charAt(0).toLowerCase()}${name.slice(1)}` : name;
+  if (!weighted) return name;
+  if (PROPER_FIRST.test(name)) return `${name} with weight`;
+  return `Weighted ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
 }
 
 /**
@@ -333,7 +351,7 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   if (loggingType === 'assisted') {
     return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;
   }
-  const hits = loggingType === 'weighted_time' ? `reaches ${rule.repMax}s` : `hits ${rule.repMax}`;
+  const hits = loggingType === 'weighted_time' ? `reaches ${rule.repMax} s` : `hits ${rule.repMax}`;
   const days = p.sessionsToRaise === 2 ? 'on two normal days in a row' : 'on a normal day';
   return `If every working set ${hits} ${days}, add ${inc}${halved}. A marked day holds the weight.`;
 }
@@ -350,7 +368,7 @@ function ladderSentence(p: ProgramRule, rule: Rule | null, loggingType: LoggingT
   if (!next) return `${head} Top rung. Keep adding ${rung.timed ? 'time' : 'reps'}.`;
   const top = rule?.repMax ?? rung.repMax;
   const hit = rung.timed ? `Hold ${top} s` : `Hit ${top}`;
-  return `${head} ${hit} on every set and next time is ${next.name} at ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
+  return `${head} ${hit} on every set on a normal day and next time is ${next.name} at ${p.sets} × ${next.repMin}${next.timed ? ' s' : ''}.`;
 }
 
 /** A run's line (R620): the week's target, which follows the program week, not performance. */
@@ -468,8 +486,11 @@ function loadRead(a: ProgramReadInput): string | null {
   const to = formatWeight(raised.weight, raised.unit);
   let normal: string;
   if (loggingType === 'weighted_distance') normal = `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} on every run on a normal day and next time is ${to}.`;
-  else if (p.sessionsToRaise === 2) normal = `Hit ${rule.repMax}s on two normal days in a row and then it is ${to}.`;
-  else normal = `${loggingType === 'weighted_time' ? 'Reach' : 'Hit'} ${rule.repMax}s on a normal day and next time is ${to}.`;
+  else if (p.sessionsToRaise === 2) {
+    const every = rule.repMax === 1 ? 'Do every single' : `Hit ${rule.repMax} on every set`;
+    normal = `${every} on two normal days in a row and the weight goes to ${to}.`;
+  } else if (loggingType === 'weighted_time') normal = `Reach ${rule.repMax} s on a normal day and next time is ${to}.`;
+  else normal = `Hit ${rule.repMax}s on a normal day and next time is ${to}.`;
   const after = holds ?? missWarning(p);
   return after === null ? normal : `${normal} ${after}`;
 }

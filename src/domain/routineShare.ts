@@ -2,7 +2,7 @@ import LIBRARY_IDS from '../seed/libraryIds.json';
 import type { CustomExerciseInput } from './customExercise';
 import { MAX_NAME_LENGTH } from './customExercise';
 import { REST_CHOICES } from './rest';
-import { MAX_REPS, MAX_SETS, MIN_SETS } from './routineDraft';
+import { MAX_SETS, MIN_SETS } from './routineDraft';
 import type { Equipment, LoggingType, Muscle, WeightUnit } from './types';
 
 /**
@@ -48,8 +48,8 @@ export const MAX_DAY_NAME = 60;
 export const MAX_DAYS = 14;
 export const MAX_SLOTS_PER_DAY = 40;
 export const MAX_CUSTOMS = 60;
-/** The rep range's top: seconds for timed exercises, so up to an hour (the editor's limit too). */
-export { MAX_REPS };
+/** The rep range's top a code carries: seconds for timed exercises, so up to an hour. */
+export const MAX_REPS = 3600;
 export const MAX_INCREMENT = 100;
 
 /**

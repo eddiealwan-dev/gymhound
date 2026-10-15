@@ -103,7 +103,7 @@ export function ImportRoutine({ initial = '', onCancel }: { initial?: string; on
           <Body weight={600}>{program.name}</Body>
           {/* A retired program is on Routines only while someone uses it (R598), so its preview says it is retired. */}
           <Body muted>
-            {`${program.days.length} ${program.days.length === 1 ? 'day' : 'days'} · ${programById(program.id) ? 'already in your Routines' : 'retired. Open program shows its page.'}`}
+            {`${program.days.length} ${program.days.length === 1 ? 'day' : 'days'}${programById(program.id) ? ' · already in your Routines' : '. Retired. Open program shows its page.'}`}
           </Body>
         </View>
       ) : null}
