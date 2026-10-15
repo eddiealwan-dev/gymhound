@@ -396,6 +396,21 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     expect(linesOf(db, id).map((l) => l.text)).toContain('Easy run — next time 18:36.');
   });
 
+  it('leaves technique sets out of the VOLUME, as they are out of weekly volume (walkthrough)', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, program.id, NOW);
+    const wed = program.days.find((d) => d.slug === 'wed-olympic-squat')!;
+    const [snatch, frontSquat] = wed.slots;
+    expect(snatch.countsTowardVolume).toBe(false);
+    const id = runSession(db, `${program.id}:${wed.slug}`, at(1), {
+      [snatch.id]: { weight: 95, reps: [2, 2, 2] },
+      [frontSquat.id]: { weight: 135, reps: [5, 5] },
+    });
+    // 135 × 5 × 2 = 1,350: the snatch's EMOM is technique work. Its sets still count as sets done.
+    expect(getFinishSummary(db, id, 'lb')).toMatchObject({ volume: 1350, setCount: 5 });
+  });
+
   it('counts a score as a score, not a set', () => {
     const db = seededDb();
     const program = insertProgram(db, 'program-crossfit-foundations');

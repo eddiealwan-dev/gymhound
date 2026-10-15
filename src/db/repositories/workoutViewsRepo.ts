@@ -346,6 +346,21 @@ function selectNextTimes(db: Db, workoutId: string, weekKind: WeekKind | null): 
 }
 
 /**
+ * A workout's sets for its VOLUME: all but a program's technique sets (`countsTowardVolume: false`, an EMOM's snatches),
+ * which are not counted toward weekly volume either (R629; the walkthrough). Your own routines count every set.
+ */
+function countedSets(db: Db, workoutId: string, routineId: string | null): VolumeSet[] {
+  return db
+    .select({ ...VOLUME_SET_COLUMNS, routineExerciseId: workoutExercises.routineExerciseId })
+    .from(sets)
+    .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .all()
+    .filter((s) => programSlotOf(routineId, s.routineExerciseId)?.countsTowardVolume !== false);
+}
+
+/**
  * The duration, volume, done-set count, next-time weights and personal bests of a finished workout. Throws if it does not exist or is
  * not finished.
  */
@@ -361,7 +376,7 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     id: workout.id,
     name: workout.name,
     durationMs: workout.finishedAt - workout.startedAt,
-    volume: totalVolume(workoutSets, displayUnit),
+    volume: totalVolume(countedSets(db, workoutId, workout.routineId), displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
     scoreCount: workoutSets.filter((s) => s.done && (s.loggingType === 'rounds' || s.loggingType === 'for_time')).length,
     next,
