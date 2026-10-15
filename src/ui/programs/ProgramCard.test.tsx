@@ -207,6 +207,34 @@ describe('the program card (R630)', () => {
     }
   });
 
+  it('says no exercise name to VoiceOver either: every accessibility label, for every program (R634, final review)', () => {
+    for (const program of PROGRAMS) {
+      const tree = mount(program.number);
+      const labels = tree.root
+        .findAll((n) => typeof n.props.accessibilityLabel === 'string')
+        .map((n) => n.props.accessibilityLabel as string)
+        .join('\n');
+      // As on screen, only the documents' own words may name a lift; and the photo names its movement (R632).
+      const own = [
+        program.goal,
+        program.equipment,
+        program.schedule,
+        program.specialWeeksText,
+        program.lineage,
+        ...program.whyItWorks,
+        program.progressionNotes,
+        program.afterThisProgram,
+        `${program.picture.label} photo`,
+      ].join('\n');
+      for (const day of program.days) {
+        expect([program.id, day.name, labels.split('\n').includes(day.name)]).toEqual([program.id, day.name, false]);
+        for (const slot of day.slots) {
+          if (labels.includes(slot.catalogName)) expect([program.id, slot.catalogName, own.includes(slot.catalogName)]).toEqual([program.id, slot.catalogName, true]);
+        }
+      }
+    }
+  });
+
   it('draws citation markers muted and has VoiceOver read them as "source n"', () => {
     const tree = mount(11);
     const first = DUP.whyItWorks[0];
