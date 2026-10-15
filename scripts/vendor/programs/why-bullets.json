@@ -1,0 +1,135 @@
+{
+  "barbell-foundations": [
+    "Every beginner program that has lasted decades is a 3-day, A/B-alternating full-body plan built on the squat, a press, a pull and a hinge, with 3-5 sets of 3-8 reps, small fixed increments and a reset after repeated misses [23][24][25][26][28].",
+    "Novices gain strength fastest from frequent practice of the main lifts, and strength responds to frequency more than hypertrophy does (about +12.7% at one session a week vs +17.3% at two, volume equated) [1].",
+    "The two faults of the classic versions - almost no upper-body pulling and only 1-2 deadlift sets a week [23][24] - are fixed here with a row or pulldown every session, 3 deadlift sets and 8-15-rep accessories after the barbell work.",
+    "Squat jumps are 5 lb per session (the StrongLifts figure), not 10 lb, because 10 lb three times a week stalls most beginners within weeks [24]."
+  ],
+  "dumbbell-full-body": [
+    "Dumbbell programs that work share one rule set: 3 sets to the top of a rep range, then the next dumbbell step; three sessions without a rep PR → drop two steps and rebuild [32].",
+    "Hypertrophy is similar across 6-30 reps when sets are taken close to failure [12][13], so wide 8-12 and 12-20 ranges are used here to absorb the coarse 5 lb jumps of fixed dumbbells.",
+    "Machines and free weights grow muscle equally; strength is specific to the tool trained [9].",
+    "The known weakness of dumbbell plans - under-loaded legs - is fixed with a squat pattern and a hinge or lunge in every session (split squats and RDLs are the standard fix) [32], and calves appear on two days as the earlier app review asked."
+  ],
+  "calisthenics-foundations": [
+    "The Recommended Routine is the de-facto standard bodyweight template: three pairs (pull-up/squat, dip/hinge, row/push-up) at 3x5-8 plus core, three non-consecutive days a week [37].",
+    "Its rule - start a rung at 3x5, add a rep per set until 3x8 with good form, then move to the next harder variation and reset to 3x5 - is what keeps bodyweight sets hard; the 20-50-rep 'standards' used by Convict Conditioning and Hybrid Calisthenics are the documented cause of the 'I can do 25 squats and have nowhere to go' problem [37][39].",
+    "Load-matched push-ups produce the same chest and triceps growth and bench-press 1RM gains as bench press over 8 weeks, and switching push-up variations to keep reps in a strength range raised bench 1RM in 4 weeks [38] - which is why progression is by variation, not by rep inflation.",
+    "The RR as written gives rear delts only about 4.5 fractional sets a week and side delts none; this version adds a band pull-apart/face-pull slot and a band lateral raise slot to fix that (the earlier app review's main criticism)."
+  ],
+  "minimalist-two-day": [
+    "Detectable hypertrophy begins at about 4 fractional sets per muscle per week and detectable strength gain at 1 hard set per lift per week [1]; the time-efficient-training review sets a floor of 4 weekly sets per muscle at 6-15 reps using bilateral compound lifts [43].",
+    "Trained powerlifters maintain or raise 1RM on 3-6 weekly sets of 1-5 reps per lift spread over 1-3 sessions [43].",
+    "Every muscle here gets 4-9 fractional sets a week - deliberately below the app's 8-set band for several muscles - so the program is flagged 'minimum effective' rather than 'optimal'.",
+    "Two sessions a week also matched three for strength and lean mass in older adults [44], and adherence, not programming, is the usual failure point: gym dropout runs 51-96% a year [51]."
+  ],
+  "upper-lower-powerbuilding": [
+    "Powerbuilding pairs heavy 3-6-rep main lifts (strength is load-specific [12]) with 8-15-rep accessories (hypertrophy is load-independent across that range when sets are hard [12][13]).",
+    "Training each muscle twice a week lets 14-20 weekly sets be spread under the roughly 10-11 sets-per-muscle-per-session ceiling beyond which extra sets stop adding detectable growth [4].",
+    "Split and full-body routines produce the same growth when volume is matched [7], so upper/lower is chosen for scheduling: four sessions, every muscle twice.",
+    "PHUL's two weak points - chest at the bottom of the range and only one side-delt slot [30] - are fixed with close-grip bench on the power day and a lateral raise plus face pull on the hypertrophy day.",
+    "Deadlift and squat share the power day; the hypertrophy day's hinge is a Romanian deadlift three days later, so the lower back is never loaded heavily on consecutive days."
+  ],
+  "push-pull-legs": [
+    "Two push, two pull and two leg sessions give every muscle 2 exposures and 15-22 weekly sets while keeping each session under the per-muscle session ceiling [1][3][4].",
+    "The Reddit PPL's engine - a heavy 5-rep barbell lift first, 8-12-rep compounds second, isolation last, double progression and -10% after three missed sessions - maps directly onto the app's rule [29].",
+    "Exercise order mainly decides which lift gets strongest; growth is unaffected [8], so the barbell lift leads each day.",
+    "The original puts deadlifts the day before squats plus Romanian deadlifts.",
+    "Here Legs A uses a hip thrust (squats and hip thrusts grow the glutes equally [11]) and the Romanian deadlift moves to Legs B, four days after the deadlift.",
+    "Hamstrings are not grown by squats [11], so a leg curl appears on both leg days."
+  ],
+  "full-body-three-day": [
+    "Full-body and split routines produce identical hypertrophy and strength when weekly sets are matched (14 trials, 392 subjects) [7]; three full-body sessions simply spread 10-16 weekly sets per muscle across three exposures, which also helps strength [1].",
+    "Each session opens with one heavy lower lift and one heavy upper lift at 5-8 reps, then 8-20-rep accessories - the structure shared by every modern 3-day template [29][30].",
+    "Compounds first, isolation last [8]; antagonist supersets on the accessories keep sessions near an hour [49].",
+    "The three hinges (squat, deadlift, Romanian deadlift) sit on separate days with a rest day between, so the lower back is never loaded two days running."
+  ],
+  "kettlebell-strength-conditioning": [
+    "The kettlebell canon is swing + get-up (Simple & Sinister: 100 one-arm swings in sets of 10 every 30 s, then 10 get-ups) [34], double-bell clean/press/front-squat complexes (Armor Building Complex, run for rounds against the clock) [35], and 'five movements' sessions [35].",
+    "Six weeks of 12 x 30 s swing intervals twice a week raised half-squat 1RM by 18 kg and vertical jump by 3 cm in novices [36]; the broader kettlebell literature shows small-to-moderate strength and power gains with low-certainty evidence, largely because studies used light bells [36].",
+    "Pure kettlebell programs give almost no direct chest, biceps or horizontal-pulling volume [34][35], so gorilla rows, floor presses, reverse flyes and curls are added - the same fix dumbbell users apply - and each muscle lands inside the 8-24 band.",
+    "Bells jump 4 kg (about 8 lb), so progression is volume first (more reps, sets or rounds), then the next bell, exactly as StrongFirst coaches prescribe for fixed bells [34][35]."
+  ],
+  "lean-out": [
+    "Lifting in a deficit protects muscle and still builds strength: strength gains were not impaired in deficit groups across the meta-analysis, and lean mass is roughly held at a 500 kcal/day deficit [40].",
+    "A fat-loss program therefore looks like a hypertrophy program, not a 'toning' circuit - the only direct trial in trained men found 3 sets per exercise non-inferior to 5 while cutting [40], so volume here sits at 10-15 sets per muscle, the lower-middle of the productive range.",
+    "Protein is the lever that matters: 2.4 g/kg/day in a steep deficit produced +1.2 kg lean mass and -4.8 kg fat versus +0.1 kg lean at 1.2 g/kg [40]; aim for 0.5-1% body weight lost per week [40].",
+    "Cardio does not blunt strength or size; only power suffers, and only when done in the same session as lifting [41].",
+    "HIIT and steady cardio burn similar fat; HIIT takes about 40% less time, and walking/running beats cycling for fat loss [42].",
+    "Finishers are kept short and placed after lifting, with longer steady-state walks on rest days if wanted."
+  ],
+  "glute-lower-body-emphasis": [
+    "Specialisation means raising the target muscle's frequency and volume while the rest sits at maintenance: Contreras trains glutes 3-6 days a week with a thrust/bridge, a squat or lunge, a hinge and lateral band work each week [46]; RP puts the glute maximum-adaptive range at 8-24 weekly sets and the recoverable limit at 24-30 [31].",
+    "Hip thrusts and squats grow the gluteus maximus equally and neither grows the hamstrings [11], so this program carries both plus a hinge and a leg curl every week.",
+    "Women show similar relative gains to men, are less fatigable set to set and may recover faster, which supports equal-or-higher volume and frequency - not lighter 'toning' work; 6-10RM loads grew far more muscle than 20-30RM in the one direct comparison in women [45].",
+    "Upper-body volume is held at 8-13 sets per muscle, the maintenance-to-moderate zone, so recovery goes to the legs [31]."
+  ],
+  "advanced-upper-lower-dup": [
+    "For trained lifters, undulating periodization beats linear loading for strength (effect size 0.61 in trained vs 0.06 in beginners, volume equated) while hypertrophy is unaffected by the periodization model [15][16].",
+    "Assigning each day its own rep range and progressing each day's loads independently is the simplest way to get that undulation inside a fixed-increment app.",
+    "Advanced lifters have the most to gain from extra volume costing more per increment [1], so volume sits at 11-19 sets per muscle, with isolation exercises chosen to load the stretched position (seated leg curls out-grew lying curls ~14% vs 9%; overhead triceps work favours the long head) [10].",
+    "Competitive strength and physique athletes deload about every 5-6 weeks for 6-7 days, cutting sets but keeping loads [19]; a full week off reduced strength gains in the one randomized trial [18], so the deload here is half-sets at full weight."
+  ],
+  "strength-peaking-block": [
+    "Strength plateaus at low volume: detectable 1RM gains stop beyond roughly 4 hard sets per lift per week and 2 direct sets per session [1][4], and trained powerlifters progress on 3-6 weekly sets of 1-5 reps at over 80% 1RM, often as a heavy single plus 2-3 back-off sets [43].",
+    "Strength is load-specific [12] and undulating heavy exposure matters most for trained lifters [15], so each competition lift gets a top set of 2-3 and back-off sets of 3-5, with the bench trained three times a week (upper-body pressing is the most frequency-sensitive strength quality [6]).",
+    "Tapers of 8-14 days that cut volume 30-60% while holding or raising intensity give about 2-5% more on test day [47]; week 5 halves the sets at full weight and week 6 tests.",
+    "Accessory volume is deliberately low (hamstrings 8, calves 0); this is a 6-week block, not a year-round program."
+  ],
+  "dumbbell-full-body-ii": [
+    "Dumbbell-only lifters who outgrow 3 days need more weekly sets, not more exercises per session: 12–18 weekly sets per muscle is the best-supported range for trained lifters [3], and spreading them over four sessions keeps every muscle well under the ~11-sets-per-session ceiling [4].",
+    "Full-body and split routines give identical results when volume matches [7], so four full-body days are used because they let fixed dumbbells be loaded hardest on the first lift of each day [8].",
+    "Exercises that train muscles at long lengths are favoured - incline curls, overhead extensions, Romanian and single-leg Romanian deadlifts, deep split squats [10] - and the coarse 5 lb dumbbell jumps are absorbed with wide rep ranges, which is how the r/Fitness dumbbell routines handle progression [32][33].",
+    "Legs, the usual weak point of dumbbell programs, get a squat pattern and a hinge every day [32]."
+  ],
+  "mobility-for-lifters": [
+    "Range of motion improves from almost any consistent stimulus; static and PNF stretching beat dynamic for long-term range (77 studies) [78], weekly frequency and at least 5 minutes a week per area matter more than session length [77], and full-range resistance training with external load improves range as much as stretching does - bodyweight-only training does not [79][80].",
+    "So this program mixes three tools instead of only static holds, which was the earlier review's criticism: controlled active moves at end range (CARs, 90/90 switches, Cossack squats) [86], classic holds (couch, pigeon) [77], and loaded stretches (goblet squat hold, Jefferson curl, RDL stretch hold, pullover stretch) that add load at long muscle lengths [80][84].",
+    "Holds of 60 seconds or longer right before lifting cost about 4–5% strength (under 60 s cost about 1%) [81], so long holds belong after training or on rest days; before lifting use only the controlled moves.",
+    "Honest framing for the app: stretching does not prevent injuries (relative risk 0.96) - strength training does (0.32) [82] - and does not meaningfully reduce soreness [83]; this program is for positions and control in the lifts."
+  ],
+  "bro-split": [
+    "Bodybuilders have used the 5-day split for decades for its focused sessions and easy scheduling [54].",
+    "When weekly sets are matched, a once-a-week split and higher-frequency training produce no significant difference in growth or strength over 8 weeks (Gomes 2018), though full-body matched or beat it on every measure and the split caused more soreness [54]; volume-equated frequency has only a trivial effect on hypertrophy [1][5].",
+    "The real cost is per-session volume: beyond about 11 sets for one muscle in one session, extra sets stop adding growth [4], and classic bro-split days run 15–25 sets per muscle.",
+    "This version caps each muscle's day at 10–12 hard sets and lets indirect work (presses for triceps and front delts, rows for biceps and rear delts) carry weekly totals into the 12–20 range [3].",
+    "Hamstrings and rear delts, the two areas bro splits usually under-dose [53], get a Romanian deadlift plus a leg curl and two rear-delt movements.",
+    "Trade-off stated honestly: for strength, especially pressing, one exposure a week is less effective than two [1][6]; lifters chasing strength should prefer #5 or #6."
+  ],
+  "advanced-calisthenics": [
+    "Advanced bodyweight programs put 2–3 skills first, strength second and accessories last, over 3–4 days in push/pull or straight-/bent-arm splits [87].",
+    "Static skills share one ladder - tuck, advanced tuck, one-leg or half-lay, straddle, full - and the hardest steps can take months [88].",
+    "Tendons adapt only to high-intensity contractions (≥70% of maximum), and isometric work at long muscle lengths transfers best to dynamic strength [84], which is why skills are trained at the hardest clean variation for short holds and paired with heavy weighted pulls and dips (3–8 reps).",
+    "Each straight-arm skill appears once a week (front lever, planche, back lever) to respect slower connective-tissue adaptation - a widely repeated practitioner rule [87][88].",
+    "Legs are the classic calisthenics gap [39]: pistols, weighted split squats, Nordic curls and single-leg RDLs cover them, and the RDL stays because seated-curl-style long-length work out-grew Nordics about 1.7× for hamstring size [52].",
+    "Push-ups and pull-ups grow muscle as well as their barbell equivalents when load is matched [38]."
+  ],
+  "crossfit-foundations": [
+    "CrossFit's own guidance for beginners is 'mechanics, then consistency, then intensity': over 80% of early time on technique at light loads, 3–5 reps per teaching step, and intensity added 'in small doses' [57].",
+    "The template mixes monostructural, gymnastics and weightlifting elements, with couplets scored by time and 20-minute triplets scored by rounds [56]; the on-ramp teaches the squat, press, deadlift, ring row, push-up, thruster and kettlebell swing first, with barbell loads of 35–75 lb [58].",
+    "Injury rates (about 1.9–3.9 per 1,000 hours) are similar to or lower than running, Olympic lifting, soccer and rugby, but risk is higher in novices and without supervision, with the shoulder and low back most affected [59][60][61] - so this program keeps kipping and high-rep pulls from the floor out of the metcons and uses scaling ladders instead.",
+    "Fitness outcomes from CrossFit-style training are promising but the evidence is low quality: small studies report about 12% VO2max gains, and the one meta-analysis found no significant pooled effect [60][61].",
+    "A strength block every session (3×5–8) and accessory work keep every muscle inside the 8–24 volume band, which most metcon-only templates do not."
+  ],
+  "crossfit-performance": [
+    "CrossFit's template rotates single-element days (one heavy lift or long monostructural effort), couplets for time and longer triplets for rounds [56]; competitive programs follow a strength → skill → metcon order with heavy and skill work before conditioning [56][62], and HWPO runs 4–7-week phases separated by lighter transition weeks with benchmark retests [62].",
+    "Strength still follows the strength evidence: heavy sets of 3–5 on the squat and deadlift [1][12], weighted pull-ups and dips for upper-body strength, and Olympic lifts as clean, moderate-load EMOM sets rather than high-rep lifts under fatigue (the template keeps heavy lifts at low reps with long rest) [56].",
+    "Shoulder and low-back injuries dominate CrossFit's injury profile [59][60], so gymnastics volume is capped, strict strength comes before kipping, rear-delt work is programmed, and heavy hinges are never back-to-back.",
+    "Cardio added to lifting does not reduce strength or size when kept apart from heavy sessions [41]; the long engine day sits mid-week away from the heavy lower days."
+  ],
+  "strongman-prep": [
+    "Strongman competitors build mainly on barbell strength and add 1–2 event days; 97% train for maximal strength, 80% periodize, and the most-trained events are the farmer's walk, log press and stones [63].",
+    "Short-term strongman implement training is about as effective as traditional lifting for strength and size (7-week RCT) [64].",
+    "The 4-day layout and event dosing follow documented intermediate templates: moving events for 3–4 runs of 50–100 ft, stones as singles, with yoke loads rising about 10–15 lb and farmer's about 10 lb per cycle [67][69]; the taper (half volume and events at 60–70% two weeks out, last event session about 10 days out) follows the same coaches [68][69].",
+    "Injury data shape the safety rules: 5.5 injuries per 1,000 hours, mostly low back (24%), shoulder (21%) and biceps (11%), and an hour of implement work is 1.9× riskier than an hour of barbell lifting [65]; the yoke loads the spine the most and stones force a rounded back [66].",
+    "So stones stay at low reps, events are limited to three per day, deadlift and yoke are two days apart, and the biceps and upper back get direct work."
+  ],
+  "hybrid-athlete": [
+    "Adding endurance work to lifting does not reduce maximal strength (SMD −0.06) or muscle growth (−0.01) across 43 studies; it does blunt explosive strength, and only when both are done in the same session - sessions at least 3 hours apart showed no effect [41].",
+    "In trained lifters, same-session training cost lower-body strength (−0.66) while separate sessions did not (−0.10) [71]; if they must share a session, lifting first preserved about 4 kg more lower-body strength [72].",
+    "Interference grows with running frequency and duration [70], so most running here is easy: roughly 75–80% easy, with two quality sessions a week (intervals and tempo) as the useful ceiling [73].",
+    "The hard days are spaced so heavy legs (Mon) and intervals (Wed) never touch, and Thursday's lifting is upper-body-led with light legs before the tempo run.",
+    "Run volume rises gradually: a strict 10% rule did not lower injuries versus a faster plan [74], but jumps over ~30% a week did raise them [74], so each run grows by a fixed amount with a cap.",
+    "Lifting volume sits at 8–15 sets per muscle - enough to keep building, since concurrent training does not reduce hypertrophy [41]."
+  ]
+}

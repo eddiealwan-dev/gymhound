@@ -1,4 +1,6 @@
+import type { ProgramSlot } from '../seed/programTypes';
 import {
+  documentVolume,
   groupsOutsideBand,
   MAJOR_GROUPS,
   WEEKLY_SETS_BAND,
@@ -132,5 +134,81 @@ describe('the band the programs are held to (R93)', () => {
     const tooMuch = [day(['squat', 5], ['rdl', 5]), day(['squat', 5], ['rdl', 5]), day(['squat', 5])];
     expect(groupsOutsideBand(tooMuch, muscles)).toContain('glutes');
     expect(weeklySetsByGroup(tooMuch, muscles).glutes).toBe(25);
+  });
+});
+
+describe("documentVolume (R629, the documents' check)", () => {
+  // Slots carry the catalog's own credits ("front delts"), as the twenty programs do.
+  const slot = (sets: number, primary: string[], secondary: string[], countsTowardVolume = true) =>
+    ({ sets, credits: [{ primary, secondary }], creditPerSet: 1, countsTowardVolume }) as unknown as ProgramSlot;
+  const pday = (...slots: ProgramSlot[]) => ({ slug: 'd', name: 'D', slots });
+
+  it('counts a set once per group, 1 for a primary, else ½, times days a week over the days in the rotation', () => {
+    // A/B run 3 times a week: each day counts 1.5 times.
+    const v = documentVolume({
+      daysPerWeek: 3,
+      days: [
+        pday(slot(3, ['chest'], ['front delts', 'triceps']), slot(3, ['lats', 'upper back'], ['biceps', 'rear delts', 'lower back'])),
+        pday(slot(3, ['quads', 'glutes'], ['adductors', 'lower back'])),
+      ],
+    });
+    expect(v.groups.Chest).toEqual({ hardSets: 4.5, daysPerWeek: 1.5 });
+    // Lats and upper back are both Back, and a row's set counts once for the group.
+    expect(v.groups.Back).toEqual({ hardSets: 4.5, daysPerWeek: 1.5 });
+    expect(v.groups.Triceps).toEqual({ hardSets: 2.25, daysPerWeek: 1.5 });
+    expect(v.groups.Biceps).toEqual({ hardSets: 2.25, daysPerWeek: 1.5 });
+    expect(v.groups.Quads).toEqual({ hardSets: 4.5, daysPerWeek: 1.5 });
+    expect(v.groups.Hamstrings).toEqual({ hardSets: 0, daysPerWeek: 0 });
+    expect(v.groups.Calves).toEqual({ hardSets: 0, daysPerWeek: 0 });
+    expect(v.groups.Abs).toEqual({ hardSets: 0, daysPerWeek: 0 });
+  });
+
+  it('counts a day for a group that gets only secondary credit (unlike R87)', () => {
+    const v = documentVolume({ daysPerWeek: 2, days: [pday(slot(4, ['hamstrings'], ['calves'])), pday(slot(3, ['chest'], []))] });
+    expect(v.groups.Calves).toEqual({ hardSets: 2, daysPerWeek: 1 });
+    expect(v.groups.Hamstrings).toEqual({ hardSets: 4, daysPerWeek: 1 });
+  });
+
+  it('gives shoulders as side + rear delts, and the three delts on their own', () => {
+    const v = documentVolume({
+      daysPerWeek: 1,
+      days: [pday(slot(3, ['side delts'], ['traps']), slot(2, ['rear delts'], ['upper back']), slot(4, ['front delts'], ['side delts', 'triceps']))],
+    });
+    expect(v.delts).toEqual({ side: 3 + 2, rear: 2, front: 4 });
+    expect(v.groups.Shoulders).toEqual({ hardSets: 5 + 2, daysPerWeek: 1 });
+  });
+
+  it('counts front delts nowhere in shoulders', () => {
+    const v = documentVolume({ daysPerWeek: 1, days: [pday(slot(4, ['front delts'], ['triceps']))] });
+    expect(v.groups.Shoulders).toEqual({ hardSets: 0, daysPerWeek: 0 });
+    expect(v.delts.front).toBe(4);
+  });
+
+  it('counts each metcon element by its credit, 1 set per 5 work minutes', () => {
+    // AMRAP 15: pull-up, push-up, air squat, then a run that credits nothing. 15 / 5 = 3 sets per element.
+    const metcon = {
+      sets: 1,
+      creditPerSet: 3,
+      countsTowardVolume: true,
+      credits: [
+        { primary: ['lats'], secondary: ['biceps', 'upper back'] },
+        { primary: ['chest'], secondary: ['front delts', 'triceps'] },
+        { primary: ['quads', 'glutes'], secondary: [] },
+        { primary: [], secondary: [] },
+      ],
+    } as unknown as ProgramSlot;
+    const v = documentVolume({ daysPerWeek: 1, days: [pday(metcon)] });
+    expect(v.groups.Back).toEqual({ hardSets: 3, daysPerWeek: 1 });
+    expect(v.groups.Chest.hardSets).toBe(3);
+    expect(v.groups.Biceps.hardSets).toBe(1.5);
+    expect(v.groups.Triceps.hardSets).toBe(1.5);
+    expect(v.groups.Glutes.hardSets).toBe(3);
+    expect(v.delts.front).toBe(1.5);
+  });
+
+  it('leaves out what the documents do not count (technique sets, runs, skill practice)', () => {
+    const v = documentVolume({ daysPerWeek: 1, days: [pday(slot(10, ['glutes', 'hamstrings', 'upper back'], ['quads'], false))] });
+    expect(v.groups.Glutes).toEqual({ hardSets: 0, daysPerWeek: 0 });
+    expect(v.groups.Quads).toEqual({ hardSets: 0, daysPerWeek: 0 });
   });
 });

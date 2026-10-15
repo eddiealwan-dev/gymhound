@@ -1,6 +1,8 @@
 // Weekly working sets and training frequency of a program (§18.3, §18.8 R87 and R93): the numbers each built-in
 // program is checked against, about 10–20 hard sets per major muscle a week (read as 8–24) and each trained at least
 // twice where the split allows. Pure: a program is a week of days, and `muscles` says what each exercise trains.
+// The twenty programs of §18.29 are checked by the documents' own rule instead (`documentVolume`, R629).
+import type { Program } from '../seed/programTypes';
 import type { Muscle } from './types';
 
 type ProgramDays = readonly { exercises: readonly { exerciseId: string; sets: number }[] }[];
@@ -116,4 +118,73 @@ export function groupsOutsideBand(days: ProgramDays, muscles: MusclesOf): MajorG
   return (Object.keys(MAJOR_GROUPS) as MajorGroup[]).filter(
     (g) => band[g].floor < WEEKLY_SETS_BAND.min || band[g].cap > WEEKLY_SETS_BAND.max,
   );
+}
+
+/** The groups of the documents' volume table (R629), in the catalog's own muscle words. */
+export type DocumentGroup = 'Chest' | 'Back' | 'Shoulders' | 'Biceps' | 'Triceps' | 'Quads' | 'Hamstrings' | 'Glutes' | 'Calves' | 'Abs';
+
+/** Each group's catalog muscles. Shoulders are side and rear delts only, summed (front delts get plenty from pressing). */
+export const DOCUMENT_GROUPS: Readonly<Record<DocumentGroup, readonly string[]>> = {
+  Chest: ['chest'],
+  Back: ['lats', 'upper back'],
+  Shoulders: ['side delts', 'rear delts'],
+  Biceps: ['biceps'],
+  Triceps: ['triceps'],
+  Quads: ['quads'],
+  Hamstrings: ['hamstrings'],
+  Glutes: ['glutes'],
+  Calves: ['calves'],
+  Abs: ['abs'],
+};
+
+/** The eight groups held to the 8–24 band; calves and abs are shown for information (the build spec). */
+export const DOCUMENT_BAND_GROUPS: readonly DocumentGroup[] = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes'];
+
+const DELTS = { side: 'side delts', rear: 'rear delts', front: 'front delts' } as const;
+
+/**
+ * The documents' weekly volume of a program (R629): a group's hard sets are Σ sets × credit × (days a week ÷ days in
+ * the rotation), a set counting once per group, 1 when the group is a primary of the credit, else ½ when a secondary;
+ * a metcon counts each element's credit, `creditPerSet` (work minutes ÷ 5) sets each; slots that don't count toward
+ * volume (technique sets, runs, skill practice) count nothing. Shoulders are side + rear delts. A group's days a week
+ * count every rotation day where it gets any credit, primary or secondary (unlike R87's primary-only frequency).
+ */
+export function documentVolume(p: Pick<Program, 'daysPerWeek' | 'days'>): {
+  groups: Record<DocumentGroup, { hardSets: number; daysPerWeek: number }>;
+  delts: { side: number; rear: number; front: number };
+} {
+  const perDay = p.days.length === 0 ? 0 : p.daysPerWeek / p.days.length;
+  const groupNames = Object.keys(DOCUMENT_GROUPS) as DocumentGroup[];
+  const sets = Object.fromEntries(groupNames.map((g) => [g, 0])) as Record<DocumentGroup, number>;
+  const days = Object.fromEntries(groupNames.map((g) => [g, 0])) as Record<DocumentGroup, number>;
+  const delts = { side: 0, rear: 0, front: 0 };
+  for (const day of p.days) {
+    const creditedToday = new Set<DocumentGroup>();
+    for (const slot of day.slots) {
+      if (!slot.countsTowardVolume) continue;
+      const count = slot.sets * slot.creditPerSet;
+      for (const credit of slot.credits) {
+        for (const group of groupNames) {
+          if (group === 'Shoulders') continue;
+          const muscles = DOCUMENT_GROUPS[group];
+          if (credit.primary.some((m) => muscles.includes(m))) sets[group] += count;
+          else if (credit.secondary.some((m) => muscles.includes(m))) sets[group] += count / 2;
+          else continue;
+          creditedToday.add(group);
+        }
+        for (const key of ['side', 'rear', 'front'] as const) {
+          const muscle = DELTS[key];
+          if (credit.primary.includes(muscle)) delts[key] += count;
+          else if (credit.secondary.includes(muscle)) delts[key] += count / 2;
+          else continue;
+          if (key !== 'front') creditedToday.add('Shoulders');
+        }
+      }
+    }
+    for (const group of creditedToday) days[group] += 1;
+  }
+  sets.Shoulders = delts.side + delts.rear;
+  const groups = {} as Record<DocumentGroup, { hardSets: number; daysPerWeek: number }>;
+  for (const group of groupNames) groups[group] = { hardSets: sets[group] * perDay, daysPerWeek: days[group] * perDay };
+  return { groups, delts: { side: delts.side * perDay, rear: delts.rear * perDay, front: delts.front * perDay } };
 }
