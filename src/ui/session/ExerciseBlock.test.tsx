@@ -1568,6 +1568,116 @@ describe('ExerciseBlock: a distance keeps its unit when ticked', () => {
   });
 });
 
+describe('SetRow: the three program logging types (R607)', () => {
+  beforeEach(() => {
+    vibrate.mockReset();
+    mockAnnounce.mockClear();
+  });
+
+  /** A yoke carry: a load and a distance in the slot's feet, time optional, drawn while Settings says mi. */
+  const yoke = (sets: SetView[] = [set('s0', 0)]): WorkoutExerciseView => ({
+    ...bench(sets),
+    name: 'Yoke carry',
+    loggingType: 'weighted_distance',
+    equipment: 'other',
+    slotDistanceUnit: 'ft',
+  });
+  const amrap = (sets: SetView[] = [set('s0', 0)]): WorkoutExerciseView => ({ ...bench(sets), name: 'AMRAP 10', loggingType: 'rounds', equipment: 'other' });
+  const forTime = (sets: SetView[] = [set('s0', 0)]): WorkoutExerciseView => ({ ...bench(sets), name: '21-15-9', loggingType: 'for_time', equipment: 'other' });
+
+  it('renders a carry\'s fields with VoiceOver labels ("Set 1 distance, feet") under LB, DIST and TIME', () => {
+    const tree = mount(yoke());
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'DIST', 'TIME']));
+    for (const label of ['Set 1 weight, pounds', 'Set 1 distance, feet', 'Set 1 time']) {
+      expect(byLabel(tree, label).props.onChangeText).toEqual(expect.any(Function));
+    }
+  });
+
+  it("saves a typed distance in the slot's feet, not the mi in Settings", () => {
+    const tree = mount(yoke());
+
+    act(() => byLabel(tree, 'Set 1 distance, feet').props.onChangeText('50'));
+    act(() => byLabel(tree, 'Set 1 distance, feet').props.onBlur());
+
+    expect(commitSetField).toHaveBeenCalledWith('db', 's0', { distance: 50, distanceUnit: 'ft' });
+  });
+
+  it('a carry with no distance says "Add distance to complete set"; the time is never asked for', async () => {
+    const tree = mount(yoke());
+    act(() => byLabel(tree, 'Set 1 weight, pounds').props.onChangeText('315'));
+
+    await tapTick(tree, 'Set 1 done');
+
+    expect(tick).not.toHaveBeenCalled();
+    expect(shownText(tree)).toContain('Add distance to complete set');
+
+    act(() => byLabel(tree, 'Set 1 distance, feet').props.onChangeText('50'));
+    jest.mocked(tick).mockReturnValue(true);
+    await tapTick(tree, 'Set 1 done');
+    expect(tick).toHaveBeenCalledWith('db', expect.anything(), expect.anything(), expect.objectContaining({ weight: 315, distance: 50, durationS: null }), 'lb', 'ft');
+  });
+
+  it('shows last time as "50 ft · 315 lb"', () => {
+    const tree = mount({ ...yoke(), previous: [{ position: 0, setType: 'working', weight: 315, weightUnit: 'lb', reps: null, durationS: null, distance: 50, distanceUnit: 'ft' }] });
+
+    expect(shownText(tree)).toContain('50 ft · 315 lb');
+  });
+
+  it('an AMRAP score has ROUNDS and +REPS, and asks for the rounds in its own words', async () => {
+    const tree = mount(amrap());
+
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['ROUNDS', '+REPS']));
+    expect(byLabel(tree, 'Set 1 done').props.accessibilityHint).toBe('Enter rounds first');
+    act(() => byLabel(tree, 'Set 1 extra reps').props.onChangeText('4'));
+    await tapTick(tree, 'Set 1 done');
+    expect(shownText(tree)).toContain('Add rounds to complete set');
+    expect(mockAnnounce).toHaveBeenCalledWith('Add rounds to complete set');
+
+    act(() => byLabel(tree, 'Set 1 rounds').props.onChangeText('6'));
+    jest.mocked(tick).mockReturnValue(true);
+    await tapTick(tree, 'Set 1 done');
+    expect(tick).toHaveBeenCalledWith('db', expect.anything(), expect.anything(), expect.objectContaining({ reps: 6, extraReps: 4 }), 'lb', 'mi');
+  });
+
+  it('shows last AMRAP score as "6 + 4"', () => {
+    const tree = mount({ ...amrap(), previous: [{ position: 0, setType: 'working', weight: null, weightUnit: null, reps: 6, durationS: null, distance: null, distanceUnit: null, extraReps: 4 }] });
+
+    expect(shownText(tree)).toContain('6 + 4');
+  });
+
+  it('saves extra reps typed into their own field', () => {
+    const tree = mount(amrap());
+
+    act(() => byLabel(tree, 'Set 1 extra reps').props.onChangeText('4'));
+    act(() => byLabel(tree, 'Set 1 extra reps').props.onBlur());
+
+    expect(commitSetField).toHaveBeenCalledWith('db', 's0', { extraReps: 4 });
+  });
+
+  it('a For Time score has TIME, read as m:ss, and says "Add time to complete set"', async () => {
+    const tree = mount(forTime());
+
+    expect(byLabel(tree, 'Set 1 time').props.keyboardType).toBe('numbers-and-punctuation');
+    await tapTick(tree, 'Set 1 done');
+    expect(shownText(tree)).toContain('Add time to complete set');
+
+    act(() => byLabel(tree, 'Set 1 time').props.onChangeText('7:42'));
+    jest.mocked(tick).mockReturnValue(true);
+    await tapTick(tree, 'Set 1 done');
+    expect(tick).toHaveBeenCalledWith('db', expect.anything(), expect.anything(), expect.objectContaining({ durationS: 462 }), 'lb', 'mi');
+  });
+
+  it('every field is at least 44pt tall and follows the text size', () => {
+    const tree = mount(yoke());
+
+    for (const label of ['Set 1 weight, pounds', 'Set 1 distance, feet', 'Set 1 time']) {
+      expect(fieldStyle(tree, label).minHeight).toBe(44);
+      expect(byLabel(tree, label).props.allowFontScaling).not.toBe(false);
+    }
+  });
+});
+
 describe('ExerciseBlock: the form demo (R86)', () => {
   const demo = (tree: ReactTestRenderer) => tree.root.findByType(FormDemo);
   const SHOW_FORM = 'Show form for Bench Press';

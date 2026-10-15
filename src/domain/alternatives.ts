@@ -15,10 +15,15 @@ export type SwapCandidate = {
 /** How many alternatives Modify lists. */
 export const ALTERNATIVES_SHOWN = 8;
 
-/** Logged by time, by distance or by load and reps: a swap keeps to the same kind, so its sets still make sense. */
-function logKind(type: LoggingType): 'time' | 'distance' | 'reps' {
+/**
+ * Logged by time, by distance, by load and reps, by load and distance (a program's carry), or as a score (a program's
+ * AMRAP or For Time, R607): a swap keeps to the same kind, so its sets still make sense.
+ */
+function logKind(type: LoggingType): 'time' | 'distance' | 'reps' | 'carry' | 'score' {
   if (type === 'timed' || type === 'weighted_time') return 'time';
   if (type === 'distance_time') return 'distance';
+  if (type === 'weighted_distance') return 'carry';
+  if (type === 'rounds' || type === 'for_time') return 'score';
   return 'reps';
 }
 

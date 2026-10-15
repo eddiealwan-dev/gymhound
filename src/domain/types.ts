@@ -76,6 +76,8 @@ export type SavedSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (R607). Absent in a set remembered before 0010, and read as none. */
+  extraReps?: number | null;
 };
 /** Something off (spec 18.7, R60): why an exercise is flagged today. Stored per workout exercise; null is nothing off. */
 export type ExerciseMark = 'rough_sleep' | 'sick' | 'short_on_food' | 'pain' | 'cutting';

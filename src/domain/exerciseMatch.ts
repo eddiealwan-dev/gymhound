@@ -137,7 +137,9 @@ const MUSCLE_WORDS: [RegExp, Muscle][] = [
 /**
  * How to keep an exercise no library entry matched, as your own (R565): its equipment and main muscle from the words of
  * its name where they say ("Hack squat (Machine)" is a machine for the quads; none when nothing says), and how it is
- * logged from what the file logged for it: weight and reps, reps alone, time, time with weight, or distance.
+ * logged from what the file logged for it: weight and reps, reps alone, time, time with weight, or distance. It is
+ * always one of the six types your own exercises can have (R108), never a program type (R607): a carry's weight and
+ * distance log as distance, and an AMRAP score's rounds and extra reps as reps.
  */
 export function guessOwnExercise(name: string, sets: readonly ImportedSet[]): { equipment: Equipment; primaryMuscles: Muscle[]; loggingType: LoggingType } {
   const words = nameWords(name);

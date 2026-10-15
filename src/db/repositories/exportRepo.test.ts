@@ -68,6 +68,18 @@ function build(): { db: Db; oct1: string; oct6: string } {
 }
 
 describe('workoutCsvRows', () => {
+  it("writes an AMRAP score's extra reps in the last column, extra_reps (R609)", () => {
+    const db = seededDb();
+    const id = startEmptyWorkout(db, OCT_6);
+    addExerciseToWorkout(db, id, BENCH);
+    tickSet(db, setIds(db)[0], { weight: null, reps: 6, durationS: null, distance: null, extraReps: 4 }, 'lb', OCT_6 + MINUTE, 'mi');
+    finishWorkout(db, id, OCT_6 + 30 * MINUTE);
+
+    const [row] = workoutCsvRows(db, () => 0);
+
+    expect([row[col('reps')], row[col('extra_reps')], row[row.length - 1]]).toEqual([6, 4, 4]);
+  });
+
   it('has one row per done set of finished workouts, by start time, then exercise, then set position', () => {
     const { db, oct1, oct6 } = build();
 
@@ -80,7 +92,7 @@ describe('workoutCsvRows', () => {
       [oct1, 'barbell-overhead-press', 'working', 65, 8],
       [oct6, BENCH, 'working', 60, 5],
     ]);
-    rows.forEach((r) => expect(r).toHaveLength(21));
+    rows.forEach((r) => expect(r).toHaveLength(22));
   });
 
   it('leaves out the active workout and a set that is not done', () => {

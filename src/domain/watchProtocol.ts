@@ -11,6 +11,18 @@ import type { DistanceUnit, LoggingType, WeightUnit } from './types';
  */
 export const WATCH_PROTOCOL = 1;
 
+/** What the watch shows in place of a tick for a set it can't log (`phoneOnly`). */
+export const PHONE_ONLY_LINE = 'Log this one on your phone.';
+
+/**
+ * Whether a tick on the wrist can log a set of this type. The wrist sends only a weight and reps; the three program
+ * types (R607) need what it can't take, a carry's distance, an AMRAP's rounds and extra reps, a For Time's time, so
+ * they are logged on the phone.
+ */
+export function watchCanLog(loggingType: LoggingType): boolean {
+  return loggingType !== 'weighted_distance' && loggingType !== 'rounds' && loggingType !== 'for_time';
+}
+
 /** The set the watch shows next, with what a tick on the wrist logs (the target, else the placeholders). */
 export type WatchNextSet = {
   setId: string;
@@ -24,6 +36,8 @@ export type WatchNextSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit;
+  /** A set the watch can't log (`watchCanLog`): it shows `PHONE_ONLY_LINE` and no tick, and the phone refuses one. */
+  phoneOnly: boolean;
 };
 
 export type WatchWorkout = {

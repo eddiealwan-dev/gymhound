@@ -102,6 +102,7 @@ describe('liftSessions (R173)', () => {
       durationS: null,
       distance: null,
       distanceUnit: null,
+      extraReps: null,
     });
   });
 

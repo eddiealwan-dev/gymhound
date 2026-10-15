@@ -94,6 +94,19 @@ describe('ruleSentence (spec 7.4, the rule)', () => {
     );
   });
 
+  it("the scores of programs (R607): last time's score, with or without a rule; never a weight to add", () => {
+    expect(sentence(RULE_LB, 'rounds', 'lb', last({ sets: 1, reps: 6, extraReps: 4 }))).toBe('Last time: 6 + 4.');
+    expect(sentence(null, 'rounds', 'lb', last({ sets: 1, reps: 6 }))).toBe('Last time: 6.');
+    expect(sentence(RULE_LB, 'for_time', 'lb', last({ sets: 1, durationS: 462 }))).toBe('Last time: 7:42.');
+    expect(sentence(RULE_LB, 'for_time', 'lb', NO_LAST)).toBe('First time logging this.');
+  });
+
+  it("a carry with no rule: last time's sets, distance and load", () => {
+    expect(sentence(null, 'weighted_distance', 'lb', last({ sets: 3, weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft' }))).toBe(
+      'No rule here. Last time: 3 × 50 ft at 315 lb.',
+    );
+  });
+
   it('no rule, logged before: last time, with the weight in the unit it was logged in', () => {
     expect(sentence(null, 'weighted', 'lb', last({ sets: 3, reps: 10, weight: 25, weightUnit: 'lb' }))).toBe(
       'No rule here. Last time: 3 × 10 at 25 lb.',
@@ -261,9 +274,11 @@ describe("todaysRead (spec 7.4, today's read; R61 for a flagged exercise)", () =
     );
   });
 
-  it('no read for timed, distance_time, increment 0 or no rule', () => {
+  it('no read for timed, distance_time, the two scores, increment 0 or no rule', () => {
     expect(read({ loggingType: 'timed', rule: RULE_TIME })).toBeNull();
     expect(read({ loggingType: 'distance_time' })).toBeNull();
+    expect(read({ loggingType: 'rounds' })).toBeNull();
+    expect(read({ loggingType: 'for_time' })).toBeNull();
     expect(read({ rule: { ...RULE_LB, increment: 0 } })).toBeNull();
     expect(read({ rule: { ...RULE_LB, increment: 0 }, mark: 'sick', override: { weight: 175, unit: 'lb' } })).toBeNull();
     expect(read({ rule: null })).toBeNull();
@@ -294,6 +309,10 @@ describe("lastSummary: last time's sets for the rule line", () => {
     distance: null,
     distanceUnit: null,
     ...over,
+  });
+
+  it("keeps an AMRAP score's extra reps", () => {
+    expect(lastSummary([prev(0, { reps: 6, extraReps: 4 })])).toMatchObject({ sets: 1, reps: 6, extraReps: 4 });
   });
 
   it('is null when there was no last time', () => {

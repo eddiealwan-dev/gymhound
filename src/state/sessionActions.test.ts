@@ -516,6 +516,39 @@ describe('tick records a carried distance in the entry distance unit', () => {
   });
 });
 
+describe('tick and the three program logging types (R607)', () => {
+  it("records a carry's distance in the slot's feet, not the mi in Settings, with no time when none was given", () => {
+    startFromDay(db, PUSH_A);
+    setSetting(db, 'distanceUnit', 'mi');
+    const ex = activeView().exercises[0];
+    // The bench press's sets, read as a yoke carry whose slot counts feet and asks for 50.
+    const yoke = { ...ex, loggingType: 'weighted_distance' as const, rule: ex.rule && { ...ex.rule, repMax: 50 }, slotDistanceUnit: 'ft' as const };
+
+    expect(tick(db, yoke, yoke.sets[0], { ...NOTHING, weight: 315 }, 'lb')).toBe(true);
+
+    expect(reread(yoke.sets[0].id)).toMatchObject({ weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: null, reps: null });
+  });
+
+  it("records an AMRAP score's rounds and extra reps, and the view reads them back", () => {
+    startFromDay(db, PUSH_A);
+    const ex = activeView().exercises[0];
+    const amrap = { ...ex, loggingType: 'rounds' as const };
+
+    expect(tick(db, amrap, amrap.sets[0], { ...NOTHING, reps: 6, extraReps: 4 })).toBe(true);
+
+    expect(reread(amrap.sets[0].id)).toMatchObject({ reps: 6, extraReps: 4, weight: null, done: true });
+  });
+
+  it('commitSetField saves extra reps typed into their field', () => {
+    startFromDay(db, PUSH_A);
+    const set = bench().sets[0];
+
+    commitSetField(db, set.id, fieldPatch('extraReps', 7, 'lb', 'mi'));
+
+    expect(reread(set.id).extraReps).toBe(7);
+  });
+});
+
 describe('a distance unit switch mid-workout: a typed or saved distance keeps its unit, as a weight does', () => {
   /** The bench press's first set read as a distance exercise, as the session shows it now, in the units in Settings. */
   function runRow() {

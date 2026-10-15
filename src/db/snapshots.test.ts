@@ -628,7 +628,7 @@ describe('startDatabase', () => {
     });
     // The current code reads it: bench's last result is the set logged before the migrations.
     expect(getPreviousSets(result.db, 'barbell-bench-press', 'none')).toEqual([
-      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null },
+      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null, extraReps: null },
     ]);
   });
 
@@ -732,7 +732,7 @@ describe('startDatabase', () => {
       mark: null,
     });
     expect(getPreviousSets(db, 'barbell-bench-press', 'none')).toEqual([
-      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null },
+      { position: 0, setType: 'working', weight: 185, weightUnit: 'lb', reps: 8, durationS: null, distance: null, distanceUnit: null, extraReps: null },
     ]);
     expect(getExerciseNote(db, 'barbell-bench-press')).toBe('Elbows in');
     expect(db.select().from(schema.routineExercises).where(eq(schema.routineExercises.id, `${PUSH_A}:barbell-bench-press`)).get()).toMatchObject({

@@ -1,3 +1,4 @@
+import { formatRest } from './dates';
 import { MARK_LABELS } from './labels';
 import type { Outcome } from './progression';
 import { estimatedOneRm, sameLoggedWeight } from './prs';
@@ -16,6 +17,8 @@ export type LiftSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (R607). Absent reads as none. */
+  extraReps?: number | null;
 };
 
 /**
@@ -52,15 +55,20 @@ const loadedSet = (s: LiftSet) =>
 const everLoaded = (sessions: readonly LiftSession[]) => sessions.some((s) => s.sets.some(loadedSet));
 
 /**
- * Timed charts the longest hold, distance and time charts nothing (records only, §8.9), bodyweight plus never loaded
- * (no done non-warmup set with added weight above 0) the most reps in a set; everything else the working weight
- * (assisted: the assistance).
+ * Timed charts the longest hold, distance and time charts nothing (records only, §8.9), and so do the two scores of
+ * programs (an AMRAP and a For Time score, R607); bodyweight plus never loaded (no done non-warmup set with added weight
+ * above 0) the most reps in a set; everything else the working weight (assisted: the assistance; a carry: its load).
  */
 export function liftMetric(loggingType: LoggingType, sessions: readonly LiftSession[]): LiftMetric {
   if (loggingType === 'timed') return 'longest_hold';
-  if (loggingType === 'distance_time') return 'none';
+  if (loggingType === 'distance_time' || loggingType === 'rounds' || loggingType === 'for_time') return 'none';
   if (loggingType === 'bodyweight_plus' && !everLoaded(sessions)) return 'best_reps';
   return 'working_weight';
+}
+
+/** What a lift with no chart says in its place (`liftMetric` 'none'): distance and time, or a program's score (R607). */
+export function recordsOnlyLine(loggingType: LoggingType): string {
+  return loggingType === 'rounds' || loggingType === 'for_time' ? 'Scores show records only.' : 'Distance and time show records only.';
 }
 
 /** A point of a lift's chart: hollow for a session with something off, labelled with its reason or "Stall". */
@@ -118,7 +126,9 @@ export type LiftRecordKind =
   | 'longest_hold'
   | 'least_assistance'
   | 'longest_distance'
-  | 'longest_time';
+  | 'longest_time'
+  | 'best_score'
+  | 'best_time';
 
 /** A record under a lift's chart (R174), in the unit logged, with the date and workout of its set. */
 export type LiftRecord = { kind: LiftRecordKind; title: string; value: string; localDate: string; workoutId: string };
@@ -166,7 +176,10 @@ function record(kind: LiftRecordKind, title: string, value: string, c: Candidate
  *   instead of both;
  * - weight and time: Heaviest ("70 lb × 40s", loads above 0) and Longest hold ("1:30"); timed: Longest hold;
  * - assisted: Least assistance ("−20 lb × 8", "Bodyweight × 8" at 0), the lowest assistance with reps;
- * - distance and time: Longest distance ("5 km") and Longest time ("32:10").
+ * - distance and time: Longest distance ("5 km") and Longest time ("32:10");
+ * - the program types (R607): a carry's Heaviest ("30 ft · 365 lb") and Longest distance ("20 yd"), compared in
+ *   metres; an AMRAP's Best score ("6 + 9": the most rounds, then the most extra reps); a For Time's Best time
+ *   ("7:42", the fastest). These are records under the chart, not PR marks, which the three never get (R608).
  */
 export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSession[]): LiftRecord[] {
   const all: Candidate[] = sessions.flatMap((session) => session.sets.filter(counted).map((set) => ({ set, session })));
@@ -176,6 +189,14 @@ export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSes
   const longestHold = () => {
     const c = best(withHold, (a, b) => (a.set.durationS ?? 0) > (b.set.durationS ?? 0));
     if (c) out.push(record('longest_hold', 'Longest hold', formatDuration(c.set.durationS ?? 0), c));
+  };
+  const longestDistance = () => {
+    const metres = (s: LiftSet) => convertDistance(s.distance ?? 0, s.distanceUnit ?? 'm', 'm');
+    const far = best(
+      all.filter((c) => c.set.distance !== null && c.set.distance > 0 && c.set.distanceUnit !== null),
+      (a, b) => metres(a.set) > metres(b.set),
+    );
+    if (far) out.push(record('longest_distance', 'Longest distance', `${far.set.distance} ${far.set.distanceUnit}`, far));
   };
 
   switch (loggingType) {
@@ -236,14 +257,36 @@ export function liftRecords(loggingType: LoggingType, sessions: readonly LiftSes
       break;
     }
     case 'distance_time': {
-      const metres = (s: LiftSet) => convertDistance(s.distance ?? 0, s.distanceUnit ?? 'm', 'm');
-      const far = best(
-        all.filter((c) => c.set.distance !== null && c.set.distance > 0 && c.set.distanceUnit !== null),
-        (a, b) => metres(a.set) > metres(b.set),
-      );
-      if (far) out.push(record('longest_distance', 'Longest distance', `${far.set.distance} ${far.set.distanceUnit}`, far));
+      longestDistance();
       const long = best(withHold, (a, b) => (a.set.durationS ?? 0) > (b.set.durationS ?? 0));
       if (long) out.push(record('longest_time', 'Longest time', formatDuration(long.set.durationS ?? 0), long));
+      break;
+    }
+    case 'weighted_distance': {
+      const carried = all.filter((c) => loadedSet(c.set) && c.set.distance !== null && c.set.distance > 0 && c.set.distanceUnit !== null);
+      const heaviest = best(carried, (a, b) => heavierSet(a.set, b.set));
+      if (heaviest) {
+        const { distance, distanceUnit } = heaviest.set;
+        out.push(record('heaviest', 'Heaviest', `${distance} ${distanceUnit} · ${formatWeight(heaviest.set.weight ?? 0, heaviest.set.weightUnit ?? 'lb')}`, heaviest));
+      }
+      longestDistance();
+      break;
+    }
+    case 'rounds': {
+      const scored = all.filter((c) => c.set.reps !== null);
+      const top = best(scored, (a, b) => {
+        if ((a.set.reps ?? 0) !== (b.set.reps ?? 0)) return (a.set.reps ?? 0) > (b.set.reps ?? 0);
+        return (a.set.extraReps ?? 0) > (b.set.extraReps ?? 0);
+      });
+      if (top) {
+        const extra = top.set.extraReps ?? null;
+        out.push(record('best_score', 'Best score', extra === null ? `${top.set.reps}` : `${top.set.reps} + ${extra}`, top));
+      }
+      break;
+    }
+    case 'for_time': {
+      const fastest = best(withHold, (a, b) => (a.set.durationS ?? 0) < (b.set.durationS ?? 0));
+      if (fastest) out.push(record('best_time', 'Best time', formatRest(fastest.set.durationS ?? 0), fastest));
       break;
     }
   }

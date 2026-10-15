@@ -1,4 +1,4 @@
-import { liftMetric, liftPoints, liftRecords, sessionText, type LiftSession, type LiftSet } from './liftStats';
+import { liftMetric, liftPoints, liftRecords, recordsOnlyLine, sessionText, type LiftSession, type LiftSet } from './liftStats';
 import type { Outcome } from './progression';
 import type { ExerciseMark, SetType, WeightUnit } from './types';
 
@@ -240,5 +240,55 @@ describe('liftRecords (R174)', () => {
       ['longest_distance', 'Longest distance', '4 mi', '2026-09-08'],
       ['longest_time', 'Longest time', '32:10', '2026-09-01'],
     ]);
+  });
+});
+
+describe('the three program logging types (R607, R608)', () => {
+  const carry = (weight: number, distance: number, unit: 'ft' | 'yd' | 'm'): LiftSet => ({ ...w(weight, 0), reps: null, distance, distanceUnit: unit });
+  const score = (rounds: number, extraReps: number | null): LiftSet => ({ ...w(null, rounds), extraReps });
+  const time = (durationS: number): LiftSet => ({ ...hold(durationS), setType: 'working' });
+
+  it("charts a carry's working weight; a score shows records only", () => {
+    const loaded = [sess('2026-10-01', [carry(315, 50, 'ft')], { ww: 315 })];
+    expect(liftMetric('weighted_distance', loaded)).toBe('working_weight');
+    expect(liftMetric('rounds', [])).toBe('none');
+    expect(liftMetric('for_time', [])).toBe('none');
+    expect(liftPoints('weighted_distance', loaded, 'lb').map((p) => p.value)).toEqual([315]);
+    expect(liftPoints('rounds', [sess('2026-10-01', [score(6, 4)])], 'lb')).toEqual([]);
+  });
+
+  it('says which lifts show records only, in their own words', () => {
+    expect(recordsOnlyLine('distance_time')).toBe('Distance and time show records only.');
+    expect(recordsOnlyLine('rounds')).toBe('Scores show records only.');
+    expect(recordsOnlyLine('for_time')).toBe('Scores show records only.');
+  });
+
+  it('a session reads as the Previous column: "50 ft · 315 lb", "6 + 4", "7:42"', () => {
+    expect(sessionText('weighted_distance', sess('2026-10-01', [carry(315, 50, 'ft'), carry(335, 50, 'ft')]), 'lb')).toBe('50 ft · 315 lb, 50 ft · 335 lb');
+    expect(sessionText('rounds', sess('2026-10-01', [score(6, 4)]), 'lb')).toBe('6 + 4');
+    expect(sessionText('for_time', sess('2026-10-01', [time(462)]), 'lb')).toBe('7:42');
+  });
+
+  it('a carry: Heaviest, then Longest distance, compared across units', () => {
+    const a = sess('2026-09-01', [carry(315, 50, 'ft'), carry(365, 30, 'ft')]);
+    const b = sess('2026-09-08', [carry(300, 20, 'yd')]);
+    expect(liftRecords('weighted_distance', [a, b]).map((r) => [r.kind, r.title, r.value, r.localDate])).toEqual([
+      ['heaviest', 'Heaviest', '30 ft · 365 lb', '2026-09-01'],
+      ['longest_distance', 'Longest distance', '20 yd', '2026-09-08'],
+    ]);
+  });
+
+  it('an AMRAP score: Best score, the most rounds, then the most extra reps', () => {
+    const a = sess('2026-09-01', [score(6, 4)]);
+    const b = sess('2026-09-08', [score(6, 9)]);
+    const c = sess('2026-09-15', [score(5, 12)]);
+    expect(liftRecords('rounds', [a, b, c]).map((r) => [r.kind, r.title, r.value, r.localDate])).toEqual([['best_score', 'Best score', '6 + 9', '2026-09-08']]);
+  });
+
+  it('a For Time score: Best time, the fastest', () => {
+    const a = sess('2026-09-01', [time(500)]);
+    const b = sess('2026-09-08', [time(462)]);
+    const c = sess('2026-09-15', [time(480)]);
+    expect(liftRecords('for_time', [a, b, c]).map((r) => [r.kind, r.title, r.value, r.localDate])).toEqual([['best_time', 'Best time', '7:42', '2026-09-08']]);
   });
 });

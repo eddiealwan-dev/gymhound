@@ -23,6 +23,8 @@ export type LastSummary = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (R607). Absent reads as none. */
+  extraReps?: number | null;
 };
 
 type Load = { weight: number; unit: WeightUnit };
@@ -39,11 +41,22 @@ export function lastSummary(previous: readonly PrevSet[]): LastSummary | null {
   const first = pool[0];
   if (!first) return null;
   const { reps, weight, weightUnit, durationS, distance, distanceUnit } = first;
-  return { sets: pool.length, reps, weight, weightUnit, durationS, distance, distanceUnit };
+  const extra = first.extraReps === undefined || first.extraReps === null ? {} : { extraReps: first.extraReps };
+  return { sets: pool.length, reps, weight, weightUnit, durationS, distance, distanceUnit, ...extra };
 }
 
-/** Whether the rule raises this type's load: not timed or distance_time. */
-const isLoaded = (loggingType: LoggingType): boolean => loggingType !== 'timed' && loggingType !== 'distance_time';
+/** The types with no load for a rule to raise: timed, distance and time, and the two scores of programs (R607). */
+const UNLOADED: readonly LoggingType[] = ['timed', 'distance_time', 'rounds', 'for_time'];
+
+/** Whether the rule raises this type's load: not timed, distance and time, or a score. */
+const isLoaded = (loggingType: LoggingType): boolean => !UNLOADED.includes(loggingType);
+
+/** An AMRAP score as "6 + 4", or "6" with no extra reps; a For Time score as "7:42" (R607). Null with no score. */
+function lastScore(last: LastSummary, loggingType: LoggingType): string | null {
+  if (loggingType === 'for_time') return last.durationS === null ? null : formatRest(last.durationS);
+  if (last.reps === null) return null;
+  return last.extraReps === undefined || last.extraReps === null ? `${last.reps}` : `${last.reps} + ${last.extraReps}`;
+}
 
 /** "5 km in 25:30", or whichever of the two was logged; null for neither. */
 function lastDistance(last: LastSummary): string | null {
@@ -60,6 +73,12 @@ function lastDistance(last: LastSummary): string | null {
  */
 function lastTime(last: LastSummary, loggingType: LoggingType): string | null {
   if (loggingType === 'distance_time') return lastDistance(last);
+  if (loggingType === 'rounds' || loggingType === 'for_time') return lastScore(last, loggingType);
+  if (loggingType === 'weighted_distance') {
+    if (last.distance === null || last.distanceUnit === null) return null;
+    const at = last.weight && last.weightUnit ? ` at ${formatWeight(last.weight, last.weightUnit)}` : '';
+    return `${last.sets} ${TIMES} ${last.distance} ${last.distanceUnit}${at}`;
+  }
   const seconds = last.durationS === null ? null : `${last.durationS} s`;
   if (loggingType === 'timed') return seconds && `${last.sets} ${TIMES} ${seconds}`;
   const each = loggingType === 'weighted_time' ? seconds : last.reps === null ? null : `${last.reps}`;
@@ -78,7 +97,8 @@ export function ruleSentence(a: { rule: Rule | null; loggingType: LoggingType; u
   const done = last && lastTime(last, loggingType);
   const firstTime = 'First time logging this.';
   if (loggingType === 'timed') return done ? `Last time: ${done}. Timed holds don't go up automatically.` : firstTime;
-  if (loggingType === 'distance_time') return done ? `Last time: ${done}.` : firstTime;
+  // Distance and time, and a program's score (R622's metcon line is the program's own), say last time.
+  if (loggingType === 'distance_time' || loggingType === 'rounds' || loggingType === 'for_time') return done ? `Last time: ${done}.` : firstTime;
   if (!rule) return done ? `No rule here. Last time: ${done}.` : firstTime;
   if (rule.increment <= 0) return "No weight to add. Beat last time's reps.";
 

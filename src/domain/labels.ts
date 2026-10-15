@@ -18,7 +18,10 @@ export function formatRepScheme(setCount: number, repMin: number, repMax: number
   return `${setCount}×${reps}${COUNTED_IN_SECONDS.includes(loggingType) ? 's' : ''}`;
 }
 
-/** How each logging type reads in the custom exercise editor (R108). */
+/**
+ * How each logging type reads in words: the six the custom exercise editor offers (R108, `CUSTOM_LOGGING_TYPES`), and
+ * the three that only programs use (R607), which the editor never offers.
+ */
 export const LOGGING_TYPE_LABELS: Record<LoggingType, string> = {
   weighted: 'Weight and reps',
   bodyweight_plus: 'Bodyweight plus weight',

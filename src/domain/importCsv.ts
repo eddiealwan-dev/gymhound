@@ -23,6 +23,8 @@ export type ImportedSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps, from GymHound's `extra_reps` column (R609); absent in a file without it. */
+  extraReps?: number | null;
 };
 
 export type ImportedExercise = { name: string; note: string | null; sets: ImportedSet[] };
@@ -136,6 +138,9 @@ const UNIT_WORDS: Record<string, string> = {
   km: 'km', kilometers: 'km', kilometres: 'km',
   mi: 'mi', mile: 'mi', miles: 'mi',
   m: 'm', meters: 'm', metres: 'm',
+  // A carry's distance (R609).
+  ft: 'ft', feet: 'ft', foot: 'ft',
+  yd: 'yd', yds: 'yd', yard: 'yd', yards: 'yd',
   s: 's', sec: 's', secs: 's', seconds: 's',
   min: 'min', mins: 'min', minutes: 'min',
   g: 'g', grams: 'g',
@@ -190,6 +195,8 @@ const COLUMNS = {
   seconds: ['seconds', 'duration', 'time', 'set duration', 'hold', 'duration s'],
   distance: ['distance'],
   distanceUnit: ['distance unit'],
+  // GymHound's last column since R609: an AMRAP score's extra reps.
+  extraReps: ['extra reps'],
   note: ['exercise note', 'exercise notes', 'notes', 'note', 'comment', 'comments'],
   // Body
   kind: ['kind', 'measurement', 'metric'],
@@ -358,6 +365,9 @@ function distanceUnitOf(raw: string | undefined): DistanceUnit | null {
   if (/^(km|kms|kilometers?|kilometres?)$/.test(t)) return 'km';
   if (/^(mi|miles?)$/.test(t)) return 'mi';
   if (/^(m|meters?|metres?)$/.test(t)) return 'm';
+  // A carry's distance (R609).
+  if (/^(ft|feet|foot)$/.test(t)) return 'ft';
+  if (/^(yd|yds|yards?)$/.test(t)) return 'yd';
   return null;
 }
 
@@ -426,6 +436,7 @@ function planWorkouts(t: Table, o: ImportOptions): ImportPlan {
     seconds: col(COLUMNS.seconds, (h) => h.base === 'duration' && h.unit === null),
     distance: col(COLUMNS.distance),
     distanceUnit: col(COLUMNS.distanceUnit),
+    extraReps: col(COLUMNS.extraReps),
     note: col(COLUMNS.note),
   };
   const headerWeightUnit = c.weight >= 0 ? weightUnitOf(t.headers[c.weight].unit ?? t.headers[c.weight].base) : null;
@@ -454,12 +465,13 @@ function planWorkouts(t: Table, o: ImportOptions): ImportPlan {
     const reps = num(c.reps);
     const seconds = c.seconds >= 0 ? readSeconds(cell(c.seconds)) : null;
     const distance = num(c.distance);
-    const anything = (weight ?? 0) > 0 || (reps ?? 0) > 0 || (seconds ?? 0) > 0 || (distance ?? 0) > 0;
+    const extraReps = num(c.extraReps);
+    const anything = (weight ?? 0) > 0 || (reps ?? 0) > 0 || (seconds ?? 0) > 0 || (distance ?? 0) > 0 || (extraReps ?? 0) > 0;
     if (!anything) {
       skipped.push({ row, reason: `Nothing logged for ${exercise}` });
       return;
     }
-    if ([weight, reps, seconds, distance].some((v) => v !== null && v < 0)) {
+    if ([weight, reps, seconds, distance, extraReps].some((v) => v !== null && v < 0)) {
       skipped.push({ row, reason: `A number below zero for ${exercise}` });
       return;
     }
@@ -468,7 +480,8 @@ function planWorkouts(t: Table, o: ImportOptions): ImportPlan {
       setType: type ?? 'working',
       weight: weight !== null && weight > 0 ? weight : null,
       weightUnit: weight !== null && weight > 0 ? unit : null,
-      reps: reps !== null && reps > 0 ? Math.round(reps) : null,
+      // 0 rounds is a score when it has extra reps (an AMRAP of 0 + 12).
+      reps: reps !== null && (reps > 0 || (extraReps ?? 0) > 0) ? Math.round(reps) : null,
       rpe: (() => {
         const v = num(c.rpe);
         return v !== null && v >= 6 && v <= 10 ? Math.round(v * 2) / 2 : null;
@@ -476,6 +489,8 @@ function planWorkouts(t: Table, o: ImportOptions): ImportPlan {
       durationS: seconds !== null && seconds > 0 ? seconds * secondsScale : null,
       distance: distance !== null && distance > 0 ? distance : null,
       distanceUnit: distance !== null && distance > 0 ? (distanceUnitOf(cell(c.distanceUnit)) ?? headerDistanceUnit ?? o.distanceUnit) : null,
+      // Only a file with the column carries the field, so an older file's sets read as they always have.
+      ...(c.extraReps >= 0 ? { extraReps: extraReps !== null && extraReps > 0 ? Math.round(extraReps) : null } : {}),
     };
     const start = c.start >= 0 && c.start !== c.date ? readDate(cell(c.start), o.dayFirst) : date;
     const startedAt = start?.at ?? middayOf(date.localDate);

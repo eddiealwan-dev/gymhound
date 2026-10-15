@@ -100,6 +100,10 @@ function measure(loggingType: LoggingType, s: PrCandidate): Measured | null {
       if (load === null && durationS === null) return null;
       return { load, reps: null, durationS };
     }
+    case 'weighted_distance':
+    case 'rounds':
+    case 'for_time':
+      return null; // no PR marks for the program types (R608); their PR rules are a later addition
     default:
       return null; // assisted and distance_time never flag in v1
   }

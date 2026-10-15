@@ -87,13 +87,18 @@ const STARTING_SCHEME: Record<LoggingType, { setCount: number; repMin: number; r
   weighted_time: { setCount: 3, repMin: 30, repMax: 60 },
   // The rep range is unused for distance and time.
   distance_time: { setCount: 1, repMin: 1, repMax: 1 },
-  weighted_distance: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
-  rounds: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
-  for_time: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
+  // R607, for programs: a carry's range is its distance, in the unit its sets are entered in (m on your own routine);
+  // an AMRAP or For Time score is one set with no range.
+  weighted_distance: { setCount: 3, repMin: 20, repMax: 20 },
+  rounds: { setCount: 1, repMin: 1, repMax: 1 },
+  for_time: { setCount: 1, repMin: 1, repMax: 1 },
 };
 
-/** Logging types with no load for the rule to raise: their increment starts at 0. */
-const NO_LOAD: LoggingType[] = ['timed', 'distance_time'];
+/**
+ * Logging types with no load for the rule to raise: their increment starts at 0. Timed, distance and time, and the two
+ * scores of programs (R607); a carry has a load. `savedWorkout.ts` and the routine editor use this list too.
+ */
+export const NO_LOAD: readonly LoggingType[] = ['timed', 'distance_time', 'rounds', 'for_time'];
 
 export function newDraft(): RoutineDraft {
   return { id: null, name: '', days: [], nextKey: 1 };
@@ -193,8 +198,8 @@ const wholeAtLeast = (v: number, min: number, fallback: number) =>
   Number.isFinite(v) ? Math.max(min, Math.round(v)) : fallback;
 
 /**
- * A rule as it may be saved: sets a whole number from 1 to 10, reps whole and at least 1 with min ≤ max, and the
- * increment 0 or more; anything not a number becomes the lowest allowed. When min > max, `keep` names the end that
+ * A rule as it may be saved: sets a whole number from 1 to 10, reps whole and at least 1 with min ≤ max (a carry's
+ * distance in ft, yd or m alike, R607), and the increment 0 or more; anything not a number becomes the lowest allowed. When min > max, `keep` names the end that
  * stays and the other moves to meet it. The reducer and `saveRoutine` both apply it.
  */
 export function clampRule<T extends RuleFields>(rule: T, keep: 'min' | 'max' = 'min'): T {

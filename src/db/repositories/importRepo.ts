@@ -23,7 +23,12 @@ export function fingerprint(text: string): string {
   return a.toString(36).padStart(7, '0') + b.toString(36).padStart(7, '0');
 }
 
-const setText = (s: ImportedSet) => [s.setType, s.weight, s.weightUnit, s.reps, s.durationS, s.distance, s.distanceUnit].join(',');
+/**
+ * A set as its workout's fingerprint reads it. An AMRAP score's extra reps (R609) are added only when there are some, so
+ * a workout imported before the column existed keeps its id and is found again.
+ */
+const setText = (s: ImportedSet) =>
+  [s.setType, s.weight, s.weightUnit, s.reps, s.durationS, s.distance, s.distanceUnit, ...((s.extraReps ?? null) !== null ? [s.extraReps] : [])].join(',');
 
 /** A workout's id: the file's own (GymHound's export), else a fingerprint of when it was and what was in it. */
 function workoutId(w: ImportedWorkout): string {

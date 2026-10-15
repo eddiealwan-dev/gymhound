@@ -26,8 +26,11 @@ export type LoggedBlock = { workoutId: string; exerciseId: string; loggingType: 
  */
 export type GroupWeek = { group: MajorGroup; sets: number; status: 'under' | 'in' | 'over' };
 
-/** The logging types whose sets count as volume for a muscle (R176): timed holds and cardio don't (as R87). */
-const COUNTED_TYPES: ReadonlySet<LoggingType> = new Set<LoggingType>(['weighted', 'bodyweight_plus', 'assisted', 'weighted_time']);
+/**
+ * The logging types whose sets count as volume for a muscle (R176): timed holds and cardio don't (as R87). A loaded
+ * carry's sets do, as a loaded hold's do; a metcon's one score (an AMRAP or For Time) is not a hard set (R607).
+ */
+const COUNTED_TYPES: ReadonlySet<LoggingType> = new Set<LoggingType>(['weighted', 'bodyweight_plus', 'assisted', 'weighted_time', 'weighted_distance']);
 
 /** True when a block's sets count towards sets per muscle and the check-in's hard sets (R176). */
 export function countsAsHardSets(block: Pick<LoggedBlock, 'loggingType'>): boolean {

@@ -13,6 +13,7 @@ export type SetPatch = Partial<{
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  extraReps: number | null;
 }>;
 
 // Positions are 0-based and contiguous: appending takes max + 1 (0 when empty) and every removal renumbers.

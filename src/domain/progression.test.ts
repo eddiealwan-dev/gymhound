@@ -52,6 +52,16 @@ describe('computeOutcome', () => {
       expect(computeOutcome(distance)).toEqual(expected);
     });
 
+    it("gives a program's AMRAP and For Time scores no_rule with no load (R622), and a carry its load (R607)", () => {
+      const expected = { workingWeight: null, workingUnit: null, outcome: 'no_rule', nextWeight: null, nextUnit: null, missed: false };
+      expect(computeOutcome(input({ loggingType: 'rounds', sets: [set(null, null, 6)] }))).toEqual(expected);
+      expect(computeOutcome(input({ loggingType: 'for_time', sets: [set(95, 'lb', null, { durationS: 462 })] }))).toEqual(expected);
+      expect(computeOutcome(input({ loggingType: 'weighted_distance', rule: null, sets: [lb(315, 0), lb(335, 0)] }))).toMatchObject({
+        workingWeight: 315,
+        workingUnit: 'lb',
+      });
+    });
+
     it('with a rule and no counted sets gives no_sets and keeps the planned weight', () => {
       const sets = [lb(95, 5, { setType: 'warmup' }), lb(135, 8, { done: false })];
       expect(computeOutcome(input({ sets }))).toEqual({
