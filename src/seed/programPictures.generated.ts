@@ -40,7 +40,7 @@ export const PROGRAM_PICTURE_SOURCES: Readonly<Record<string, { exerciseId: stri
   'program-glute-lower-body-emphasis': { exerciseId: 'barbell-hip-thrust', frame: 1 },
   'program-advanced-upper-lower-dup': { exerciseId: 'barbell-bench-press', frame: 1 },
   'program-strength-peaking-block': { exerciseId: 'barbell-deadlift', frame: 1 },
-  'program-dumbbell-full-body-ii': { exerciseId: 'dumbbell-bulgarian-split-squat', frame: 1 },
+  'program-dumbbell-full-body-ii': { exerciseId: 'dumbbell-one-arm-row', frame: 1 },
   'program-mobility-for-lifters': { exerciseId: 'fedb-kneeling-hip-flexor', frame: 1 },
   'program-bro-split': { exerciseId: 'barbell-curl', frame: 1 },
   'program-advanced-calisthenics': { exerciseId: 'fedb-muscle-up', frame: 1 },
