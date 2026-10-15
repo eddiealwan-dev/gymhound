@@ -61,9 +61,11 @@ const loadIn = (n: number, unit: WeightUnit): string => String(unit === 'kg' ? r
 /**
  * Loads in program text (a slot's note, a metcon's "95/65 lb"), in the session unit (ruling R-g4): in kg, each pound
  * figure is converted to the nearest 0.5 kg, with the bare number it is set against ("5 lb per session, not 10"). A pair
- * is spaced around its slash in either unit ("43 / 29.5 kg"). Kilograms in the text, and everything else, stay as written.
+ * converted is spaced around its slash ("43 / 29.5 kg"). In a lb session the text stays exactly as written ("95/65 lb",
+ * W3 review), and kilograms in the text, and everything else, always do.
  */
 export function loadsInUnit(text: string, unit: WeightUnit): string {
+  if (unit === 'lb') return text;
   return text.replace(
     /(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s?lbs?\b([^.;]*?\bnot )?(\d+(?:\.\d+)?\b(?!\s?(?:lb|kg|%|s\b)))?/g,
     (whole, loads: string, not: string | undefined, against: string | undefined) => {

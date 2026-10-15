@@ -83,9 +83,11 @@ describe('units', () => {
       );
     });
 
-    it('converts each load of a pair, spaced around the slash', () => {
+    it('converts each load of a pair in a kg session, spaced around the slash', () => {
       expect(loadsInUnit('95/65 lb', 'kg')).toBe('43 / 29.5 kg');
-      expect(loadsInUnit('95/65 lb', 'lb')).toBe('95 / 65 lb');
+      // A lb session shows lb notes exactly as written (W3 review).
+      expect(loadsInUnit('95/65 lb', 'lb')).toBe('95/65 lb');
+      expect(loadsInUnit('thrusters (95/65 lb) and pull-ups', 'lb')).toBe('thrusters (95/65 lb) and pull-ups');
     });
 
     it("converts the bare number a load is compared with (\"5 lb per session, not 10\")", () => {
