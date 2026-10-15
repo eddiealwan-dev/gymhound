@@ -21,6 +21,7 @@ import {
   metconTitle,
   runFormat,
   runNoun,
+  targetSecondsOf,
   TECHNIQUE_LINE,
   workPlanFor,
 } from '../../domain/sessionBlock';
@@ -227,7 +228,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
    */
   const kind = blockKindOf(ex);
   /** A run's or an interval's target, in seconds, from the week's snapshot. */
-  const targetS = kind === 'run' || kind === 'intervals' ? (ex.rule?.repMax ?? null) : null;
+  const targetS = (kind === 'run' || kind === 'intervals') && targetSecondsOf(ex) > 0 ? targetSecondsOf(ex) : null;
   /** An event's distance unit (ft, yd or m), which heads its column. */
   const entryUnit = entryDistanceUnit(ex, distanceUnit) ?? 'm';
   // The same columns while nothing they show changes, so a write to one set redraws its row alone.

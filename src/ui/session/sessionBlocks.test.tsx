@@ -291,6 +291,14 @@ describe('a run is a timed effort with its own block', () => {
     expect(buttons(tree)).not.toContain('+ Set');
   });
 
+  it("reads its target from one field, as its rule line and clock do, when the range's ends differ", () => {
+    const base = run();
+    const tree = mount({ ...base, rule: { ...base.rule!, repMin: 1740, repMax: 1800 } });
+    expect(shownText(tree)).toContain('Run 29:00');
+    expect(clock(tree)[0].props.plan).toMatchObject({ steps: [{ seconds: 1740 }] });
+    expect(field(tree, 'Run time').props.placeholder).toBe('29:00');
+  });
+
   it('steps intervals through hard and easy, the easy part from the note, with + Set only', () => {
     const tree = mount(intervals());
     expect(shownText(tree)).toContain('6 × 3:00 hard / 2:00 easy');

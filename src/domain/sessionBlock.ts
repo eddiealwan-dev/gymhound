@@ -119,6 +119,14 @@ export function emomMinutesOf(note: string | null): number | null {
 /** How many working sets intervals have today: each is one hard part. */
 const workingSets = (ex: BlockInput) => ex.sets.filter((s) => s.setType === 'working').length;
 
+/**
+ * A run's or an interval's target in seconds, the week's (R620): the rule's repMin, the one field its rule line, its
+ * clock, its format line and its suggested time all read, so they can't disagree. 0 for none.
+ */
+export function targetSecondsOf(ex: Pick<BlockInput, 'rule'>): number {
+  return ex.rule?.repMin ?? 0;
+}
+
 /** The clock a block runs, or null for a block with none (events, plain sets, technique sets without an EMOM). */
 export function workPlanFor(ex: BlockInput): WorkPlan | null {
   const p = ex.program;
@@ -130,11 +138,11 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
       return { kind: 'for_time', noun: 'For Time', steps: [{ kind: 'work', seconds: (m.capMinutes ?? m.workMinutes) * 60, set: 1 }] };
     }
     case 'run': {
-      const target = ex.rule?.repMin ?? 0;
+      const target = targetSecondsOf(ex);
       return target > 0 ? { kind: 'run', noun: runNoun(ex.exerciseId), steps: [{ kind: 'work', seconds: target, set: 1 }] } : null;
     }
     case 'intervals': {
-      const work = ex.rule?.repMin ?? 0;
+      const work = targetSecondsOf(ex);
       const sets = workingSets(ex);
       if (work <= 0 || sets === 0) return null;
       const easy = easySecondsOf(p?.note ?? null);
