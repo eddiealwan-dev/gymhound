@@ -513,10 +513,12 @@ describe('the history editor', () => {
 
 describe('the history editor and the three program logging types (R607)', () => {
   /** An exercise of a program type, added the way the seed will add the new exercises (Task 9). */
+  /** Adds a program-only exercise for the test; seed 9 already ships some of them (yoke-carry), so an existing row stays. */
   function addProgramExercise(id: string, name: string, loggingType: 'weighted_distance' | 'rounds' | 'for_time'): void {
     mockDb
       .insert(exercises)
       .values({ id, name, aliases: [], primaryMuscles: ['quads'], secondaryMuscles: [], equipment: 'other', pattern: 'carry', loggingType, isCustom: false, createdAt: NOW })
+      .onConflictDoNothing()
       .run();
   }
 
