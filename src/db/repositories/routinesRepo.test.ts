@@ -5,7 +5,7 @@ import type { DraftAction, LibraryExercise, RoutineDraft } from '../../domain/ro
 import { canAddRoutine } from '../../domain/routineLimit';
 import { gearFor } from '../../domain/plates';
 import type { DayFromSaved } from '../../domain/savedWorkout';
-import { upNextDayHasWeight, upNextLoad } from '../../domain/upNext';
+import { upNextDayHasWeight, upNextLoad, upNextNeedsWeights } from '../../domain/upNext';
 import type { ExerciseMark, WeightUnit } from '../../domain/types';
 import { PROGRAMS } from '../../seed/programs.generated';
 import { PREMADE_ORDER, runSeed } from '../../seed/seed';
@@ -13,6 +13,7 @@ import { routineDays, routineExercises, routines, sets, workoutExercises, workou
 import { seededDb } from '../testing/fixtures';
 import { seededV1Db } from '../testing/seedV1';
 import type { Db } from '../types';
+import { changeRung } from './programRunRepo';
 import { getSettings, setSetting } from './settingsRepo';
 import {
   deleteRoutine,
@@ -230,6 +231,28 @@ describe('getUpNext of a program: the warm-up line (R626, R645)', () => {
     expect(getUpNext(db)!.exercises.some((e) => e.warmUp)).toBe(false);
     setActiveRoutine(db, PPL);
     expect(getUpNext(db)!.exercises.some((e) => e.warmUp)).toBe(false);
+  });
+});
+
+describe('getUpNext of a program: which slots need a weight', () => {
+  it('a calisthenics day needs none: its band slot is reps only and its ladders on bodyweight rungs', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'program-calisthenics-foundations');
+    const exercises = getUpNext(db)!.exercises;
+    expect(exercises.some((e) => e.loggingType === 'weighted')).toBe(true);
+    expect(upNextNeedsWeights(exercises)).toBe(false);
+  });
+
+  it('a lifting day still does, and so does a weighted top rung', () => {
+    const db = seededDb();
+    setActiveRoutine(db, 'program-barbell-foundations');
+    expect(upNextNeedsWeights(getUpNext(db)!.exercises)).toBe(true);
+    const program = PROGRAMS.find((p) => p.id === 'program-calisthenics-foundations')!;
+    const ladder = program.days[0].slots.find((s) => s.ladder?.some((r) => r.weightedIncrementLb !== null))!;
+    const top = ladder.ladder!.findIndex((r) => r.weightedIncrementLb !== null);
+    setActiveRoutine(db, program.id);
+    changeRung(db, ladder.id, top);
+    expect(getUpNext(db)!.exercises.find((e) => e.routineExerciseId === ladder.id)!.needsLoad).toBeUndefined();
   });
 });
 

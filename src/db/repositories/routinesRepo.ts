@@ -80,6 +80,8 @@ export type UpNextExercise = {
   lastNextUnit: WeightUnit | null;
   /** The warm-up line goes under it: a program's lifting day's first slot, as in the session (R626, R645). */
   warmUp?: boolean;
+  /** False for a program slot whose rule adds no load (reps only, a bodyweight rung): it needs no weight. */
+  needsLoad?: boolean;
   /** A program slot's scheme words (§18.29): a carry's distance unit, a metcon's format, a run on a clock. */
   schemeExtra?: RepSchemeExtra;
 };
@@ -575,10 +577,18 @@ export function getUpNext(db: Db): UpNext | null {
 
   const program = upNextProgram(db, routine.id, routine.runStartedAt, routine.runDeloadAt);
   const programData = programById(routine.id);
+  const slotOf = (routineExerciseId: string) => (programData ? programSlotOf(routine.id, routineExerciseId) : undefined);
   /** Whether the warm-up line goes under this slot (R626, R645), before the run starts too. */
   const warmUp = (e: { routineExerciseId: string; loggingType: LoggingType }): boolean => {
-    const slot = programData ? programSlotOf(routine.id, e.routineExerciseId) : undefined;
+    const slot = slotOf(e.routineExerciseId);
     return programData !== undefined && slot !== undefined && showsWarmUp(programData, slot, e.loggingType);
+  };
+  /** A program slot whose rule adds no load needs no weight, whatever its type: reps only, a bodyweight rung. */
+  const addsNoLoad = (e: { routineExerciseId: string; ladderRung: number | null }): boolean => {
+    const slot = slotOf(e.routineExerciseId);
+    if (!slot) return false;
+    if (slot.ruleKind === 'reps_only') return true;
+    return slot.ladder !== null && (slot.ladder[e.ladderRung ?? 0]?.weightedIncrementLb ?? null) === null;
   };
   return {
     routineId: routine.id,
@@ -593,6 +603,7 @@ export function getUpNext(db: Db): UpNext | null {
       ...(program ? (slotScheme(db, routine.id, { ...exercise, ladderRung, nextSetCount }, program.week, program.weekInfo) ?? {}) : {}),
       ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
       ...(warmUp(exercise) ? { warmUp: true } : {}),
+      ...(addsNoLoad({ ...exercise, ladderRung }) ? { needsLoad: false } : {}),
     })),
     program,
   };

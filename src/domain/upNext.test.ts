@@ -270,4 +270,12 @@ describe('a program on Up next (R616, R627, R614)', () => {
   it('a carry needs a load (R607)', () => {
     expect(upNextNeedsWeights([{ loggingType: 'weighted_distance', nextWeight: null, nextWeightUnit: null }])).toBe(true);
   });
+
+  it('a program slot whose rule adds no load needs none: a calisthenics day says nothing of weights', () => {
+    const band = { ...w(null), needsLoad: false };
+    expect(upNextNeedsWeights([none('bodyweight_plus'), none('timed'), band])).toBe(false);
+    expect(upNextSubtitle(null, upNextNeedsWeights([none('bodyweight_plus'), band]), 'en-GB', 'Week 1 of 6')).toBe('Week 1 of 6 · First time on this day.');
+    expect(upNextLoad(band, true, 'lb', LB_GEAR)).toBeNull();
+    expect(upNextNeedsWeights([band, w(null)])).toBe(true);
+  });
 });
