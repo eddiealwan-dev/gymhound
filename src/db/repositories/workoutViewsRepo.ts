@@ -4,12 +4,14 @@ import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
 import type { BestWeight } from '../../domain/setTable';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
+import type { WeekKind } from '../../seed/programTypes';
 import { convertWeight } from '../../domain/units';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 import { getWorkoutPrs } from './prRepo';
 import { carryUnit, programSlotOf } from './programRunRepo';
+import { programFinishLines, programPartsOf, type FinishRow, type ProgramSlotView, type ProgramWorkoutView } from './programViewRepo';
 import { ruleOf } from './ruleSnapshot';
 
 export type SetView = PrevSet & {
@@ -53,11 +55,18 @@ export type WorkoutExerciseView = {
    * with none (R422). Optional so a view built by hand reads as no history.
    */
   bestWeight?: BestWeight | null;
+  /**
+   * A slot of one of the twenty programs (§18.29): the rule's words for its kind, the warm-up line and its note. Null or
+   * absent for anything else (your own routines run §7.3, R628).
+   */
+  program?: ProgramSlotView | null;
 };
 
 export type ActiveWorkoutView = {
   id: string;
   name: string;
+  /** The program the workout runs and its week (R616, R617); null or absent for any other workout. */
+  program?: ProgramWorkoutView | null;
   startedAt: number;
   restEndsAt: number | null;
   /** The set whose tick started the running rest (R38); the countdown shows under it. Null when no rest runs. */
@@ -77,7 +86,15 @@ export type FinishSummary = {
   next: NextTime[];
   /** The personal bests set in this workout (R105), in workout order: one per exercise and kind. Empty when none. */
   prs: PrHighlight[];
+  /**
+   * What the summary lists under the figures, in workout order: `next` as lines (`finishLine`), and for the twenty
+   * programs the rule's words besides (§18.29): why a weight dropped (R613), a ladder's move (R618), an added set or
+   * longer intervals (R619) and a metcon beaten twice in a row (R622), each with its why when it has one.
+   */
+  lines?: FinishRow[];
 };
+
+export type { FinishRow } from './programViewRepo';
 
 const PREV_SET_COLUMNS = {
   position: sets.position,
@@ -183,6 +200,20 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     db,
     rows.map((r) => r.we.exerciseId),
   );
+  // The twenty programs' words (§18.29): the week, and each slot's rule kind, warm-up line and note.
+  const parts = programPartsOf(
+    db,
+    workout,
+    rows.map(({ we, exercise }) => ({
+      id: we.id,
+      exerciseId: we.exerciseId,
+      routineExerciseId: we.routineExerciseId,
+      ruleKind: we.ruleKind,
+      ruleRung: we.ruleRung,
+      rule: ruleOf(we),
+      loggingType: exercise.loggingType,
+    })),
+  );
   const setsByExercise = new Map<string, SetView[]>();
   for (const s of setRows) {
     const view: SetView = {
@@ -211,6 +242,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
     startedAt: workout.startedAt,
     restEndsAt: workout.restEndsAt,
     restSetId: workout.restSetId,
+    program: parts.workout,
     exercises: rows.map(({ we, exercise, note, restSeconds }) => ({
       id: we.id,
       exerciseId: we.exerciseId,
@@ -233,6 +265,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       bestWeight: best.get(we.exerciseId) ?? null,
       // A program carry is entered in its slot's ft or yd, from the first set (R607).
       slotDistanceUnit: carryUnit(programSlotOf(workout.routineId, we.routineExerciseId)),
+      program: parts.slots.get(we.id) ?? null,
     })),
   };
 }
@@ -284,7 +317,7 @@ export function getVolumeSetsSince(db: Db, fromLocalDate: string): VolumeSet[] {
  * No rule (an exercise added on the day, a timed one) and no next weight (no working set ticked and nothing planned)
  * leave the exercise out.
  */
-function selectNextTimes(db: Db, workoutId: string): NextTime[] {
+function selectNextTimes(db: Db, workoutId: string, weekKind: WeekKind | null): NextTime[] {
   const rows = db
     .select({
       workoutExerciseId: workoutExercises.id,
@@ -303,7 +336,8 @@ function selectNextTimes(db: Db, workoutId: string): NextTime[] {
   return rows.flatMap(({ workoutExerciseId, name, loggingType, outcome, nextWeight, nextUnit, mark }) =>
     outcome === null || outcome === 'no_rule' || nextWeight === null || nextUnit === null
       ? []
-      : [{ workoutExerciseId, name, loggingType, outcome, nextWeight, nextUnit, mark }],
+      : // A holding week names the week it held for (R617).
+        [{ workoutExerciseId, name, loggingType, outcome, nextWeight, nextUnit, mark, ...(outcome === 'held_week' ? { weekKind } : {}) }],
   );
 }
 
@@ -318,13 +352,15 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
   }
 
   const workoutSets = selectVolumeSets(db, eq(workouts.id, workoutId));
+  const next = selectNextTimes(db, workoutId, workout.weekKind);
   return {
     id: workout.id,
     name: workout.name,
     durationMs: workout.finishedAt - workout.startedAt,
     volume: totalVolume(workoutSets, displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
-    next: selectNextTimes(db, workoutId),
+    next,
     prs: getWorkoutPrs(db, workoutId),
+    lines: programFinishLines(db, workout, next),
   };
 }

@@ -347,6 +347,10 @@ describe('clampRule', () => {
 
   const rule = { setCount: 3, repMin: 8, repMax: 12, increment: 5 };
 
+  it('keeps any range a routine has, past an hour too (R628, ruling R-t11a: nothing is rewritten on save)', () => {
+    expect(clampRule({ ...rule, repMin: 3600, repMax: 5400 })).toMatchObject({ repMin: 3600, repMax: 5400 });
+  });
+
   it('keeps sets a whole number from 1 to 10', () => {
     expect(clampRule({ ...rule, setCount: 0 }).setCount).toBe(1);
     expect(clampRule({ ...rule, setCount: 25 }).setCount).toBe(10);

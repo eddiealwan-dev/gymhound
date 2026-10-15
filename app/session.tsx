@@ -9,6 +9,7 @@ import { getNextDayTitle } from '../src/db/repositories/workoutsRepo';
 import { getActiveWorkoutView } from '../src/db/repositories/workoutViewsRepo';
 import type { Db } from '../src/db/types';
 import { formatElapsed } from '../src/domain/dates';
+import { programWeekText } from '../src/domain/upNext';
 import { finishCheck, finishConfirm, type FinishConfirm } from '../src/domain/finishCheck';
 import { gearFor } from '../src/domain/plates';
 import type { MusicAppId } from '../src/domain/types';
@@ -19,7 +20,7 @@ import { joinsNextInSuperset, replaceNeedsConfirm, startsSuperset } from '../src
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
 import { useDbQuery } from '../src/state/dataVersion';
-import { discard, finish, replaceWith } from '../src/state/sessionActions';
+import { changeRungTo, discard, finish, replaceWith } from '../src/state/sessionActions';
 import { ModifySheet } from '../src/ui/ModifySheet';
 import { useShareEqual } from '../src/state/shareEqual';
 import { useNow } from '../src/state/useNow';
@@ -193,6 +194,25 @@ function SessionHeader({
   );
 }
 
+/**
+ * A program's week at the top of the session (R616, R617): "Week 3 of 12", and the week's line muted under it when it
+ * has one (a deload, a taper, a phase note). One stop for VoiceOver. It wraps at any text size.
+ */
+function ProgramWeek({ week, weeks, done, line }: { week: number; weeks: number; done: boolean; line: string | null }) {
+  // After the last week, or an early deload, the normal rules carry on until Start over (R616, R627).
+  const head = programWeekText({ week, weeks, done });
+  return (
+    <View accessible accessibilityLabel={line === null ? head : `${head}. ${line}`} style={{ marginBottom: 16, gap: 2 }}>
+      <Body weight={600}>{head}</Body>
+      {line === null ? null : (
+        <Body muted style={{ fontSize: 14 }}>
+          {line}
+        </Body>
+      )}
+    </View>
+  );
+}
+
 /** The workout in progress: its exercises, each with a set table, the ⋯ menus, adding exercises, the rest timer, Finish in the header, and Discard. */
 export default function Session() {
   const db = useDb();
@@ -210,6 +230,8 @@ export default function Session() {
   /** The exercise Modify is open for (R553), and the swap waiting on "Replace?" when it has completed sets. */
   const [modifyFor, setModifyFor] = useState<string | null>(null);
   const [swapAsk, setSwapAsk] = useState<{ id: string; name: string; exerciseId: string } | null>(null);
+  /** Change rung waiting on "Change to {rung}?" when the exercise has completed sets (R618). */
+  const [rungAsk, setRungAsk] = useState<{ id: string; rung: number; name: string } | null>(null);
   /** The workout's exercises as last drawn, for openers made once per exercise. */
   const exercisesRef = useRef(workout?.exercises ?? []);
   exercisesRef.current = workout?.exercises ?? [];
@@ -278,6 +300,9 @@ export default function Session() {
   }
 
   const { restEndsAt, restSetId } = workout;
+  /** The exercise Modify (or Change rung) is open for, and its program rule if it has one. */
+  const modifying = workout.exercises.find((e) => e.id === modifyFor) ?? null;
+  const modifyingRule = modifying?.program?.rule ?? null;
   /** The set ticked last: mid-superset it shows when the rest comes (R100). */
   const lastTicked = latestTickedSetId(workout.exercises);
   /** What the rest row says at zero, by the set the rest is (or was) under. */
@@ -398,6 +423,9 @@ export default function Session() {
             paddingBottom: 16 + Math.max(dockHeight, insets.bottom),
           }}
         >
+          {workout.program ? (
+            <ProgramWeek week={workout.program.week} weeks={workout.program.weeks} done={workout.program.done} line={workout.program.weekLine} />
+          ) : null}
           {workout.exercises.length > 0 ? <SessionTip /> : null}
           {workout.exercises.map((ex) => {
             // What is about one set goes only to the block that has it, so a tick redraws the blocks it changed, not all.
@@ -457,11 +485,22 @@ export default function Session() {
         {safeScroll.room > 0 ? <View style={{ height: safeScroll.room }} /> : null}
       </ScrollView>
       <ModifySheet
-        target={(() => {
-          const ex = workout.exercises.find((e) => e.id === modifyFor);
-          return ex ? { exerciseId: ex.exerciseId, name: ex.name, programExerciseId: null, inUse: workout.exercises.map((e) => e.exerciseId) } : null;
-        })()}
-        note="Just for this workout. To swap it for good, use Modify on the routine's page."
+        target={modifying ? { exerciseId: modifying.exerciseId, name: modifying.name, programExerciseId: null, inUse: workout.exercises.map((e) => e.exerciseId) } : null}
+        // A program's ladder slot changes its rung here, for today and from now on (R618).
+        ladder={modifyingRule?.kind === 'ladder' && modifyingRule.rungs ? { rungs: modifyingRule.rungs, current: modifyingRule.rung ?? 0, sets: modifyingRule.sets } : null}
+        note={
+          modifyingRule?.kind === 'ladder'
+            ? 'Changes it today and from now on. Its sets today start fresh.'
+            : "Just for this workout. To swap it for good, use Modify on the routine's page."
+        }
+        onChooseRung={(rung) => {
+          const ex = modifying;
+          setModifyFor(null);
+          if (!ex) return;
+          const name = ex.program?.rule.rungs?.[rung]?.name ?? '';
+          if (replaceNeedsConfirm(ex)) afterSheetCloses(() => setRungAsk({ id: ex.id, rung, name }));
+          else changeRungTo(db, ex.id, rung);
+        }}
         onClose={() => setModifyFor(null)}
         onChoose={(exerciseId) => {
           const ex = workout.exercises.find((e) => e.id === modifyFor);
@@ -471,6 +510,18 @@ export default function Session() {
           if (replaceNeedsConfirm(ex)) afterSheetCloses(() => setSwapAsk({ id: ex.id, name: ex.name, exerciseId }));
           else replaceWith(db, ex.id, exerciseId);
         }}
+      />
+      <ConfirmSheet
+        visible={rungAsk !== null}
+        title={`Change to ${rungAsk?.name ?? ''}?`}
+        body="Its completed sets will be cleared."
+        confirmLabel="Change"
+        cancelLabel="Keep"
+        onConfirm={() => {
+          if (rungAsk) changeRungTo(db, rungAsk.id, rungAsk.rung);
+          setRungAsk(null);
+        }}
+        onCancel={() => setRungAsk(null)}
       />
       <ConfirmSheet
         visible={swapAsk !== null}

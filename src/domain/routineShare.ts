@@ -48,7 +48,7 @@ export const MAX_DAY_NAME = 60;
 export const MAX_DAYS = 14;
 export const MAX_SLOTS_PER_DAY = 40;
 export const MAX_CUSTOMS = 60;
-/** The rep range's top: seconds for timed exercises, so up to an hour. */
+/** The rep range's top a code carries: seconds for timed exercises, so up to an hour. */
 export const MAX_REPS = 3600;
 export const MAX_INCREMENT = 100;
 
@@ -139,6 +139,12 @@ export const SHARE_CODE_ERRORS: Record<ShareCodeError, string> = {
   newer_version: 'That code is from a newer version of GymHound. Update the app and try again.',
   cut_short: 'That code is cut short. Copy the whole code and try again.',
 };
+
+/** Why `encodeRoutine` refuses a slot's sets or range: past what a code carries (a copied 90:00 run, ruling R-t9a). */
+export const OUT_OF_BOUNDS = 'Sets or reps are out of bounds.';
+
+/** What Share routine says when a routine has a target past what a code carries (ruling R-t9a). */
+export const SHARE_TOO_LONG = 'This routine has a target longer than GymHound can share.';
 
 /** Raised by `encodeRoutine` for a routine outside the bounds a code can carry. */
 export class RoutineNotShareable extends Error {
@@ -325,7 +331,7 @@ export function encodeRoutineV1(routine: SharedRoutine, libraryIds: readonly str
       const increment = round3(slot.increment);
       const whole = (n: number, lo: number, hi: number) => Number.isInteger(n) && n >= lo && n <= hi;
       if (!whole(setCount, MIN_SETS, MAX_SETS) || !whole(repMin, 1, MAX_REPS) || !whole(repMax, repMin, MAX_REPS)) {
-        throw new RoutineNotShareable('Sets or reps are out of bounds.');
+        throw new RoutineNotShareable(OUT_OF_BOUNDS);
       }
       if (!Number.isFinite(increment) || increment < 0 || increment > MAX_INCREMENT) throw new RoutineNotShareable('The increment is out of bounds.');
       if (slot.restSeconds !== null && !REST_CHOICES.includes(slot.restSeconds)) throw new RoutineNotShareable('The rest is out of bounds.');
@@ -669,7 +675,7 @@ export function encodeRoutine(routine: SharedRoutine, libraryIds: readonly strin
       }
       const whole = (n: number, lo: number, hi: number) => Number.isInteger(n) && n >= lo && n <= hi;
       if (!whole(slot.setCount, MIN_SETS, MAX_SETS) || !whole(slot.repMin, 1, MAX_REPS) || !whole(slot.repMax, slot.repMin, MAX_REPS)) {
-        throw new RoutineNotShareable('Sets or reps are out of bounds.');
+        throw new RoutineNotShareable(OUT_OF_BOUNDS);
       }
       const hundredths = Math.round(slot.increment * 100);
       if (!Number.isFinite(slot.increment) || hundredths < 0 || hundredths > MAX_INCREMENT * 100) throw new RoutineNotShareable('The increment is out of bounds.');

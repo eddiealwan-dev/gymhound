@@ -1,14 +1,19 @@
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { SwapCandidate } from '../../domain/alternatives';
+import type { RepSchemeExtra } from '../../domain/labels';
+import { programWeek, reactiveDeloadDue } from '../../domain/programRules';
 import type { Outcome } from '../../domain/progression';
 import { clampRule, dayLabel, linksFromGroups, supersetGroups, validateDraft } from '../../domain/routineDraft';
 import type { RoutineDraft } from '../../domain/routineDraft';
 import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { programById } from '../../seed/programs.generated';
+import type { ProgramWeek } from '../../seed/programTypes';
 import { PREMADE_ORDER, RETIRED_PREMADES } from '../../seed/routines';
 import { newId } from '../ids';
 import { exercises, routineDays, routineExercises, routines, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
+import { programState } from './programRunRepo';
+import { slotScheme } from './programViewRepo';
 import { getSettings, setSetting } from './settingsRepo';
 
 /** Raised when a premade routine would be edited or deleted. Premades are read-only (§8.6). */
@@ -73,6 +78,23 @@ export type UpNextExercise = {
   lastWorkingUnit: WeightUnit | null;
   lastNextWeight: number | null;
   lastNextUnit: WeightUnit | null;
+  /** A program slot's scheme words (§18.29): a carry's distance unit, a metcon's format, a run on a clock. */
+  schemeExtra?: RepSchemeExtra;
+};
+
+/**
+ * One of the twenty programs on Up next (§18.29): the week of the next session (R616) and its special kind (R617),
+ * whether the block is done (Start over), the reactive deload's offer (R627) with the key Not now stores, and the
+ * program's After this program, whose first sentence Up next shows once the block is done.
+ */
+export type UpNextProgram = {
+  week: number;
+  weeks: number;
+  done: boolean;
+  weekInfo: ProgramWeek | null;
+  offerDeload: boolean;
+  offerKey: string;
+  afterThisProgram: string;
 };
 
 type LastResult = Pick<
@@ -99,6 +121,8 @@ export type UpNext = {
   /** The day's latest finished workout. Its `day_mark` is no longer read: marks are per exercise (R69). */
   lastTime: { localDate: string } | null;
   exercises: UpNextExercise[];
+  /** One of the twenty programs with its run started (§18.29); null or absent for any other routine. */
+  program?: UpNextProgram | null;
 };
 
 /**
@@ -537,6 +561,8 @@ export function getUpNext(db: Db): UpNext | null {
       incrementUnit: routineExercises.incrementUnit,
       nextWeight: routineExercises.nextWeight,
       nextWeightUnit: routineExercises.nextWeightUnit,
+      ladderRung: routineExercises.ladderRung,
+      nextSetCount: routineExercises.nextSetCount,
     })
     .from(routineExercises)
     .innerJoin(exercises, eq(exercises.id, routineExercises.exerciseId))
@@ -544,6 +570,7 @@ export function getUpNext(db: Db): UpNext | null {
     .orderBy(asc(routineExercises.position))
     .all();
 
+  const program = upNextProgram(db, routine.id, routine.runStartedAt, routine.runDeloadAt);
   return {
     routineId: routine.id,
     routineName: routine.name,
@@ -551,11 +578,45 @@ export function getUpNext(db: Db): UpNext | null {
     dayId: day.id,
     dayName: day.name,
     lastTime,
-    exercises: dayExercises.map((exercise) => ({
+    exercises: dayExercises.map(({ ladderRung, nextSetCount, ...exercise }) => ({
       ...exercise,
+      // A program slot shows the week's sets and range (R617-R620), as the workout will start it.
+      ...(program ? (slotScheme(db, routine.id, { ...exercise, ladderRung, nextSetCount }, program.week, program.weekInfo) ?? {}) : {}),
       ...lastResult(db, exercise.routineExerciseId, exercise.exerciseId),
     })),
+    program,
   };
+}
+
+/** The program part of Up next (§18.29): null for a routine that is not one of the twenty, or with no run yet. */
+function upNextProgram(db: Db, routineId: string, runStartedAt: number | null, runDeloadAt: number | null): UpNextProgram | null {
+  const program = programById(routineId);
+  const state = program && runStartedAt !== null ? programState(db, routineId) : null;
+  if (!program || !state || runStartedAt === null) return null;
+  // The offer is for the week of the latest finished session (R627), until Not now for that week, the tap, or the end.
+  const missWeek = state.sessions === 0 ? 0 : programWeek(state.sessions - 1, program.daysPerWeek);
+  const offerKey = `${routineId}:${runStartedAt}:${missWeek}`;
+  const offerDeload =
+    program.reactiveDeload &&
+    !state.done &&
+    runDeloadAt === null &&
+    state.weekInfo?.halfSets !== true &&
+    reactiveDeloadDue(state.mainMissesThisWeek) &&
+    getSettings(db).deloadOfferDismissed !== offerKey;
+  return {
+    week: state.week,
+    weeks: program.weeks,
+    done: state.done,
+    weekInfo: state.weekInfo,
+    offerDeload,
+    offerKey,
+    afterThisProgram: program.afterThisProgram,
+  };
+}
+
+/** Not now on the reactive deload's offer (R627): it is not offered again for that run and week. */
+export function dismissDeloadOffer(db: Db, offerKey: string): void {
+  setSetting(db, 'deloadOfferDismissed', offerKey);
 }
 
 /** Every exercise Modify can offer (R553): the library and your own, not archived. */

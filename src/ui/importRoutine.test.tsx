@@ -73,7 +73,10 @@ describe('Add from code (§18.18)', () => {
     mockPro = false;
     const tree = render(shareMessage('Push/pull/legs', encodePremade('premade-ppl-6')));
     expect(allText(tree)).toContain('Push/pull/legs');
-    expect(allText(tree)).toContain('already in your Routines');
+    // A retired program is on Routines only while someone uses it (R598): the preview says it is retired, not that it
+    // is on Routines, and Open program opens its page.
+    expect(allText(tree)).toContain('6 days. Retired. Open program shows its page.');
+    expect(allText(tree)).not.toContain('already in your Routines');
     const open = tree.root.findByProps({ label: 'Open program' });
     act(() => open.props.onPress());
     expect(mockReplace).toHaveBeenCalledWith('/routines/premade-ppl-6');
@@ -85,6 +88,7 @@ describe('Add from code (§18.18)', () => {
     mockPro = false;
     const tree = render(encodePremade('program-bro-split'));
     expect(allText(tree)).toContain('Bro Split');
+    expect(allText(tree)).toContain('already in your Routines');
     act(() => tree.root.findByProps({ label: 'Open program' }).props.onPress());
     expect(mockReplace).toHaveBeenCalledWith('/routines/program-bro-split');
   });

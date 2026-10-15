@@ -92,6 +92,8 @@ export default function FinishSummary() {
   const read = useCallback((db: Db) => readSummary(db, id), [id]);
   const { summary, unit, firstWorkout } = useDbQuery(read);
   useReviewAfterFinish(db, id, summary !== null);
+  /** The lines under the figures: the summary's own, else next time's weights as `finishLine` says them. */
+  const lines = summary === null ? [] : (summary.lines ?? summary.next.map((n) => ({ workoutExerciseId: n.workoutExerciseId, text: finishLine(n), why: null })));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -120,10 +122,18 @@ export default function FinishSummary() {
                   label="Sets logged"
                   value={`${summary.setCount} ${summary.setCount === 1 ? 'set' : 'sets'}`}
                 />
-                {summary.next.length > 0 && (
+                {lines.length > 0 && (
                   <View style={{ gap: 8, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border }}>
-                    {summary.next.map((n, i) => (
-                      <Body key={i}>{finishLine(n)}</Body>
+                    {lines.map((line, i) => (
+                      // A program's line says why under it, muted (§18.29: a reset, a ladder going back, a metcon beaten twice).
+                      <View key={i} style={{ gap: 2 }}>
+                        <Body>{line.text}</Body>
+                        {line.why === null ? null : (
+                          <Body muted style={{ fontSize: 14 }}>
+                            {line.why}
+                          </Body>
+                        )}
+                      </View>
                     ))}
                   </View>
                 )}

@@ -2,6 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDb } from '../../../src/db/DbProvider';
+import { changeRung, startProgramOver } from '../../../src/db/repositories/programRunRepo';
+import { programPageOf, type ProgramPageView, type SlotScheme } from '../../../src/db/repositories/programViewRepo';
 import { getRoutineDetail, swapRoutineExercise } from '../../../src/db/repositories/routinesRepo';
 import { programExerciseId } from '../../../src/domain/alternatives';
 import { routineLine } from '../../../src/domain/programInfo';
@@ -10,6 +12,7 @@ import type { Program } from '../../../src/seed/programTypes';
 import type { RoutineDetail, RoutineDetailExercise } from '../../../src/db/repositories/routinesRepo';
 import type { Db } from '../../../src/db/types';
 import { formatRepScheme } from '../../../src/domain/labels';
+import { graduationLine, programWeekText, startOverQuestion } from '../../../src/domain/upNext';
 import { linksFromGroups } from '../../../src/domain/routineDraft';
 import { bumpData, useDbQuery } from '../../../src/state/dataVersion';
 import { ActiveBadge } from '../../../src/ui/ActiveBadge';
@@ -22,7 +25,7 @@ import { ModifySheet } from '../../../src/ui/ModifySheet';
 import { ProgramCard } from '../../../src/ui/programs/ProgramCard';
 import { useProGate } from '../../../src/ui/RoutineLimit';
 import { useRoutineActions } from '../../../src/ui/routines/useRoutineActions';
-import { afterSheetCloses, Sheet } from '../../../src/ui/Sheet';
+import { afterSheetCloses, ConfirmSheet, Sheet } from '../../../src/ui/Sheet';
 import { SheetTitle } from '../../../src/ui/SheetTitle';
 import { Screen } from '../../../src/ui/Screen';
 import { SupersetBar, supersetRuns } from '../../../src/ui/SupersetBar';
@@ -40,8 +43,17 @@ function toRoutines() {
  * An exercise of a day: its name, and its sets and reps (seconds for timed ones) as Up next shows them. Tapping it opens
  * its Modify and Stats (R553, R554).
  */
-function ExerciseRow({ exercise, onPress }: { exercise: RoutineDetailExercise; onPress: (exercise: RoutineDetailExercise) => void }) {
-  const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+function ExerciseRow({
+  exercise,
+  plan,
+  onPress,
+}: {
+  exercise: RoutineDetailExercise;
+  /** A program slot's next session (§18.29): the week's sets, the rung's range, a carry's distance, a metcon's format. */
+  plan: SlotScheme | null;
+  onPress: (exercise: RoutineDetailExercise) => void;
+}) {
+  const scheme = schemeOf(exercise, plan);
   return (
     // At a large text size the scheme drops under the name rather than squeezing it, as on Up next.
     <Pressable
@@ -59,8 +71,23 @@ function ExerciseRow({ exercise, onPress }: { exercise: RoutineDetailExercise; o
   );
 }
 
+/** An exercise's sets and reps as Up next shows them; a program slot's as its next session will start (§18.29). */
+function schemeOf(exercise: RoutineDetailExercise, plan: SlotScheme | null): string {
+  return plan
+    ? formatRepScheme(plan.setCount, plan.repMin, plan.repMax, exercise.loggingType, plan.schemeExtra)
+    : formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+}
+
 /** A day as a card: its name, then its exercises in order, a superset marked by the bar down its members' edge. */
-function DayCard({ day, onExercise }: { day: RoutineDetail['days'][number]; onExercise: (exercise: RoutineDetailExercise) => void }) {
+function DayCard({
+  day,
+  plans,
+  onExercise,
+}: {
+  day: RoutineDetail['days'][number];
+  plans: ProgramPageView['slots'] | null;
+  onExercise: (exercise: RoutineDetailExercise) => void;
+}) {
   const { colors } = useTheme();
   const links = linksFromGroups(day.exercises.map((e) => e.supersetGroup));
   return (
@@ -69,7 +96,9 @@ function DayCard({ day, onExercise }: { day: RoutineDetail['days'][number]; onEx
         {day.name}
       </Display>
       {supersetRuns(day.exercises, links).map((run) => {
-        const rows = run.members.map((exercise) => <ExerciseRow key={exercise.id} exercise={exercise} onPress={onExercise} />);
+        const rows = run.members.map((exercise) => (
+          <ExerciseRow key={exercise.id} exercise={exercise} plan={plans?.[exercise.id]?.scheme ?? null} onPress={onExercise} />
+        ));
         return run.superset ? <SupersetBar key={run.members[0].id}>{rows}</SupersetBar> : rows;
       })}
     </View>
@@ -90,12 +119,47 @@ const RETIRED = 'Retired. It keeps running for you, and its history stays.';
  * program says it keeps running (R598). Premades are read-only but still progress when run. The actions are
  * `useRoutineActions`, shared with the ⋯ sheet on Routines (R542); Delete leaves for Routines.
  */
+/**
+ * The active program's state under its card (R634, R636, R616, R614): Active with the week ("Week 3 of 12", or "12
+ * weeks done."), the week's line, a line for each lift that dropped back twice in this run, and Start over, which asks
+ * first.
+ */
+function ActiveProgramState({ name, page, onStartOver }: { name: string; page: ProgramPageView | null; onStartOver: () => void }) {
+  if (page === null) return <ActiveBadge />;
+  return (
+    <View style={{ gap: 4 }}>
+      <ActiveBadge />
+      <Body weight={600}>{programWeekText(page)}</Body>
+      {page.weekLine === null ? null : <Body muted>{page.weekLine}</Body>}
+      {page.droppedTwice.map((exercise) => (
+        <Body key={exercise} muted>
+          {graduationLine(exercise)}
+        </Body>
+      ))}
+      <View style={{ marginTop: 4 }}>
+        <Button label="Start over" variant="secondary" accessibilityLabel={`Start ${name} over at week 1`} onPress={onStartOver} />
+      </View>
+    </View>
+  );
+}
+
+/** The routine and, for the active program whose exercises show, its state (R634). */
+function readPage(db: Db, id: string, pro: boolean) {
+  const routine = getRoutineDetail(db, id);
+  const page = routine !== null && routine.isPremade && routine.isActive && canSeeProgramExercises(routine, pro) ? programPageOf(db, id) : null;
+  return { routine, page };
+}
+
 export default function RoutineDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const read = useCallback((d: Db) => getRoutineDetail(d, id), [id]);
-  const routine = useDbQuery(read);
-  const actions = useRoutineActions(toRoutines);
   const pro = useIsPro();
+  const read = useCallback((d: Db) => readPage(d, id, pro), [id, pro]);
+  const { routine, page } = useDbQuery(read);
+  /** Start over waiting on its question (R616). */
+  const [askStartOver, setAskStartOver] = useState(false);
+  /** The ladder slot Change rung is open for (R618). */
+  const [changingRung, setChangingRung] = useState<RoutineDetailExercise | null>(null);
+  const actions = useRoutineActions(toRoutines);
   const openPaywall = useOpenPaywall();
   const db = useDb();
   const gate = useProGate();
@@ -130,7 +194,7 @@ export default function RoutineDetailScreen() {
             <View style={{ gap: 8 }}>
               {locked ? <Body muted>{proReasonText(lockedRoutineReason(routine))}</Body> : showDays ? null : <Body muted>{HIDDEN}</Body>}
               {showDays ? (
-                <ActiveBadge />
+                <ActiveProgramState name={routine.name} page={page} onStartOver={() => setAskStartOver(true)} />
               ) : (
                 <Button label={locked ? 'See Pro' : 'Set active'} onPress={locked ? openPaywall : () => actions.setActive(routine)} />
               )}
@@ -181,7 +245,7 @@ export default function RoutineDetailScreen() {
       {showDays ? (
         <View style={{ gap: 16, marginTop: 32 }}>
           {routine.days.map((day) => (
-            <DayCard key={day.id} day={day} onExercise={setChosen} />
+            <DayCard key={day.id} day={day} plans={page?.slots ?? null} onExercise={setChosen} />
           ))}
         </View>
       ) : null}
@@ -193,22 +257,32 @@ export default function RoutineDetailScreen() {
         </View>
       )}
       <Sheet visible={chosen !== null} onClose={() => setChosen(null)}>
-        <SheetTitle
-          subtitle={chosen === null ? null : formatRepScheme(chosen.setCount, chosen.repMin, chosen.repMax, chosen.loggingType)}
-        >
-          {chosen?.name ?? ''}
-        </SheetTitle>
+        <SheetTitle subtitle={chosen === null ? null : schemeOf(chosen, page?.slots[chosen.id]?.scheme ?? null)}>{chosen?.name ?? ''}</SheetTitle>
         <View style={{ gap: 8 }}>
-          <Button
-            label="Modify"
-            variant="secondary"
-            onPress={() => {
-              const exercise = chosen;
-              setChosen(null);
-              // A Pro program or a kept routine can't change until Pro is back (R524, R525).
-              if (exercise) afterSheetCloses(() => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => setModifying(exercise)));
-            }}
-          />
+          {/* A ladder slot changes its rung in place of Modify (R618). */}
+          {chosen !== null && page?.slots[chosen.id]?.ladder ? (
+            <Button
+              label="Change rung"
+              variant="secondary"
+              accessibilityLabel={`Change rung for ${chosen.name}`}
+              onPress={() => {
+                const exercise = chosen;
+                setChosen(null);
+                afterSheetCloses(() => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => setChangingRung(exercise)));
+              }}
+            />
+          ) : (
+            <Button
+              label="Modify"
+              variant="secondary"
+              onPress={() => {
+                const exercise = chosen;
+                setChosen(null);
+                // A Pro program or a kept routine can't change until Pro is back (R524, R525).
+                if (exercise) afterSheetCloses(() => gate.when(canUseRoutine(routine, gate.isPro()), lockedRoutineReason(routine), () => setModifying(exercise)));
+              }}
+            />
+          )}
           <Button
             label="Stats"
             variant="secondary"
@@ -239,6 +313,30 @@ export default function RoutineDetailScreen() {
           setModifying(null);
           bumpData();
         }}
+      />
+      <ModifySheet
+        target={changingRung === null ? null : { exerciseId: changingRung.exerciseId, name: changingRung.name, programExerciseId: null, inUse: [] }}
+        ladder={changingRung === null ? null : (page?.slots[changingRung.id]?.ladder ?? null)}
+        note="Changes it from the next workout. Its next weight starts fresh."
+        onChoose={() => setChangingRung(null)}
+        onChooseRung={(rung) => {
+          if (changingRung) changeRung(db, changingRung.id, rung);
+          setChangingRung(null);
+          bumpData();
+        }}
+        onClose={() => setChangingRung(null)}
+      />
+      <ConfirmSheet
+        visible={askStartOver}
+        title={startOverQuestion(routine.name)}
+        confirmLabel="Start over"
+        cancelLabel="Not now"
+        onConfirm={() => {
+          setAskStartOver(false);
+          startProgramOver(db, routine.id, Date.now());
+          bumpData();
+        }}
+        onCancel={() => setAskStartOver(false)}
       />
       {gate.sheets}
       {actions.sheets}

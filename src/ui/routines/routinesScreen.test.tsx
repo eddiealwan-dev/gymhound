@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { setActiveProgram } from '../../db/repositories/programRunRepo';
 import { Image, StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -34,6 +35,7 @@ jest.mock('../../db/repositories/routinesRepo', () => ({
   deleteRoutine: jest.fn(),
   duplicateRoutine: jest.fn(() => 'copy-1'),
 }));
+jest.mock('../../db/repositories/programRunRepo', () => ({ setActiveProgram: jest.fn(), changeRung: jest.fn(), startProgramOver: jest.fn() }));
 jest.mock('../../state/routineShare', () => ({ shareRoutine: jest.fn(() => Promise.resolve('shared')) }));
 jest.mock('../../db/repositories/savedWorkoutsRepo', () => ({ listSavedWorkouts: () => [], startSavedWorkout: jest.fn() }));
 jest.mock('../../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
@@ -154,7 +156,7 @@ describe('Routines: the groups (R597, R598)', () => {
     const tree = mount();
     expect(buttons(tree, 'Set active')).toHaveLength(1);
     act(() => buttons(tree, 'Set active')[0].props.onPress());
-    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'premade-ppl-6');
+    expect(setActiveProgram).toHaveBeenCalledWith('db', 'premade-ppl-6', expect.any(Number));
   });
 });
 

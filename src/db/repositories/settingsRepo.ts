@@ -77,6 +77,8 @@ export type Settings = {
   reviewLastCheck: string | null;
   /** §18.28 (R593): the tester questions' answers, one entry per workout asked after. Read through `readTesterEntries`. */
   testerAnswers: unknown;
+  /** §18.29 (R627): the reactive deload's offer answered Not now, for this program's run and week; null for none. */
+  deloadOfferDismissed: string | null;
 };
 
 /** The stored key for each field. One row per key, named as in spec §6. */
@@ -122,6 +124,7 @@ const KEYS: Record<keyof Settings, string> = {
   reviewAskedAt: 'review_asked_at',
   reviewLastCheck: 'review_last_check',
   testerAnswers: 'tester_answers',
+  deloadOfferDismissed: 'deload_offer_dismissed',
 };
 
 const FIELDS = Object.keys(KEYS) as (keyof Settings)[];
@@ -170,6 +173,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     reviewAskedAt: null,
     reviewLastCheck: null,
     testerAnswers: [],
+    deloadOfferDismissed: null,
   };
 }
 

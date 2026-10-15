@@ -6,7 +6,7 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import { MARK_LABELS } from '../../domain/labels';
 import { planInUnit, type Gear } from '../../domain/plates';
 import { restAfterLine, restLengthFor } from '../../domain/rest';
-import { lastSummary, ruleSentence, todaysRead } from '../../domain/ruleLine';
+import { lastSummary, programRuleSentence, programTodaysRead, ruleSentence, todaysRead, WARM_UP_LINE } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
 import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
@@ -198,7 +198,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   /** A plan or an override in the unit shown, as the set table shows today's target (`planInUnit`, spec 7.1). */
   const shown = (weight: number | null, from: WeightUnit | null) =>
     weight === null ? null : { weight: planInUnit(weight, from ?? unit, unit, ex.equipment === 'barbell', gear.bar, gear.plates), unit };
-  const read = todaysRead({
+  const readInput = {
     rule: ex.rule,
     loggingType: ex.loggingType,
     planned: shown(ex.plannedWeight, ex.plannedUnit),
@@ -206,8 +206,16 @@ export const ExerciseBlock = memo(function ExerciseBlock({
     mark: ex.mark,
     equipment: ex.equipment,
     gear,
-  });
-  const sentence = ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last: lastSummary(ex.previous) });
+  };
+  const last = lastSummary(ex.previous);
+  // A program's slot reads by its rule kind (§18.29, R610–R622); everything else as spec 7.4 says.
+  const program = ex.program ?? null;
+  const read = program ? programTodaysRead({ ...readInput, program: program.rule, last }) : todaysRead(readInput);
+  const sentence = program
+    ? programRuleSentence({ program: program.rule, rule: ex.rule, loggingType: ex.loggingType, unit, last })
+    : ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last });
+  /** A ladder slot changes its rung where any other exercise is modified (R618). */
+  const ladder = program?.rule.kind === 'ladder';
   const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
   /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
   const restUnder = (setId: string): number | null => {
@@ -388,7 +396,13 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           onPress={onOpenMark}
         />
         {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
-        {onOpenModify ? <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} /> : null}
+        {onOpenModify ? (
+          ladder ? (
+            <NameRowControl icon="swap-horizontal" label="Change rung" readAs={`Change rung for ${ex.name}`} onPress={onOpenModify} />
+          ) : (
+            <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} />
+          )
+        ) : null}
         {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
         {/* + Note comes last (the owner's Round 11 note). */}
         {!ex.note && !editingNote ? (
@@ -451,6 +465,18 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       <Body muted style={{ fontSize: 14, marginTop: NAME_ROW_HIT_SLOP.bottom }}>
         {read === null ? sentence : `${sentence} ${read}`}
       </Body>
+      {/* A program slot's note, as the documents write it (R606), and the warm-up line under a lifting day's first slot
+          (R626). Muted under the rule; they wrap at any text size. */}
+      {program?.note ? (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {program.note}
+        </Body>
+      ) : null}
+      {program?.warmUp ? (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {WARM_UP_LINE}
+        </Body>
+      ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (

@@ -4,7 +4,8 @@ import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useDb } from '../../src/db/DbProvider';
-import { getUpNext } from '../../src/db/repositories/routinesRepo';
+import { startEarlyDeload, startProgramOver } from '../../src/db/repositories/programRunRepo';
+import { dismissDeloadOffer, getUpNext } from '../../src/db/repositories/routinesRepo';
 import type { UpNext } from '../../src/db/repositories/routinesRepo';
 import { getSettings, setSetting } from '../../src/db/repositories/settingsRepo';
 import { ActiveWorkoutExistsError } from '../../src/db/repositories/workoutsRepo';
@@ -15,7 +16,19 @@ import { formatRepScheme } from '../../src/domain/labels';
 import { gearFor, type Gear } from '../../src/domain/plates';
 import { computeStreak } from '../../src/domain/streak';
 import type { DistanceUnit, WeightUnit } from '../../src/domain/types';
-import { startDayLabel, upNextDayHasWeight, upNextLoad, upNextNeedsWeights, upNextOutcome, upNextSubtitle } from '../../src/domain/upNext';
+import { weekLine } from '../../src/domain/ruleLine';
+import {
+  DELOAD_OFFER,
+  firstSentence,
+  programWeekText,
+  startDayLabel,
+  startOverQuestion,
+  upNextDayHasWeight,
+  upNextLoad,
+  upNextNeedsWeights,
+  upNextOutcome,
+  upNextSubtitle,
+} from '../../src/domain/upNext';
 import { formatVolume, totalVolume } from '../../src/domain/volume';
 import { deviceLocale } from '../../src/platform/locale';
 import { bumpData, useFocusedDbQuery } from '../../src/state/dataVersion';
@@ -24,7 +37,7 @@ import { useNow } from '../../src/state/useNow';
 import { Button } from '../../src/ui/Button';
 import { Hint } from '../../src/ui/Hint';
 import { Screen } from '../../src/ui/Screen';
-import { Sheet } from '../../src/ui/Sheet';
+import { ConfirmSheet, Sheet } from '../../src/ui/Sheet';
 import { Body, Display, Label, Num } from '../../src/ui/Text';
 import { breakableName, useLargeText } from '../../src/ui/largeText';
 import { useTheme } from '../../src/ui/ThemeProvider';
@@ -172,8 +185,83 @@ function ChangeRoutineLink({ onPress = openRoutines }: { onPress?: () => void })
 }
 
 /**
+ * A program's part of Up next (§18.29): the week's line (R617), the reactive deload's offer with Start deload and Not
+ * now (R627), and once the block is done, "12 weeks done." with the first sentence of After this program and Start
+ * over, which asks first (R616). Nothing starts without a tap.
+ */
+function ProgramUpNext({ upNext }: { upNext: UpNext }) {
+  const db = useDb();
+  const [askStartOver, setAskStartOver] = useState(false);
+  const program = upNext.program;
+  if (!program) return null;
+  const line = program.done ? null : weekLine(program.weekInfo);
+  return (
+    <>
+      {line === null ? null : (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {line}
+        </Body>
+      )}
+      {program.offerDeload ? (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          <Body accessibilityLiveRegion="polite">{DELOAD_OFFER}</Body>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <View style={{ flexGrow: 1 }}>
+              <Button
+                label="Start deload"
+                variant="secondary"
+                accessibilityLabel="Start the deload week now"
+                onPress={() => {
+                  startEarlyDeload(db, upNext.routineId, Date.now());
+                  bumpData();
+                }}
+              />
+            </View>
+            <View style={{ flexGrow: 1 }}>
+              <Button
+                label="Not now"
+                variant="quiet"
+                accessibilityLabel="Not now: keep this week as planned"
+                onPress={() => {
+                  dismissDeloadOffer(db, program.offerKey);
+                  bumpData();
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      ) : null}
+      {program.done ? (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          <Body>{`${programWeekText(program)} ${firstSentence(program.afterThisProgram)}`}</Body>
+          <Button
+            label="Start over"
+            variant="secondary"
+            accessibilityLabel={`Start ${upNext.routineName} over at week 1`}
+            onPress={() => setAskStartOver(true)}
+          />
+        </View>
+      ) : null}
+      <ConfirmSheet
+        visible={askStartOver}
+        title={startOverQuestion(upNext.routineName)}
+        confirmLabel="Start over"
+        cancelLabel="Not now"
+        onConfirm={() => {
+          setAskStartOver(false);
+          startProgramOver(db, upNext.routineId, Date.now());
+          bumpData();
+        }}
+        onCancel={() => setAskStartOver(false)}
+      />
+    </>
+  );
+}
+
+/**
  * The next day of the active routine: its name, when it was last done, a button that starts it, and its exercises,
- * each with its load in the display unit and how it went last time.
+ * each with its load in the display unit and how it went last time. A program leads with its week and shows its
+ * week's line, the reactive deload's offer and Start over once the block is done (`ProgramUpNext`).
  */
 function UpNextCard({
   upNext,
@@ -189,6 +277,8 @@ function UpNextCard({
   onStart: (dayId: string) => void;
 }) {
   const dayHasWeight = upNextDayHasWeight(upNext.exercises);
+  const program = upNext.program ?? null;
+  const week = program === null || program.done ? null : programWeekText(program);
   return (
     <Card>
       <Label>UP NEXT</Label>
@@ -196,14 +286,15 @@ function UpNextCard({
         {`${breakableName(upNext.routineName)} · ${upNext.dayName}`}
       </Display>
       <Body muted style={{ fontSize: 14 }}>
-        {upNextSubtitle(upNext.lastTime, upNextNeedsWeights(upNext.exercises), locale)}
+        {upNextSubtitle(upNext.lastTime, upNextNeedsWeights(upNext.exercises), locale, week)}
       </Body>
+      <ProgramUpNext upNext={upNext} />
       <View style={{ marginTop: 16, marginBottom: 8 }}>
         <Button label={startDayLabel(upNext.routineName, upNext.dayName)} onPress={() => onStart(upNext.dayId)} />
       </View>
       {upNext.exercises.map((exercise) => {
         const load = upNextLoad(exercise, dayHasWeight, unit, gear);
-        const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType);
+        const scheme = formatRepScheme(exercise.setCount, exercise.repMin, exercise.repMax, exercise.loggingType, exercise.schemeExtra);
         const outcome = upNextOutcome(exercise, unit, gear) ?? '';
         // At a large text size the scheme drops under the name rather than squeezing it. The name's flex basis stays
         // 'auto' (not flex: 1, whose basis of 0 would keep the row from ever wrapping); when both fit it grows and

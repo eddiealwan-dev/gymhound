@@ -8,8 +8,11 @@ import { convertIncrement, formatWeight, isZeroWeight } from './units';
 /** What the Up next card needs of an exercise to say its load. */
 export type UpNextLoadInput = { loggingType: LoggingType; nextWeight: number | null; nextWeightUnit: WeightUnit | null };
 
-/** Types that need a load to be logged. Bodyweight-plus, timed and distance exercises do fine without one. */
-const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assisted'];
+/**
+ * Types that need a load to be logged. Bodyweight-plus, timed and distance exercises do fine without one; a carry
+ * (weight and distance, R607) needs its load.
+ */
+const NEEDS_LOAD: readonly LoggingType[] = ['weighted', 'weighted_time', 'assisted', 'weighted_distance'];
 
 /** A weight and its unit, but not a bodyweight-plus exercise's 0 added load, which is no load (R75). */
 const hasWeight = (exercise: UpNextLoadInput): exercise is UpNextLoadInput & { nextWeight: number; nextWeightUnit: WeightUnit } =>
@@ -97,11 +100,39 @@ export function upNextOutcome(exercise: UpNextOutcomeInput, unit: WeightUnit, ge
   }
 }
 
-/** "First time on this day." or "Last time: WED 7 OCT", ending "Pick weights as you go." when the day needs weights. */
-export function upNextSubtitle(lastTime: { localDate: string } | null, needsWeights: boolean, locale: string): string {
+/**
+ * "First time on this day." or "Last time: WED 7 OCT", ending "Pick weights as you go." when the day needs weights. A
+ * program leads with its week (R616): "Week 3 of 12 · Last time: WED 7 OCT".
+ */
+export function upNextSubtitle(lastTime: { localDate: string } | null, needsWeights: boolean, locale: string, week: string | null = null): string {
   const when = lastTime === null ? 'First time on this day.' : `Last time: ${formatTrainDate(fromLocalDate(lastTime.localDate), locale)}`;
-  if (!needsWeights) return when;
-  return `${lastTime === null ? when : `${when}.`} Pick weights as you go.`;
+  const line = needsWeights ? `${lastTime === null ? when : `${when}.`} Pick weights as you go.` : when;
+  return week === null ? line : `${week} · ${line}`;
+}
+
+/** A program's week (R616): "Week 3 of 12", or "12 weeks done." once the block is done. */
+export function programWeekText(p: { week: number; weeks: number; done: boolean }): string {
+  return p.done ? `${p.weeks} weeks done.` : `Week ${p.week} of ${p.weeks}`;
+}
+
+/** The reactive deload's offer on Up next (R627). */
+export const DELOAD_OFFER = 'Two main lifts missed this week. Start the deload week now?';
+
+/** What Start over asks first (R616). */
+export function startOverQuestion(name: string): string {
+  return `Start ${name} over at week 1? Your weights stay.`;
+}
+
+/** The line on the active program's page when one slot has reset twice in the run (R614). */
+export function graduationLine(exercise: string): string {
+  return `${exercise} has dropped back twice in this run. See After this program.`;
+}
+
+/** The first sentence of a program's text, without its citation markers ("[22][23]"), for Up next once a block is done. */
+export function firstSentence(text: string): string {
+  const plain = text.replace(/\s*(\[\d+\])+/g, '').trim();
+  const end = plain.search(/[.?](\s|$)/);
+  return end === -1 ? plain : plain.slice(0, end + 1);
 }
 
 /**

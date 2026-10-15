@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { setActiveProgram } from '../../db/repositories/programRunRepo';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import RoutineDetailScreen from '../../../app/(tabs)/routines/[id]';
@@ -29,6 +30,8 @@ jest.mock('../../db/repositories/routinesRepo', () => ({
   deleteRoutine: jest.fn(),
   swapRoutineExercise: jest.fn(),
 }));
+jest.mock('../../db/repositories/programRunRepo', () => ({ setActiveProgram: jest.fn(), changeRung: jest.fn(), startProgramOver: jest.fn() }));
+jest.mock('../../db/repositories/programViewRepo', () => ({ programPageOf: jest.fn(() => null) }));
 jest.mock('../../state/routineShare', () => ({ shareRoutine: jest.fn(() => Promise.resolve('shared')) }));
 jest.mock('../../db/repositories/workoutsRepo', () => ({ getActiveWorkoutId: jest.fn() }));
 jest.mock('../../platform/entitlements', () => ({ entitlementsFor: () => ({ isPro: () => mockPro }), useIsPro: () => mockPro }));
@@ -123,7 +126,7 @@ describe("a program's page is its card (R630, R634)", () => {
     expect(buttons(tree, 'Share routine')).toHaveLength(1);
 
     act(() => buttons(tree, 'Set active')[0].props.onPress());
-    expect(setActiveRoutine).toHaveBeenCalledWith('db', 'program-advanced-upper-lower-dup');
+    expect(setActiveProgram).toHaveBeenCalledWith('db', 'program-advanced-upper-lower-dup', expect.any(Number));
   });
 
   it("a Pro program on free: R525's line and See Pro, and no Set active", () => {
@@ -135,7 +138,7 @@ describe("a program's page is its card (R630, R634)", () => {
     expect(buttons(tree, 'Set active')).toHaveLength(0);
     act(() => buttons(tree, 'See Pro')[0].props.onPress());
     expect(router.push).toHaveBeenCalledWith('/paywall');
-    expect(setActiveRoutine).not.toHaveBeenCalled();
+    expect(setActiveProgram).not.toHaveBeenCalled();
     for (const name of EXERCISES) expect(shown).not.toContain(name);
   });
 
