@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
+import { ClockPanel, ClockPills, ClockTrack } from './ClockPanel';
 import { RestInline } from './RestInline';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -69,6 +70,12 @@ const pillGroups = () => row().findAll((n) => n.type === View && styleOf(n).over
 const shownText = () => tree.root.findAllByType(Text).map((t) => [t.props.children].flat().join(''));
 
 describe('the rest under its set is a live timer (spec 18.6)', () => {
+  it("is drawn in the panel, pills and track the work clock shares", () => {
+    expect(tree.root.findAllByType(ClockPanel)).toHaveLength(1);
+    expect(tree.root.findAllByType(ClockPills)).toHaveLength(1);
+    expect(tree.root.findAllByType(ClockTrack)).toHaveLength(1);
+  });
+
   it('shows a big countdown under a REST label', () => {
     const time = tree.root.find((n) => n.type === Text && n.props.children === '1:45');
     expect(styleOf(time)).toMatchObject({ fontSize: 32, fontFamily: 'BarlowCondensed_800ExtraBold' });

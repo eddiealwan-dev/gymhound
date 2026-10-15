@@ -4,6 +4,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { LEAD_IN_MS, pauseTimer, releaseHold, startTimer, stopTimer, type WorkPlan, type WorkTimer } from '../../domain/workClock';
 import { doneWorkClock, pauseWorkClock, releaseWorkHold, resetWorkClock, resumeWorkClock, startWorkClock } from '../../state/workClockActions';
 import { Button } from '../Button';
+import { ClockPanel, ClockPills, ClockTrack } from './ClockPanel';
 import { WorkClock } from './WorkClock';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -67,6 +68,13 @@ const styleOf = (node: ReactTestInstance) => [node.props.style].flat(Infinity).r
 const track = () => tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true);
 
 describe('the work clock before Start', () => {
+  it("is drawn in the rest row's own panel, pills and track, not a copy of them", () => {
+    mount(amrap10, null);
+    expect(tree.root.findAllByType(ClockPanel)).toHaveLength(1);
+    expect(tree.root.findAllByType(ClockPills)).toHaveLength(1);
+    expect(tree.root.findAllByType(ClockTrack)).toHaveLength(1);
+  });
+
   it('shows the full time over its name, in the rest row\'s type, with Start as its one filled pill', () => {
     mount(amrap10, null);
     expect(shownText()).toEqual(expect.arrayContaining(['AMRAP', '10:00']));

@@ -8,6 +8,7 @@ import { restMinus15, restPlus15, restSkip } from '../../state/sessionActions';
 import { Button } from '../Button';
 import { Body, Num } from '../Text';
 import { useTheme } from '../ThemeProvider';
+import { ClockPanel, ClockPills, ClockTrack } from './ClockPanel';
 import { useRestClock } from './useRestClock';
 
 type Props = {
@@ -50,27 +51,10 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
   const running = phase.kind === 'running';
 
   return (
-    <View
+    <ClockPanel
       onLayout={running ? (e) => setRunningHeight(e.nativeEvent.layout.height) : undefined}
-      style={{
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        columnGap: 8,
-        // The pills' 4pt hitSlops, stacked on two lines, must not overlap.
-        rowGap: 8,
-        minHeight: running ? undefined : runningHeight,
-        marginVertical: 4,
-        paddingLeft: 12,
-        paddingRight: 8,
-        paddingVertical: 6,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        backgroundColor: colors.surface,
-        overflow: 'hidden',
-      }}
+      minHeight={running ? undefined : runningHeight}
+      margins={{ marginVertical: 4 }}
     >
       {running ? (
         <>
@@ -90,22 +74,7 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               {formatRest(phase.remaining)}
             </Num>
           </Pressable>
-          {/*
-            The pills wrap as one group, so Skip never sits alone on the second line. When the group alone is wider than
-            the row (AX2 on 320pt), it wraps inside itself, at the end, rather than being clipped by the row.
-          */}
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              rowGap: 8,
-              columnGap: 8,
-              maxWidth: '100%',
-              flexShrink: 0,
-            }}
-          >
+          <ClockPills>
             <Button
               label="−15s"
               variant="secondary"
@@ -127,19 +96,8 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
               accessibilityLabel="Skip the rest"
               onPress={() => restSkip(db, workoutId, endsAt)}
             />
-          </View>
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{
-              position: 'absolute',
-              left: 0,
-              bottom: 0,
-              height: 3,
-              width: `${restTrackFraction(phase.remaining, trackLength) * 100}%`,
-              backgroundColor: colors.text,
-            }}
-          />
+          </ClockPills>
+          <ClockTrack fraction={restTrackFraction(phase.remaining, trackLength)} />
         </>
       ) : (
         <View style={{ flexGrow: 1, flexBasis: 'auto', minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -149,6 +107,6 @@ export function RestInline({ workoutId, endsAt, lengthSeconds, upText, onOpenRes
           </Body>
         </View>
       )}
-    </View>
+    </ClockPanel>
   );
 }
