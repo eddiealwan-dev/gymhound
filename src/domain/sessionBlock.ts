@@ -1,8 +1,11 @@
 import type { MetconRule, RuleKind } from '../seed/programTypes';
 import { formatRest } from './dates';
+import { spokenRest } from './rest';
 import { TIMED_RUN_IDS } from './restKind';
 import { metconText } from './ruleLine';
-import type { LoggingType, SetType } from './types';
+import { weightText } from './setEntry';
+import type { Column, RowModel } from './setTable';
+import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
 import type { WorkPlan, WorkStep } from './workClock';
 
 /**
@@ -151,4 +154,94 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
     default:
       return null;
   }
+}
+
+/** The line an event's rule adds (t7-design.md): what a tick means on a carry, a yoke or a sled. */
+export const EVENT_LINE = 'A drop ends the set: log what you carried unbroken.';
+
+const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
+const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
+
+/** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
+export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string };
+
+/**
+ * A block's own take on its set rows (t7-design.md). A metcon's score suggests nothing (last time stays beside it) and
+ * is spoken as "Score"; a run's row and each working set of intervals suggest the week's target, a run's row spoken as
+ * "Run"; an event's last time reads "315 × 50" (its time and units said in words), its time may stay empty, and its tick
+ * means drop-free. Plain sets and technique sets keep their rows.
+ */
+export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions): RowModel[] {
+  switch (kind) {
+    case 'metcon':
+      return rows.map((row) => ({
+        ...row,
+        spokenAs: 'Score',
+        placeholders: { weight: null, reps: null, durationS: null, distance: null, ...(row.loggingType === 'rounds' ? { extraReps: null } : {}) },
+      }));
+    case 'run':
+    case 'intervals': {
+      const target = o.targetS ?? null;
+      return rows.map((row) => {
+        const suggested = row.set.setType === 'working' && target !== null ? { ...row, placeholders: { ...row.placeholders, durationS: target } } : row;
+        return kind === 'run' ? { ...suggested, spokenAs: o.noun ?? 'Run' } : suggested;
+      });
+    }
+    case 'event':
+      return rows.map((row) => ({ ...row, ...eventPrevious(row, o.unit), optional: ['durationS'], tickLabel: `Set ${row.label} carried drop-free` }));
+    default:
+      return rows;
+  }
+}
+
+/** An event's last time: "315 × 50", with a unit only where it isn't the one shown, and every unit and the time in words. */
+function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previous' | 'previousLabel'> {
+  const p = row.matched;
+  if (p === null || p.weight === null || p.distance === null || p.distanceUnit === null) return { previous: row.previous };
+  const weightUnit = p.weightUnit ?? unit;
+  const distance = p.distanceUnit === (row.distanceUnit ?? p.distanceUnit) ? `${p.distance}` : `${p.distance} ${p.distanceUnit}`;
+  const said = `${p.weight} ${WEIGHT_WORDS[weightUnit]} for ${p.distance} ${DISTANCE_WORDS[p.distanceUnit]}`;
+  return {
+    previous: `${weightText(p.weight, weightUnit, unit)} × ${distance}`,
+    previousLabel: p.durationS === null ? said : `${said} in ${spokenRest(p.durationS)}`,
+  };
+}
+
+/**
+ * A block's columns: a metcon's score and a run have one row, so no SET chip; an event heads its distance with its
+ * unit ("FT", "YD"). The rest keep the set table's.
+ */
+export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit): Column[] {
+  if (kind === 'metcon' || kind === 'run') return columns.filter((c) => c.key !== 'set');
+  if (kind === 'event') return columns.map((c) => (c.key === 'distance' ? { ...c, header: eventDistanceUnit.toUpperCase() } : c));
+  return columns;
+}
+
+/** A metcon's name in the session: the program's label for it ("Metcon A"), else the exercise's own name. */
+export function metconTitle(catalogName: string, exerciseName: string): string {
+  const dot = catalogName.indexOf(' · ');
+  return dot > 0 ? catalogName.slice(0, dot) : exerciseName;
+}
+
+/** Units in words, for VoiceOver: "200 m" is 200 metres, "12 cal" 12 calories, "95/65 lb" 95 or 65 pounds. */
+function spokenAmount(text: string): string {
+  return text
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1 or $2')
+    .replace(/\b(\d+(?: or \d+)?) ?m\b/g, '$1 metres')
+    .replace(/\b(\d+) ?cal\b/g, '$1 calories')
+    .replace(/\blb\b/g, 'pounds')
+    .replace(/\bkg\b/g, 'kilograms');
+}
+
+/** A metcon's format and moves as one sentence for VoiceOver: "AMRAP 10 minutes: 10 Goblet squat, 200 metres Run." */
+export function metconVoice(parts: { format: string; elements: MetconElement[] }): string {
+  const format = parts.format.replace(/ min cap$/, ' minute cap').replace(/ min$/, ' minutes').replace(' · ', ', ');
+  const moves = parts.elements.map((e) => [e.amount === null ? null : spokenAmount(e.amount), e.name].filter((x) => x !== null).join(' ') + (e.load === null ? '' : `, ${spokenAmount(e.load)}`));
+  return moves.length === 0 ? `${format}.` : `${format}: ${moves.join(', ')}.`;
+}
+
+/** A metcon's rule line without its format and moves, which the block lists above it (R622's second half). */
+export function metconRuleLine(sentence: string, catalogName: string): string {
+  const lead = `${metconText(catalogName)}. `;
+  return sentence.startsWith(lead) ? sentence.slice(lead.length) : sentence;
 }

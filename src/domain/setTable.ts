@@ -175,6 +175,16 @@ export type RowModel = {
    * filling the reps or time.
    */
   placeholders: ReturnType<typeof placeholdersFor>;
+  /** The same set from last time (`matchPrevious`), or null: a block may say it its own way (`blockRows`). */
+  matched: PrevSet | null;
+  /** What VoiceOver reads for `previous` when the short text would not say it all (an event's time, its units). */
+  previousLabel?: string;
+  /** What VoiceOver calls the set when it is not "Set 1": a metcon's "Score", a run's "Run" (Task 7b). */
+  spokenAs?: string;
+  /** The inputs that may stay empty: drawn with a faint dash and read as optional (an event's time). */
+  optional?: InputKey[];
+  /** The tick's VoiceOver label when "Set 1 done" is not what it means ("Set 1 carried drop-free"). */
+  tickLabel?: string;
 };
 
 /** A number to 2 decimals, as the set rows show it: 254.60000000000002 is 254.6. */
@@ -242,6 +252,7 @@ export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear, dista
       label: labels[i],
       previous: formatPrevious(matched[i], ex.loggingType, unit),
       target: rowTarget,
+      matched: matched[i],
       placeholders: placeholdersFor({
         previous: matched[i],
         ruleRepMax: ex.rule?.repMax ?? null,
@@ -455,6 +466,23 @@ export function fieldVoiceLabel(
     case 'rpe':
       return `${set} RPE`;
   }
+}
+
+/**
+ * What VoiceOver calls a row's input: `fieldVoiceLabel`, unless a block names the row ("Score rounds", "Run time"), and
+ * with ", optional" after a field that may stay empty ("Set 1 time, optional").
+ */
+export function rowFieldVoiceLabel(row: RowModel, key: InputKey, header: string, unit: WeightUnit, distanceUnit: DistanceUnit): string {
+  const optional = row.optional?.includes(key) ? ', optional' : '';
+  if (row.spokenAs === undefined) return `${fieldVoiceLabel(key, row.loggingType, row.label, header, unit, distanceUnit)}${optional}`;
+  const field = fieldVoiceLabel(key, 'rounds', '1', header, unit, distanceUnit).replace(/^Set 1 /, '');
+  return `${row.spokenAs} ${key === 'reps' && row.loggingType !== 'rounds' ? 'reps' : field}${optional}`;
+}
+
+/** What VoiceOver calls a row's tick: "Set 1 done", or the block's own words ("Score done", "Set 1 carried drop-free"). */
+export function rowTickLabel(row: RowModel): string {
+  if (row.tickLabel !== undefined) return row.tickLabel;
+  return row.spokenAs === undefined ? `Set ${row.label} done` : `${row.spokenAs} done`;
 }
 
 /**

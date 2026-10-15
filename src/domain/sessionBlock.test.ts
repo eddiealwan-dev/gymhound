@@ -1,10 +1,17 @@
 import type { MetconRule, RuleKind } from '../seed/programTypes';
+import { buildRows, hintText, rowFieldVoiceLabel, rowTickLabel, tableColumns, type ExerciseInput, type SetInput } from './setTable';
 import {
+  blockColumns,
   blockKindOf,
+  blockRows,
+  EVENT_LINE,
   easySecondsOf,
   emomMinutesOf,
   intervalFormat,
   metconParts,
+  metconRuleLine,
+  metconTitle,
+  metconVoice,
   runFormat,
   TECHNIQUE_LINE,
   workPlanFor,
@@ -192,5 +199,148 @@ describe('workPlanFor', () => {
   it('has no clock for events or plain sets', () => {
     expect(workPlanFor(slot({ loggingType: 'weighted_distance' }))).toBeNull();
     expect(workPlanFor(slot())).toBeNull();
+  });
+});
+
+describe('blockRows: what each block suggests and shows in its rows', () => {
+  const gear = { bar: 45, plates: { '45': 4 } };
+  const sv = (id: string, extra: Partial<SetInput> = {}): SetInput => ({
+    id,
+    position: 0,
+    setType: 'working',
+    weight: null,
+    weightUnit: null,
+    reps: null,
+    durationS: null,
+    distance: null,
+    distanceUnit: null,
+    rpe: null,
+    done: false,
+    ...extra,
+  });
+  const input = (extra: Partial<ExerciseInput>): ExerciseInput => ({
+    loggingType: 'weighted',
+    equipment: 'other',
+    rule: null,
+    plannedWeight: null,
+    plannedUnit: null,
+    overrideWeight: null,
+    overrideUnit: null,
+    sets: [sv('s1')],
+    previous: [],
+    ...extra,
+  });
+
+  it('suggests no score: last time shows beside it, never in the fields, and calls the row the score', () => {
+    const ex = input({ loggingType: 'rounds', previous: [{ ...sv('p'), reps: 6, extraReps: 4 }] });
+    const [row] = blockRows('metcon', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(row.previous).toBe('6 + 4');
+    expect(hintText(row, 'reps')).toBe('');
+    expect(hintText(row, 'extraReps')).toBe('');
+    expect(row.spokenAs).toBe('Score');
+    expect(rowTickLabel(row)).toBe('Score done');
+    expect(rowFieldVoiceLabel(row, 'reps', 'ROUNDS', 'lb', 'mi')).toBe('Score rounds');
+    expect(rowFieldVoiceLabel(row, 'extraReps', '+REPS', 'lb', 'mi')).toBe('Score extra reps');
+    const time = blockRows('metcon', buildRows(input({ loggingType: 'for_time', previous: [{ ...sv('p'), durationS: 462 }] }), 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(time[0].previous).toBe('7:42');
+    expect(hintText(time[0], 'durationS')).toBe('');
+    expect(rowFieldVoiceLabel(time[0], 'durationS', 'TIME', 'lb', 'mi')).toBe('Score time');
+  });
+
+  it("suggests the week's target for a run and each interval, over last week's time", () => {
+    const ex = input({ loggingType: 'timed', rule: { repMax: 1740 }, previous: [{ ...sv('p'), durationS: 1620 }] });
+    const [row] = blockRows('run', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb', targetS: 1740, noun: 'Run' });
+    expect(row.previous).toBe('27:00');
+    expect(hintText(row, 'durationS')).toBe('29:00');
+    expect(rowTickLabel(row)).toBe('Run done');
+    expect(rowFieldVoiceLabel(row, 'durationS', 'TIME', 'lb', 'mi')).toBe('Run time');
+    const sets = input({ loggingType: 'timed', sets: [sv('w', { setType: 'warmup' }), sv('a'), sv('b', { position: 1 })] });
+    const rows = blockRows('intervals', buildRows(sets, 'lb', gear, 'mi'), { unit: 'lb', targetS: 180 });
+    expect(rows.map((r) => hintText(r, 'durationS'))).toEqual(['', '3:00', '3:00']);
+    expect(rowTickLabel(rows[1])).toBe('Set 1 done');
+  });
+
+  it('shows last time of an event as load × distance, and says it all to VoiceOver', () => {
+    const ex = input({
+      loggingType: 'weighted_distance',
+      slotDistanceUnit: 'ft',
+      previous: [{ ...sv('p'), weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: 22 }],
+    });
+    const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(row.previous).toBe('315 × 50');
+    expect(row.previousLabel).toBe('315 pounds for 50 feet in 22 seconds');
+    expect(rowTickLabel(row)).toBe('Set 1 carried drop-free');
+    expect(row.optional).toEqual(['durationS']);
+    expect(rowFieldVoiceLabel(row, 'durationS', 'TIME', 'lb', 'mi')).toBe('Set 1 time, optional');
+    expect(rowFieldVoiceLabel(row, 'distance', 'FT', 'lb', 'ft')).toBe('Set 1 distance, feet');
+  });
+
+  it("keeps a unit that isn't the one shown", () => {
+    const ex = input({
+      loggingType: 'weighted_distance',
+      slotDistanceUnit: 'ft',
+      previous: [{ ...sv('p'), weight: 140, weightUnit: 'kg', distance: 20, distanceUnit: 'm' }],
+    });
+    const [row] = blockRows('event', buildRows(ex, 'lb', gear, 'mi'), { unit: 'lb' });
+    expect(row.previous).toBe('140 kg × 20 m');
+    expect(row.previousLabel).toBe('140 kilograms for 20 metres');
+  });
+
+  it('leaves the rows of every other block as they are', () => {
+    const rows = buildRows(input({ previous: [{ ...sv('p'), weight: 100, weightUnit: 'lb', reps: 5 }] }), 'lb', gear, 'mi');
+    expect(blockRows('sets', rows, { unit: 'lb' })).toBe(rows);
+    expect(blockRows('technique', rows, { unit: 'lb' })).toBe(rows);
+    expect(rowTickLabel(rows[0])).toBe('Set 1 done');
+    expect(rowFieldVoiceLabel(rows[0], 'weight', 'LB', 'lb', 'mi')).toBe('LB, set 1');
+  });
+});
+
+describe('blockColumns', () => {
+  const cols = (loggingType: Parameters<typeof tableColumns>[0]) => tableColumns(loggingType, 'lb', false);
+  const keys = (c: { key: string }[]) => c.map((x) => x.key);
+
+  it('drops the SET chip from a score and a run: one row has no set to number', () => {
+    expect(keys(blockColumns('metcon', cols('rounds'), 'ft'))).toEqual(['previous', 'reps', 'extraReps', 'tick']);
+    expect(keys(blockColumns('run', cols('timed'), 'ft'))).toEqual(['previous', 'durationS', 'tick']);
+  });
+
+  it("heads an event's distance with its unit", () => {
+    expect(blockColumns('event', cols('weighted_distance'), 'yd').map((c) => c.header)).toEqual(['SET', 'PREVIOUS', 'LB', 'YD', 'TIME', '✓']);
+  });
+
+  it('keeps the columns of intervals, technique and plain sets', () => {
+    const c = cols('weighted');
+    expect(blockColumns('sets', c, 'ft')).toBe(c);
+    expect(blockColumns('technique', c, 'ft')).toBe(c);
+    expect(keys(blockColumns('intervals', cols('timed'), 'ft'))).toEqual(['set', 'previous', 'durationS', 'tick']);
+  });
+});
+
+describe("a metcon's words", () => {
+  it("is called by the program's label for it", () => {
+    expect(metconTitle('Metcon A · AMRAP 10 min: 10 goblet squats', 'AMRAP 10: goblet squat, push-up, run')).toBe('Metcon A');
+    expect(metconTitle('Metcon · 21-15-9 for time: thrusters', 'x')).toBe('Metcon');
+    expect(metconTitle('Fran', 'AMRAP 10: goblet squat')).toBe('AMRAP 10: goblet squat');
+  });
+
+  it('says the format and every move as one sentence', () => {
+    const parts = metconParts(amrap, 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run');
+    expect(metconVoice(parts)).toBe('AMRAP 10 minutes: 10 Goblet squat, 10 Push-up, 200 metres Run.');
+    const fr = metconParts(fran, 'Metcon · 21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)');
+    expect(metconVoice(fr)).toBe('For Time, 8 minute cap: Thruster, 95 or 65 pounds, Pull-up (scaled as needed).');
+    const row: MetconRule = { format: 'AMRAP', workMinutes: 12, elements: ['Row (erg)'], capMinutes: null };
+    expect(metconVoice(metconParts(row, 'Metcon · AMRAP 12 min: 12-cal row'))).toBe('AMRAP 12 minutes: 12 calories Row (erg).');
+  });
+
+  it('leaves the format out of the rule line: the list says it', () => {
+    const name = 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run';
+    const sentence =
+      'AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run. Beat your score twice in a row, then go heavier or take the next scaling step.';
+    expect(metconRuleLine(sentence, name)).toBe('Beat your score twice in a row, then go heavier or take the next scaling step.');
+    expect(metconRuleLine('Something else.', name)).toBe('Something else.');
+  });
+
+  it('adds the drop-free words to an event', () => {
+    expect(EVENT_LINE).toBe('A drop ends the set: log what you carried unbroken.');
   });
 });
