@@ -19,9 +19,12 @@ function checkedName(name: string): string {
   return name.trim();
 }
 
-/** A workout exercise's done sets as remembered sets, in set order (R118). */
+/**
+ * A workout exercise's done sets as remembered sets, in set order (R118). An AMRAP score's extra reps (R607) are kept
+ * only when there are some, so every other set is remembered as before.
+ */
 function doneSets(db: Db, workoutExerciseId: string): SavedSet[] {
-  return db
+  const rows = db
     .select({
       setType: sets.setType,
       weight: sets.weight,
@@ -30,11 +33,13 @@ function doneSets(db: Db, workoutExerciseId: string): SavedSet[] {
       durationS: sets.durationS,
       distance: sets.distance,
       distanceUnit: sets.distanceUnit,
+      extraReps: sets.extraReps,
     })
     .from(sets)
     .where(and(eq(sets.workoutExerciseId, workoutExerciseId), eq(sets.done, true)))
     .orderBy(asc(sets.position))
     .all();
+  return rows.map(({ extraReps, ...set }) => (extraReps === null ? set : { ...set, extraReps }));
 }
 
 /** Superset groups as kept: a group with one member left is no superset, so it becomes null. */

@@ -1,14 +1,18 @@
 import { resolveTick, type PrevSet } from './setEntry';
 import {
   buildRows,
+  entryDistanceUnit,
   fieldLook,
   fieldPatch,
+  fieldVoiceLabel,
   hintText,
   isComplete,
   isTargetValue,
   looksUnlikely,
+  needLine,
   parseField,
   readRow,
+  slotDistanceUnit,
   tableColumns,
   valueText,
   type ExerciseInput,
@@ -745,5 +749,131 @@ describe('looksUnlikely: the soft check on a set field once it is left (R422)', 
   it('flags drop and failure sets like working sets', () => {
     expect(looksUnlikely('weight', 1200, 'drop', 'lb', null)).toBe(true);
     expect(looksUnlikely('reps', 150, 'failure', 'lb', null)).toBe(true);
+  });
+});
+
+describe('the three program logging types (R607)', () => {
+  describe('column labels', () => {
+    it('weight and distance: the load, DIST, then an optional TIME', () => {
+      expect(keys('weighted_distance')).toEqual(['set', 'previous', 'weight', 'distance', 'durationS', 'tick']);
+      expect(headers('weighted_distance', 'lb')).toEqual(['SET', 'PREVIOUS', 'LB', 'DIST', 'TIME', '✓']);
+    });
+
+    it('an AMRAP score: ROUNDS, then +REPS', () => {
+      expect(keys('rounds')).toEqual(['set', 'previous', 'reps', 'extraReps', 'tick']);
+      expect(headers('rounds')).toEqual(['SET', 'PREVIOUS', 'ROUNDS', '+REPS', '✓']);
+    });
+
+    it('a For Time score: TIME', () => {
+      expect(keys('for_time')).toEqual(['set', 'previous', 'durationS', 'tick']);
+      expect(headers('for_time')).toEqual(['SET', 'PREVIOUS', 'TIME', '✓']);
+    });
+  });
+
+  describe("the distance unit of a set: the slot's ft or yd, else m (R607)", () => {
+    it('reads a slot target unit', () => {
+      expect(slotDistanceUnit('feet')).toBe('ft');
+      expect(slotDistanceUnit('yards')).toBe('yd');
+      expect(slotDistanceUnit('reps')).toBe('m');
+    });
+
+    it("weight and distance enters in the slot's unit, else last time's, else m; the other types in Settings' unit", () => {
+      const carry = exercise({ loggingType: 'weighted_distance', rule: { repMax: 50 } });
+      expect(entryDistanceUnit({ ...carry, slotDistanceUnit: 'ft' }, 'mi')).toBe('ft');
+      expect(entryDistanceUnit({ ...carry, previous: [prev(0, 'working', 315, null, { distance: 40, distanceUnit: 'yd' })] }, 'mi')).toBe('yd');
+      expect(entryDistanceUnit(carry, 'mi')).toBe('m');
+      expect(entryDistanceUnit(exercise({ loggingType: 'distance_time' }), 'km')).toBe('km');
+    });
+
+    it("a row carries its entry unit, and the rule's distance is the hint", () => {
+      const [row] = buildRows(
+        exercise({ loggingType: 'weighted_distance', rule: { repMax: 50 }, sets: [set('working')], slotDistanceUnit: 'ft', plannedWeight: 315, plannedUnit: 'lb' }),
+        'lb',
+        LB_GEAR,
+        'mi',
+      );
+      expect(row.distanceUnit).toBe('ft');
+      expect(row.target).toBe(315);
+      expect(hintText(row, 'distance')).toBe('50');
+      expect(hintText(row, 'durationS')).toBe('');
+      expect(readRow(row, {}, 'lb', 'ft')).toMatchObject({ tickable: true, missing: null, distanceUnit: 'ft' });
+    });
+  });
+
+  describe('a tick that is not ready says why', () => {
+    it('weight and distance needs the distance, never the time', () => {
+      const [row] = buildRows(exercise({ loggingType: 'weighted_distance', rule: null, sets: [set('working')] }), 'lb', LB_GEAR, 'mi');
+      expect(readRow(row, { weight: '315' }, 'lb', 'm').missing).toBe('distance');
+      expect(readRow(row, { weight: '315', distance: '50' }, 'lb', 'm')).toMatchObject({ tickable: true, missing: null });
+    });
+
+    it('an AMRAP score needs the rounds, never the extra reps', () => {
+      const [row] = buildRows(exercise({ loggingType: 'rounds', rule: { repMax: 1 }, sets: [set('working')] }), 'lb', LB_GEAR, 'mi');
+      expect(readRow(row, { extraReps: '4' }, 'lb', 'mi').missing).toBe('reps');
+      expect(readRow(row, { reps: '6' }, 'lb', 'mi')).toMatchObject({ tickable: true, missing: null });
+      expect(readRow(row, { reps: '6', extraReps: '4' }, 'lb', 'mi').entered).toMatchObject({ reps: 6, extraReps: 4 });
+    });
+
+    it('a For Time score needs the time', () => {
+      const [row] = buildRows(exercise({ loggingType: 'for_time', rule: { repMax: 12 }, sets: [set('working')] }), 'lb', LB_GEAR, 'mi');
+      expect(readRow(row, {}, 'lb', 'mi').missing).toBe('durationS');
+      expect(readRow(row, { durationS: '7:42' }, 'lb', 'mi')).toMatchObject({ tickable: true, entered: { durationS: 462 } });
+    });
+
+    it('says the line in the type\'s words: rounds for an AMRAP score', () => {
+      expect(needLine('distance', 'weighted_distance')).toBe('Add distance to complete set');
+      expect(needLine('reps', 'rounds')).toBe('Add rounds to complete set');
+      expect(needLine('durationS', 'for_time')).toBe('Add time to complete set');
+      expect(needLine('reps', 'weighted')).toBe('Add reps to complete set');
+      expect(needLine('weight', 'weighted_distance')).toBe('Add weight to complete set');
+    });
+  });
+
+  it('the extra reps read as whole numbers, 0 included, and patch their own field', () => {
+    expect(parseField('extraReps', '0')).toEqual({ valid: true, value: 0 });
+    expect(parseField('extraReps', '4.5')).toEqual({ valid: false, value: null });
+    expect(fieldPatch('extraReps', 4, 'lb', 'mi')).toEqual({ extraReps: 4 });
+    expect(fieldPatch('extraReps', null, 'lb', 'mi')).toEqual({ extraReps: null });
+  });
+
+  it("shows the stored score, else last time's as the hint", () => {
+    const [stored] = buildRows(exercise({ loggingType: 'rounds', rule: null, sets: [set('working', { reps: 6, extraReps: 4 })] }), 'lb', LB_GEAR);
+    expect(valueText(stored, 'reps', 'lb', 'mi')).toBe('6');
+    expect(valueText(stored, 'extraReps', 'lb', 'mi')).toBe('4');
+    const [hinted] = buildRows(
+      exercise({ loggingType: 'rounds', rule: null, sets: [set('working')], previous: [prev(0, 'working', null, 5, { extraReps: 9 })] }),
+      'lb',
+      LB_GEAR,
+    );
+    expect(hintText(hinted, 'reps')).toBe('5');
+    expect(hintText(hinted, 'extraReps')).toBe('9');
+    expect(hinted.previous).toBe('5 + 9');
+  });
+
+  it('a ticked score must keep its rounds, a ticked carry its distance', () => {
+    expect(isComplete('rounds', { weight: null, reps: 6, durationS: null, distance: null })).toBe(true);
+    expect(isComplete('rounds', { weight: null, reps: null, durationS: null, distance: null, extraReps: 4 })).toBe(false);
+    expect(isComplete('weighted_distance', { weight: 315, reps: null, durationS: null, distance: null })).toBe(false);
+    expect(isComplete('weighted_distance', { weight: 315, reps: null, durationS: null, distance: 50 })).toBe(true);
+  });
+
+  describe('VoiceOver labels name the set first, then the field and its unit', () => {
+    it('says "Set 1 distance, feet" and the other fields of the new types', () => {
+      expect(fieldVoiceLabel('distance', 'weighted_distance', '1', 'LB', 'lb', 'ft')).toBe('Set 1 distance, feet');
+      expect(fieldVoiceLabel('distance', 'weighted_distance', '2', 'DIST', 'lb', 'yd')).toBe('Set 2 distance, yards');
+      expect(fieldVoiceLabel('distance', 'weighted_distance', '1', 'DIST', 'lb', 'm')).toBe('Set 1 distance, metres');
+      expect(fieldVoiceLabel('weight', 'weighted_distance', '1', 'LB', 'lb', 'ft')).toBe('Set 1 weight, pounds');
+      expect(fieldVoiceLabel('weight', 'weighted_distance', '1', 'KG', 'kg', 'ft')).toBe('Set 1 weight, kilograms');
+      expect(fieldVoiceLabel('durationS', 'weighted_distance', 'W', 'TIME', 'lb', 'ft')).toBe('Warmup time');
+      expect(fieldVoiceLabel('reps', 'rounds', '1', 'ROUNDS', 'lb', 'mi')).toBe('Set 1 rounds');
+      expect(fieldVoiceLabel('extraReps', 'rounds', '1', '+REPS', 'lb', 'mi')).toBe('Set 1 extra reps');
+      expect(fieldVoiceLabel('durationS', 'for_time', '1', 'TIME', 'lb', 'mi')).toBe('Set 1 time');
+      expect(fieldVoiceLabel('rpe', 'for_time', '1', 'RPE', 'lb', 'mi')).toBe('Set 1 RPE');
+    });
+
+    it('keeps the labels the other types have always had', () => {
+      expect(fieldVoiceLabel('weight', 'weighted', '1', 'LB', 'lb', 'mi')).toBe('LB, set 1');
+      expect(fieldVoiceLabel('distance', 'distance_time', '1', 'DIST', 'lb', 'mi')).toBe('DIST, set 1');
+    });
   });
 });

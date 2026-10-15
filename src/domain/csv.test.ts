@@ -80,11 +80,11 @@ describe('toCsv', () => {
 });
 
 describe('WORKOUT_CSV_COLUMNS', () => {
-  it('is the 21 spec §11 columns in order', () => {
+  it('is the 21 spec §11 columns in order, then extra_reps last (R609)', () => {
     expect(WORKOUT_CSV_COLUMNS.join(', ')).toBe(
-      'workout_id, date, started_at, finished_at, workout, routine, routine_day, day_mark, exercise, exercise_id, set_number, set_type, weight, weight_unit, reps, rpe, duration_s, distance, distance_unit, pr, exercise_note',
+      'workout_id, date, started_at, finished_at, workout, routine, routine_day, day_mark, exercise, exercise_id, set_number, set_type, weight, weight_unit, reps, rpe, duration_s, distance, distance_unit, pr, exercise_note, extra_reps',
     );
-    expect(WORKOUT_CSV_COLUMNS).toHaveLength(21);
+    expect(WORKOUT_CSV_COLUMNS).toHaveLength(22);
   });
 });
 
@@ -147,6 +147,7 @@ describe('buildWorkoutCsvRows', () => {
     distanceUnit: null,
     prFlags: 0,
     exerciseNote: null,
+    extraReps: null,
   };
 
   it('writes every column in order, with times at the offset the device had then', () => {
@@ -174,8 +175,23 @@ describe('buildWorkoutCsvRows', () => {
       null,
       'heaviest',
       'pause, then press',
+      null,
     ]);
     expect(row).toHaveLength(WORKOUT_CSV_COLUMNS.length);
+  });
+
+  it('export adds extra_reps: an AMRAP score keeps its extra reps, and a carry its feet (R609)', () => {
+    const [amrap, carry] = buildWorkoutCsvRows(
+      [
+        { ...base, weight: null, weightUnit: null, reps: 6, extraReps: 4 },
+        { ...base, weight: 315, weightUnit: 'lb', reps: null, distance: 50, distanceUnit: 'ft', workoutExerciseId: 'we2' },
+      ],
+      () => 0,
+    );
+    const at = (name: (typeof WORKOUT_CSV_COLUMNS)[number]) => WORKOUT_CSV_COLUMNS.indexOf(name);
+    expect([amrap[at('reps')], amrap[at('extra_reps')]]).toEqual([6, 4]);
+    expect(amrap[amrap.length - 1]).toBe(4);
+    expect([carry[at('weight')], carry[at('distance')], carry[at('distance_unit')], carry[at('extra_reps')]]).toEqual([315, 50, 'ft', null]);
   });
 
   it('numbers each set within its own set type in that exercise', () => {
@@ -236,7 +252,8 @@ describe('buildWorkoutCsvRows', () => {
     expect(row[9]).toBe('-dips');
     expect(row[12]).toBe(-20);
     expect(row[20]).toBe("'- elbows in, slow");
-    expect(toCsv(WORKOUT_CSV_COLUMNS, [row]).split('\r\n')[1].endsWith(`,"'- elbows in, slow"`)).toBe(true);
+    // The note is followed by the empty extra_reps column (R609).
+    expect(toCsv(WORKOUT_CSV_COLUMNS, [row]).split('\r\n')[1].endsWith(`,"'- elbows in, slow",`)).toBe(true);
   });
 
   it("fills day_mark from the exercise's Something off mark, and normal when nothing is off (R60)", () => {

@@ -116,6 +116,43 @@ describe('importing workouts (R565)', () => {
     fail.mockRestore();
   });
 
+  it("keeps an AMRAP score's extra reps and a carry's feet (R609)", () => {
+    const file = [
+      'date,workout,exercise,weight,weight_unit,reps,distance,distance_unit,extra_reps',
+      '2026-10-01,Strongman,Yoke carry,315,lb,,50,ft,',
+      '2026-10-01,Strongman,AMRAP 10,,,6,,,4',
+    ].join('\n');
+    applyImport(db, plan(file), NOW);
+    const rows = db.select().from(sets).all().filter((s) => s.id.startsWith('imp-'));
+    expect(rows.map((s) => [s.weight, s.distance, s.distanceUnit, s.reps, s.extraReps])).toEqual([
+      [315, 50, 'ft', null, null],
+      [null, null, null, 6, 4],
+    ]);
+  });
+
+  it('a score with other extra reps is another workout, not one already in', () => {
+    applyImport(db, plan(['date,workout,exercise,reps,extra_reps', '2026-10-01,Metcon,AMRAP 10,6,4'].join('\n')), NOW);
+    expect(applyImport(db, plan(['date,workout,exercise,reps,extra_reps', '2026-10-01,Metcon,AMRAP 10,6,5'].join('\n')), NOW)).toMatchObject({ added: 1 });
+  });
+
+  it('a file with an empty extra_reps column finds the workouts an older file without it added: nothing doubles', () => {
+    applyImport(db, plan(IMPORT_SAMPLES.workouts), NOW);
+    const withColumn = IMPORT_SAMPLES.workouts
+      .split('\r\n')
+      .map((line, i) => `${line},${i === 0 ? 'extra_reps' : ''}`)
+      .join('\r\n');
+    expect(applyImport(db, plan(withColumn), NOW)).toMatchObject({ added: 0, alreadyIn: 2 });
+  });
+
+  it("reads its own extra reps back in from GymHound's export", () => {
+    applyImport(db, plan(['date,workout,exercise,reps,extra_reps', '2026-10-01,Metcon,AMRAP 10,6,4'].join('\n')), NOW);
+    const exported = toCsv(WORKOUT_CSV_COLUMNS, workoutCsvRows(db));
+
+    const other = seededDb();
+    applyImport(other, plan(exported), NOW);
+    expect(other.select().from(sets).all().map((s) => [s.reps, s.extraReps])).toEqual([[6, 4]]);
+  });
+
   it('fingerprints are stable and differ for different text', () => {
     expect(fingerprint('a')).toBe(fingerprint('a'));
     expect(fingerprint('a')).not.toBe(fingerprint('b'));

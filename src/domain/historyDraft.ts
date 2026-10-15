@@ -17,6 +17,8 @@ export type DraftSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (`rounds`, R607). Absent reads as none. */
+  extraReps?: number | null;
   done: boolean;
 };
 
@@ -47,8 +49,14 @@ export function patchDraftSet(d: WorkoutDraft, workoutExerciseId: string, index:
   }));
 }
 
-/** Adds a working set at the end of the exercise: empty, not done, in the display units. */
+/**
+ * Adds a working set at the end of the exercise: empty, not done, in the display units. A carry's distance
+ * (`weighted_distance`) is in the carry's own unit instead, the last one its sets have, else m: ft and yd are for sets
+ * only, never the distance unit in Settings (R607).
+ */
 export function addDraftSet(d: WorkoutDraft, workoutExerciseId: string, unit: WeightUnit, distanceUnit: DistanceUnit): WorkoutDraft {
+  const ex = d.exercises.find((e) => e.workoutExerciseId === workoutExerciseId);
+  const carryUnit = ex?.loggingType === 'weighted_distance' ? ([...ex.sets].reverse().find((s) => s.distanceUnit !== null)?.distanceUnit ?? 'm') : null;
   const added: DraftSet = {
     id: null,
     setType: 'working',
@@ -58,7 +66,7 @@ export function addDraftSet(d: WorkoutDraft, workoutExerciseId: string, unit: We
     rpe: null,
     durationS: null,
     distance: null,
-    distanceUnit,
+    distanceUnit: carryUnit ?? distanceUnit,
     done: false,
   };
   return mapExercise(d, workoutExerciseId, (e) => ({ ...e, sets: [...e.sets, added] }));
@@ -85,6 +93,7 @@ function sameSet(a: DraftSet, b: DraftSet): boolean {
     a.durationS === b.durationS &&
     a.distance === b.distance &&
     a.distanceUnit === b.distanceUnit &&
+    (a.extraReps ?? null) === (b.extraReps ?? null) &&
     a.done === b.done
   );
 }
@@ -119,7 +128,7 @@ export function changedExercises(saved: WorkoutDraft, current: WorkoutDraft): st
 }
 
 /**
- * Whether every value of every set can be stored: weight, reps, time and distance finite and not negative, RPE null
+ * Whether every value of every set can be stored: weight, reps, extra reps, time and distance finite and not negative, RPE null
  * or 6 to 10. The editor's fields already parse this way; a hand-built draft may not.
  */
 export function draftValuesInRange(d: WorkoutDraft): boolean {
@@ -131,6 +140,7 @@ export function draftValuesInRange(d: WorkoutDraft): boolean {
         ok(s.reps) &&
         ok(s.durationS) &&
         ok(s.distance) &&
+        ok(s.extraReps ?? null) &&
         (s.rpe === null || (Number.isFinite(s.rpe) && s.rpe >= 6 && s.rpe <= 10)),
     ),
   );
@@ -140,7 +150,11 @@ export type DraftProblem = { workoutExerciseId: string; index: number; need: 'we
 
 type Need = DraftProblem['need'];
 
-/** The values a done set must hold, in column order (as `isComplete`): bodyweight plus needs only reps. */
+/**
+ * The values a done set must hold, in column order (as `isComplete`): bodyweight plus needs only reps; a carry its
+ * weight and distance (the time is optional), an AMRAP score its rounds (`reps`; the extra reps are optional) and a For
+ * Time score its time (R607).
+ */
 const NEEDS: Record<LoggingType, Need[]> = {
   weighted: ['weight', 'reps'],
   assisted: ['weight', 'reps'],
@@ -148,9 +162,9 @@ const NEEDS: Record<LoggingType, Need[]> = {
   weighted_time: ['weight', 'time'],
   timed: ['time'],
   distance_time: ['distance', 'time'],
-  weighted_distance: ['weight', 'distance'], // Task 7
-  rounds: ['reps'], // Task 7
-  for_time: ['time'], // Task 7
+  weighted_distance: ['weight', 'distance'],
+  rounds: ['reps'],
+  for_time: ['time'],
 };
 
 function valueOf(s: DraftSet, need: Need): number | null {

@@ -195,3 +195,78 @@ describe('draftLeavesNothing', () => {
     expect(draftLeavesNothing(none)).toBe(true);
   });
 });
+
+describe('the three program logging types (R607)', () => {
+  const program = (): WorkoutDraft => ({
+    workoutId: 'w2',
+    name: 'Strongman',
+    exercises: [
+      {
+        workoutExerciseId: 'yoke',
+        exerciseId: 'yoke-carry',
+        name: 'Yoke carry',
+        loggingType: 'weighted_distance',
+        showRpe: false,
+        mark: null,
+        sets: [set({ id: 'y1', weight: 315, weightUnit: 'lb', reps: null, distance: 50, distanceUnit: 'ft' })],
+      },
+      {
+        workoutExerciseId: 'amrap',
+        exerciseId: 'metcon-amrap-10-squat-pushup-run',
+        name: 'AMRAP 10',
+        loggingType: 'rounds',
+        showRpe: false,
+        mark: null,
+        sets: [set({ id: 'a1', weight: null, weightUnit: null, reps: 6, extraReps: 4 })],
+      },
+      {
+        workoutExerciseId: 'fran',
+        exerciseId: 'metcon-21-15-9-thruster-pullup',
+        name: '21-15-9',
+        loggingType: 'for_time',
+        showRpe: false,
+        mark: null,
+        sets: [set({ id: 'f1', weight: null, weightUnit: null, reps: null, durationS: 462 })],
+      },
+    ],
+  });
+
+  it("a carry needs its weight and distance, not its time; a score its rounds or its time", () => {
+    expect(draftProblems(program())).toEqual([]);
+    let d = patchDraftSet(program(), 'yoke', 0, { distance: null });
+    d = patchDraftSet(d, 'amrap', 0, { reps: null });
+    d = patchDraftSet(d, 'fran', 0, { durationS: null });
+    expect(draftProblems(d)).toEqual([
+      { workoutExerciseId: 'yoke', index: 0, need: 'distance' },
+      { workoutExerciseId: 'amrap', index: 0, need: 'reps' },
+      { workoutExerciseId: 'fran', index: 0, need: 'time' },
+    ]);
+  });
+
+  it('a change to the extra reps is a change to save', () => {
+    const saved = program();
+    const changed = patchDraftSet(saved, 'amrap', 0, { extraReps: 5 });
+    expect(isDraftDirty(saved, changed)).toBe(true);
+    expect(changedExercises(saved, changed)).toEqual(['amrap']);
+    // A set read with no extra reps is the same as one with none.
+    const noExtra = patchDraftSet(saved, 'yoke', 0, { extraReps: null });
+    expect(isDraftDirty(saved, noExtra)).toBe(false);
+  });
+
+  it('extra reps below zero are out of range', () => {
+    expect(draftValuesInRange(program())).toBe(true);
+    expect(draftValuesInRange(patchDraftSet(program(), 'amrap', 0, { extraReps: -1 }))).toBe(false);
+  });
+
+  it("a set added to a carry takes the carry's own unit, not the distance unit in Settings", () => {
+    const d = addDraftSet(program(), 'yoke', 'lb', 'mi');
+    expect(d.exercises[0].sets[1]).toMatchObject({ distance: null, distanceUnit: 'ft', weightUnit: 'lb', done: false });
+    const run = addDraftSet(program(), 'amrap', 'lb', 'mi');
+    expect(run.exercises[1].sets[1].distanceUnit).toBe('mi');
+  });
+
+  it('a carry with no unit yet takes m', () => {
+    const d = patchDraftSet(program(), 'yoke', 0, { distanceUnit: null });
+    expect(addDraftSet(d, 'yoke', 'lb', 'km').exercises[0].sets[1].distanceUnit).toBe('m');
+  });
+});

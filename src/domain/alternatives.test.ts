@@ -43,6 +43,26 @@ describe('alternativesFor (R553)', () => {
     expect(ids).not.toContain('wall-sit');
   });
 
+  it("keeps a program's carry to carries, and its scores to scores (R607)", () => {
+    const carry = (id: string, over: Partial<SwapCandidate> = {}) =>
+      ex(id, { primaryMuscles: ['traps'], secondaryMuscles: [], pattern: 'carry', equipment: 'other', loggingType: 'weighted_distance', ...over });
+    const yoke = carry('yoke-carry');
+    const carries = [
+      yoke,
+      carry('sandbag-carry'),
+      carry('farmers-walk-time', { loggingType: 'weighted_time' }),
+      carry('shrug', { loggingType: 'weighted' }),
+      carry('run', { loggingType: 'distance_time' }),
+    ];
+    expect(alternativesFor(yoke, carries, new Set()).map((c) => c.id)).toEqual(['sandbag-carry']);
+
+    const score = (id: string, loggingType: SwapCandidate['loggingType']) =>
+      ex(id, { pattern: 'isolation', equipment: 'other', loggingType, primaryMuscles: ['quads'], secondaryMuscles: [] });
+    const amrap = score('amrap-10', 'rounds');
+    const metcons = [amrap, score('amrap-15', 'rounds'), score('for-time-21-15-9', 'for_time'), score('leg-extension', 'weighted'), score('wall-sit', 'timed')];
+    expect(alternativesFor(amrap, metcons, new Set()).map((c) => c.id).sort()).toEqual(['amrap-15', 'for-time-21-15-9']);
+  });
+
   it('lists at most eight', () => {
     const many = Array.from({ length: 20 }, (_, i) => ex(`squat-${String(i).padStart(2, '0')}`));
     expect(alternativesFor(legPress, many, new Set())).toHaveLength(8);

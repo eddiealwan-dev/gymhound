@@ -15,6 +15,8 @@ export type PrevSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (`rounds`, R607): the rounds are in `reps`. Absent reads as none. */
+  extraReps?: number | null;
 };
 
 type SetFields = {
@@ -22,6 +24,8 @@ type SetFields = {
   reps: number | null;
   durationS: number | null;
   distance: number | null;
+  /** Only an AMRAP score (`rounds`) has extra reps; for the other types it is left out. */
+  extraReps?: number | null;
 };
 
 export type TickInput = {
@@ -41,6 +45,7 @@ export type TickValues = SetFields;
 const MINUS = '−';
 const TIMES = '×';
 const BODYWEIGHT = 'BW';
+const DOT = '·';
 
 const OTHER_SET_LABELS: Record<Exclude<SetType, 'working'>, string> = {
   warmup: 'W',
@@ -89,7 +94,7 @@ export function matchPrevious(
 }
 
 /** The fields one set carries to the sets below it (spec 18.6). A weight and a distance keep the unit they were logged in. */
-export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'durationS' | 'distance' | 'distanceUnit'>;
+export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'durationS' | 'distance' | 'distanceUnit' | 'extraReps'>;
 
 /**
  * Today's own values for the set at `index` (spec 18.6): per field, the nearest set above `index` of the same set type
@@ -97,6 +102,7 @@ export type Carried = Pick<PrevSet, 'weight' | 'weightUnit' | 'reps' | 'duration
  */
 export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Carried>, index: number): Carried | null {
   const carried: Carried = { weight: null, weightUnit: null, reps: null, durationS: null, distance: null, distanceUnit: null };
+  let extraReps: number | null = null;
   const setType = current[index]?.setType;
   for (let i = index - 1; i >= 0; i--) {
     const above = current[i];
@@ -111,8 +117,11 @@ export function carryAbove(current: ReadonlyArray<Pick<PrevSet, 'setType'> & Car
     }
     carried.reps ??= above.reps;
     carried.durationS ??= above.durationS;
+    extraReps ??= above.extraReps ?? null;
   }
-  const found = carried.weight !== null || carried.reps !== null || carried.durationS !== null || carried.distance !== null;
+  // Only an AMRAP score has extra reps to carry; the other types leave the field out.
+  if (extraReps !== null) carried.extraReps = extraReps;
+  const found = carried.weight !== null || carried.reps !== null || carried.durationS !== null || carried.distance !== null || extraReps !== null;
   return found ? carried : null;
 }
 
@@ -132,8 +141,10 @@ function distanceInEntryUnit(distance: number | null, from: DistanceUnit | null,
  * The greyed-out values a set row shows: the previous set, else the rule's value.
  *
  * `ruleRepMax` is a rep count for the weighted types, seconds for `timed` and `weighted_time` (it
- * feeds the duration and reps stay empty), and unused for `distance_time`. Without `loggingType`
- * it is treated as reps.
+ * feeds the duration and reps stay empty), the slot's distance for `weighted_distance` (in the slot's unit, which is
+ * then the entry unit `distanceUnit`), and unused for `distance_time` and the two scores (`rounds`, `for_time`): a
+ * score is never suggested from the rule, only from last time. Without `loggingType` it is treated as reps. An AMRAP
+ * score's extra reps come from last time, else the set above; the other types have none.
  *
  * `carried` is today's own values from the set above (`carryAbove`, spec 18.6). It counts only when
  * there is no previous set, because history wins row by row. Then the weight is the carried weight
@@ -156,7 +167,12 @@ export function placeholdersFor(a: {
 }): SetFields {
   const { previous, loggingType, carried } = a;
   const ruleIsSeconds = loggingType === 'timed' || loggingType === 'weighted_time';
-  const ruleReps = ruleIsSeconds || loggingType === 'distance_time' ? null : a.ruleRepMax;
+  const ruleIsDistance = loggingType === 'weighted_distance';
+  const ruleIsNotReps = ruleIsSeconds || ruleIsDistance || loggingType === 'distance_time' || loggingType === 'rounds' || loggingType === 'for_time';
+  const ruleReps = ruleIsNotReps ? null : a.ruleRepMax;
+  const ruleDistance = ruleIsDistance ? a.ruleRepMax : null;
+  // Only an AMRAP score has extra reps; the other types leave the field out.
+  const extra = (value: number | null | undefined) => (loggingType === 'rounds' ? { extraReps: value ?? null } : {});
 
   if (previous === null && carried) {
     const weight = inEntryUnit(carried.weight, carried.weightUnit, a.unit);
@@ -164,7 +180,8 @@ export function placeholdersFor(a: {
       weight: loggingType === 'bodyweight_plus' && weight === 0 ? null : weight,
       reps: ruleIsSeconds ? null : (ruleReps ?? carried.reps),
       durationS: ruleIsSeconds ? (a.ruleRepMax ?? carried.durationS) : carried.durationS,
-      distance: distanceInEntryUnit(carried.distance, carried.distanceUnit, a.distanceUnit),
+      distance: distanceInEntryUnit(carried.distance, carried.distanceUnit, a.distanceUnit) ?? ruleDistance,
+      ...extra(carried.extraReps),
     };
   }
 
@@ -172,7 +189,8 @@ export function placeholdersFor(a: {
     weight: inEntryUnit(previous?.weight ?? null, previous?.weightUnit ?? null, a.unit),
     reps: ruleIsSeconds ? null : (previous?.reps ?? ruleReps),
     durationS: previous?.durationS ?? (ruleIsSeconds ? a.ruleRepMax : null),
-    distance: distanceInEntryUnit(previous?.distance ?? null, previous?.distanceUnit ?? null, a.distanceUnit),
+    distance: distanceInEntryUnit(previous?.distance ?? null, previous?.distanceUnit ?? null, a.distanceUnit) ?? ruleDistance,
+    ...extra(previous?.extraReps),
   };
 }
 
@@ -188,6 +206,7 @@ export function resolveTick(i: TickInput): TickValues | null {
   const reps = entered.reps ?? placeholders.reps;
   const durationS = entered.durationS ?? placeholders.durationS;
   const distance = entered.distance ?? placeholders.distance;
+  const extraReps = entered.extraReps ?? placeholders.extraReps ?? null;
 
   switch (i.loggingType) {
     case 'weighted':
@@ -201,11 +220,13 @@ export function resolveTick(i: TickInput): TickValues | null {
       return weight !== null && durationS !== null ? { weight, reps: null, durationS, distance: null } : null;
     case 'distance_time':
       return distance !== null && durationS !== null ? { weight: null, reps: null, durationS, distance } : null;
-    case 'weighted_distance': // Task 7
-      return weight !== null && distance !== null ? { weight, reps: null, durationS: null, distance } : null;
-    case 'rounds': // Task 7
-      return reps !== null ? { weight: null, reps, durationS: null, distance: null } : null;
-    case 'for_time': // Task 7
+    case 'weighted_distance':
+      // The time is optional (R607): kept when there is one.
+      return weight !== null && distance !== null ? { weight, reps: null, durationS, distance } : null;
+    case 'rounds':
+      // The rounds are in `reps`; the extra reps are optional.
+      return reps !== null ? { weight: null, reps, durationS: null, distance: null, extraReps } : null;
+    case 'for_time':
       return durationS !== null ? { weight: null, reps: null, durationS, distance: null } : null;
   }
 }
@@ -229,7 +250,8 @@ export function formatDuration(seconds: number): string {
 
 /**
  * The Previous column (spec 8.4): "185 × 5", "+25 × 8", "BW × 8", "−40 × 8", "70 lb × 40s", "40s"
- * or "1:30", "2 km · 12:30". Weight-and-time always shows its unit; the other weights show it only
+ * or "1:30", "2 km · 12:30"; and the program types (R607): "50 ft · 315 lb" (then " · 0:32" with a time), an AMRAP
+ * score "6 + 4" ("6" with no extra reps) and a For Time score "7:42". Weight-and-time always shows its unit; the other weights show it only
  * when it differs from `displayUnit` ("84 kg × 12"). Bodyweight plus with no added weight (0 or
  * none) reads "BW × 8", not "+0 × 8".
  *
@@ -254,9 +276,15 @@ export function formatPrevious(p: PrevSet | null, loggingType: LoggingType, disp
     case 'distance_time':
       if (p.distance === null || p.distanceUnit === null || p.durationS === null) return '';
       return `${p.distance} ${p.distanceUnit} · ${formatRest(p.durationS)}`;
-    case 'weighted_distance': // Task 7
-    case 'rounds': // Task 7
-    case 'for_time': // Task 7
-      return '';
+    case 'weighted_distance': {
+      if (p.weight === null || p.distance === null || p.distanceUnit === null) return '';
+      const carry = `${p.distance} ${p.distanceUnit} ${DOT} ${formatWeight(p.weight, p.weightUnit ?? displayUnit)}`;
+      return p.durationS === null ? carry : `${carry} ${DOT} ${formatRest(p.durationS)}`;
+    }
+    case 'rounds':
+      if (p.reps === null) return '';
+      return p.extraReps === null || p.extraReps === undefined ? `${p.reps}` : `${p.reps} + ${p.extraReps}`;
+    case 'for_time':
+      return p.durationS === null ? '' : formatRest(p.durationS);
   }
 }

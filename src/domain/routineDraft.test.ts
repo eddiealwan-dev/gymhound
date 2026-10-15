@@ -151,6 +151,16 @@ describe('exercises', () => {
     expect(oneDay(PLANK).days[0].exercises[0]).toMatchObject({ setCount: 3, repMin: 30, repMax: 60, increment: 0 });
   });
 
+  it("a program's carry starts at 3 sets of 20 (its distance) with the increment; its scores at one set with none (R607)", () => {
+    const yoke: LibraryExercise = { id: 'yoke-carry', name: 'Yoke carry', loggingType: 'weighted_distance' };
+    const amrap: LibraryExercise = { id: 'metcon-amrap-10-squat-pushup-run', name: 'AMRAP 10', loggingType: 'rounds' };
+    const fran: LibraryExercise = { id: 'metcon-21-15-9-thruster-pullup', name: '21-15-9', loggingType: 'for_time' };
+    const [carry, score, time] = oneDay(yoke, amrap, fran).days[0].exercises;
+    expect(carry).toMatchObject({ setCount: 3, repMin: 20, repMax: 20, increment: 5 });
+    expect(score).toMatchObject({ setCount: 1, repMin: 1, repMax: 1, increment: 0 });
+    expect(time).toMatchObject({ setCount: 1, repMin: 1, repMax: 1, increment: 0 });
+  });
+
   it('the same exercise can be added to a day twice', () => {
     const d = oneDay(CURL, CURL);
     expect(ids(d)).toEqual(['dumbbell-curl', 'dumbbell-curl']);
@@ -329,6 +339,12 @@ describe('hasChanges', () => {
 });
 
 describe('clampRule', () => {
+  it("keeps a carry's distance in ft or yd whole, up to the longest a program writes (R607)", () => {
+    const carry = { setCount: 4, repMin: 40, repMax: 150, increment: 10 };
+    expect(clampRule(carry)).toEqual(carry);
+    expect(clampRule({ ...carry, repMin: 49.6, repMax: 100.2 })).toMatchObject({ repMin: 50, repMax: 100 });
+  });
+
   const rule = { setCount: 3, repMin: 8, repMax: 12, increment: 5 };
 
   it('keeps sets a whole number from 1 to 10', () => {

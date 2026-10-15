@@ -9,6 +9,7 @@ import {
   placeholdersFor,
   resolveTick,
   setLabels,
+  setName,
   weightText,
   type PrevSet,
   type TickValues,
@@ -21,8 +22,8 @@ import { convertWeight } from './units';
  * input, reading what was typed, and the previous result on each row. The components only draw it.
  */
 
-/** The fields a set stores that the user types in. */
-export type FieldKey = 'weight' | 'reps' | 'durationS' | 'distance';
+/** The fields a set stores that the user types in. An AMRAP score's rounds are `reps`, its extra reps `extraReps`. */
+export type FieldKey = 'weight' | 'reps' | 'durationS' | 'distance' | 'extraReps';
 /** Every input a row can have: the fields, plus RPE. */
 export type InputKey = FieldKey | 'rpe';
 export type ColumnKey = 'set' | 'previous' | InputKey | 'tick';
@@ -37,13 +38,15 @@ const FIELDS: Record<LoggingType, FieldKey[]> = {
   weighted_time: ['weight', 'durationS'],
   timed: ['durationS'],
   distance_time: ['distance', 'durationS'],
-  weighted_distance: ['weight', 'distance'], // Task 7
-  rounds: ['reps'], // Task 7
-  for_time: ['durationS'], // Task 7
+  // R607, for programs: a carry's load and distance, then its time, which is optional; an AMRAP score's rounds and
+  // extra reps; a For Time score's time.
+  weighted_distance: ['weight', 'distance', 'durationS'],
+  rounds: ['reps', 'extraReps'],
+  for_time: ['durationS'],
 };
 
 /** Types whose weight is a load that today's target applies to. */
-export const HAS_LOAD: LoggingType[] =['weighted', 'bodyweight_plus', 'assisted', 'weighted_time'];
+export const HAS_LOAD: LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'weighted_time', 'weighted_distance'];
 
 function loadHeader(loggingType: LoggingType, unit: WeightUnit): string {
   const label = unit.toUpperCase();
@@ -57,7 +60,9 @@ function fieldHeader(key: FieldKey, loggingType: LoggingType, unit: WeightUnit):
     case 'weight':
       return loadHeader(loggingType, unit);
     case 'reps':
-      return 'REPS';
+      return loggingType === 'rounds' ? 'ROUNDS' : 'REPS';
+    case 'extraReps':
+      return '+REPS';
     case 'durationS':
       return 'TIME';
     case 'distance':
@@ -86,6 +91,7 @@ const PARSERS: Record<InputKey, (text: string) => number | null> = {
   weight: parseDecimal,
   distance: parseDecimal,
   reps: parseReps,
+  extraReps: parseReps,
   durationS: parseDuration,
   rpe: parseRpe,
 };
@@ -106,6 +112,7 @@ export type FieldPatch = Partial<{
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  extraReps: number | null;
 }>;
 
 export function fieldPatch(key: InputKey, value: number | null, unit: WeightUnit, distanceUnit: DistanceUnit): FieldPatch {
@@ -116,6 +123,8 @@ export function fieldPatch(key: InputKey, value: number | null, unit: WeightUnit
       return { distance: value, distanceUnit: value === null ? null : distanceUnit };
     case 'reps':
       return { reps: value };
+    case 'extraReps':
+      return { extraReps: value };
     case 'durationS':
       return { durationS: value };
     case 'rpe':
@@ -139,11 +148,21 @@ export type ExerciseInput = {
   overrideUnit: WeightUnit | null;
   sets: SetInput[];
   previous: PrevSet[];
+  /**
+   * The distance unit of the program slot, for `weighted_distance` (R607: ft or yd, else m; `slotDistanceUnit`).
+   * Optional: without it a carry is entered in last time's unit, else m.
+   */
+  slotDistanceUnit?: DistanceUnit | null;
 };
 
 export type RowModel = {
   set: SetInput;
   loggingType: LoggingType;
+  /**
+   * The unit a distance is entered in on this row when it is not the distance unit in Settings: a carry's (R607,
+   * `entryDistanceUnit`). Absent for the other types, which enter in the unit in Settings.
+   */
+  distanceUnit?: DistanceUnit;
   /** "1", "2", "3" for working sets; W, D or F for the others. */
   label: string;
   /** The same set from last time, as text. Empty when there is none. */
@@ -176,6 +195,26 @@ export function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): numb
   return planInUnit(weight, from, unit, ex.equipment === 'barbell', gear.bar, gear.plates);
 }
 
+/** A program slot's distance unit (R607): ft for a slot counted in feet, yd in yards, else m. */
+export function slotDistanceUnit(targetUnit: string): DistanceUnit {
+  if (targetUnit === 'feet') return 'ft';
+  if (targetUnit === 'yards') return 'yd';
+  return 'm';
+}
+
+/**
+ * The unit an exercise's distances are entered in. A carry (`weighted_distance`) is in its slot's unit, else last
+ * time's, else m: ft and yd are for sets only, and the Settings distance unit stays mi or km (R607). Every other type
+ * enters in `settingsUnit`, the distance unit in Settings.
+ */
+export function entryDistanceUnit(
+  ex: Pick<ExerciseInput, 'loggingType' | 'previous' | 'slotDistanceUnit'>,
+  settingsUnit?: DistanceUnit,
+): DistanceUnit | undefined {
+  if (ex.loggingType !== 'weighted_distance') return settingsUnit;
+  return ex.slotDistanceUnit ?? ex.previous.find((p) => p.distanceUnit !== null)?.distanceUnit ?? 'm';
+}
+
 /**
  * One row per set. Each row's previous is the same set from last time: the previous set with the same type and the
  * same number within that type (`matchPrevious`, computed once here), so a warmup is never the previous result for a
@@ -184,18 +223,22 @@ export function targetFor(ex: ExerciseInput, unit: WeightUnit, gear: Gear): numb
  * placeholders, except a carried weight under a target: the target wins. The Previous column never shows a carry.
  * What a row shows is what its tick records, so a set with a value above it ticks in one tap (R48).
  * `gear` is the bar and plates in Settings for `unit`, which a barbell target in the other unit rounds to.
- * `distanceUnit` is the distance unit in Settings, which a previous or carried distance in another unit converts to.
+ * `distanceUnit` is the distance unit in Settings, which a previous or carried distance in another unit converts to; a
+ * carry's rows enter in its own unit instead (`entryDistanceUnit`), which each row then carries.
  */
 export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear, distanceUnit?: DistanceUnit): RowModel[] {
   const matched = matchPrevious(ex.sets, ex.previous);
   const labels = setLabels(ex.sets.map((s) => s.setType));
   const target = targetFor(ex, unit, gear);
+  const entryUnit = entryDistanceUnit(ex, distanceUnit);
+  const ownUnit = ex.loggingType === 'weighted_distance' && entryUnit !== undefined ? { distanceUnit: entryUnit } : {};
   return ex.sets.map((set, i) => {
     const rowTarget = set.setType === 'working' ? target : null;
     const carried = matched[i] === null ? carryAbove(ex.sets, i) : null;
     return {
       set,
       loggingType: ex.loggingType,
+      ...ownUnit,
       label: labels[i],
       previous: formatPrevious(matched[i], ex.loggingType, unit),
       target: rowTarget,
@@ -204,7 +247,7 @@ export function buildRows(ex: ExerciseInput, unit: WeightUnit, gear: Gear, dista
         ruleRepMax: ex.rule?.repMax ?? null,
         loggingType: ex.loggingType,
         unit,
-        distanceUnit,
+        distanceUnit: entryUnit,
         carried: carried !== null && rowTarget !== null ? { ...carried, weight: null } : carried,
       }),
     };
@@ -238,6 +281,8 @@ function storedValue(set: SetInput, key: InputKey): number | null {
       return set.durationS;
     case 'distance':
       return set.distance;
+    case 'extraReps':
+      return set.extraReps ?? null;
     case 'rpe':
       return set.rpe;
   }
@@ -288,6 +333,8 @@ export function hintText(row: RowModel, key: InputKey): string {
       return placeholders.durationS === null ? '' : formatDuration(placeholders.durationS);
     case 'distance':
       return placeholders.distance === null ? '' : numberText(placeholders.distance);
+    case 'extraReps':
+      return placeholders.extraReps === null || placeholders.extraReps === undefined ? '' : String(placeholders.extraReps);
     case 'rpe':
       return '';
   }
@@ -334,16 +381,80 @@ export type RowReading = {
   tickable: boolean;
   /**
    * The first field (in column order) the logging type needs that has no value from what was entered, the target
-   * (weight only) or the placeholder; null when every needed field has one. Bodyweight plus needs only reps.
+   * (weight only) or the placeholder; null when every needed field has one. Bodyweight plus needs only reps; a carry
+   * its weight and distance (the time is optional); an AMRAP score its rounds (the extra reps are optional).
    */
   missing: FieldKey | null;
 };
 
-const ORDER: InputKey[] = ['weight', 'reps', 'durationS', 'distance', 'rpe'];
+const ORDER: InputKey[] = ['weight', 'reps', 'extraReps', 'durationS', 'distance', 'rpe'];
 
-/** The fields a tick needs a value for: the type's fields, except bodyweight plus, where no load means none added. */
+/**
+ * The fields a tick needs a value for: the type's fields, except bodyweight plus, where no load means none added, and
+ * the optional fields of the program types (R607): a carry's time and an AMRAP score's extra reps.
+ */
 function neededFields(loggingType: LoggingType): FieldKey[] {
-  return loggingType === 'bodyweight_plus' ? ['reps'] : FIELDS[loggingType];
+  switch (loggingType) {
+    case 'bodyweight_plus':
+    case 'rounds':
+      return ['reps'];
+    case 'weighted_distance':
+      return ['weight', 'distance'];
+    default:
+      return FIELDS[loggingType];
+  }
+}
+
+/** The line above a row's inputs once its tick was tapped before it was ready (spec 18.6, R82): in the type's words. */
+export function needLine(key: FieldKey, loggingType: LoggingType): string {
+  switch (key) {
+    case 'weight':
+      return 'Add weight to complete set';
+    case 'reps':
+      return loggingType === 'rounds' ? 'Add rounds to complete set' : 'Add reps to complete set';
+    case 'extraReps':
+      return 'Add reps to complete set';
+    case 'durationS':
+      return 'Add time to complete set';
+    case 'distance':
+      return 'Add distance to complete set';
+  }
+}
+
+const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
+const DISTANCE_WORDS: Record<DistanceUnit, string> = { m: 'metres', km: 'kilometres', mi: 'miles', ft: 'feet', yd: 'yards' };
+const PROGRAM_TYPES: readonly LoggingType[] = ['weighted_distance', 'rounds', 'for_time'];
+
+/**
+ * What VoiceOver calls a set's input. The program types (R607) name the set first, then the field and its unit in
+ * words: "Set 1 distance, feet", "Set 1 weight, pounds", "Set 1 rounds", "Set 1 extra reps", "Warmup time". The other
+ * types keep the header and the set they have always had: "LB, set 1". `label` is the set's label ("1", "W"),
+ * `header` the column's, `unit` the weight unit and `distanceUnit` the unit the row's distance is entered in.
+ */
+export function fieldVoiceLabel(
+  key: InputKey,
+  loggingType: LoggingType,
+  label: string,
+  header: string,
+  unit: WeightUnit,
+  distanceUnit: DistanceUnit,
+): string {
+  if (!PROGRAM_TYPES.includes(loggingType)) return `${header}, set ${label}`;
+  const set = setName(label);
+  switch (key) {
+    case 'weight':
+      return `${set} weight, ${WEIGHT_WORDS[unit]}`;
+    case 'distance':
+      return `${set} distance, ${DISTANCE_WORDS[distanceUnit]}`;
+    case 'reps':
+      return loggingType === 'rounds' ? `${set} rounds` : `${set} reps`;
+    case 'extraReps':
+      return `${set} extra reps`;
+    case 'durationS':
+      return `${set} time`;
+    case 'rpe':
+      return `${set} RPE`;
+  }
 }
 
 /**
@@ -363,7 +474,14 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit, distanc
     if (!parsed.valid) invalid.push(key);
     values[key] = parsed.value;
   }
-  const entered: TickValues = { weight: values.weight, reps: values.reps, durationS: values.durationS, distance: values.distance };
+  const entered: TickValues = {
+    weight: values.weight,
+    reps: values.reps,
+    durationS: values.durationS,
+    distance: values.distance,
+    // Only an AMRAP score has extra reps.
+    ...(row.loggingType === 'rounds' ? { extraReps: values.extraReps } : {}),
+  };
   const resolved = resolveTick({ loggingType: row.loggingType, entered, target: row.target, placeholders: row.placeholders });
   const weightUnit = drafts.weight === undefined ? (row.set.weightUnit ?? unit) : unit;
   const enteredDistanceUnit = drafts.distance === undefined ? (row.set.distanceUnit ?? distanceUnit) : distanceUnit;
@@ -372,6 +490,7 @@ export function readRow(row: RowModel, drafts: Drafts, unit: WeightUnit, distanc
     reps: entered.reps ?? row.placeholders.reps,
     durationS: entered.durationS ?? row.placeholders.durationS,
     distance: entered.distance ?? row.placeholders.distance,
+    extraReps: entered.extraReps ?? row.placeholders.extraReps ?? null,
   };
   const missing = neededFields(row.loggingType).find((key) => filled[key] === null) ?? null;
   return {

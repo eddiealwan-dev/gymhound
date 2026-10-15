@@ -148,6 +148,25 @@ describe('dayFromSaved', () => {
     expect(day.exercises[0]).toMatchObject({ repMin: 30, repMax: 45, increment: 5, startWeight: { weight: 50, unit: 'lb' } });
   });
 
+  it("gives a carry its distance as the range, the increment and the lightest load (R607)", () => {
+    const carry = (weight: number, distance: number): SavedSet => ({ ...loaded(weight, 0), reps: null, distance, distanceUnit: 'ft' });
+    const day = dayFromSaved(saved([exercise('yoke-carry', 'weighted_distance', [carry(315, 50), carry(335, 40)])]), LB5);
+    expect(day.exercises[0]).toMatchObject({ setCount: 2, repMin: 40, repMax: 50, increment: 5, startWeight: { weight: 315, unit: 'lb' } });
+  });
+
+  it('gives an AMRAP or For Time score one set of 1–1, no increment and no start weight (R607)', () => {
+    const score: SavedSet = { ...loaded(95, 6), extraReps: 4 };
+    const time: SavedSet = { ...held(462), weight: 95, weightUnit: 'lb' };
+    const day = dayFromSaved(saved([exercise('amrap', 'rounds', [score]), exercise('fran', 'for_time', [time])]), LB5);
+    for (const e of day.exercises) expect(e).toMatchObject({ setCount: 1, repMin: 1, repMax: 1, increment: 0, startWeight: null });
+  });
+
+  it('lists the three program types as Previous does: "50 ft · 315 lb", "6 + 4", "7:42"', () => {
+    expect(savedSetsLine([{ ...loaded(315, 0), reps: null, distance: 50, distanceUnit: 'ft' }], 'weighted_distance', 'lb')).toBe('50 ft · 315 lb');
+    expect(savedSetsLine([{ ...loaded(0, 6), weight: null, weightUnit: null, extraReps: 4 }], 'rounds', 'lb')).toBe('6 + 4');
+    expect(savedSetsLine([held(462)], 'for_time', 'lb')).toBe('7:42');
+  });
+
   it('gives distance and time 1–1, no increment and no start weight', () => {
     const run: SavedSet = { ...held(600), distance: 2, distanceUnit: 'km' };
     const day = dayFromSaved(saved([exercise('run', 'distance_time', [run])]), LB5);

@@ -8,9 +8,11 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import {
   fieldLook,
   fieldPatch,
+  fieldVoiceLabel,
   hintText,
   isComplete,
   looksUnlikely,
+  needLine,
   parseField,
   readRow,
   valueText,
@@ -55,6 +57,7 @@ const KEYBOARD: Record<InputKey, KeyboardTypeOptions> = {
   weight: 'decimal-pad',
   distance: 'decimal-pad',
   reps: 'number-pad',
+  extraReps: 'number-pad',
   rpe: 'decimal-pad',
   // The time can be "90" or "1:30", so it needs the colon.
   durationS: 'numbers-and-punctuation',
@@ -81,21 +84,21 @@ function warningHaptic(): void {
  */
 const TICK_HIT_SLOP = { top: 4, bottom: 4, right: 4, left: 0 };
 
-/** The line above a row's inputs once its tick was tapped before it was ready (spec 18.6, R82). */
-const NEED_LINE: Record<FieldKey, string> = {
-  weight: 'Add weight to complete set',
-  reps: 'Add reps to complete set',
-  durationS: 'Add time to complete set',
-  distance: 'Add distance to complete set',
-};
-
-/** The tick's VoiceOver hint while it is not ready (spec 18.6). */
-const NEED_HINT: Record<FieldKey, string> = {
-  weight: 'Enter a weight first',
-  reps: 'Enter reps first',
-  durationS: 'Enter a time first',
-  distance: 'Enter a distance first',
-};
+/** The tick's VoiceOver hint while it is not ready (spec 18.6): rounds for an AMRAP score (R607). */
+function needHint(key: FieldKey, loggingType: RowModel['loggingType']): string {
+  switch (key) {
+    case 'weight':
+      return 'Enter a weight first';
+    case 'reps':
+      return loggingType === 'rounds' ? 'Enter rounds first' : 'Enter reps first';
+    case 'extraReps':
+      return 'Enter reps first';
+    case 'durationS':
+      return 'Enter a time first';
+    case 'distance':
+      return 'Enter a distance first';
+  }
+}
 
 /** The VoiceOver hint on a field showing a suggestion (a target or last time's value) rather than a value. */
 export const SUGGESTED_HINT = 'Suggested. Complete the set to log it.';
@@ -146,15 +149,22 @@ type Props = {
 };
 
 /**
+ * The distance unit this row enters in: a carry's own (ft, yd or m, R607), which the row carries, else `distanceUnit`,
+ * the unit in Settings.
+ */
+const rowDistanceUnit = (row: RowModel, distanceUnit: DistanceUnit): DistanceUnit => row.distanceUnit ?? distanceUnit;
+
+/**
  * One set. Each input keeps what is typed locally and saves on blur; blank is "no value", and only non-blank text
  * that does not parse is marked (an underline and "Check this number"). A tick that is not ready (a number to check,
  * or a needed field with no value) keeps a dashed ring and stays pressable: a tap ticks nothing, buzzes, marks the
  * field and says why, and leaves the person to tap the field (spec 18.6, R99).
  */
-export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, distanceUnit, onChangeType, onLongPress, isNext }: Props) {
+export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, distanceUnit: settingsDistanceUnit, onChangeType, onLongPress, isNext }: Props) {
   const db = useDb();
   const { colors } = useTheme();
   const { set } = row;
+  const distanceUnit = rowDistanceUnit(row, settingsDistanceUnit);
   const [drafts, setDrafts] = useState<Drafts>({});
   /** Inputs that have been left since they were typed in. A half-typed number is only called wrong once it is left. */
   const [left, setLeft] = useState<InputKey[]>([]);
@@ -177,7 +187,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
    * The line above the row's inputs, where a keyboard already up for this row's field can't cover it (R82). A number
    * that doesn't read wins, then the field a not-ready tick asks for, then the soft check (R422).
    */
-  const line = showHint ? 'Check this number' : needed !== null ? NEED_LINE[needed] : soft.length > 0 ? 'Check this number' : null;
+  const line = showHint ? 'Check this number' : needed !== null ? needLine(needed, row.loggingType) : soft.length > 0 ? 'Check this number' : null;
 
   const type = (key: InputKey, text: string) => {
     setDrafts((d) => ({ ...d, [key]: text }));
@@ -248,7 +258,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         say('Check this number');
       } else {
         setAsked(true);
-        if (missing !== null) say(NEED_LINE[missing]);
+        if (missing !== null) say(needLine(missing, row.loggingType));
       }
       return;
     }
@@ -296,7 +306,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         // iOS adds its own Done bar above a number pad with this key (R43); Done blurs, and the blur saves.
         returnKeyType="done"
         selectTextOnFocus
-        accessibilityLabel={`${header}, set ${row.label}`}
+        accessibilityLabel={fieldVoiceLabel(key, row.loggingType, row.label, header, unit, distanceUnit)}
         // Not on a ticked set, whose tick would untick it (B2).
         accessibilityHint={look === 'suggested' && !set.done ? SUGGESTED_HINT : undefined}
         // Capped as the body fields are, so "182.5" or "1:00" stays whole in its column at the largest text size (R562).
@@ -353,7 +363,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
             accessibilityRole="checkbox"
             accessibilityLabel={`Set ${row.label} done`}
             aria-checked={set.done}
-            accessibilityHint={!set.done && !canTick && reading.missing !== null ? NEED_HINT[reading.missing] : undefined}
+            accessibilityHint={!set.done && !canTick && reading.missing !== null ? needHint(reading.missing, row.loggingType) : undefined}
             onPress={toggle}
             hitSlop={TICK_HIT_SLOP}
             style={tickStyle}

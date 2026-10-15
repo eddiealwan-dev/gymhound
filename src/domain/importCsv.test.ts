@@ -166,6 +166,47 @@ describe('workout files (R565)', () => {
     const file = ['date,exercise,weight,reps', '13/01/2024,Squat,100,5', '03/02/2024,Squat,100,5'].join('\n');
     expect(workoutsOf(planImport(file, OPTIONS)).workouts.map((w) => w.localDate)).toEqual(['2024-01-13', '2024-02-03']);
   });
+
+  it('reads ft and yd distances, in the unit column or the header, and keeps the weight beside them (R609)', () => {
+    const file = [
+      'date,workout,exercise,weight,weight_unit,distance,distance_unit',
+      '2026-10-01,Strongman,Yoke carry,315,lb,50,ft',
+      '2026-10-01,Strongman,Sandbag carry,150,lb,40,yd',
+      '2026-10-01,Strongman,Sled push for distance,90,lb,20,yards',
+      '2026-10-01,Strongman,Farmer carry,100,lb,60,feet',
+    ].join('\n');
+    const [w] = workoutsOf(planImport(file, OPTIONS)).workouts;
+    expect(w.exercises.map((e) => [e.sets[0].weight, e.sets[0].distance, e.sets[0].distanceUnit])).toEqual([
+      [315, 50, 'ft'],
+      [150, 40, 'yd'],
+      [90, 20, 'yd'],
+      [100, 60, 'ft'],
+    ]);
+    const header = ['date,exercise,weight,distance (ft)', '2026-10-01,Yoke carry,315,50'].join('\n');
+    expect(workoutsOf(planImport(header, OPTIONS)).workouts[0].exercises[0].sets[0]).toMatchObject({ distance: 50, distanceUnit: 'ft' });
+  });
+
+  it("reads GymHound's extra_reps column: an AMRAP score's rounds and extra reps (R609)", () => {
+    const file = [
+      'date,workout,exercise,set_type,weight,weight_unit,reps,rpe,duration_s,distance,distance_unit,pr,exercise_note,extra_reps',
+      '2026-10-01,Metcon,AMRAP 10,working,,,6,,,,,,,4',
+      '2026-10-02,Metcon,AMRAP 10,working,,,0,,,,,,,12',
+      '2026-10-03,Metcon,AMRAP 10,working,,,7,,,,,,,',
+    ].join('\n');
+    const plan = workoutsOf(planImport(file, OPTIONS));
+    expect(plan.skipped).toEqual([]);
+    expect(plan.workouts.map((w) => [w.exercises[0].sets[0].reps, w.exercises[0].sets[0].extraReps])).toEqual([
+      [6, 4],
+      [0, 12],
+      [7, null],
+    ]);
+  });
+
+  it('a file from an older GymHound, with no extra_reps column, still imports, with no extra reps', () => {
+    const plan = workoutsOf(planImport(IMPORT_SAMPLES.workouts, OPTIONS));
+    expect(plan.skipped).toEqual([]);
+    expect(plan.workouts.flatMap((w) => w.exercises.flatMap((e) => e.sets.map((s) => s.extraReps ?? null)))).toEqual(Array(6).fill(null));
+  });
 });
 
 describe('body and food files (R565)', () => {
@@ -272,5 +313,13 @@ describe('matching exercise names to the library (R565)', () => {
     expect(guessOwnExercise('Running', [{ ...set, distance: 5, distanceUnit: 'km', durationS: 1800 }])).toEqual({ equipment: 'other', primaryMuscles: [], loggingType: 'distance_time' });
     expect(guessOwnExercise('L-sit', [{ ...set, durationS: 20 }])).toEqual({ equipment: 'other', primaryMuscles: [], loggingType: 'timed' });
     expect(guessOwnExercise('Muscle-up', [{ ...set, reps: 3 }])).toMatchObject({ equipment: 'bodyweight', loggingType: 'bodyweight_plus' });
+  });
+
+  it('keeps a guessed exercise to the six types your own can have, never a program type (R607)', () => {
+    const set = { setType: 'working' as const, weight: null, weightUnit: null, reps: null, rpe: null, durationS: null, distance: null, distanceUnit: null };
+    // A carry from another app: weight and feet. Your own exercise logs it by distance; the weight stays on each set.
+    expect(guessOwnExercise('Keg carry', [{ ...set, weight: 150, weightUnit: 'lb', distance: 50, distanceUnit: 'ft' }]).loggingType).toBe('distance_time');
+    // A score: rounds and extra reps read as reps.
+    expect(guessOwnExercise('Murph AMRAP', [{ ...set, reps: 6, extraReps: 4 }]).loggingType).toBe('bodyweight_plus');
   });
 });

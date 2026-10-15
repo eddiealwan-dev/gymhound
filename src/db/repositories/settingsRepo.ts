@@ -9,7 +9,8 @@ export type { FuelTargets, Macros } from '../../domain/types';
 export type Settings = {
   theme: ThemePreference;
   unit: WeightUnit;
-  distanceUnit: DistanceUnit;
+  /** mi or km: ft and yd are a carry's own, for sets only (R607). */
+  distanceUnit: Extract<DistanceUnit, 'mi' | 'km'>;
   barLb: number;
   barKg: number;
   /** Pairs owned, by plate weight: `{ '45': 4 }` is four pairs of 45s. */

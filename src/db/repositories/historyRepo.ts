@@ -21,6 +21,8 @@ export type WorkoutDetailSet = {
   durationS: number | null;
   distance: number | null;
   distanceUnit: DistanceUnit | null;
+  /** An AMRAP score's extra reps (`rounds`, R607). Absent reads as none. */
+  extraReps?: number | null;
   prFlags: number;
 };
 
@@ -199,6 +201,7 @@ export function getWorkoutDetail(db: Db, workoutId: string, displayUnit: WeightU
       durationS: s.durationS,
       distance: s.distance,
       distanceUnit: s.distanceUnit,
+      extraReps: s.extraReps,
       prFlags: s.prFlags,
     };
     const list = setsByExercise.get(s.workoutExerciseId);

@@ -11,7 +11,7 @@ import { getSavedWorkout, listSavedWorkouts } from '../../../../src/db/repositor
 import type { Db } from '../../../../src/db/types';
 import { getSettings } from '../../../../src/db/repositories/settingsRepo';
 import { parseDecimal, parseDuration, parseReps } from '../../../../src/domain/input';
-import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, refreshDraft, validateDraft, withLibraryNames } from '../../../../src/domain/routineDraft';
+import { dayLabel, defaultIncrement, draftReducer, hasChanges, MAX_SETS, MIN_SETS, newDraft, NO_LOAD, refreshDraft, validateDraft, withLibraryNames } from '../../../../src/domain/routineDraft';
 import type { DraftAction, DraftDay, DraftExercise, RoutineDraft } from '../../../../src/domain/routineDraft';
 import { dayFromSaved } from '../../../../src/domain/savedWorkout';
 import type { LoggingType, WeightUnit } from '../../../../src/domain/types';
@@ -35,10 +35,8 @@ import { Toggle } from '../../../../src/ui/Toggle';
 
 /** Types whose rep range counts seconds. */
 const IN_SECONDS: LoggingType[] = ['timed', 'weighted_time'];
-/** Distance and time has no rep range to set. */
-const NO_REPS: LoggingType[] = ['distance_time'];
-/** Types with no load for the rule to raise, so no increment to set. */
-const NO_LOAD: LoggingType[] = ['timed', 'distance_time'];
+/** Distance and time, and a program's AMRAP or For Time score (R607), have no rep range to set. */
+const NO_REPS: LoggingType[] = ['distance_time', 'rounds', 'for_time'];
 
 /** Back to the screen the editor was opened from: the routine, or Routines for a new one. */
 function goBack(fallback: Href) {
@@ -207,6 +205,9 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
   const { key: exerciseKey, name, loggingType } = exercise;
   const update = (patch: Extract<DraftAction, { type: 'updateExercise' }>['patch']) => apply({ type: 'updateExercise', exerciseKey, patch });
   const repWord: NumberKind = IN_SECONDS.includes(loggingType) ? 'seconds' : 'reps';
+  // A program's carry (R607): its range is the distance each set covers, a whole number like reps.
+  const carry = loggingType === 'weighted_distance';
+  const rangeName = carry ? 'distance' : repWord;
   const increment = Number(convertIncrement(exercise.increment, exercise.incrementUnit, unit).toFixed(2));
   return (
     <View style={{ gap: 12, paddingVertical: 12, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.border }}>
@@ -223,11 +224,11 @@ function ExerciseEditor({ exercise, index, count, unit, apply }: ExerciseProps) 
           <SetStepper exercise={exercise} onChange={(setCount) => update({ setCount })} />
         </Field>
         {NO_REPS.includes(loggingType) ? null : (
-          <Field label={repWord === 'seconds' ? 'Seconds' : 'Reps'}>
+          <Field label={carry ? 'Distance' : repWord === 'seconds' ? 'Seconds' : 'Reps'}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <NumberField value={exercise.repMin} kind={repWord} label={`${name} ${repWord} from`} onCommit={(repMin) => update({ repMin })} />
+              <NumberField value={exercise.repMin} kind={repWord} label={`${name} ${rangeName} from`} onCommit={(repMin) => update({ repMin })} />
               <Body muted>–</Body>
-              <NumberField value={exercise.repMax} kind={repWord} label={`${name} ${repWord} to`} onCommit={(repMax) => update({ repMax })} />
+              <NumberField value={exercise.repMax} kind={repWord} label={`${name} ${rangeName} to`} onCommit={(repMax) => update({ repMax })} />
             </View>
           </Field>
         )}

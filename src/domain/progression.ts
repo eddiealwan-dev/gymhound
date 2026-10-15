@@ -24,14 +24,17 @@ export type OutcomeResult = { workingWeight: number | null; workingUnit: WeightU
 
 type Load = { value: number; unit: WeightUnit };
 
+/** Timed, distance and time, and a program's AMRAP and For Time scores (R607, R622) have no load for the rule to raise. */
+const hasLoad = (t: LoggingType) => t !== 'timed' && t !== 'distance_time' && t !== 'rounds' && t !== 'for_time';
+
 /**
  * The easiest load among the counted sets (step 2): the lowest weight, or the highest assistance for `assisted`,
  * compared in kg (loads within 0.01 kg are the same; the first is kept). An empty load counts as 0 in the plan's
  * unit, else the first counted set's unit, else lb.
- * Null for timed and distance_time, and when nothing was counted.
+ * Null for the types with no load (`hasLoad`), and when nothing was counted.
  */
 function workingLoad(input: OutcomeInput, counted: OutcomeInput['sets']): Load | null {
-  if (input.loggingType === 'timed' || input.loggingType === 'distance_time') return null;
+  if (!hasLoad(input.loggingType)) return null;
   const emptyUnit = input.plannedUnit ?? counted.find((s) => s.weightUnit !== null)?.weightUnit ?? 'lb';
   const easier = input.loggingType === 'assisted' ? (a: number, b: number) => a > b : (a: number, b: number) => a < b;
   let easiest: Load | null = null;
@@ -60,7 +63,7 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
     input.plannedWeight !== null && input.plannedUnit !== null ? { value: input.plannedWeight, unit: input.plannedUnit } : null;
 
   // Step 3.
-  if (!rule || loggingType === 'timed' || loggingType === 'distance_time') return result('no_rule', null);
+  if (!rule || !hasLoad(loggingType)) return result('no_rule', null);
   if (!working) return result('no_sets', planned);
 
   // Step 4: all hit.

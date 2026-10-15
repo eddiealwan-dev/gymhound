@@ -48,7 +48,7 @@ const WEIGHT_OPTIONS: { value: WeightUnit; label: string }[] = [
   { value: 'kg', label: 'kg' },
 ];
 
-const DISTANCE_OPTIONS: { value: DistanceUnit; label: string }[] = [
+const DISTANCE_OPTIONS: { value: Extract<DistanceUnit, 'mi' | 'km'>; label: string }[] = [
   { value: 'mi', label: 'mi' },
   { value: 'km', label: 'km' },
 ];

@@ -3,7 +3,7 @@ import type { PrHighlight } from '../../domain/prs';
 import type { NextTime } from '../../domain/ruleLine';
 import type { PrevSet } from '../../domain/setEntry';
 import type { BestWeight } from '../../domain/setTable';
-import type { Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
+import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from '../../domain/types';
 import { convertWeight } from '../../domain/units';
 import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
@@ -42,6 +42,11 @@ export type WorkoutExerciseView = {
   mark: ExerciseMark | null;
   sets: SetView[];
   previous: PrevSet[];
+  /**
+   * A program carry's distance unit (`weighted_distance`, R607: the slot's ft or yd, else m). Optional: without it the
+   * set rows enter a carry in last time's unit, else m (`entryDistanceUnit`).
+   */
+  slotDistanceUnit?: DistanceUnit | null;
   /**
    * The heaviest done set, warmups left out, the exercise has in a finished workout, in the unit it was logged in; null
    * with none (R422). Optional so a view built by hand reads as no history.
@@ -82,6 +87,7 @@ const PREV_SET_COLUMNS = {
   durationS: sets.durationS,
   distance: sets.distance,
   distanceUnit: sets.distanceUnit,
+  extraReps: sets.extraReps,
 };
 
 /**
@@ -189,6 +195,7 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       durationS: s.durationS,
       distance: s.distance,
       distanceUnit: s.distanceUnit,
+      extraReps: s.extraReps,
       done: s.done,
       completedAt: s.completedAt,
     };

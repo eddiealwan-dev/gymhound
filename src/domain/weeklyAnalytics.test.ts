@@ -49,6 +49,12 @@ describe('muscleWeek', () => {
     expect(find(weeks, 'chest').sets).toBe(0);
   });
 
+  it("counts a loaded carry's sets, and not a metcon's one score (R607)", () => {
+    expect(find(muscleWeek([block('w1', 'bench', 3, 'weighted_distance')], muscles), 'chest').sets).toBe(3);
+    const scores = muscleWeek([block('w1', 'bench', 1, 'rounds'), block('w1', 'bench', 1, 'for_time')], muscles);
+    expect(find(scores, 'chest').sets).toBe(0);
+  });
+
   it('counts weighted, bodyweight plus, assisted and weight-and-time blocks', () => {
     const weeks = muscleWeek(
       [

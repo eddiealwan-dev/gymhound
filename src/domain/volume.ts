@@ -21,7 +21,8 @@ function countsTowardVolume(set: VolumeSet): boolean {
 
 /**
  * Total volume of the sets in `displayUnit`, rounded to a whole number (spec 7.9).
- * Only done, non-warmup `weighted` and `bodyweight_plus` sets count, each as load × reps.
+ * Only done, non-warmup `weighted` and `bodyweight_plus` sets count, each as load × reps: a carry, an AMRAP score and
+ * a For Time score (R607) add nothing, as weight and time doesn't.
  * A set with no reps adds nothing; a set with no weight has a load of 0.
  */
 export function totalVolume(sets: VolumeSet[], displayUnit: WeightUnit): number {

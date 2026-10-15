@@ -5,7 +5,7 @@ import { gearFor } from '../domain/plates';
 import { nextSetId, workoutProgress } from '../domain/sessionProgress';
 import { setName } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
-import { WATCH_PROTOCOL, type WatchCommand, type WatchNextSet, type WatchState } from '../domain/watchProtocol';
+import { WATCH_PROTOCOL, watchCanLog, type WatchCommand, type WatchNextSet, type WatchState } from '../domain/watchProtocol';
 import { restPlus15, restSkip, tick } from './sessionActions';
 
 /**
@@ -37,7 +37,8 @@ export function watchStateFor(db: Db): WatchState {
       reps: row.placeholders.reps,
       durationS: row.placeholders.durationS,
       distance: row.placeholders.distance,
-      distanceUnit,
+      distanceUnit: row.distanceUnit ?? distanceUnit,
+      phoneOnly: !watchCanLog(ex.loggingType),
     };
   }
   return {
@@ -50,8 +51,8 @@ export function watchStateFor(db: Db): WatchState {
  * Applies a watch command through the session screen's own actions, so a tick on the wrist starts the same rest, rings
  * the same bell and is undone the same way (R317). 'stale' when the watch acted on a state the phone has moved past
  * (another workout, a set already ticked, a rest already changed); the bridge then sends the current state.
- * 'refused' when the tick had no value to log (a set with no target and no placeholder): the watch says to log it on
- * the phone.
+ * 'refused' when the tick had no value to log (a set with no target and no placeholder), or the set is one the watch
+ * can't log (a program's carry or score, `watchCanLog`): the watch says to log it on the phone.
  */
 export function applyWatchCommand(db: Db, command: WatchCommand): 'ok' | 'stale' | 'refused' {
   if (command.kind === 'hello') return 'ok';
@@ -61,6 +62,7 @@ export function applyWatchCommand(db: Db, command: WatchCommand): 'ok' | 'stale'
     const ex = view.exercises.find((e) => e.sets.some((s) => s.id === command.setId));
     const set = ex?.sets.find((s) => s.id === command.setId);
     if (ex === undefined || set === undefined || set.done) return 'stale';
+    if (!watchCanLog(ex.loggingType)) return 'refused';
     const entered = { weight: command.weight, reps: command.reps, durationS: null, distance: null };
     return tick(db, ex, set, entered) ? 'ok' : 'refused';
   }

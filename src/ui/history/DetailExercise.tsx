@@ -21,18 +21,32 @@ export function nextLinesFor(exercises: readonly { workoutExerciseId: string }[]
   });
 }
 
+/** A carry's distance unit in words (R607): "50 ft" is said "50 feet". */
+const SPOKEN_DISTANCE: [RegExp, string][] = [
+  [/^(\S+) ft\b/, '$1 feet'],
+  [/^(\S+) yd\b/, '$1 yards'],
+  [/^(\S+) m\b/, '$1 metres'],
+];
+
 /**
  * A set as the screen reader says it: "185 by 5", "Bodyweight by 12", "40 seconds", "70 lb by 1 minute 30 seconds",
- * "2 km, 12 minutes 30 seconds", then ", RPE 8" when it has one.
+ * "2 km, 12 minutes 30 seconds", and for the program types (R607) "50 feet, 315 lb, 32 seconds", "6 rounds and 4 reps"
+ * and "7 minutes 42 seconds"; then ", RPE 8" when it has one.
  */
 export function spokenSet(set: WorkoutDetailSet, position: number, loggingType: LoggingType, unit: WeightUnit): string {
   let text = historySetText({ ...set, position, rpe: null }, loggingType, unit);
+  if (loggingType === 'rounds' && set.reps !== null) {
+    const rounds = `${set.reps} ${set.reps === 1 ? 'round' : 'rounds'}`;
+    const extra = set.extraReps ?? null;
+    text = extra === null ? rounds : `${rounds} and ${extra} ${extra === 1 ? 'rep' : 'reps'}`;
+  }
   if (set.durationS !== null) {
     const seconds = Math.max(0, Math.floor(set.durationS));
     const shown = [formatDuration(seconds), formatRest(seconds)].find((d) => text.endsWith(d));
     if (shown !== undefined) text = `${text.slice(0, -shown.length)}${spokenRest(seconds)}`;
   }
-  text = text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replace(' · ', ', ');
+  if (loggingType === 'weighted_distance') for (const [unitText, words] of SPOKEN_DISTANCE) text = text.replace(unitText, words);
+  text = text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replaceAll(' · ', ', ');
   return set.rpe === null ? text : `${text}, RPE ${set.rpe}`;
 }
 
