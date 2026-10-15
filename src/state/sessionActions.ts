@@ -37,7 +37,7 @@ import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterPlus15, restAfterTick, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { restLengthOf } from '../domain/restKind';
-import { blockKindOf, runNoun } from '../domain/sessionBlock';
+import { blockKindOf, blockRows, metconLoadName, runNoun } from '../domain/sessionBlock';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import type { BellSound, DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
@@ -96,7 +96,11 @@ export function tick(
 ): boolean {
   const settings = getSettings(db);
   const { unit, distanceUnit } = settings;
-  const row = buildRows(ex, unit, gearFor(unit, settings), distanceUnit).find((r) => r.set.id === set.id);
+  const kind = blockKindOf(ex);
+  const built = buildRows(ex, unit, gearFor(unit, settings), distanceUnit);
+  // A score's row suggests its main move's load only where the metcon has one, as its block shows it (W3 review).
+  const rows = kind === 'metcon' ? blockRows(kind, built, { unit, loadName: metconLoadName(ex) }) : built;
+  const row = rows.find((r) => r.set.id === set.id);
   if (!row) return false;
   const values = resolveTick({ loggingType: ex.loggingType, entered, target: row.target, placeholders: row.placeholders });
   if (values === null) return false;
@@ -109,7 +113,6 @@ export function tick(
   let restStarted: number | null = null;
   let waitsFor: string | null = null;
   // A metcon's score or a run ends its clock: it has done its job (Task 7b).
-  const kind = blockKindOf(ex);
   if (kind === 'metcon' || kind === 'run') clearWorkClock(db, ex.id);
   if (view) {
     // R639: none after a metcon or a run, else the lifter's own rest, else the slot's kind; while an EMOM runs, the

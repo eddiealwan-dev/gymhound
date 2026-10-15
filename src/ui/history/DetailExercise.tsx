@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { View } from 'react-native';
 import type { WorkoutDetailExercise, WorkoutDetailSet } from '../../db/repositories/historyRepo';
 import { formatRest } from '../../domain/dates';
-import { historySetText } from '../../domain/history';
+import { historySetText, scoreLoadText } from '../../domain/history';
 import { MARK_LABELS } from '../../domain/labels';
 import { finishLine, type NextTime } from '../../domain/ruleLine';
 import { spokenRest } from '../../domain/rest';
@@ -31,10 +31,13 @@ const SPOKEN_DISTANCE: [RegExp, string][] = [
 /**
  * A set as the screen reader says it: "185 by 5", "Bodyweight by 12", "40 seconds", "70 lb by 1 minute 30 seconds",
  * "2 km, 12 minutes 30 seconds", and for the program types (R607) "50 feet, 315 lb, 32 seconds", "6 rounds and 4 reps"
- * and "7 minutes 42 seconds"; then ", RPE 8" when it has one.
+ * and "7 minutes 42 seconds", with a score's load after it ("at 43 kg"); then ", RPE 8" when it has one.
  */
 export function spokenSet(set: WorkoutDetailSet, position: number, loggingType: LoggingType, unit: WeightUnit): string {
+  // A score's load is said after the score, once the score is in words (ruling R-g3): "6 rounds and 4 reps at 43 kg".
+  const load = scoreLoadText(set, loggingType, unit);
   let text = historySetText({ ...set, position, rpe: null }, loggingType, unit);
+  if (load !== '' && text.endsWith(load)) text = text.slice(0, -load.length);
   if (loggingType === 'rounds' && set.reps !== null) {
     const rounds = `${set.reps} ${set.reps === 1 ? 'round' : 'rounds'}`;
     const extra = set.extraReps ?? null;
@@ -46,7 +49,7 @@ export function spokenSet(set: WorkoutDetailSet, position: number, loggingType: 
     if (shown !== undefined) text = `${text.slice(0, -shown.length)}${spokenRest(seconds)}`;
   }
   if (loggingType === 'weighted_distance') for (const [unitText, words] of SPOKEN_DISTANCE) text = text.replace(unitText, words);
-  text = text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replaceAll(' · ', ', ');
+  text = `${text.replace(/^BW\b/, 'Bodyweight').replaceAll(' × ', ' by ').replaceAll(' · ', ', ')}${load}`;
   return set.rpe === null ? text : `${text}, RPE ${set.rpe}`;
 }
 

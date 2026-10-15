@@ -10,7 +10,7 @@ import { totalVolume, type VolumeSet } from '../../domain/volume';
 import { exerciseNotes, exercisePrefs, exercises, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 import { getWorkoutPrs } from './prRepo';
-import { carryUnit, programSlotOf } from './programRunRepo';
+import { carryUnit, programSlotOf, slotSessions } from './programRunRepo';
 import { programFinishLines, programPartsOf, type FinishRow, type ProgramSlotView, type ProgramWorkoutView } from './programViewRepo';
 import { ruleOf } from './ruleSnapshot';
 
@@ -142,6 +142,26 @@ export function getPreviousSets(db: Db, exerciseId: string, excludeWorkoutId: st
 }
 
 /**
+ * A program slot's previous sets (ruling R-f2): the done sets of the newest finished session of the exercise on the
+ * slot's own progression line (`slotSessions`: the slot and the slots on other days with the same rule kind and range,
+ * R625 as amended), never another range's slot of the exercise (Strongman's speed log lift, #20's warm-up jog). None
+ * while the line has no session, so the row suggests the slot's target. Your own routines read `getPreviousSets`.
+ */
+export function getPreviousSetsOnLine(db: Db, routineExerciseId: string, exerciseId: string, excludeWorkoutId: string): PrevSet[] {
+  const sessions = slotSessions(db, routineExerciseId, 0, exerciseId).filter((s) => s.id !== excludeWorkoutId);
+  for (const session of sessions.reverse()) {
+    const done = db
+      .select(PREV_SET_COLUMNS)
+      .from(sets)
+      .where(and(eq(sets.workoutExerciseId, session.workoutExerciseId), eq(sets.done, true)))
+      .orderBy(asc(sets.position))
+      .all();
+    if (done.length > 0) return done;
+  }
+  return [];
+}
+
+/**
  * Each exercise's heaviest done set in finished workouts, warmups left out, in the unit it was logged in (R422). One
  * query for the whole workout: the heaviest per unit, then the heavier of the two compared in kg.
  */
@@ -265,7 +285,11 @@ export function getActiveWorkoutView(db: Db): ActiveWorkoutView | null {
       overrideUnit: we.overrideUnit,
       mark: we.mark,
       sets: setsByExercise.get(we.id) ?? [],
-      previous: getPreviousSets(db, we.exerciseId, workout.id),
+      // A program slot's previous is from its own progression line (ruling R-f2); anything else's by exercise.
+      previous:
+        we.routineExerciseId !== null && programSlotOf(workout.routineId, we.routineExerciseId) !== undefined
+          ? getPreviousSetsOnLine(db, we.routineExerciseId, we.exerciseId, workout.id)
+          : getPreviousSets(db, we.exerciseId, workout.id),
       bestWeight: best.get(we.exerciseId) ?? null,
       // A program carry is entered in its slot's ft or yd, from the first set (R607).
       slotDistanceUnit: carryUnit(programSlotOf(workout.routineId, we.routineExerciseId)),
@@ -346,6 +370,21 @@ function selectNextTimes(db: Db, workoutId: string, weekKind: WeekKind | null): 
 }
 
 /**
+ * A workout's sets for its VOLUME: all but a program's technique sets (`countsTowardVolume: false`, an EMOM's snatches),
+ * which are not counted toward weekly volume either (R629; the walkthrough). Your own routines count every set.
+ */
+function countedSets(db: Db, workoutId: string, routineId: string | null): VolumeSet[] {
+  return db
+    .select({ ...VOLUME_SET_COLUMNS, routineExerciseId: workoutExercises.routineExerciseId })
+    .from(sets)
+    .innerJoin(workoutExercises, eq(workoutExercises.id, sets.workoutExerciseId))
+    .innerJoin(exercises, eq(exercises.id, workoutExercises.exerciseId))
+    .where(eq(workoutExercises.workoutId, workoutId))
+    .all()
+    .filter((s) => programSlotOf(routineId, s.routineExerciseId)?.countsTowardVolume !== false);
+}
+
+/**
  * The duration, volume, done-set count, next-time weights and personal bests of a finished workout. Throws if it does not exist or is
  * not finished.
  */
@@ -361,7 +400,7 @@ export function getFinishSummary(db: Db, workoutId: string, displayUnit: WeightU
     id: workout.id,
     name: workout.name,
     durationMs: workout.finishedAt - workout.startedAt,
-    volume: totalVolume(workoutSets, displayUnit),
+    volume: totalVolume(countedSets(db, workoutId, workout.routineId), displayUnit),
     setCount: workoutSets.filter((s) => s.done).length,
     scoreCount: workoutSets.filter((s) => s.done && (s.loggingType === 'rounds' || s.loggingType === 'for_time')).length,
     next,

@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import Session from '../../../app/session';
 import { setSetting } from '../../db/repositories/settingsRepo';
+import { announce } from '../../platform/announce';
 import type { MusicAppId } from '../../domain/types';
 import { Button } from '../Button';
 import { MusicBar } from './MusicBar';
@@ -44,6 +45,8 @@ jest.mock('../../state/dataVersion', () => ({
   bumpData: jest.fn(),
 }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
+// On iOS an announcement waits half a second on a real timer, which would outlive the file and hold its Jest worker.
+jest.mock('../../platform/announce', () => ({ ...jest.requireActual('../../platform/announce'), announce: jest.fn() }));
 jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn() }));
 jest.mock('../../state/useNow', () => ({ useNow: () => 2_000 }));
 jest.mock('./ExerciseBlock', () => ({ ExerciseBlock: () => null }));
@@ -204,6 +207,8 @@ describe('the music bar (Task 26)', () => {
       tree.root.findAllByType(Button).find((b) => b.props.label === 'Open Spotify')!.props.onPress();
     });
     expect(tree.root.findAllByType(Text).map((t) => t.props.children)).toContain("Spotify isn't on this phone.");
+    // VoiceOver is told; the call is mocked so its half-second iOS timer never outlives the file (the Jest worker exit).
+    expect(announce).toHaveBeenCalledWith("Spotify isn't on this phone.");
 
     const music = tree.root.findAll((n) => n.props.accessibilityLabel === 'Music' && typeof n.props.onPress === 'function')[0];
     act(() => music.props.onPress());

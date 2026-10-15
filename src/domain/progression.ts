@@ -47,14 +47,10 @@ export type OutcomeInput = {
    * off a barbell rounds down to it, and a slot whose full increment is 0 never resets. Default: the rule's increment.
    */
   fullIncrement?: number;
-  /** The step a reset off a barbell rounds down to, in the rule's increment unit, where it is not the full increment. */
-  resetStep?: number;
   /** All-hit normal sessions in a row before a raise: 2 for Atlas stone load (R623), else 1 (the default). */
   sessionsToRaise?: 1 | 2;
   /** With `sessionsToRaise` 2: the slot's previous normal session hit every set (`isAllHit`) and did not raise. */
   previousAllHit?: boolean;
-  /** The bottom of the range for a miss, where it is not the rule's `repMin`. */
-  repMinForMiss?: number;
   /** The slot's distance unit for `weighted_distance` (ft or yd); absent, each set's distance is read in its own unit. */
   distanceUnit?: DistanceUnit;
 };
@@ -141,7 +137,7 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
     missesToReset !== undefined &&
     isMiss({
       setCount: rule.setCount,
-      repMin: input.repMinForMiss ?? rule.repMin,
+      repMin: rule.repMin,
       loggingType,
       sets: input.sets,
       marked: false,
@@ -153,7 +149,7 @@ export function computeOutcome(input: OutcomeInput): OutcomeResult {
     // with nothing to add (reps only) has no weight to drop, and a drop that loads no lighter (the empty bar) is none.
     const fullIncrement = input.fullIncrement ?? rule.increment;
     if ((input.missesBefore ?? 0) + 1 >= missesToReset && loggingType !== 'assisted' && fullIncrement > 0) {
-      const step = convertIncrement(input.resetStep ?? fullIncrement, rule.incrementUnit, working.unit);
+      const step = convertIncrement(fullIncrement, rule.incrementUnit, working.unit);
       const next = resetWeight(working, input.resetMultiplier ?? 0.9, step, input.equipment === 'barbell', input.gear[working.unit]);
       if (toHundredths(next) < toHundredths(working.value)) return result('reset', { value: next, unit: working.unit }, true);
     }

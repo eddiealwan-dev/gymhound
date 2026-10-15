@@ -745,8 +745,14 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     const lighter = { ...easy, week: 4, weekInfo: { week: 4, kind: 'lighter' as const, halfSets: true, holds: true, runShare: 0.6, note: '' } };
     expect(line(lighter, at(1116), 'timed')).toBe('60% of the time this lighter week. Adds 2:00 a week, up to 40:00. Next week 33:00.');
     expect(line({ ...easy, week: 9 }, at(2400), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week 40:00 again.');
+    // Before a lighter week the line says next week's share, the number the finish line gives (R654; final review).
+    const beforeLighter = { ...easy, week: 3, nextWeekInfo: { week: 4, kind: 'lighter' as const, halfSets: true, holds: true, runShare: 0.6, note: '' } };
+    expect(line(beforeLighter, at(1740), 'timed')).toBe('Adds 2:00 a week, up to 40:00. Next week is lighter: 18:36.');
     const intervals = program({ kind: 'weekly_seconds', weekly: { kind: 'sets_then_seconds', startSets: 6, capSets: 8, seconds: 180, stepS: 15 } });
     expect(line(intervals, at(180, 8), 'timed')).toBe('Week 3: 8 × 3:00. Adds a set a week up to 8, then 15 s a set.');
+    expect(line({ ...intervals, nextWeekInfo: beforeLighter.nextWeekInfo }, at(180, 8), 'timed')).toBe(
+      'Week 3: 8 × 3:00. Adds a set a week up to 8, then 15 s a set. Next week is lighter: 8 × 1:57.',
+    );
     expect(line(program({ kind: 'weekly_seconds', weekly: { kind: 'fixed' } }), at(600), 'timed')).toBe('10:00, the same every week.');
   });
 

@@ -88,7 +88,7 @@ describe('metconParts (R-t7b2, design gate #2)', () => {
         { amount: '21-15-9', name: 'Pull-ups (scaled as needed)', load: null },
       ],
     });
-    expect(metconParts(fran, name, 'lb').elements[0].load).toBe('95 / 65 lb');
+    expect(metconParts(fran, name, 'lb').elements[0].load).toBe('95/65 lb');
   });
 
   it('puts the rounds in the format line, with no repeat of the name', () => {

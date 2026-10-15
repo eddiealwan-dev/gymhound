@@ -503,6 +503,29 @@ describe('VoiceOver', () => {
     expect(spoken(tree, 'Set 1, 6 rounds and 4 reps')).toHaveLength(1);
     expect(spoken(tree, 'Set 1, 7 minutes 42 seconds')).toHaveLength(1);
   });
+  it("shows and says a score's load with it: \"6 + 4 at 43 kg\", \"7:42 at 95 lb\" (ruling R-g3, W3 review)", () => {
+    const detail = pushA();
+    const block = (id: string, name: string, loggingType: 'rounds' | 'for_time', sets: WorkoutDetailSet[]) => ({
+      workoutExerciseId: id,
+      exerciseId: id,
+      name,
+      loggingType,
+      supersetGroup: null,
+      mark: null,
+      note: null,
+      showRpe: false,
+      sets,
+    });
+    detail.exercises = [
+      block('amrap', 'AMRAP 10', 'rounds', [set({ id: 'a1', reps: 6, extraReps: 4, weight: 43, weightUnit: 'kg' })]),
+      block('fran', '21-15-9', 'for_time', [set({ id: 'f1', durationS: 462, weight: 95, weightUnit: 'lb' })]),
+    ];
+    jest.mocked(getWorkoutDetail).mockReturnValue(detail);
+    const tree = mount();
+    for (const text of ['6 + 4 at 43 kg', '7:42 at 95 lb']) expect(textNodes(tree, text)).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 6 rounds and 4 reps at 43 kg')).toHaveLength(1);
+    expect(spoken(tree, 'Set 1, 7 minutes 42 seconds at 95 lb')).toHaveLength(1);
+  });
 });
 
 describe('the screen stays mounted across workouts', () => {

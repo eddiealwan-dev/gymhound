@@ -143,8 +143,9 @@ function distanceInEntryUnit(distance: number | null, from: DistanceUnit | null,
  * `ruleRepMax` is a rep count for the weighted types, seconds for `timed` and `weighted_time` (it
  * feeds the duration and reps stay empty), the slot's distance for `weighted_distance` (in the slot's unit, which is
  * then the entry unit `distanceUnit`), and unused for `distance_time` and the two scores (`rounds`, `for_time`): a
- * score is never suggested from the rule, only from last time. Without `loggingType` it is treated as reps. An AMRAP
- * score's extra reps come from last time, else the set above; the other types have none.
+ * score is never suggested from the rule, only from last time, and its load never here (the metcon block suggests its
+ * main move's, `blockRows`). Without `loggingType` it is treated as reps. An AMRAP score's extra reps come from last
+ * time, else the set above; the other types have none.
  *
  * `carried` is today's own values from the set above (`carryAbove`, spec 18.6). It counts only when
  * there is no previous set, because history wins row by row. Then the weight is the carried weight
@@ -173,11 +174,13 @@ export function placeholdersFor(a: {
   const ruleDistance = ruleIsDistance ? a.ruleRepMax : null;
   // Only an AMRAP score has extra reps; the other types leave the field out.
   const extra = (value: number | null | undefined) => (loggingType === 'rounds' ? { extraReps: value ?? null } : {});
+  // A score suggests no load of its own: the metcon block suggests its main move's, where its field shows it (W3 review).
+  const score = loggingType === 'rounds' || loggingType === 'for_time';
 
   if (previous === null && carried) {
     const weight = inEntryUnit(carried.weight, carried.weightUnit, a.unit);
     return {
-      weight: loggingType === 'bodyweight_plus' && weight === 0 ? null : weight,
+      weight: score || (loggingType === 'bodyweight_plus' && weight === 0) ? null : weight,
       reps: ruleIsSeconds ? null : (ruleReps ?? carried.reps),
       durationS: ruleIsSeconds ? (a.ruleRepMax ?? carried.durationS) : carried.durationS,
       distance: distanceInEntryUnit(carried.distance, carried.distanceUnit, a.distanceUnit) ?? ruleDistance,
@@ -186,7 +189,7 @@ export function placeholdersFor(a: {
   }
 
   return {
-    weight: inEntryUnit(previous?.weight ?? null, previous?.weightUnit ?? null, a.unit),
+    weight: score ? null : inEntryUnit(previous?.weight ?? null, previous?.weightUnit ?? null, a.unit),
     reps: ruleIsSeconds ? null : (previous?.reps ?? ruleReps),
     durationS: previous?.durationS ?? (ruleIsSeconds ? a.ruleRepMax : null),
     distance: distanceInEntryUnit(previous?.distance ?? null, previous?.distanceUnit ?? null, a.distanceUnit) ?? ruleDistance,
@@ -207,7 +210,10 @@ export function resolveTick(i: TickInput): TickValues | null {
   const durationS = entered.durationS ?? placeholders.durationS;
   const distance = entered.distance ?? placeholders.distance;
   const extraReps = entered.extraReps ?? placeholders.extraReps ?? null;
-  /** A metcon score's load: typed, else last time's suggested; never a target, which a score has none of (R-g3). */
+  /**
+   * A metcon score's load: typed, else the one its block suggests (last time's, where the main move's field shows it);
+   * never a target, which a score has none of (R-g3).
+   */
   const scoreLoad = entered.weight ?? placeholders.weight ?? null;
 
   switch (i.loggingType) {
@@ -223,8 +229,8 @@ export function resolveTick(i: TickInput): TickValues | null {
     case 'distance_time':
       return distance !== null && durationS !== null ? { weight: null, reps: null, durationS, distance } : null;
     case 'weighted_distance':
-      // The time is optional (R607): kept when there is one.
-      return weight !== null && distance !== null ? { weight, reps: null, durationS, distance } : null;
+      // The time is optional (R607): only what was typed, never last time's (the final review).
+      return weight !== null && distance !== null ? { weight, reps: null, durationS: entered.durationS, distance } : null;
     case 'rounds':
       // The rounds are in `reps`; the extra reps are optional, and so is the load of the main move (ruling R-g3).
       return reps !== null ? { weight: scoreLoad, reps, durationS: null, distance: null, extraReps } : null;

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { Image, Platform, Text, TextInput } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -243,6 +243,15 @@ describe('personal records on the finish summary (R104, R105)', () => {
       'Save as a workout',
       'Done',
     ]);
+  });
+
+  it("keeps 16pt above its hairline after a metcon's or a run's line, which has no next weight (walkthrough)", async () => {
+    const metconLine = { workoutExerciseId: 'we2', text: 'AMRAP 10 — 7 rounds', why: 'Beat it twice in a row to go heavier.' };
+    mockRead = { unit: 'lb', summary: { ...pushA([], [benchPr('heaviest')]), lines: [metconLine] } };
+    const tree = await mountSettled();
+    const heading = tree.root.findAll((n) => n.type === Text && n.props.children === 'Personal records')[0];
+    const box = tree.root.findAll((n) => n.type === View && n.findAll((m) => m === heading).length > 0 && StyleSheet.flatten(n.props.style)?.borderTopWidth === 1)[0];
+    expect(StyleSheet.flatten(box.props.style)).toMatchObject({ marginTop: 16, paddingTop: 16 });
   });
 
   it('hides the section when there are none', async () => {

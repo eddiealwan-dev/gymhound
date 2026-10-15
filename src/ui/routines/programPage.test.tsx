@@ -77,6 +77,7 @@ const MINE: RoutineDetail = { ...RETIRED, id: 'mine', name: 'My split', isPremad
 const HIDDEN = "The days and exercises show once it's your active program.";
 const RETIRED_LINE = 'Retired. It keeps running for you, and its history stays.';
 const EXERCISES = ['Upper Heavy', 'Barbell bench press', 'Weighted pull-up', 'Lower Heavy', 'Barbell back squat'];
+const DAY_NAMES = ['Upper Heavy', 'Lower Heavy'];
 
 function mount(detail: RoutineDetail): ReactTestRenderer {
   mockId = detail.id;
@@ -99,6 +100,18 @@ function shownText(tree: ReactTestRenderer): string[] {
   return out;
 }
 
+/** Every accessibility label on the page, as VoiceOver would say them. */
+const labelsOf = (tree: ReactTestRenderer): string[] =>
+  tree.root.findAll((n) => typeof n.props.accessibilityLabel === 'string').map((n) => n.props.accessibilityLabel as string);
+
+/**
+ * The labels that name a day or an exercise of the program: a label that is a day's name, or one with an exercise's
+ * name in it. The card's Schedule paragraph, the documents' own words, names the days in a sentence ("Days run Upper
+ * Heavy → Lower Heavy …"), as it does on screen.
+ */
+const leaks = (tree: ReactTestRenderer): string[] =>
+  labelsOf(tree).filter((l) => EXERCISES.some((name) => (DAY_NAMES.includes(name) ? l === name : l.includes(name))));
+
 const buttons = (tree: ReactTestRenderer, label: string) => tree.root.findAllByType(Button).filter((b) => b.props.label === label);
 
 beforeEach(() => {
@@ -120,6 +133,8 @@ describe("a program's page is its card (R630, R634)", () => {
     expect(shown).toContain('Sources (7)');
     expect(shown.indexOf(HIDDEN)).toBeGreaterThan(shown.indexOf('Sources (7)'));
     for (const name of EXERCISES) expect(shown).not.toContain(name);
+    // Nor in what VoiceOver says (final review).
+    expect(leaks(tree)).toEqual([]);
     expect(buttons(tree, 'Set active').map((b) => b.props.variant ?? 'primary')).toEqual(['primary']);
     // Nothing that needs the exercises (Modify, Duplicate) is offered until they show (R635).
     expect(buttons(tree, 'Duplicate')).toHaveLength(0);
@@ -140,6 +155,14 @@ describe("a program's page is its card (R630, R634)", () => {
     expect(router.push).toHaveBeenCalledWith('/paywall');
     expect(setActiveProgram).not.toHaveBeenCalled();
     for (const name of EXERCISES) expect(shown).not.toContain(name);
+    expect(leaks(tree)).toEqual([]);
+  });
+
+  it('an active Pro program on free hides its days and exercises from VoiceOver too (R634)', () => {
+    mockPro = false;
+    const tree = mount({ ...DUP, isActive: true });
+    for (const name of EXERCISES) expect(shownText(tree)).not.toContain(name);
+    expect(leaks(tree)).toEqual([]);
   });
 
   it('your active program shows Active, then its days and exercises', () => {
@@ -150,6 +173,8 @@ describe("a program's page is its card (R630, R634)", () => {
     expect(tree.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === 'Active' && n.props.accessible === true)).toHaveLength(1);
     for (const name of EXERCISES) expect(shown).toContain(name);
     expect(shown.indexOf('Upper Heavy')).toBeGreaterThan(shown.indexOf('Sources (7)'));
+    // The sweep above sees them once they show: VoiceOver names the exercises of your active program.
+    expect(leaks(tree).length).toBeGreaterThan(0);
   });
 
   it('Back returns to Routines', () => {

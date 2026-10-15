@@ -3,6 +3,7 @@ import { MARK_LABELS } from './labels';
 import { formatPrevious, type PrevSet } from './setEntry';
 import type { ExerciseMark, LoggingType, WeightUnit } from './types';
 import { formatVolume } from './volume';
+import { formatWeight } from './units';
 
 /** One finished workout as History's list shows it (R163). */
 export type HistoryCard = {
@@ -71,9 +72,19 @@ export function marksLine(marks: readonly ExerciseMark[]): string | null {
   return `Something off: ${unique.map((m) => MARK_LABELS[m]).join(' · ')}`;
 }
 
-/** A logged set as the History detail reads it: as Previous ("185 × 5", "84 kg × 5"), then " @ 8" when it has an RPE. */
+/** A score's load (ruling R-g3), always with its unit: " at 43 kg"; empty for any other set or a score with none. */
+export function scoreLoadText(set: Pick<PrevSet, 'weight' | 'weightUnit'>, loggingType: LoggingType, displayUnit: WeightUnit): string {
+  if ((loggingType !== 'rounds' && loggingType !== 'for_time') || set.weight === null) return '';
+  return ` at ${formatWeight(set.weight, set.weightUnit ?? displayUnit)}`;
+}
+
+/**
+ * A logged set as the History detail reads it: as Previous ("185 × 5", "84 kg × 5"), a score with its load ("6 + 4 at
+ * 43 kg", "7:42 at 95 lb", W3 review), then " @ 8" when it has an RPE.
+ */
 export function historySetText(set: PrevSet & { rpe: number | null }, loggingType: LoggingType, displayUnit: WeightUnit): string {
-  const text = formatPrevious(set, loggingType, displayUnit);
+  const previous = formatPrevious(set, loggingType, displayUnit);
+  const text = previous === '' ? previous : `${previous}${scoreLoadText(set, loggingType, displayUnit)}`;
   return set.rpe === null ? text : `${text} @ ${set.rpe}`;
 }
 

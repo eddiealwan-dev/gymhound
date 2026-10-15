@@ -578,6 +578,23 @@ describe('the history editor and the three program logging types (R607)', () => 
     expect(shown(again)).toContain('Add rounds to complete set');
   });
 
+  it("gives a score with a load a weight column, so a mistyped load can be fixed (ruling R-g3, W3 review)", () => {
+    addProgramExercise('metcon-fran', '21-15-9', 'for_time');
+    const id = oneSet('metcon-fran', { durationS: 462, weight: 59 });
+    const tree = mount(id);
+    expect(shownText(tree)).toEqual(expect.arrayContaining(['LB', 'TIME']));
+    expect(field(tree, '21-15-9, set 1, weight in lb').props.value).toBe('59');
+    typeInto(tree, '21-15-9, set 1, weight in lb', '95');
+    press(tree, 'Save');
+    expect(setsOf(mockDb, id, 'metcon-fran')[0]).toMatchObject({ weight: 95, weightUnit: 'lb', durationS: 462 });
+  });
+
+  it('gives a score with no load, from a metcon of your own, no weight column', () => {
+    addProgramExercise('metcon-amrap-10', 'AMRAP 10', 'rounds');
+    const tree = mount(oneSet('metcon-amrap-10', { reps: 6 }));
+    expect(shownText(tree)).not.toContain('LB');
+  });
+
   it('edits a For Time score as m:ss', () => {
     addProgramExercise('metcon-fran', '21-15-9', 'for_time');
     const id = oneSet('metcon-fran', { durationS: 462 });

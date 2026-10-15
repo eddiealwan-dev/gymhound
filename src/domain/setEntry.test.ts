@@ -644,6 +644,15 @@ describe('the three program logging types (R607)', () => {
       expect(resolveTick({ loggingType: 'for_time', entered: { ...none, durationS: 462 }, target: null, placeholders: none })?.weight).toBeNull();
     });
 
+    it("a carry's time is only what was typed, never last time's (final review)", () => {
+      expect(
+        resolveTick({ loggingType: 'weighted_distance', entered: { ...none, weight: 315 }, target: null, placeholders: { ...none, distance: 50, durationS: 40 } }),
+      ).toEqual({ weight: 315, reps: null, durationS: null, distance: 50 });
+      expect(
+        resolveTick({ loggingType: 'weighted_distance', entered: { ...none, weight: 315, durationS: 38 }, target: null, placeholders: { ...none, distance: 50, durationS: 40 } }),
+      ).toMatchObject({ durationS: 38 });
+    });
+
     it("an AMRAP score keeps the load typed, else last time's suggested, else none (ruling R-g3)", () => {
       expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6, weight: 16 }, target: null, placeholders: none })).toMatchObject({ reps: 6, weight: 16 });
       expect(resolveTick({ loggingType: 'rounds', entered: { ...none, reps: 6 }, target: null, placeholders: { ...none, weight: 16 } })).toMatchObject({ weight: 16 });
@@ -663,6 +672,14 @@ describe('the three program logging types (R607)', () => {
         reps: null,
         distance: 60,
       });
+    });
+
+    it("a score suggests no load of its own: the metcon block suggests its main move's (W3 review)", () => {
+      const amrap = P(1, 'working', 16, 6, { weightUnit: 'kg', extraReps: 4 });
+      expect(placeholdersFor({ previous: amrap, ruleRepMax: null, loggingType: 'rounds', unit: 'kg' })).toMatchObject({ weight: null, reps: 6, extraReps: 4 });
+      const fran = P(1, 'working', 95, null, { durationS: 462 });
+      expect(placeholdersFor({ previous: fran, ruleRepMax: null, loggingType: 'for_time', unit: 'lb' })).toMatchObject({ weight: null, durationS: 462 });
+      expect(placeholdersFor({ previous: null, ruleRepMax: null, loggingType: 'for_time', unit: 'lb', carried: { weight: 95, weightUnit: 'lb', reps: null, durationS: 462, distance: null, distanceUnit: null } })).toMatchObject({ weight: null });
     });
 
     it("an AMRAP score: last time's rounds and extra reps, never the rule's number", () => {

@@ -114,6 +114,16 @@ export function metconLoadMove(rule: MetconRule): number | null {
   return at < 0 ? null : at;
 }
 
+/**
+ * A metcon's main weighted move as its block names it before the amounts are read ("Thruster"), or null for a block
+ * that isn't a metcon or a metcon with no loaded move: what a score's tick needs to record the load its row shows.
+ */
+export function metconLoadName(ex: BlockInput): string | null {
+  const metcon = blockKindOf(ex) === 'metcon' ? (ex.program?.metcon ?? null) : null;
+  const at = metcon === null ? null : metconLoadMove(metcon);
+  return metcon === null || at === null ? null : metcon.elements[at];
+}
+
 /** The word a timed slot is called by: a walk, a ride, a row, else a run. */
 export function runNoun(exerciseId: string): string {
   if (exerciseId === 'incline-treadmill-walk') return 'Walk';
@@ -254,6 +264,8 @@ export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions)
     case 'event':
       return rows.map((row) => ({
         ...row,
+        // The optional time hints no last time: a tick saves only a typed time, so the row shows what it records (R48, R-f4).
+        placeholders: { ...row.placeholders, durationS: null },
         ...eventPrevious(row, o.unit),
         optional: ['durationS'],
         tickLabel: o.eventWord === 'push' ? `Set ${row.label} pushed without a stop` : `Set ${row.label} carried drop-free`,

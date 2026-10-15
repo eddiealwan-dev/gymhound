@@ -37,15 +37,18 @@ const PICK_ONE = 'Set one active and Train lines up its next workout.';
 /** Over New routine while you have none of your own (R401). */
 const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
-/** A row's line with no-break spaces inside each part, so a "·" never ends a line ("3 days a week · 12 weeks"). */
-const unbroken = (line: string) => line.split(' · ').map((part) => part.replace(/ /g, ' ')).join(' · ');
+/**
+ * A row's line with a no-break space only between a number and its word ("3 days", "12 weeks") and before each "·", so
+ * a "·" never starts or ends a line and the rest wraps between words, never inside one, at large text (ruling R-g6).
+ */
+const unbroken = (line: string) => line.replace(/(\d) (?=\S)/g, '$1\u00a0').replace(/ · /g, '\u00a0· ');
 
 /**
  * One of the twenty programs (R633): its 48pt picture, its name (a line may break after a slash) and "3 days a week ·
  * 12 weeks · Beginner", all one 44pt+ target that opens its card, where Set active lives. The name and the line take
  * the whole width between the picture and the chevron at every text size (design gate #1): a Pro program for a free
  * lifter ends its line with "· Pro" (R525), and the program in use has "✓ Active" on a line of its own under it, in
- * body strong. A state is a word and a mark, never a pill (R636). ⋯ at the end opens the program's options (R542).
+ * body strong, a Pro one on free included. A state is a word and a mark, never a pill (R636). ⋯ at the end opens the program's options (R542).
  */
 function ProgramRow({
   routine,
@@ -60,8 +63,9 @@ function ProgramRow({
 }) {
   const { colors } = useTheme();
   const line = routineLine(routine);
-  const active = routine.isActive && !locked;
-  const state = locked ? 'part of GymHound Pro' : active ? 'active' : null;
+  // The program in use stays marked Active on free too, beside "Pro" on its line (the walkthrough).
+  const active = routine.isActive;
+  const state = [locked ? 'part of GymHound Pro' : null, active ? 'active' : null].filter((s) => s !== null).join(', ') || null;
   return (
     <View
       style={{

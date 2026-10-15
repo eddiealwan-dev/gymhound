@@ -12,7 +12,8 @@ import type { Db } from '../types';
 import { changeRungToday, programPageOf, showsWarmUp } from './programViewRepo';
 import { changeRung, setActiveProgram, startEarlyDeload } from './programRunRepo';
 import { getActiveWorkoutView, getFinishSummary } from './workoutViewsRepo';
-import { startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { finishWorkout, startWorkoutFromDay, tickSet } from './workoutsRepo';
+import { programRuleSentence } from '../../domain/ruleLine';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -315,7 +316,7 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     expect(linesOf(db, id)[0].text).toMatch(/ — holds at 100 lb · Deload week$/);
   });
 
-  it('a metcon not yet beaten twice keeps its line, with no why (R622)', () => {
+  it('a metcon not yet beaten twice keeps its line, with its rule as the why (R622)', () => {
     const db = seededDb();
     const program = insertProgram(db, 'program-crossfit-foundations');
     setActiveProgram(db, program.id, NOW);
@@ -323,7 +324,8 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     const metcon = dayA.slots.find((s) => s.ruleKind === 'metcon')!;
     const id = runSession(db, `${program.id}:${dayA.slug}`, at(1), { [metcon.id]: { reps: [5] } });
     // Its outcome and its rule, in the lift lines' style (design gate #6).
-    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: 'AMRAP 10 — 5 rounds. Beat it twice in a row to go heavier.', why: null });
+    // Every line ends as a lift's does, with no full stop; the rule is the muted sentence under it (walkthrough).
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: 'AMRAP 10 — 5 rounds', why: 'Beat it twice in a row to go heavier.' });
   });
 
   it('a metcon beaten twice in a row says so (R622)', () => {
@@ -341,7 +343,7 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     });
     expect(linesOf(db, last)).toContainEqual({
       workoutExerciseId: expect.any(String),
-      text: 'AMRAP 10 — 7 rounds.',
+      text: 'AMRAP 10 — 7 rounds',
       why: 'You beat your score twice in a row. Go heavier or take the next scaling step.',
     });
   });
@@ -357,7 +359,7 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
     const fran = tue.slots.find((s) => s.ruleKind === 'metcon')!;
     const id = runSession(db, `${program.id}:${tue.slug}`, at(1), { [fran.id]: { seconds: [13], weight: 95 } });
-    expect(linesOf(db, id).map((l) => l.text)).toContain('21-15-9 for time — 0:13 at 95 lb. Beat it twice in a row to go heavier.');
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: '21-15-9 for time — 0:13 at 95 lb', why: 'Beat it twice in a row to go heavier.' });
   });
 
   it('an easy run says next week\'s time, and intervals next week\'s sets', () => {
@@ -367,14 +369,47 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
     const run = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
     const tueId = runSession(db, `${program.id}:${tue.slug}`, at(1), { [run.id]: { seconds: [1500] } });
-    expect(linesOf(db, tueId).map((l) => l.text)).toContain('Easy run — next time 27:00.');
+    expect(linesOf(db, tueId).map((l) => l.text)).toContain('Easy run — next time 27:00');
     const wed = program.days.find((d) => d.name.startsWith('Wed'))!;
     const [warm, intervals, cool] = wed.slots;
     const wedId = runSession(db, `${program.id}:${wed.slug}`, at(2), { [warm.id]: { seconds: [600] }, [intervals.id]: { seconds: [180, 180, 180, 180, 180, 180] }, [cool.id]: { seconds: [600] } });
     const texts = linesOf(db, wedId).map((l) => l.text);
-    expect(texts).toContain('Interval run — next time 7 × 3:00.');
+    expect(texts).toContain('Interval run — next time 7 × 3:00');
     // The warm-up and cool-down jogs stay the same every week: nothing to say.
     expect(texts.some((t) => t.startsWith('Warm-up run') || t.startsWith('Cool-down run'))).toBe(false);
+  });
+
+  it("#20 week 3: the easy run's line and its finish line give the lighter week 4's time (R654)", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    fakeSessions(db, program.id, 2 * program.daysPerWeek, NOW + HOUR);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const run = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
+    const id = runSession(db, `${program.id}:${tue.slug}`, at(30), { [run.id]: { seconds: [1740] } }, false);
+    const rule = blockIn(db, run.id).program!.rule;
+    expect(rule.week).toBe(3);
+    expect(rule.nextWeekInfo).toMatchObject({ kind: 'lighter', runShare: 0.6 });
+    expect(
+      programRuleSentence({ program: rule, rule: { setCount: 1, repMin: 1740, repMax: 1740, increment: 0, incrementUnit: 'lb' }, loggingType: 'timed', unit: 'lb', last: null }),
+    ).toBe('Adds 2:00 a week, up to 40:00. Next week is lighter: 18:36.');
+    finishWorkout(db, id, at(30) + HOUR);
+    expect(linesOf(db, id).map((l) => l.text)).toContain('Easy run — next time 18:36');
+  });
+
+  it('leaves technique sets out of the VOLUME, as they are out of weekly volume (walkthrough)', () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, program.id, NOW);
+    const wed = program.days.find((d) => d.slug === 'wed-olympic-squat')!;
+    const [snatch, frontSquat] = wed.slots;
+    expect(snatch.countsTowardVolume).toBe(false);
+    const id = runSession(db, `${program.id}:${wed.slug}`, at(1), {
+      [snatch.id]: { weight: 95, reps: [2, 2, 2] },
+      [frontSquat.id]: { weight: 135, reps: [5, 5] },
+    });
+    // 135 × 5 × 2 = 1,350: the snatch's EMOM is technique work. Its sets still count as sets done.
+    expect(getFinishSummary(db, id, 'lb')).toMatchObject({ volume: 1350, setCount: 5 });
   });
 
   it('counts a score as a score, not a set', () => {
@@ -427,5 +462,60 @@ describe('what a slot rule knows of its block (design gate #4, #5)', () => {
     startWorkoutFromDay(db, `${sm.id}:${sat.slug}`, at(1));
     const [farmer, sandbag, sled] = viewOf(db).exercises;
     expect([farmer, sandbag, sled].map((e) => e.program!.rule.eventWord)).toEqual(['carry', 'carry', 'push']);
+  });
+});
+
+describe("PREVIOUS and prefill follow the slot's progression line (ruling R-f2)", () => {
+  const previousOf = (db: Db, routineExerciseId: string) => blockIn(db, routineExerciseId).previous;
+
+  it("Strongman Thursday's speed log lift shows none of Monday's 3–5 sets: its own line has no session yet", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-strongman-prep');
+    setActiveProgram(db, program.id, NOW);
+    const monLog = 'program-strongman-prep:mon-overhead:fedb-log-lift';
+    const thuLog = 'program-strongman-prep:thu-events-a:fedb-log-lift';
+    runSession(db, 'program-strongman-prep:mon-overhead', at(1), { [monLog]: { weight: 90, reps: [5, 5, 5, 5] } });
+    startWorkoutFromDay(db, 'program-strongman-prep:thu-events-a', at(3));
+    expect(previousOf(db, thuLog)).toEqual([]);
+  });
+
+  it("#20 Wednesday's warm-up and cool-down runs show none of Tuesday's 25:30 easy run", () => {
+    const db = seededDb();
+    const program = insertProgram(db, 'program-hybrid-athlete');
+    setActiveProgram(db, program.id, NOW);
+    const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
+    const tueRun = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
+    runSession(db, `${program.id}:${tue.slug}`, at(1), { [tueRun.id]: { seconds: [1530] } });
+    const wed = program.days.find((d) => d.name.startsWith('Wed'))!;
+    const [warm, , cool] = wed.slots;
+    startWorkoutFromDay(db, `${program.id}:${wed.slug}`, at(2));
+    expect(previousOf(db, warm.id)).toEqual([]);
+    expect(previousOf(db, cool.id)).toEqual([]);
+  });
+
+  it("a lift on its line on another day shows that day's sets: Barbell Foundations B's squat shows A's", () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 5] } });
+    startWorkoutFromDay(db, `${BF}:b`, at(2));
+    expect(previousOf(db, `${BF}:b:barbell-back-squat`).map((s) => [s.weight, s.reps])).toEqual([
+      [135, 5],
+      [135, 5],
+      [135, 5],
+    ]);
+  });
+
+  it('your own routines keep PREVIOUS by exercise, from any workout, as before', () => {
+    const db = seededDb();
+    insertProgram(db, BF);
+    setActiveProgram(db, BF, NOW);
+    runSession(db, BF_A, at(1), { [SQUAT_A]: { weight: 135, reps: [5, 5, 5] } });
+    // A Push/pull/legs day has the bench press; Barbell Foundations A has it too.
+    const benchA = `${BF_A}:barbell-bench-press`;
+    runSession(db, BF_A, at(2), { [benchA]: { weight: 95, reps: [5, 5, 5] } });
+    startWorkoutFromDay(db, 'premade-ppl-6:push-a', at(3));
+    const bench = viewOf(db).exercises.find((e) => e.exerciseId === 'barbell-bench-press')!;
+    expect(bench.previous.map((s) => s.weight)).toEqual([95, 95, 95]);
   });
 });

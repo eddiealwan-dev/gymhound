@@ -10,6 +10,7 @@ import { enDashRanges, secondsAsMinutes } from './programCard';
 import { MARK_LABELS } from './labels';
 import { nearestLoadable, type Gear } from './plates';
 import { raiseLoadable, type Outcome, type OutcomeInput } from './progression';
+import { runTarget } from './programRules';
 import type { PrevSet } from './setEntry';
 import type { DistanceUnit, Equipment, ExerciseMark, LoggingType, WeightUnit } from './types';
 import { convertIncrement, formatWeight, isZeroWeight, loadsInUnit } from './units';
@@ -224,6 +225,8 @@ export type ProgramRule = {
   week: number;
   /** That week's special kind (R617), null on a normal week. */
   weekInfo: ProgramWeek | null;
+  /** Next week's special kind, so a run's "Next week" gives a lighter week's share as the finish line does (R654). */
+  nextWeekInfo?: ProgramWeek | null;
   /** The slot's sets, for a ladder's next rung ("at 3 × 5"). */
   sets: number;
   /** A ladder's rung (0-based) and its rungs (R618); null for any other slot. */
@@ -472,15 +475,22 @@ function runSentence(p: ProgramRule, rule: Rule): string {
   const weekly = p.weekly;
   if (!weekly || weekly.kind === 'fixed') return `${formatRest(rule.repMin)}, the same every week.`;
   const share = p.weekInfo?.runShare ?? 1;
+  const nextShare = p.nextWeekInfo?.runShare ?? 1;
   const lighter = share < 1 ? ` That's ${pct(share)}% on this lighter week.` : '';
   if (weekly.kind === 'seconds') {
     // The clock and the suggested time say this week's target, so the line says how it grows and next week's (gate #18).
     const next = Math.min(weekly.startS + p.week * weekly.stepS, weekly.capS);
     const now = Math.min(weekly.startS + (p.week - 1) * weekly.stepS, weekly.capS);
     const lighterNow = share < 1 ? `${pct(share)}% of the time this lighter week. ` : '';
-    return `${lighterNow}Adds ${formatRest(weekly.stepS)} a week, up to ${formatRest(weekly.capS)}. Next week ${formatRest(next)}${next === now ? ' again' : ''}.`;
+    const grows = `${lighterNow}Adds ${formatRest(weekly.stepS)} a week, up to ${formatRest(weekly.capS)}.`;
+    // Next week's number is the one the finish line gives: a lighter week's share of it (R654, the final review).
+    if (nextShare < 1) return `${grows} Next week is lighter: ${formatRest(Math.round(next * nextShare))}.`;
+    return `${grows} Next week ${formatRest(next)}${next === now ? ' again' : ''}.`;
   }
-  return `Week ${p.week}: ${rule.setCount} × ${formatRest(rule.repMin)}.${lighter} Adds a set a week up to ${weekly.capSets}, then ${weekly.stepS} s a set.`;
+  const line = `Week ${p.week}: ${rule.setCount} × ${formatRest(rule.repMin)}.${lighter} Adds a set a week up to ${weekly.capSets}, then ${weekly.stepS} s a set.`;
+  if (nextShare >= 1) return line;
+  const target = runTarget(weekly, { sets: rule.setCount, seconds: rule.repMin }, p.week + 1, nextShare);
+  return `${line} Next week is lighter: ${target.sets} × ${formatRest(target.seconds)}.`;
 }
 
 /** Added sets (R619): a set a session to the cap, then a heavier bell (back to a set count) or longer sets. */
