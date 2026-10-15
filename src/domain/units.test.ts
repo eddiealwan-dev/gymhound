@@ -79,7 +79,7 @@ describe('units', () => {
       expect(loadsInUnit('Weeks 1–2: empty bar to 75 lb', 'kg')).toBe('Weeks 1–2: empty bar to 34 kg');
       expect(loadsInUnit('Weeks 1–2: 95 lb or less', 'kg')).toBe('Weeks 1–2: 43 kg or less');
       expect(loadsInUnit('+5 lb for beginners; +10 lb if you are past the novice stage', 'kg')).toBe(
-        '+2.5 kg for beginners; +4.5 kg if you are past the novice stage',
+        '+2.5 kg for beginners; +5 kg if you are past the novice stage',
       );
     });
 
@@ -91,8 +91,18 @@ describe('units', () => {
     });
 
     it("converts the bare number a load is compared with (\"5 lb per session, not 10\")", () => {
-      expect(loadsInUnit('Beginner squat: 5 lb per session, not 10', 'kg')).toBe('Beginner squat: 2.5 kg per session, not 4.5');
+      expect(loadsInUnit('Beginner squat: 5 lb per session, not 10', 'kg')).toBe('Beginner squat: 2.5 kg per session, not 5');
       expect(loadsInUnit('Beginner squat: 5 lb per session, not 10', 'lb')).toBe('Beginner squat: 5 lb per session, not 10');
+    });
+
+    it('converts an increment by the gym convention (5 lb is 2.5 kg, 10 lb is 5 kg) and a load exactly (ruling R-f3)', () => {
+      expect(loadsInUnit('Use 2.5 lb jumps as soon as 5 lb fails', 'kg')).toBe('Use 1.25 kg jumps as soon as 2.5 kg fails');
+      expect(loadsInUnit('Drop to +5 lb after first stall', 'kg')).toBe('Drop to +2.5 kg after first stall');
+      expect(loadsInUnit('+2.5 lb if available', 'kg')).toBe('+1.25 kg if available');
+      expect(loadsInUnit('Very slow; start with bodyweight, then 5 lb steps', 'kg')).toBe('Very slow; start with bodyweight, then 2.5 kg steps');
+      // Loads: 75 lb is 34.0 kg, 95 lb 43.1 kg, to the nearest 0.5 kg.
+      expect(loadsInUnit('Weeks 1–2: empty bar to 75 lb', 'kg')).toBe('Weeks 1–2: empty bar to 34 kg');
+      expect(loadsInUnit('Weeks 1–2: 95 lb or less', 'kg')).toBe('Weeks 1–2: 43 kg or less');
     });
 
     it('leaves text with no load, and a lb session, as it is', () => {

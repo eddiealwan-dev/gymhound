@@ -58,9 +58,17 @@ export function roundToHalf(v: number): number {
 /** A load as program text says it, in `unit`: pounds become kilograms to the nearest 0.5 kg (ruling R-g4). */
 const loadIn = (n: number, unit: WeightUnit): string => String(unit === 'kg' ? roundToHalf(n * LB_TO_KG) : n);
 
+/** An increment as program text says it, in `unit`, by the gym convention: 5 lb is 2.5 kg, 10 lb is 5 kg (ruling R-f3). */
+const incrementIn = (n: number, unit: WeightUnit): string => String(convertIncrement(n, 'lb', unit));
+
+/** The words after a pound figure that make it a step rather than a load: "5 lb per session", "2.5 lb jumps". */
+const STEP_WORDS = /^\s(?:per session|jumps?|steps?|increments?|fails?)\b/;
+
 /**
- * Loads in program text (a slot's note, a metcon's "95/65 lb"), in the session unit (ruling R-g4): in kg, each pound
- * figure is converted to the nearest 0.5 kg, with the bare number it is set against ("5 lb per session, not 10"). A pair
+ * Loads and increments in program text (a slot's note, a metcon's "95/65 lb"), in the session unit (rulings R-g4,
+ * R-f3). In kg, a load is converted exactly, to the nearest 0.5 kg ("empty bar to 75 lb" → "34 kg"); an increment (a
+ * figure after "+", or before "per session", "jumps", "steps", "increments" or "fails") by the gym convention ("+10 lb"
+ * → "+5 kg"), with the bare number it is set against ("5 lb per session, not 10" → "2.5 kg per session, not 5"). A pair
  * converted is spaced around its slash ("43 / 29.5 kg"). In a lb session the text stays exactly as written ("95/65 lb",
  * W3 review), and kilograms in the text, and everything else, always do.
  */
@@ -68,12 +76,15 @@ export function loadsInUnit(text: string, unit: WeightUnit): string {
   if (unit === 'lb') return text;
   return text.replace(
     /(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s?lbs?\b([^.;]*?\bnot )?(\d+(?:\.\d+)?\b(?!\s?(?:lb|kg|%|s\b)))?/g,
-    (whole, loads: string, not: string | undefined, against: string | undefined) => {
+    (whole: string, loads: string, not: string | undefined, against: string | undefined, at: number) => {
+      const lbEnd = at + whole.length - (not ?? '').length - (against ?? '').length;
+      const step = text.charAt(at - 1) === '+' || STEP_WORDS.test(text.slice(lbEnd));
+      const convert = step ? incrementIn : loadIn;
       const pair = loads
         .split('/')
-        .map((n) => loadIn(Number(n.trim()), unit))
+        .map((n) => convert(Number(n.trim()), unit))
         .join(' / ');
-      const tail = not !== undefined && against !== undefined ? `${not}${loadIn(Number(against), unit)}` : `${not ?? ''}${against ?? ''}`;
+      const tail = not !== undefined && against !== undefined ? `${not}${convert(Number(against), unit)}` : `${not ?? ''}${against ?? ''}`;
       return `${pair} ${unit}${tail}`;
     },
   );
