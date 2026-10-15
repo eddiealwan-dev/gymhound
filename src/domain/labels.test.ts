@@ -2,6 +2,7 @@ import {
   EQUIPMENT_ORDER,
   equipmentLabel,
   formatRepScheme,
+  CUSTOM_LOGGING_TYPES,
   LOGGING_TYPE_LABELS,
   MARK_LABELS,
   MUSCLE_ORDER,
@@ -139,7 +140,7 @@ describe('musclesLine', () => {
 });
 
 describe('LOGGING_TYPE_LABELS', () => {
-  it('names each logging type for the custom exercise editor (R108)', () => {
+  it('names each logging type, the three of programs included (R108, R607)', () => {
     expect(LOGGING_TYPE_LABELS).toEqual({
       weighted: 'Weight and reps',
       bodyweight_plus: 'Bodyweight plus weight',
@@ -147,7 +148,14 @@ describe('LOGGING_TYPE_LABELS', () => {
       timed: 'Time',
       weighted_time: 'Weight and time',
       distance_time: 'Distance and time',
+      weighted_distance: 'Weight and distance',
+      rounds: 'AMRAP score',
+      for_time: 'For Time score',
     });
+  });
+
+  it('the custom exercise editor keeps its six (R607)', () => {
+    expect(CUSTOM_LOGGING_TYPES).toEqual(['weighted', 'bodyweight_plus', 'assisted', 'timed', 'weighted_time', 'distance_time']);
   });
 });
 

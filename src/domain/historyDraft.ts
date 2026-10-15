@@ -148,6 +148,9 @@ const NEEDS: Record<LoggingType, Need[]> = {
   weighted_time: ['weight', 'time'],
   timed: ['time'],
   distance_time: ['distance', 'time'],
+  weighted_distance: ['weight', 'distance'], // Task 7
+  rounds: ['reps'], // Task 7
+  for_time: ['time'], // Task 7
 };
 
 function valueOf(s: DraftSet, need: Need): number | null {

@@ -10,7 +10,8 @@ import { convertIncrement, isZeroWeight, sameWeight, toKg } from './units';
 
 export { raiseLoadable };
 
-export type Outcome = 'raised' | 'held' | 'held_marked' | 'no_rule' | 'no_sets';
+/** `held_week`: a half-set, test or meet week holds the plan (R617). `reset`: misses in a row drop the weight (R613). */
+export type Outcome = 'raised' | 'held' | 'held_marked' | 'held_week' | 'reset' | 'no_rule' | 'no_sets';
 export type OutcomeInput = {
   rule: { setCount: number; repMin: number; repMax: number; increment: number; incrementUnit: WeightUnit } | null;
   plannedWeight: number | null; plannedUnit: WeightUnit | null;

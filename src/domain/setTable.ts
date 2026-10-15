@@ -37,6 +37,9 @@ const FIELDS: Record<LoggingType, FieldKey[]> = {
   weighted_time: ['weight', 'durationS'],
   timed: ['durationS'],
   distance_time: ['distance', 'durationS'],
+  weighted_distance: ['weight', 'distance'], // Task 7
+  rounds: ['reps'], // Task 7
+  for_time: ['durationS'], // Task 7
 };
 
 /** Types whose weight is a load that today's target applies to. */

@@ -15,7 +15,8 @@ export function convertWeight(v: number, from: WeightUnit, to: WeightUnit): numb
   return to === 'kg' ? kg : kg / LB_TO_KG;
 }
 
-const METRES: Record<DistanceUnit, number> = { m: 1, km: 1000, mi: 1609.344 };
+// ft and yd are a set's distance only (R607); exact by definition.
+const METRES: Record<DistanceUnit, number> = { m: 1, km: 1000, mi: 1609.344, ft: 0.3048, yd: 0.9144 };
 
 export function convertDistance(v: number, from: DistanceUnit, to: DistanceUnit): number {
   if (from === to) return v;

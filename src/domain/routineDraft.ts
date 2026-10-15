@@ -87,6 +87,9 @@ const STARTING_SCHEME: Record<LoggingType, { setCount: number; repMin: number; r
   weighted_time: { setCount: 3, repMin: 30, repMax: 60 },
   // The rep range is unused for distance and time.
   distance_time: { setCount: 1, repMin: 1, repMax: 1 },
+  weighted_distance: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
+  rounds: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
+  for_time: { setCount: 1, repMin: 1, repMax: 1 }, // Task 7
 };
 
 /** Logging types with no load for the rule to raise: their increment starts at 0. */

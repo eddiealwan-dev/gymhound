@@ -7,8 +7,8 @@ import { useDb } from '../../src/db/DbProvider';
 import { createCustomExercise, deleteCustomExercise, isExerciseArchived, isExerciseUsed, updateCustomExercise } from '../../src/db/repositories/customExercisesRepo';
 import { getExercise, listExercises } from '../../src/db/repositories/exercisesRepo';
 import { CustomExerciseRefused, normalizeCustomExercise, validateCustomExercise, type CustomExerciseDraft } from '../../src/domain/customExercise';
-import { EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
-import type { LoggingType, Muscle } from '../../src/domain/types';
+import { CUSTOM_LOGGING_TYPES, EQUIPMENT_ORDER, equipmentLabel, LOGGING_TYPE_LABELS, MUSCLE_ORDER, muscleChoiceLabel } from '../../src/domain/labels';
+import type { Muscle } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
 import { deleteExercisePhotoFile } from '../../src/platform/exercisePhotoFiles';
 import { useCreatedExercise } from '../../src/state/createdExercise';
@@ -22,8 +22,8 @@ import { Body } from '../../src/ui/Text';
 import { fonts } from '../../src/ui/theme';
 import { useTheme } from '../../src/ui/ThemeProvider';
 
-/** The logging types in the order the editor lists them. */
-const LOGGING_TYPES = Object.keys(LOGGING_TYPE_LABELS) as LoggingType[];
+/** The logging types in the order the editor lists them: the six of R108 (programs' three are not offered, R607). */
+const LOGGING_TYPES = CUSTOM_LOGGING_TYPES;
 
 /**
  * A new exercise starts logged by weight and reps, with no equipment chosen (R128): a default barbell would turn on

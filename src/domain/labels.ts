@@ -26,7 +26,14 @@ export const LOGGING_TYPE_LABELS: Record<LoggingType, string> = {
   timed: 'Time',
   weighted_time: 'Weight and time',
   distance_time: 'Distance and time',
+  // R607: for programs only.
+  weighted_distance: 'Weight and distance',
+  rounds: 'AMRAP score',
+  for_time: 'For Time score',
 };
+
+/** The logging types the custom exercise editor offers, in its order: the six since R108, not the three of programs (R607). */
+export const CUSTOM_LOGGING_TYPES: readonly LoggingType[] = ['weighted', 'bodyweight_plus', 'assisted', 'timed', 'weighted_time', 'distance_time'];
 
 /** Every kind of equipment in the order chips show it: the six since phase 1, then the ones the library brings (R85). */
 export const EQUIPMENT_ORDER: readonly Equipment[] = [

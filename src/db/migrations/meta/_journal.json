@@ -71,6 +71,13 @@
       "when": 1791771205840,
       "tag": "0009_amazing_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792048258155,
+      "tag": "0010_lyrical_paladin",
+      "breakpoints": true
     }
   ]
 }

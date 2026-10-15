@@ -1,5 +1,6 @@
 export type WeightUnit = 'lb' | 'kg';
-export type DistanceUnit = 'm' | 'km' | 'mi';
+/** ft and yd are for sets only (R607: a strongman event's distance); the Settings distance unit stays mi or km. */
+export type DistanceUnit = 'm' | 'km' | 'mi' | 'ft' | 'yd';
 
 export type LoggingType =
   | 'weighted'
@@ -7,7 +8,12 @@ export type LoggingType =
   | 'assisted'
   | 'timed'
   | 'weighted_time'
-  | 'distance_time';
+  | 'distance_time'
+  // R607, for programs only (the custom exercise editor keeps the six above): weight and distance (strongman's moving
+  // events), an AMRAP score (rounds and extra reps, higher is better) and a For Time score (lower is better).
+  | 'weighted_distance'
+  | 'rounds'
+  | 'for_time';
 /** The first six since phase 1; the library brings the rest (§18.8, R85). Only `barbell` uses plates and barbell rounding. */
 export type Equipment =
   | 'barbell'

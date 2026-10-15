@@ -22,6 +22,13 @@ describe('units', () => {
     expect(convertDistance(3, 'km', 'km')).toBe(3);
   });
 
+  it('converts the feet and yards of a set (R607)', () => {
+    expect(convertDistance(50, 'ft', 'm')).toBeCloseTo(15.24, 10);
+    expect(convertDistance(20, 'yd', 'm')).toBeCloseTo(18.288, 10);
+    expect(convertDistance(60, 'ft', 'yd')).toBeCloseTo(20, 10);
+    expect(convertDistance(1, 'mi', 'ft')).toBeCloseTo(5280, 6);
+  });
+
   it('converts between weight units', () => {
     expect(convertWeight(2.5, 'kg', 'lb')).toBeCloseTo(5.5116, 4);
   });

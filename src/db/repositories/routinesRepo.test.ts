@@ -501,6 +501,9 @@ describe('duplicateRoutine', () => {
       isPremade: false,
       nextDayIndex: 0,
       retired: false,
+      // Your own routine has no program run (R616, 0010).
+      runStartedAt: null,
+      runDeloadAt: null,
       createdAt: NOW,
     });
     expect(listRoutines(db).map((r) => r.id)).toEqual([...PREMADE_ORDER, id]);
@@ -751,6 +754,9 @@ describe('saveRoutine (R89)', () => {
       isPremade: false,
       nextDayIndex: 0,
       retired: false,
+      // Your own routine has no program run (R616, 0010).
+      runStartedAt: null,
+      runDeloadAt: null,
       createdAt: NOW,
     });
     expect(shapeOf(db, id)).toEqual([

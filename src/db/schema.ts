@@ -14,13 +14,15 @@ import type {
   SetType,
   WeightUnit,
 } from '../domain/types';
+import type { RuleKind, WeekKind } from '../seed/programTypes';
 
 // Spec §6. IDs are text. Timestamps are epoch milliseconds. Booleans are integers 0/1.
 
 export type WorkoutStatus = 'active' | 'finished';
 /** Phase 7: whether the workout's copy in Apple Health or Health Connect was written (§17.1). */
 export type HealthStatus = 'done' | 'failed';
-export type WorkoutOutcome = 'raised' | 'held' | 'held_marked' | 'no_rule' | 'no_sets';
+// held_week (a half-set, test or meet week holds the plan, R617) and reset (misses in a row, R613) since 0010.
+export type WorkoutOutcome = 'raised' | 'held' | 'held_marked' | 'held_week' | 'reset' | 'no_rule' | 'no_sets';
 export type FoodSource = 'bundled' | 'custom' | 'online';
 
 export const exercises = sqliteTable('exercises', {
@@ -67,6 +69,11 @@ export const routines = sqliteTable('routines', {
   createdAt: integer('created_at').notNull(),
   // A premade the seed no longer has (§18.8): kept for whoever has it active or in history, hidden otherwise. Added in 0005.
   retired: integer('retired', { mode: 'boolean' }).notNull().default(false),
+  // A program's run (R616): when it was first set active, or started over. The week is counted from the finished
+  // workouts since then. Null for your own routines and for a program never set active. Added in 0010.
+  runStartedAt: integer('run_started_at'),
+  // The reactive deload (R627): when the lifter tapped Start deload; the next sessions are the deload. Added in 0010.
+  runDeloadAt: integer('run_deload_at'),
 });
 
 export const routineDays = sqliteTable('routine_days', {
@@ -98,6 +105,11 @@ export const routineExercises = sqliteTable('routine_exercises', {
   // Cached result of the progression rule (7.3). Null until the first run.
   nextWeight: real('next_weight'),
   nextWeightUnit: text('next_weight_unit').$type<WeightUnit>(),
+  // The lifter's progress on a program slot, which the seed never writes (R637). The current rung of a ladder slot
+  // (R618), a 0-based index into the slot's rungs; null is the first rung. Added in 0010.
+  ladderRung: integer('ladder_rung'),
+  // The set count an added-sets slot has grown to (R619); null is the slot's own set count. Added in 0010.
+  nextSetCount: integer('next_set_count'),
 });
 
 export const workouts = sqliteTable(
@@ -129,6 +141,10 @@ export const workouts = sqliteTable(
     healthRecordId: text('health_record_id'),
     // Phase 7 (§17.1, R309): the Rough sleep offer appears at most once per workout, like the Short on food offer.
     sleepOfferShown: integer('sleep_offer_shown', { mode: 'boolean' }).notNull().default(false),
+    // A program workout's week as it started (R617): the week number, and its special kind (null on a normal week).
+    // Both null for other workouts. Added in 0010.
+    programWeek: integer('program_week'),
+    weekKind: text('week_kind').$type<WeekKind>(),
   },
   (t) => [
     index('workouts_status_idx').on(t.status),
@@ -174,6 +190,16 @@ export const workoutExercises = sqliteTable(
     note: text('note'),
     // Something off (R60): why the exercise is flagged today. Null is nothing off. Read by the rule at finish (7.3).
     mark: text('mark').$type<ExerciseMark>(),
+    // Program slots (§18.29), computed at finish like the next weight and recomputed by history edits (§7.12). Added
+    // in 0010. Whether this session was a miss (R613), kept for the count of misses in a row.
+    missed: integer('missed', { mode: 'boolean' }).notNull().default(false),
+    // Snapshot of the slot's rule kind when the workout started (R610). Null for your own routines and ad hoc exercises.
+    ruleKind: text('rule_kind').$type<RuleKind>(),
+    // The ladder rung logged today and the rung for next time (R618).
+    ruleRung: integer('rule_rung'),
+    nextRung: integer('next_rung'),
+    // The set count for next time of an added-sets slot (R619).
+    nextSetCount: integer('next_set_count'),
   },
   (t) => [
     index('workout_exercises_workout_id_idx').on(t.workoutId),
@@ -204,6 +230,8 @@ export const sets = sqliteTable(
     // Bitmask: 1 heaviest, 2 reps at weight, 4 estimated 1RM, 8 longest hold.
     prFlags: integer('pr_flags').notNull().default(0),
     completedAt: integer('completed_at'),
+    // The extra reps of an AMRAP score (`rounds`, R607): rounds in `reps`, the extra reps here. Added in 0010.
+    extraReps: integer('extra_reps'),
   },
   (t) => [index('sets_workout_exercise_id_idx').on(t.workoutExerciseId)],
 );

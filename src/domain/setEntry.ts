@@ -201,6 +201,12 @@ export function resolveTick(i: TickInput): TickValues | null {
       return weight !== null && durationS !== null ? { weight, reps: null, durationS, distance: null } : null;
     case 'distance_time':
       return distance !== null && durationS !== null ? { weight: null, reps: null, durationS, distance } : null;
+    case 'weighted_distance': // Task 7
+      return weight !== null && distance !== null ? { weight, reps: null, durationS: null, distance } : null;
+    case 'rounds': // Task 7
+      return reps !== null ? { weight: null, reps, durationS: null, distance: null } : null;
+    case 'for_time': // Task 7
+      return durationS !== null ? { weight: null, reps: null, durationS, distance: null } : null;
   }
 }
 
@@ -248,5 +254,9 @@ export function formatPrevious(p: PrevSet | null, loggingType: LoggingType, disp
     case 'distance_time':
       if (p.distance === null || p.distanceUnit === null || p.durationS === null) return '';
       return `${p.distance} ${p.distanceUnit} · ${formatRest(p.durationS)}`;
+    case 'weighted_distance': // Task 7
+    case 'rounds': // Task 7
+    case 'for_time': // Task 7
+      return '';
   }
 }

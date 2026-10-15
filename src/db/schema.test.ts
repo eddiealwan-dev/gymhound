@@ -447,3 +447,146 @@ describe('migration 0009 (phase 7, R307, R309)', () => {
     close();
   });
 });
+
+describe('migration 0010 (program library v2, R637)', () => {
+  type Column = { name: string; type: string; notnull: number; dflt: string | null };
+  const column = (db: Db, table: string, name: string) =>
+    db
+      .all<{ name: string; type: string; notnull: number; dflt_value: string | null }>(sql.raw(`pragma table_info(${table})`))
+      .map((c): Column => ({ name: c.name, type: c.type, notnull: c.notnull, dflt: c.dflt_value }))
+      .find((c) => c.name === name);
+
+  it('adds the program columns as nullable or defaulted', () => {
+    const { db } = createTestDb();
+    const nullable = (table: string, name: string, type: 'INTEGER' | 'TEXT') =>
+      expect(column(db, table, name)).toEqual({ name, type, notnull: 0, dflt: null });
+    nullable('routines', 'run_started_at', 'INTEGER');
+    nullable('routines', 'run_deload_at', 'INTEGER');
+    nullable('routine_exercises', 'ladder_rung', 'INTEGER');
+    nullable('routine_exercises', 'next_set_count', 'INTEGER');
+    nullable('workouts', 'program_week', 'INTEGER');
+    nullable('workouts', 'week_kind', 'TEXT');
+    nullable('workout_exercises', 'rule_kind', 'TEXT');
+    nullable('workout_exercises', 'rule_rung', 'INTEGER');
+    nullable('workout_exercises', 'next_rung', 'INTEGER');
+    nullable('workout_exercises', 'next_set_count', 'INTEGER');
+    nullable('sets', 'extra_reps', 'INTEGER');
+    // `missed` is a 0/1 flag, not null, 0 by default (drizzle writes `false`, which SQLite stores as 0).
+    expect(column(db, 'workout_exercises', 'missed')).toEqual(expect.objectContaining({ type: 'INTEGER', notnull: 1 }));
+    expect(['0', 'false']).toContain(column(db, 'workout_exercises', 'missed')!.dflt);
+  });
+
+  it('round-trips the new columns, and the outcomes held_week and reset', () => {
+    const { db } = createTestDb();
+    db.run(sql`
+      INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+      VALUES ('metcon', 'AMRAP 10', '[]', '["quads"]', '[]', 'other', 'isolation', 'rounds', 0, 0, 1)`);
+    db.insert(schema.routines).values({ id: 'r', name: 'R', isPremade: true, nextDayIndex: 0, createdAt: 1, runStartedAt: 5, runDeloadAt: 9 }).run();
+    db.insert(schema.routineDays).values({ id: 'd', routineId: 'r', name: 'A', position: 0 }).run();
+    db.insert(schema.routineExercises)
+      .values({
+        id: 're',
+        routineDayId: 'd',
+        exerciseId: 'metcon',
+        position: 0,
+        setCount: 1,
+        repMin: 1,
+        repMax: 1,
+        increment: 0,
+        incrementUnit: 'lb',
+        ladderRung: 2,
+        nextSetCount: 6,
+      })
+      .run();
+    db.insert(workouts)
+      .values({ id: 'w1', name: 'W', status: 'finished', startedAt: 1, finishedAt: 2, localDate: '2026-10-15', programWeek: 10, weekKind: 'deload' })
+      .run();
+    db.insert(workoutExercises)
+      .values({
+        id: 'we1',
+        workoutId: 'w1',
+        exerciseId: 'metcon',
+        position: 0,
+        showRpe: false,
+        outcome: 'held_week',
+        missed: true,
+        ruleKind: 'metcon',
+        ruleRung: 1,
+        nextRung: 2,
+        nextSetCount: 7,
+      })
+      .run();
+    db.insert(workoutExercises).values({ id: 'we2', workoutId: 'w1', exerciseId: 'metcon', position: 1, showRpe: false, outcome: 'reset' }).run();
+    db.insert(sets).values({ id: 's1', workoutExerciseId: 'we1', position: 0, setType: 'working', reps: 6, extraReps: 4 }).run();
+
+    expect(db.select().from(schema.routines).get()).toMatchObject({ runStartedAt: 5, runDeloadAt: 9 });
+    expect(db.select().from(schema.routineExercises).get()).toMatchObject({ ladderRung: 2, nextSetCount: 6 });
+    expect(db.select().from(workouts).get()).toMatchObject({ programWeek: 10, weekKind: 'deload' });
+    expect(db.select().from(workoutExercises).where(eq(workoutExercises.id, 'we1')).get()).toMatchObject({
+      outcome: 'held_week',
+      missed: true,
+      ruleKind: 'metcon',
+      ruleRung: 1,
+      nextRung: 2,
+      nextSetCount: 7,
+    });
+    expect(db.select().from(workoutExercises).where(eq(workoutExercises.id, 'we2')).get()).toMatchObject({
+      outcome: 'reset',
+      missed: false,
+      ruleKind: null,
+    });
+    expect(db.select().from(sets).get()).toMatchObject({ reps: 6, extraReps: 4 });
+  });
+
+  it('a 0009 database with history migrates to 0010 and keeps every row', () => {
+    const { db, close } = openFileDb(':memory:');
+    migrateUpTo(db, 9);
+    expect(db.all<{ name: string }>(sql`pragma table_info(sets)`).map((c) => c.name)).not.toContain('extra_reps');
+    db.run(sql`
+      INSERT INTO exercises (id, name, aliases, primary_muscles, secondary_muscles, equipment, pattern, logging_type, is_custom, archived, created_at)
+      VALUES ('barbell-back-squat', 'Barbell back squat', '[]', '["quads"]', '["glutes"]', 'barbell', 'squat', 'weighted', 0, 0, 1)`);
+    db.run(sql`INSERT INTO routines (id, name, is_premade, next_day_index, created_at, retired) VALUES ('premade-5x5-3', '5x5', 1, 1, 1, 0)`);
+    db.run(sql`INSERT INTO routine_days (id, routine_id, name, position) VALUES ('premade-5x5-3:a', 'premade-5x5-3', 'A', 0)`);
+    db.run(sql`
+      INSERT INTO routine_exercises (id, routine_day_id, exercise_id, position, set_count, rep_min, rep_max, increment, increment_unit, next_weight, next_weight_unit)
+      VALUES ('premade-5x5-3:a:barbell-back-squat', 'premade-5x5-3:a', 'barbell-back-squat', 0, 5, 5, 5, 5, 'lb', 140, 'lb')`);
+    db.run(sql`
+      INSERT INTO workouts (id, name, routine_id, routine_day_id, status, day_mark, started_at, finished_at, local_date, food_offer_shown, sleep_offer_shown)
+      VALUES ('w1', '5x5 A', 'premade-5x5-3', 'premade-5x5-3:a', 'finished', 'normal', 1, 2, '2026-10-14', 0, 0)`);
+    db.run(sql`
+      INSERT INTO workout_exercises (id, workout_id, exercise_id, routine_exercise_id, position, show_rpe, outcome, working_weight, working_unit, next_weight, next_unit)
+      VALUES ('we1', 'w1', 'barbell-back-squat', 'premade-5x5-3:a:barbell-back-squat', 0, 0, 'raised', 135, 'lb', 140, 'lb')`);
+    db.run(sql`
+      INSERT INTO sets (id, workout_exercise_id, position, set_type, weight, weight_unit, reps, done, pr_flags)
+      VALUES ('s1', 'we1', 0, 'working', 135, 'lb', 5, 1, 1)`);
+    const count = (table: string) => db.get<{ n: number }>(sql.raw(`SELECT count(*) AS n FROM ${table}`))!.n;
+    const tables = ['exercises', 'routines', 'routine_days', 'routine_exercises', 'workouts', 'workout_exercises', 'sets'];
+    const before = tables.map(count);
+    expect(before).toEqual([1, 1, 1, 1, 1, 1, 1]);
+
+    migrateTestDb(db);
+
+    expect(tables.map(count)).toEqual(before);
+    expect(db.select().from(schema.routines).get()).toMatchObject({
+      id: 'premade-5x5-3',
+      nextDayIndex: 1,
+      retired: false,
+      runStartedAt: null,
+      runDeloadAt: null,
+    });
+    expect(db.select().from(schema.routineExercises).get()).toMatchObject({ nextWeight: 140, nextWeightUnit: 'lb', ladderRung: null, nextSetCount: null });
+    expect(db.select().from(workouts).get()).toMatchObject({ name: '5x5 A', status: 'finished', programWeek: null, weekKind: null });
+    expect(db.select().from(workoutExercises).get()).toMatchObject({
+      outcome: 'raised',
+      workingWeight: 135,
+      nextWeight: 140,
+      missed: false,
+      ruleKind: null,
+      ruleRung: null,
+      nextRung: null,
+      nextSetCount: null,
+    });
+    expect(db.select().from(sets).get()).toMatchObject({ weight: 135, reps: 5, done: true, prFlags: 1, extraReps: null });
+    close();
+  });
+});
