@@ -3,6 +3,7 @@ import {
   convertIncrement,
   convertWeight,
   defaultUnitFor,
+  loadsInUnit,
   formatWeight,
   isZeroWeight,
   roundToHalf,
@@ -71,5 +72,31 @@ describe('units', () => {
   it('rounds to the nearest 0.5', () => {
     expect(roundToHalf(22.68)).toBe(22.5);
     expect(roundToHalf(22.75)).toBe(23);
+  });
+
+  describe('loadsInUnit (ruling R-g4): loads in program text, in the session unit', () => {
+    it('converts pounds to kilograms rounded to 0.5 kg in a kg session', () => {
+      expect(loadsInUnit('Weeks 1–2: empty bar to 75 lb', 'kg')).toBe('Weeks 1–2: empty bar to 34 kg');
+      expect(loadsInUnit('Weeks 1–2: 95 lb or less', 'kg')).toBe('Weeks 1–2: 43 kg or less');
+      expect(loadsInUnit('+5 lb for beginners; +10 lb if you are past the novice stage', 'kg')).toBe(
+        '+2.5 kg for beginners; +4.5 kg if you are past the novice stage',
+      );
+    });
+
+    it('converts each load of a pair, spaced around the slash', () => {
+      expect(loadsInUnit('95/65 lb', 'kg')).toBe('43 / 29.5 kg');
+      expect(loadsInUnit('95/65 lb', 'lb')).toBe('95 / 65 lb');
+    });
+
+    it("converts the bare number a load is compared with (\"5 lb per session, not 10\")", () => {
+      expect(loadsInUnit('Beginner squat: 5 lb per session, not 10', 'kg')).toBe('Beginner squat: 2.5 kg per session, not 4.5');
+      expect(loadsInUnit('Beginner squat: 5 lb per session, not 10', 'lb')).toBe('Beginner squat: 5 lb per session, not 10');
+    });
+
+    it('leaves text with no load, and a lb session, as it is', () => {
+      expect(loadsInUnit('Hard (about 5 km pace)', 'kg')).toBe('Hard (about 5 km pace)');
+      expect(loadsInUnit('Weeks 1–2: empty bar to 75 lb', 'lb')).toBe('Weeks 1–2: empty bar to 75 lb');
+      expect(loadsInUnit('add 4 kg per hand', 'kg')).toBe('add 4 kg per hand');
+    });
   });
 });

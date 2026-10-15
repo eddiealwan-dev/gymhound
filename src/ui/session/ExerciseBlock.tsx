@@ -249,7 +249,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const working = ex.sets.filter((s) => s.setType === 'working');
   /** A metcon's score or a run, once ticked, has no more use for its clock. */
   const scored = (kind === 'metcon' || kind === 'run') && working.length > 0 && working.every((s) => s.done);
-  const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName) : null;
+  const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName, unit) : null;
   /** The name in the name row: a metcon by the program's label for it ("Metcon A"). */
   const name = kind === 'metcon' && ex.program ? metconTitle(ex.program.catalogName, ex.name) : ex.name;
   const formatLine =

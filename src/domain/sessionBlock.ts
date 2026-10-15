@@ -6,6 +6,7 @@ import { metconText } from './ruleLine';
 import { weightText } from './setEntry';
 import { DISTANCE_WORDS, type Column, type RowModel } from './setTable';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
+import { loadsInUnit } from './units';
 import type { WorkPlan, WorkStep } from './workClock';
 
 /**
@@ -50,16 +51,26 @@ export function blockKindOf(ex: BlockInput): BlockKind {
 
 export type MetconElement = { amount: string | null; name: string; load: string | null };
 
+/** A metcon's scheme as its format line says it: "21-15-9 for time", "3 rounds for time"; null for plain For Time. */
+const FOR_TIME_SCHEME = /^((?:\d+-)+\d+|\d+ rounds) for time$/;
+/** A rep scheme ("21-15-9"): each move without its own amount is done for it. */
+const REP_SCHEME = /^(?:\d+-)+\d+$/;
+
 /**
- * A metcon's block (R-t7b2): the format line and the moves from the slot's structured rule, with each move's amount
- * ("10", "200 m", "12 cal") and load ("95/65 lb") read from the program's name for it where they match. When the list
- * can't say everything the name does (a move without an amount, rounds or a rep scheme), the name is the subtitle.
+ * A metcon's block (R-t7b2, design gate #2): the format line and the moves from the slot's structured rule, with each
+ * move's amount ("10", "200 m", "12 cal", or the rep scheme "21-15-9") and load ("43 / 29.5 kg", in the session unit,
+ * ruling R-g4) read from the program's name for it. The format line carries the scheme and the cap ("21-15-9 for time · 8
+ * min cap", "3 rounds for time · 12 min cap"). When the name can't give every move an amount, the full name is the
+ * format line and there is no list, never an empty amount column. With no name to read, the moves are listed bare.
  */
-export function metconParts(rule: MetconRule, catalogName: string): { format: string; elements: MetconElement[]; subtitle: string | null } {
-  const format = rule.format === 'AMRAP' ? `AMRAP ${rule.workMinutes} min` : rule.capMinutes !== null ? `For Time · ${rule.capMinutes} min cap` : 'For Time';
+export function metconParts(rule: MetconRule, catalogName: string, unit: WeightUnit = 'lb'): { format: string; elements: MetconElement[] } {
   const text = metconText(catalogName);
   const colon = text.indexOf(':');
   const scheme = colon < 0 ? '' : text.slice(0, colon).trim().toLowerCase();
+  const named = FOR_TIME_SCHEME.exec(scheme)?.[1] ?? null;
+  const cap = rule.capMinutes !== null ? ` · ${rule.capMinutes} min cap` : '';
+  const format = rule.format === 'AMRAP' ? `AMRAP ${rule.workMinutes} min` : named !== null ? `${named} for time${cap}` : `For Time${cap}`;
+  const repScheme = named !== null && REP_SCHEME.test(named) ? named : null;
   const body = colon < 0 ? '' : text.slice(colon + 1).replace(/\s*\(cap \d+ min\)\s*$/i, '');
   const parts = body
     .split(/,\s*|\s+and\s+/)
@@ -67,12 +78,12 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     .filter((p) => p !== '')
     .map((p) => {
       const m = /^(\d+(?:\s?m|-cal|\s?cal)?)\s+(.+)$/.exec(p);
-      const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : null;
+      const amount = m ? m[1].replace('-cal', ' cal').replace(/(\d)m$/, '$1 m') : repScheme;
       const rest = m ? m[2] : p;
       const loadMatch = /\s*\(([^)]*\b(?:lb|kg)\b[^)]*)\)/.exec(rest);
       // The program's own words for the move, without the load its column shows: "goblet squats", "push-ups (scaled)".
       const words = (loadMatch ? rest.replace(loadMatch[0], '') : rest).trim();
-      return { amount, rest: rest.toLowerCase(), words, load: loadMatch?.[1] ?? null, used: false };
+      return { amount, rest: rest.toLowerCase(), words, load: loadMatch ? loadsInUnit(loadMatch[1], unit) : null, used: false };
     });
   const elements = rule.elements.map((element): MetconElement => {
     const name = element.replace(/\s*\(metcon\)\s*$/i, '').trim();
@@ -85,9 +96,10 @@ export function metconParts(rule: MetconRule, catalogName: string): { format: st
     const own = `${part.words.charAt(0).toUpperCase()}${part.words.slice(1)}`;
     return { amount: part.amount, name: [own, ...asides].join(' '), load: part.load };
   });
-  const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time';
-  const complete = plain && elements.every((e) => e.amount !== null);
-  return { format, elements, subtitle: complete || text === '' ? null : text };
+  if (text === '') return { format, elements };
+  const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time' || named !== null;
+  if (plain && elements.every((e) => e.amount !== null)) return { format, elements };
+  return { format: text, elements: [] };
 }
 
 /** The word a timed slot is called by: a walk, a ride, a row, else a run. */

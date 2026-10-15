@@ -177,14 +177,14 @@ const snatch = () =>
     { rule: { kind: 'manual', manualText: 'Technique work, add weight when every rep is crisp' }, countsTowardVolume: false, note: 'EMOM 10: 2 reps every minute', catalogName: 'Power snatch (technique)' },
   );
 
-function mount(ex: WorkoutExerciseView, workTimer: WorkTimer | null = null, clockBusy = false): ReactTestRenderer {
+function mount(ex: WorkoutExerciseView, workTimer: WorkTimer | null = null, clockBusy = false, unit: 'lb' | 'kg' = 'lb'): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(
       <ExerciseBlock
         workoutId="w1"
         ex={ex}
-        unit="lb"
+        unit={unit}
         gear={{ bar: 45, plates: { '45': 4 } }}
         distanceUnit="mi"
         onOpenMenu={() => {}}
@@ -268,12 +268,15 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
     expect(clock(tree)).toHaveLength(0);
   });
 
-  it('says For Time with its cap, and shows the full name where the list cannot say it all', () => {
-    const tree = mount(franEx());
+  it('says its rep scheme and cap in the format line, the scheme beside each move and the load in the session unit (design gate #2)', () => {
+    const tree = mount(franEx(), null, false, 'kg');
     const shown = shownText(tree);
     expect(shown).toContain('Metcon');
-    expect(shown).toContain('For Time · 8 min cap');
-    expect(shown).toContain('21-15-9 for time: thrusters (95/65 lb) and pull-ups (cap 8 min)');
+    expect(shown).toContain('21-15-9 for time · 8 min cap');
+    expect(shown.filter((s) => s === '21-15-9')).toHaveLength(2);
+    expect(shown).toEqual(expect.arrayContaining(['Thrusters', '43 / 29.5 kg', 'Pull-ups (scaled as needed)']));
+    // The name is not repeated under the format line.
+    expect(shown.some((s) => s.includes('thrusters (95/65 lb)'))).toBe(false);
     expect(shown).toContain('7:42');
     expect(field(tree, 'Score time').props.placeholder).toBe('');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'for_time', steps: [{ seconds: 480 }] });
@@ -350,6 +353,18 @@ describe('your own routines keep their set rows', () => {
     expect(buttons(tree)).toEqual(expect.arrayContaining(['+ Set', '+ Warmup']));
     expect(labels(tree)).toContain('Set 1 done');
     expect(tree.root.findAllByType(RestInline)).toHaveLength(0);
+  });
+});
+
+describe('a metcon whose name gives no amounts', () => {
+  it('shows the full name as its format line and no list, never an empty amount column', () => {
+    const odd = exercise(
+      { exerciseId: 'metcon-amrap-10-squat-pushup-run', name: 'AMRAP 10', loggingType: 'rounds', equipment: 'other' },
+      { rule: { kind: 'metcon' }, metcon: amrap, catalogName: 'Metcon · AMRAP 10: goblet squat, push-up, run', restKind: 'none' },
+    );
+    const tree = mount(odd);
+    expect(shownText(tree)).toContain('AMRAP 10: goblet squat, push-up, run');
+    expect(tree.root.findAll((n) => n.type === View && n.props.testID === 'metcon-move')).toHaveLength(0);
   });
 });
 

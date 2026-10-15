@@ -54,3 +54,25 @@ export function convertIncrement(v: number, from: WeightUnit, to: WeightUnit): n
 export function roundToHalf(v: number): number {
   return Math.round(v * 2) / 2;
 }
+
+/** A load as program text says it, in `unit`: pounds become kilograms to the nearest 0.5 kg (ruling R-g4). */
+const loadIn = (n: number, unit: WeightUnit): string => String(unit === 'kg' ? roundToHalf(n * LB_TO_KG) : n);
+
+/**
+ * Loads in program text (a slot's note, a metcon's "95/65 lb"), in the session unit (ruling R-g4): in kg, each pound
+ * figure is converted to the nearest 0.5 kg, with the bare number it is set against ("5 lb per session, not 10"). A pair
+ * is spaced around its slash in either unit ("43 / 29.5 kg"). Kilograms in the text, and everything else, stay as written.
+ */
+export function loadsInUnit(text: string, unit: WeightUnit): string {
+  return text.replace(
+    /(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)*)\s?lbs?\b([^.;]*?\bnot )?(\d+(?:\.\d+)?\b(?!\s?(?:lb|kg|%|s\b)))?/g,
+    (whole, loads: string, not: string | undefined, against: string | undefined) => {
+      const pair = loads
+        .split('/')
+        .map((n) => loadIn(Number(n.trim()), unit))
+        .join(' / ');
+      const tail = not !== undefined && against !== undefined ? `${not}${loadIn(Number(against), unit)}` : `${not ?? ''}${against ?? ''}`;
+      return `${pair} ${unit}${tail}`;
+    },
+  );
+}
