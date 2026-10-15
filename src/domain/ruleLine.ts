@@ -205,6 +205,10 @@ export type ProgramRule = {
   kind: RuleKind;
   /** A carry's distance unit (R607), ft or yd; null for any other slot. */
   carryUnit: 'ft' | 'yd' | null;
+  /** What one set of a moving event is (design gate #5): a carry, or a push for a sled. Absent reads as a carry. */
+  eventWord?: 'carry' | 'push';
+  /** A technique slot run as an EMOM (its note starts "EMOM"): its rule is every minute clean (design gate #4). */
+  emom?: boolean;
   /** Normal sessions in a row with every set hit before a raise: 2 for Atlas stone load (R623). */
   sessionsToRaise: 1 | 2;
   /** The increment was halved after the slot's first miss in this run (R612). */
@@ -420,8 +424,9 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   const plates = unloadableRaise(rule, loggingType, load);
   const add = `add ${inc}${halved}.${plates === null ? '' : ` ${plates}`}`;
   if (loggingType === 'weighted_distance') {
-    return `If every run covers ${rule.repMax} ${p.carryUnit ?? 'm'} on a normal day, ${add} A marked day holds the weight.`;
+    return `If every ${p.eventWord ?? 'carry'} covers ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on a normal day, ${add} A marked day holds the weight.`;
   }
+  if (p.emom) return `Make every minute clean on a normal day and next time adds ${inc}${halved}.${plates === null ? '' : ` ${plates}`} A marked day holds the weight.`;
   if (loggingType === 'assisted') {
     return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;
   }
@@ -567,7 +572,8 @@ function loadRead(a: ProgramReadInput): string | null {
   const raised = raisedFrom(planned, rule, loggingType, a.equipment, a.gear);
   const to = formatWeight(raised.weight, raised.unit);
   let normal: string;
-  if (loggingType === 'weighted_distance') normal = `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} on every run on a normal day and next time is ${to}.`;
+  if (loggingType === 'weighted_distance') normal = `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on every ${p.eventWord ?? 'carry'} on a normal day and next time is ${to}.`;
+  else if (p.emom) normal = `Every minute clean on a normal day and next time is ${to}.`;
   else if (p.sessionsToRaise === 2) {
     const every = rule.repMax === 1 ? 'Do every single' : `Hit ${rule.repMax} on every set`;
     normal = `${every} on two normal days in a row and the weight goes to ${to}.`;

@@ -356,3 +356,26 @@ describe("a program day's rows on its page and Up next (design gate #19, #20)", 
     expect(programPageOf(db, program.id)!.slots[fran.id].scheme.schemeExtra).toEqual({ metcon: { format: 'For Time', workMinutes: 6, capMinutes: 8 } });
   });
 });
+
+describe('what a slot rule knows of its block (design gate #4, #5)', () => {
+  it("knows an EMOM technique slot, and calls a sled's set a push", () => {
+    const db = seededDb();
+    const perf = insertProgram(db, 'program-crossfit-performance');
+    setActiveProgram(db, perf.id, NOW);
+    const wed = perf.days.find((d) => d.name.startsWith('Wed'))!;
+    startWorkoutFromDay(db, `${perf.id}:${wed.slug}`, at(1));
+    const [snatch, squat] = viewOf(db).exercises;
+    expect(snatch.program!.rule.emom).toBe(true);
+    expect(squat.program!.rule.emom).toBeFalsy();
+  });
+
+  it('calls a carry a carry and a sled push a push', () => {
+    const db = seededDb();
+    const sm = insertProgram(db, 'program-strongman-prep');
+    setActiveProgram(db, sm.id, NOW);
+    const sat = sm.days.find((d) => d.name.startsWith('Sat'))!;
+    startWorkoutFromDay(db, `${sm.id}:${sat.slug}`, at(1));
+    const [farmer, sandbag, sled] = viewOf(db).exercises;
+    expect([farmer, sandbag, sled].map((e) => e.program!.rule.eventWord)).toEqual(['carry', 'carry', 'push']);
+  });
+});

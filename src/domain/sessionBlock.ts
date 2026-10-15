@@ -36,8 +36,8 @@ export type BlockInput = {
 /** The runs that are intervals: sets of hard work with easy between. */
 export const INTERVAL_IDS: ReadonlySet<string> = new Set(['interval-run', 'bike-intervals', 'rower-intervals']);
 
-/** The quiet line on a technique slot's block (the owner's words). */
-export const TECHNIQUE_LINE = 'Technique · not counted';
+/** The quiet line on a technique slot's block: what isn't counted, so it never reads as the rule not counting (design gate #4). */
+export const TECHNIQUE_LINE = 'Technique set: not counted toward weekly volume.';
 
 export function blockKindOf(ex: BlockInput): BlockKind {
   const p = ex.program;
@@ -127,6 +127,18 @@ export function easySecondsOf(note: string | null): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * An EMOM's format line (design gate #3): "EMOM 10 min · 2 reps every minute", from a note that starts "EMOM 10" and
+ * says the work after a colon, else from the rule's reps ("EMOM 10 min · 1–2 reps every minute"). Null for no EMOM.
+ */
+export function emomFormat(note: string | null, rule: { repMin: number; repMax: number } | null): string | null {
+  const m = note ? /^EMOM\s+(\d+)\s*(?::\s*(.+))?$/i.exec(note.trim()) : null;
+  if (!m) return null;
+  const reps = rule === null ? null : rule.repMin === rule.repMax ? `${rule.repMin}` : `${rule.repMin}–${rule.repMax}`;
+  const work = m[2]?.trim() || (reps === null ? null : `${reps} ${reps === '1' ? 'rep' : 'reps'} every minute`);
+  return work ? `EMOM ${m[1]} min · ${work}` : `EMOM ${m[1]} min`;
+}
+
 /** An EMOM's minutes, from a note that starts "EMOM 10". */
 export function emomMinutesOf(note: string | null): number | null {
   const m = note ? /^EMOM\s+(\d+)/i.exec(note.trim()) : null;
@@ -181,13 +193,18 @@ export function workPlanFor(ex: BlockInput): WorkPlan | null {
   }
 }
 
-/** The line an event's rule adds (t7-design.md): what a tick means on a carry, a yoke or a sled. */
+/** The line an event's rule adds (t7-design.md): what a tick means on a carry, a yoke or a sandbag. */
 export const EVENT_LINE = 'A drop ends the set: log what you carried unbroken.';
+
+/** What a tick means on a moving event (design gate #5): a carry ends at a drop; a sled push at a stop. */
+export function eventLine(word: 'carry' | 'push' = 'carry'): string {
+  return word === 'push' ? 'A stop ends the set: log what you pushed unbroken.' : EVENT_LINE;
+}
 
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
 
 /** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
-export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string };
+export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string; eventWord?: 'carry' | 'push' };
 
 /**
  * A block's own take on its set rows (t7-design.md). A metcon's score suggests nothing (last time stays beside it) and
@@ -212,7 +229,12 @@ export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions)
       });
     }
     case 'event':
-      return rows.map((row) => ({ ...row, ...eventPrevious(row, o.unit), optional: ['durationS'], tickLabel: `Set ${row.label} carried drop-free` }));
+      return rows.map((row) => ({
+        ...row,
+        ...eventPrevious(row, o.unit),
+        optional: ['durationS'],
+        tickLabel: o.eventWord === 'push' ? `Set ${row.label} pushed without a stop` : `Set ${row.label} carried drop-free`,
+      }));
     default:
       return rows;
   }

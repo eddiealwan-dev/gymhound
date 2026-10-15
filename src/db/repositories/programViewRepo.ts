@@ -131,6 +131,10 @@ export function programRuleOf(
   return {
     kind: a.ruleKind,
     carryUnit: carryUnit(slot),
+    ...(carryUnit(slot) !== null || a.exerciseId.includes('carry') || a.exerciseId.includes('sled')
+      ? { eventWord: a.exerciseId.startsWith('sled-') ? ('push' as const) : ('carry' as const) }
+      : {}),
+    ...(!slot.countsTowardVolume && /^EMOM\b/i.test(slot.note.trim()) ? { emom: true } : {}),
     sessionsToRaise: slot.sessionsToRaise,
     halved: a.ruleKind === 'load' && slot.halveAfterFirstMiss && rule !== null && rule.increment > 0 && rule.increment < full - 1e-9,
     missesBefore: misses,

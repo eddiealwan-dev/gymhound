@@ -565,13 +565,31 @@ describe('the rule line of a program slot (R610–R622), word for word', () => {
     );
   });
 
-  it('a carry says the distance and its unit, and that a marked day holds the weight', () => {
+  it('a carry says the distance and its unit unbroken, and that a marked day holds the weight (design gate #5)', () => {
     const yoke = program({ carryUnit: 'ft' });
     const rule: Rule = { setCount: 4, repMin: 50, repMax: 50, increment: 10, incrementUnit: 'lb' };
-    expect(line(yoke, rule, 'weighted_distance')).toBe('If every run covers 50 ft on a normal day, add 10 lb. A marked day holds the weight.');
+    expect(line(yoke, rule, 'weighted_distance')).toBe('If every carry covers 50 ft unbroken on a normal day, add 10 lb. A marked day holds the weight.');
     expect(read(yoke, rule, 320, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
-      'Cover 50 ft on every run on a normal day and next time is 330 lb.',
+      'Cover 50 ft unbroken on every carry on a normal day and next time is 330 lb.',
     );
+  });
+
+  it('a sled push is a push, not a carry', () => {
+    const sled = program({ carryUnit: 'yd', eventWord: 'push' });
+    const rule: Rule = { setCount: 4, repMin: 40, repMax: 40, increment: 20, incrementUnit: 'lb' };
+    expect(line(sled, rule, 'weighted_distance')).toBe('If every push covers 40 yd unbroken on a normal day, add 20 lb. A marked day holds the weight.');
+    expect(read(sled, rule, 200, { loggingType: 'weighted_distance', equipment: 'other' })).toBe(
+      'Cover 40 yd unbroken on every push on a normal day and next time is 220 lb.',
+    );
+  });
+
+  it("an EMOM's rule is every minute clean, with the marked day holding (design gate #4)", () => {
+    const emom = program({ emom: true });
+    const rule: Rule = { setCount: 10, repMin: 2, repMax: 2, increment: 5, incrementUnit: 'lb' };
+    expect(programRuleSentence({ program: emom, rule, loggingType: 'weighted', unit: 'kg', last: null })).toBe(
+      'Make every minute clean on a normal day and next time adds 2.5 kg. A marked day holds the weight.',
+    );
+    expect(read(emom, rule, 95)).toBe('Every minute clean on a normal day and next time is 100 lb.');
   });
 
   it('weight and time says seconds as "45 s" (#8 Farmer\'s carry)', () => {

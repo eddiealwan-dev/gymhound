@@ -145,7 +145,7 @@ describe('the format lines and what the notes say', () => {
   });
 
   it('marks technique sets in the words the owner chose', () => {
-    expect(TECHNIQUE_LINE).toBe('Technique · not counted');
+    expect(TECHNIQUE_LINE).toBe('Technique set: not counted toward weekly volume.');
   });
 });
 

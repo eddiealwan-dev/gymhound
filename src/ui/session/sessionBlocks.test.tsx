@@ -168,7 +168,20 @@ const yoke = () =>
       plannedUnit: 'lb',
       previous: [{ ...set('p', 0), weight: 315, weightUnit: 'lb', distance: 50, distanceUnit: 'ft', durationS: 22 }],
     },
-    { rule: { kind: 'load', carryUnit: 'ft' }, catalogName: 'Yoke carry', restKind: 'heavy' },
+    { rule: { kind: 'load', carryUnit: 'ft', eventWord: 'carry' }, catalogName: 'Yoke carry', restKind: 'heavy' },
+  );
+
+const sled = () =>
+  exercise(
+    {
+      exerciseId: 'sled-push-distance',
+      name: 'Sled push',
+      loggingType: 'weighted_distance',
+      equipment: 'other',
+      rule: { setCount: 4, repMin: 40, repMax: 40, increment: 20, incrementUnit: 'lb' },
+      previous: [],
+    },
+    { rule: { kind: 'load', carryUnit: 'yd', eventWord: 'push' }, catalogName: 'Sled push', restKind: 'heavy' },
   );
 
 const snatch = () =>
@@ -320,7 +333,9 @@ describe('an event reads as an event', () => {
     expect(shownText(tree)).toContain('315 × 50');
     expect(labels(tree)).toContain('Previous 315 pounds for 50 feet in 22 seconds');
     expect(labels(tree)).toContain('Set 1 carried drop-free');
-    expect(shownText(tree).some((s) => s.endsWith('A drop ends the set: log what you carried unbroken.'))).toBe(true);
+    expect(shownText(tree)).toContain(
+      'If every carry covers 50 ft unbroken on a normal day, add 20 lb. A marked day holds the weight. A drop ends the set: log what you carried unbroken. Cover 50 ft unbroken on every carry on a normal day and next time is 355 lb.',
+    );
     expect(buttons(tree)).toEqual(expect.arrayContaining(['+ Set', '+ Warmup']));
     expect(clock(tree)).toHaveLength(0);
   });
@@ -335,13 +350,37 @@ describe('an event reads as an event', () => {
   });
 });
 
+describe('a sled push', () => {
+  it('is a push: a stop ends the set, and the tick says so', () => {
+    const tree = mount(sled());
+    expect(shownText(tree).some((t) => t.includes('If every push covers 40 yd unbroken on a normal day') && t.includes('A stop ends the set: log what you pushed unbroken.'))).toBe(true);
+    expect(labels(tree)).toContain('Set 1 pushed without a stop');
+  });
+});
+
 describe('technique sets', () => {
-  it('say they are not counted, with an EMOM clock when the note starts EMOM', () => {
+  it('say what is not counted, with an EMOM clock when the note starts EMOM', () => {
     const tree = mount(snatch());
-    expect(shownText(tree)).toContain('Technique · not counted');
+    expect(shownText(tree)).toContain('Technique set: not counted toward weekly volume.');
+    expect(shownText(tree)).not.toContain('Technique · not counted');
     expect(clock(tree)[0].props.plan).toMatchObject({ kind: 'emom' });
     expect(clock(tree)[0].props.plan.steps).toHaveLength(10);
     expect(headers(tree)[0]).toBe('SET');
+  });
+
+  it('lead an EMOM with its format line, then the rule, then the technique line, the note not repeated (design gate #3, #4)', () => {
+    const emom = exercise(
+      { exerciseId: 'fedb-snatch', name: 'Snatch', rule: { setCount: 10, repMin: 2, repMax: 2, increment: 5, incrementUnit: 'lb' }, plannedWeight: 95, plannedUnit: 'lb', equipment: 'barbell', sets: [0, 1, 2].map((i) => set(`n${i}`, i)) },
+      { rule: { kind: 'load', emom: true }, countsTowardVolume: false, note: 'EMOM 10: 2 reps every minute', catalogName: 'Snatch' },
+    );
+    const shown = shownText(mount(emom));
+    const format = shown.indexOf('EMOM 10 min · 2 reps every minute');
+    const rule = shown.findIndex((t) => t.startsWith('Make every minute clean on a normal day and next time adds 5 lb.') && t.includes('A marked day holds the weight.'));
+    const technique = shown.indexOf('Technique set: not counted toward weekly volume.');
+    expect(format).toBeGreaterThan(-1);
+    expect(rule).toBeGreaterThan(format);
+    expect(technique).toBeGreaterThan(rule);
+    expect(shown).not.toContain('EMOM 10: 2 reps every minute');
   });
 });
 
