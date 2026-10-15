@@ -79,6 +79,19 @@ describe('the work clock on the lock screen (R-t7b1)', () => {
     expect(calls[0].content.title).toBe('Minute 1.');
   });
 
+  it("keeps to the work clock's own CUE_LIMIT, not a copy of it", async () => {
+    let surface!: typeof import('./expoGoNotification').workCueNotifications;
+    jest.isolateModules(() => {
+      jest.doMock('../../domain/workClock', () => ({ ...jest.requireActual('../../domain/workClock'), CUE_LIMIT: 3 }));
+      surface = (require('./expoGoNotification') as typeof import('./expoGoNotification')).workCueNotifications;
+    });
+    const cues = Array.from({ length: 10 }, (_, i) => ({ at: NOW + (i + 1) * 60_000, title: `Minute ${i}.` }));
+    await surface.schedule(cues, true);
+    expect(mockNotifications.scheduleNotificationAsync.mock.calls).toHaveLength(3);
+    expect(ids()).toEqual(['gymhound-work-0', 'gymhound-work-1', 'gymhound-work-2']);
+    jest.dontMock('../../domain/workClock');
+  });
+
   it('schedules nothing when notifications are not allowed', async () => {
     mockNotifications.getPermissionsAsync.mockResolvedValue({ status: 'denied', granted: false, canAskAgain: false });
     const surface = load();

@@ -5,7 +5,7 @@ import { useDb } from '../../db/DbProvider';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import { getActiveRest } from '../../db/repositories/workoutsRepo';
 import type { Db } from '../../db/types';
-import { dueCue } from '../../domain/workClock';
+import { cuesLeft, dueCue } from '../../domain/workClock';
 import { announce } from '../../platform/announce';
 import { playBell } from '../../platform/restTimer/bell';
 import { useDbQuery } from '../../state/dataVersion';
@@ -41,7 +41,8 @@ function cueHaptic(): void {
 export function WorkClockWatcher(): null {
   const db = useDb();
   const { timer, workoutId, bell, sound, volume } = useDbQuery(readWork);
-  const live = timer !== null && timer.workoutId === workoutId && timer.pausedAt === null && timer.doneAtS === null;
+  // It reads the clock only while one runs with a cue still to ring: once the end has rung, it stops (`cuesLeft`).
+  const live = timer !== null && timer.workoutId === workoutId && timer.pausedAt === null && cuesLeft(timer);
   const [now, setNow] = useState(() => Date.now());
   /** The cue last dealt with, by the clock's start and its index, so a slow read-back cannot ring it twice. */
   const handled = useRef<string | null>(null);

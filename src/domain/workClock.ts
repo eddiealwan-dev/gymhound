@@ -315,6 +315,14 @@ export function cuesOf(t: Pick<WorkTimer, 'plan'>): Cue[] {
   return cues.sort((a, b) => a.atMs - b.atMs);
 }
 
+/**
+ * Whether the clock still has a cue to ring: not stopped with Done, and not every cue dealt with. Once the end has rung,
+ * an ended clock has nothing left to do, so nothing needs to read it on a timer.
+ */
+export function cuesLeft(t: WorkTimer): boolean {
+  return t.doneAtS === null && t.rang < cuesOf(t).length;
+}
+
 /** When a cue falls, in epoch ms, as the clock now stands. */
 const cueTime = (t: WorkTimer, cue: Cue) => t.startsAt + t.pausedMs + cue.atMs;
 

@@ -2,6 +2,7 @@ import {
   clockAt,
   clockVoiceLabel,
   CUE_LIMIT,
+  cuesLeft,
   cuesOf,
   dueCue,
   idleClock,
@@ -189,6 +190,14 @@ describe('cues: the bell, the haptic, the words and the lock screen', () => {
     expect(dueCue(rung, into(540.5))).toMatchObject({ index: 2, audible: true, cue: { kind: 'warn' } });
     // Back after a lock: the end passed long ago, so the notification rang it. Catch up without a bell.
     expect(dueCue({ ...t, rang: 1 }, into(900))).toMatchObject({ index: 3, audible: false, cue: { kind: 'end' } });
+  });
+
+  it('has cues left to ring until its last one, the end, is dealt with', () => {
+    const t = start(emom3);
+    expect(cuesLeft(t)).toBe(true);
+    expect(cuesLeft({ ...t, rang: cuesOf(t).length - 1 })).toBe(true);
+    expect(cuesLeft({ ...t, rang: cuesOf(t).length })).toBe(false);
+    expect(cuesLeft(stopTimer(t, into(10)))).toBe(false);
   });
 
   it('rings no cue while paused or once stopped', () => {
