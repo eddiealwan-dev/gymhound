@@ -1,5 +1,5 @@
 import type { Gear } from './plates';
-import { computeOutcome, raiseLoadable, type OutcomeInput } from './progression';
+import { computeOutcome, isAllHit, raiseLoadable, type OutcomeInput } from './progression';
 import type { WeightUnit } from './types';
 
 /** The default bars and plate sets (pairs owned) from settings. */
@@ -40,14 +40,14 @@ describe('computeOutcome', () => {
   describe('no rule and no sets (steps 2–3)', () => {
     it('without a rule gives no_rule and no next weight, but still computes the working weight', () => {
       expect(computeOutcome(input({ rule: null, sets: [lb(135, 8), lb(130, 8)] }))).toEqual({
-        workingWeight: 130, workingUnit: 'lb', outcome: 'no_rule', nextWeight: null, nextUnit: null,
+        workingWeight: 130, workingUnit: 'lb', outcome: 'no_rule', nextWeight: null, nextUnit: null, missed: false,
       });
     });
 
     it('gives timed and distance_time no_rule with a null working weight, even with a rule', () => {
       const timed = input({ loggingType: 'timed', sets: [set(null, null, null, { durationS: 60 })] });
       const distance = input({ loggingType: 'distance_time', sets: [set(null, null, null, { durationS: 600 })] });
-      const expected = { workingWeight: null, workingUnit: null, outcome: 'no_rule', nextWeight: null, nextUnit: null };
+      const expected = { workingWeight: null, workingUnit: null, outcome: 'no_rule', nextWeight: null, nextUnit: null, missed: false };
       expect(computeOutcome(timed)).toEqual(expected);
       expect(computeOutcome(distance)).toEqual(expected);
     });
@@ -55,10 +55,10 @@ describe('computeOutcome', () => {
     it('with a rule and no counted sets gives no_sets and keeps the planned weight', () => {
       const sets = [lb(95, 5, { setType: 'warmup' }), lb(135, 8, { done: false })];
       expect(computeOutcome(input({ sets }))).toEqual({
-        workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb',
+        workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
       expect(computeOutcome(input({ sets: [], plannedWeight: 60, plannedUnit: 'kg' }))).toEqual({
-        workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 60, nextUnit: 'kg',
+        workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 60, nextUnit: 'kg', missed: false,
       });
     });
   });
@@ -66,13 +66,13 @@ describe('computeOutcome', () => {
   describe('a normal day (steps 4, 6, 7)', () => {
     it('raises 3×8 at 135 lb, every set at or above rep_max 8, by 5 lb to 140 lb', () => {
       expect(computeOutcome(input({ sets: ALL_HIT_135 }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', missed: false,
       });
     });
 
     it('holds at 135 lb when one set is short of rep_max', () => {
       expect(computeOutcome(input({ sets: [lb(135, 8), lb(135, 7), lb(135, 8)] }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -83,7 +83,7 @@ describe('computeOutcome', () => {
     it('holds when the increment is 0, even with every set hit', () => {
       const rule = { ...RULE, increment: 0 };
       expect(computeOutcome(input({ rule, sets: ALL_HIT_135 }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -103,32 +103,32 @@ describe('computeOutcome', () => {
   describe('a marked day (step 5)', () => {
     it('holds the planned 135 lb when every set is hit', () => {
       expect(computeOutcome(input({ marked: true, sets: ALL_HIT_135 }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
     });
 
     it('holds the planned weight, not what was lifted (an override)', () => {
       expect(computeOutcome(input({ marked: true, sets: [lb(145, 8), lb(145, 8), lb(145, 8)] }))).toEqual({
-        workingWeight: 145, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb',
+        workingWeight: 145, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
     });
 
     it('holds the working weight when there is no plan yet', () => {
       const sets = [lb(100, 8), lb(100, 8), lb(100, 8)];
       expect(computeOutcome(input({ marked: true, plannedWeight: null, plannedUnit: null, sets }))).toEqual({
-        workingWeight: 100, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 100, nextUnit: 'lb',
+        workingWeight: 100, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 100, nextUnit: 'lb', missed: false,
       });
     });
 
     it('is held_marked when sets were missed too', () => {
       expect(computeOutcome(input({ marked: true, sets: [lb(135, 5)] }))).toMatchObject({
-        outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb',
+        outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb', missed: false,
       });
     });
 
     it('keeps the planned unit', () => {
       expect(computeOutcome(input({ marked: true, plannedWeight: 60, plannedUnit: 'kg', sets: ALL_HIT_135 }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 60, nextUnit: 'kg',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 60, nextUnit: 'kg', missed: false,
       });
     });
   });
@@ -136,14 +136,14 @@ describe('computeOutcome', () => {
   describe('barbell rounding (step 6, §7.7)', () => {
     it('raises 135 lb by 5 to 140 with the default lb gear', () => {
       expect(computeOutcome(input({ equipment: 'barbell', sets: ALL_HIT_135 }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', missed: false,
       });
     });
 
     it('rounds a small raise to the nearest loadable weight heavier than the working weight', () => {
       const rule = { ...RULE, increment: 1 };
       expect(computeOutcome(input({ equipment: 'barbell', rule, sets: ALL_HIT_135 }))).toMatchObject({
-        outcome: 'raised', nextWeight: 140, nextUnit: 'lb',
+        outcome: 'raised', nextWeight: 140, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -151,12 +151,12 @@ describe('computeOutcome', () => {
       const rule = { ...RULE, increment: 2.5, incrementUnit: 'kg' as const };
       const sets = [kg(100, 8), kg(100, 8), kg(100, 8)];
       expect(computeOutcome(input({ equipment: 'barbell', rule, sets }))).toEqual({
-        workingWeight: 100, workingUnit: 'kg', outcome: 'raised', nextWeight: 102.5, nextUnit: 'kg',
+        workingWeight: 100, workingUnit: 'kg', outcome: 'raised', nextWeight: 102.5, nextUnit: 'kg', missed: false,
       });
       const small = { ...RULE, increment: 1, incrementUnit: 'lb' as const }; // 0.5 kg, rounded up to 62.5
       const at60 = [kg(60, 8), kg(60, 8), kg(60, 8)];
       expect(computeOutcome(input({ equipment: 'barbell', rule: small, sets: at60 }))).toMatchObject({
-        outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg',
+        outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', missed: false,
       });
     });
 
@@ -169,7 +169,7 @@ describe('computeOutcome', () => {
     it('holds at the working weight when nothing heavier can be loaded', () => {
       const sets = [lb(45, 8), lb(45, 8), lb(45, 8)];
       expect(computeOutcome(input({ equipment: 'barbell', gear: { lb: BARE_LB, kg: KG_GEAR }, sets }))).toEqual({
-        workingWeight: 45, workingUnit: 'lb', outcome: 'held', nextWeight: 45, nextUnit: 'lb',
+        workingWeight: 45, workingUnit: 'lb', outcome: 'held', nextWeight: 45, nextUnit: 'lb', missed: false,
       });
     });
   });
@@ -180,10 +180,10 @@ describe('computeOutcome', () => {
       const assisted = (w: number) =>
         input({ loggingType: 'assisted', equipment: 'machine', rule, sets: [lb(w, 8), lb(w, 8), lb(w, 8)] });
       expect(computeOutcome(assisted(40))).toEqual({
-        workingWeight: 40, workingUnit: 'lb', outcome: 'raised', nextWeight: 30, nextUnit: 'lb',
+        workingWeight: 40, workingUnit: 'lb', outcome: 'raised', nextWeight: 30, nextUnit: 'lb', missed: false,
       });
       expect(computeOutcome(assisted(5))).toEqual({
-        workingWeight: 5, workingUnit: 'lb', outcome: 'raised', nextWeight: 0, nextUnit: 'lb',
+        workingWeight: 5, workingUnit: 'lb', outcome: 'raised', nextWeight: 0, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -192,10 +192,10 @@ describe('computeOutcome', () => {
       const atZero = (unit: WeightUnit) =>
         input({ loggingType: 'assisted', equipment: 'machine', rule, plannedWeight: 0, plannedUnit: unit, sets: [set(0, unit, 8), set(0, unit, 9), set(null, null, 8)] });
       expect(computeOutcome(atZero('lb'))).toEqual({
-        workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb',
+        workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb', missed: false,
       });
       expect(computeOutcome(atZero('kg'))).toEqual({
-        workingWeight: 0, workingUnit: 'kg', outcome: 'held', nextWeight: 0, nextUnit: 'kg',
+        workingWeight: 0, workingUnit: 'kg', outcome: 'held', nextWeight: 0, nextUnit: 'kg', missed: false,
       });
     });
 
@@ -203,7 +203,7 @@ describe('computeOutcome', () => {
       const rule = { ...RULE, increment: 10 };
       const sets = [lb(264.6, 8), lb(264.6, 8), lb(264.6, 8)];
       expect(computeOutcome(input({ loggingType: 'assisted', equipment: 'machine', rule, sets }))).toMatchObject({
-        outcome: 'raised', nextWeight: 254.6, nextUnit: 'lb',
+        outcome: 'raised', nextWeight: 254.6, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -223,7 +223,7 @@ describe('computeOutcome', () => {
           sets: durations.map((d) => set(20, 'lb', null, { durationS: d })),
         });
       expect(computeOutcome(timed([45, 50, 45]))).toEqual({
-        workingWeight: 20, workingUnit: 'lb', outcome: 'raised', nextWeight: 25, nextUnit: 'lb',
+        workingWeight: 20, workingUnit: 'lb', outcome: 'raised', nextWeight: 25, nextUnit: 'lb', missed: false,
       });
       expect(computeOutcome(timed([45, 44, 45]))).toMatchObject({ outcome: 'held', nextWeight: 20 });
     });
@@ -232,7 +232,7 @@ describe('computeOutcome', () => {
       const sets = [set(null, null, 8), set(null, null, 10), set(null, null, 8)];
       const firstRun = input({ loggingType: 'bodyweight_plus', equipment: 'bodyweight', plannedWeight: null, plannedUnit: null, sets });
       expect(computeOutcome(firstRun)).toEqual({
-        workingWeight: 0, workingUnit: 'lb', outcome: 'raised', nextWeight: 5, nextUnit: 'lb',
+        workingWeight: 0, workingUnit: 'lb', outcome: 'raised', nextWeight: 5, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -242,7 +242,7 @@ describe('computeOutcome', () => {
         sets: [set(null, null, 8), lb(10, 8), set(null, null, 8)],
       });
       expect(computeOutcome(withPlan)).toEqual({
-        workingWeight: 0, workingUnit: 'kg', outcome: 'raised', nextWeight: 2.5, nextUnit: 'kg',
+        workingWeight: 0, workingUnit: 'kg', outcome: 'raised', nextWeight: 2.5, nextUnit: 'kg', missed: false,
       });
       const noPlan = input({
         loggingType: 'bodyweight_plus', equipment: 'bodyweight', plannedWeight: null, plannedUnit: null,
@@ -255,7 +255,7 @@ describe('computeOutcome', () => {
   describe('units (R62)', () => {
     it('takes the lower of 60 kg and 135 lb in kg, with its own unit, and converts a 5 lb increment to 2.5 kg', () => {
       const rule = { ...RULE, setCount: 2 };
-      const expected = { workingWeight: 60, workingUnit: 'kg', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg' };
+      const expected = { workingWeight: 60, workingUnit: 'kg', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', missed: false };
       expect(computeOutcome(input({ rule, sets: [kg(60, 8), lb(135, 8)] }))).toEqual(expected);
       expect(computeOutcome(input({ rule, sets: [lb(135, 8), kg(60, 8)] }))).toEqual(expected);
     });
@@ -269,13 +269,13 @@ describe('computeOutcome', () => {
     it('keeps the lb set when it is the lighter one', () => {
       const rule = { ...RULE, setCount: 2 };
       expect(computeOutcome(input({ rule, sets: [kg(62, 8), lb(135, 8)] }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', missed: false,
       });
     });
 
     it('raises a set logged in kg on an lb plan in kg', () => {
       expect(computeOutcome(input({ sets: [kg(60, 8), kg(60, 8), kg(60, 8)] }))).toEqual({
-        workingWeight: 60, workingUnit: 'kg', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg',
+        workingWeight: 60, workingUnit: 'kg', outcome: 'raised', nextWeight: 62.5, nextUnit: 'kg', missed: false,
       });
     });
 
@@ -296,7 +296,7 @@ describe('computeOutcome', () => {
         lb(100, 3, { done: false }),
       ];
       expect(computeOutcome(input({ sets }))).toEqual({
-        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb',
+        workingWeight: 135, workingUnit: 'lb', outcome: 'raised', nextWeight: 140, nextUnit: 'lb', missed: false,
       });
     });
 
@@ -342,5 +342,174 @@ describe('raiseLoadable', () => {
 
   it('can be the bar alone when the working weight is under the bar', () => {
     expect(raiseLoadable(50, 40, BARE_LB)).toBe(45);
+  });
+});
+
+describe('computeOutcome for a program slot (§18.29)', () => {
+  const MISS_135 = [lb(135, 8), lb(135, 8), lb(135, 5)];
+  /** A Beginner program's barbell slot: a reset at 3 misses in a row, to 90%. */
+  const beginner = (over: Partial<OutcomeInput>) =>
+    input({ equipment: 'barbell', missesToReset: 3, resetMultiplier: 0.9, missesBefore: 0, ...over });
+
+  it('beginner resets on the 3rd miss to 90% rounded down to a loadable barbell weight (135 → 120 with 2.5 lb pairs)', () => {
+    expect(computeOutcome(beginner({ sets: MISS_135, missesBefore: 0 }))).toEqual({
+      workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb', missed: true,
+    });
+    expect(computeOutcome(beginner({ sets: MISS_135, missesBefore: 1 }))).toMatchObject({ outcome: 'held', nextWeight: 135, missed: true });
+    expect(computeOutcome(beginner({ sets: MISS_135, missesBefore: 2 }))).toEqual({
+      workingWeight: 135, workingUnit: 'lb', outcome: 'reset', nextWeight: 120, nextUnit: 'lb', missed: true,
+    });
+  });
+
+  it('intermediate resets on the 2nd', () => {
+    const intermediate = (missesBefore: number) => beginner({ missesToReset: 2, missesBefore, sets: [lb(135, 8), lb(135, 8)] });
+    expect(computeOutcome(intermediate(0))).toMatchObject({ outcome: 'held', nextWeight: 135, missed: true });
+    expect(computeOutcome(intermediate(1))).toMatchObject({ outcome: 'reset', nextWeight: 120, missed: true });
+  });
+
+  it('#12 top set uses 95%', () => {
+    const topSet = { setCount: 1, repMin: 2, repMax: 3, increment: 5, incrementUnit: 'lb' as const };
+    const result = computeOutcome(
+      beginner({ rule: topSet, plannedWeight: 300, sets: [lb(300, 1)], missesToReset: 2, missesBefore: 1, resetMultiplier: 0.95 }),
+    );
+    expect(result).toMatchObject({ outcome: 'reset', nextWeight: 285, missed: true });
+  });
+
+  it('rounds a reset off a barbell down to a multiple of the full increment, not the halved one', () => {
+    const halved = { ...RULE, increment: 2.5 };
+    const sets = [lb(55, 8), lb(55, 5), lb(55, 8)];
+    const at = (resetStep?: number) =>
+      computeOutcome(input({ rule: halved, plannedWeight: 55, sets, missesToReset: 2, missesBefore: 1, resetStep }));
+    expect(at(5)).toMatchObject({ outcome: 'reset', nextWeight: 45, nextUnit: 'lb' });
+    expect(at()).toMatchObject({ outcome: 'reset', nextWeight: 47.5, nextUnit: 'lb' });
+  });
+
+  it('rounds a reset to the full increment when the session ran a halved one (fullIncrement)', () => {
+    const halved = { ...RULE, increment: 2.5 };
+    const sets = [lb(55, 8), lb(55, 5), lb(55, 8)];
+    const result = computeOutcome(input({ rule: halved, plannedWeight: 55, sets, missesToReset: 2, missesBefore: 1, fullIncrement: 5 }));
+    // 55 × 0.9 = 49.5: down to a multiple of 5 is 45, not 47.5.
+    expect(result).toMatchObject({ outcome: 'reset', nextWeight: 45, nextUnit: 'lb', missed: true });
+  });
+
+  it('a slot with increment 0 never resets: held, and the miss is still recorded', () => {
+    const repsOnly = { ...RULE, increment: 0 };
+    const sets = [lb(0, 8), lb(0, 8), lb(0, 4)];
+    expect(computeOutcome(input({ rule: repsOnly, plannedWeight: 0, equipment: 'bodyweight', loggingType: 'bodyweight_plus', sets, missesToReset: 2, missesBefore: 1 }))).toEqual({
+      workingWeight: 0, workingUnit: 'lb', outcome: 'held', nextWeight: 0, nextUnit: 'lb', missed: true,
+    });
+    const weighted = computeOutcome(input({ rule: repsOnly, plannedWeight: 100, sets: [lb(100, 8), lb(100, 4), lb(100, 8)], missesToReset: 2, missesBefore: 1 }));
+    expect(weighted).toMatchObject({ outcome: 'held', nextWeight: 100, missed: true });
+  });
+
+  it('is held, not reset, when the reset weight is not lower than the working weight (the empty bar)', () => {
+    const sets = [lb(45, 8), lb(45, 8), lb(45, 3)];
+    expect(computeOutcome(input({ equipment: 'barbell', plannedWeight: 45, sets, missesToReset: 2, missesBefore: 1 }))).toEqual({
+      workingWeight: 45, workingUnit: 'lb', outcome: 'held', nextWeight: 45, nextUnit: 'lb', missed: true,
+    });
+  });
+
+  it('converts the reset step to the working unit by the gym convention', () => {
+    const sets = [kg(55, 8), kg(55, 5), kg(55, 8)];
+    const result = computeOutcome(input({ plannedWeight: 55, plannedUnit: 'kg', sets, missesToReset: 2, missesBefore: 1, resetStep: 5 }));
+    // 55 × 0.9 = 49.5, down to a multiple of 2.5 kg.
+    expect(result).toMatchObject({ outcome: 'reset', nextWeight: 47.5, nextUnit: 'kg' });
+  });
+
+  it('held_week keeps the plan and is not a miss', () => {
+    expect(computeOutcome(beginner({ week: { holds: true }, sets: MISS_135, missesBefore: 2, plannedWeight: 140 }))).toEqual({
+      workingWeight: 135, workingUnit: 'lb', outcome: 'held_week', nextWeight: 140, nextUnit: 'lb', missed: false,
+    });
+    expect(computeOutcome(beginner({ week: { holds: true }, sets: ALL_HIT_135, plannedWeight: null, plannedUnit: null }))).toMatchObject({
+      outcome: 'held_week', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+    // A week that runs the normal rules (a note-only week) changes nothing.
+    expect(computeOutcome(beginner({ week: { holds: false }, sets: ALL_HIT_135 }))).toMatchObject({ outcome: 'raised', nextWeight: 140 });
+  });
+
+  it('marked is held_marked and not a miss', () => {
+    expect(computeOutcome(beginner({ marked: true, sets: MISS_135, missesBefore: 2 }))).toEqual({
+      workingWeight: 135, workingUnit: 'lb', outcome: 'held_marked', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+  });
+
+  it('no counted sets is no_sets before a holding week or a mark (§7.3 order)', () => {
+    // Skipped in a test week (R617): no_sets, the plan kept.
+    expect(computeOutcome(beginner({ week: { holds: true }, sets: [] }))).toEqual({
+      workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+    expect(computeOutcome(beginner({ marked: true, sets: [lb(135, 8, { done: false })] }))).toMatchObject({ outcome: 'no_sets', nextWeight: 135 });
+    // Your own routine, no program inputs: a marked exercise with nothing done is no_sets, as before this phase.
+    expect(computeOutcome(input({ marked: true, sets: [lb(95, 5, { setType: 'warmup' })] }))).toEqual({
+      workingWeight: null, workingUnit: null, outcome: 'no_sets', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+  });
+
+  it('a skipped exercise is no_sets, keeps its plan and is not a miss', () => {
+    expect(computeOutcome(beginner({ sets: [], missesBefore: 2 }))).toMatchObject({ outcome: 'no_sets', nextWeight: 135, missed: false });
+  });
+
+  it('sessionsToRaise 2 holds after one all-hit session and raises after two', () => {
+    const stone = (previousAllHit: boolean) =>
+      computeOutcome(input({ sets: ALL_HIT_135, sessionsToRaise: 2, previousAllHit, missesToReset: 2, missesBefore: 0 }));
+    expect(stone(false)).toEqual({
+      workingWeight: 135, workingUnit: 'lb', outcome: 'held', nextWeight: 135, nextUnit: 'lb', missed: false,
+    });
+    expect(stone(true)).toMatchObject({ outcome: 'raised', nextWeight: 140, missed: false });
+    expect(computeOutcome(input({ sets: ALL_HIT_135, sessionsToRaise: 1 }))).toMatchObject({ outcome: 'raised', nextWeight: 140 });
+  });
+
+  it('weighted_distance raises when every set covers the distance', () => {
+    const yoke = { setCount: 3, repMin: 40, repMax: 50, increment: 10, incrementUnit: 'lb' as const };
+    const run = (distance: number, unit: 'ft' | 'yd' = 'ft') => lb(400, 0, { reps: null, distance, distanceUnit: unit });
+    const at = (sets: OutcomeInput['sets']) =>
+      computeOutcome(
+        input({
+          rule: yoke, plannedWeight: 400, loggingType: 'weighted_distance', equipment: 'other', distanceUnit: 'ft',
+          sets, missesToReset: 2, missesBefore: 0,
+        }),
+      );
+    expect(at([run(50), run(55), run(50)])).toEqual({
+      workingWeight: 400, workingUnit: 'lb', outcome: 'raised', nextWeight: 410, nextUnit: 'lb', missed: false,
+    });
+    // 17 yd is 51 ft.
+    expect(at([run(50), run(17, 'yd'), run(50)])).toMatchObject({ outcome: 'raised', nextWeight: 410 });
+    expect(at([run(50), run(45), run(50)])).toMatchObject({ outcome: 'held', nextWeight: 400, missed: false });
+    expect(at([run(50), run(30), run(50)])).toMatchObject({ outcome: 'held', nextWeight: 400, missed: true });
+  });
+
+  it('a metcon score (rounds, for_time) is no_rule with no working weight (R622)', () => {
+    for (const loggingType of ['rounds', 'for_time'] as const) {
+      expect(computeOutcome(input({ loggingType, sets: [set(null, null, 6)], missesToReset: 2, missesBefore: 1 }))).toEqual({
+        workingWeight: null, workingUnit: null, outcome: 'no_rule', nextWeight: null, nextUnit: null, missed: false,
+      });
+    }
+  });
+
+  it('uses repMinForMiss as the bottom of the range when given', () => {
+    expect(computeOutcome(input({ sets: MISS_135, missesToReset: 2, missesBefore: 0, repMinForMiss: 5 }))).toMatchObject({
+      outcome: 'held', missed: false,
+    });
+  });
+
+  it('an assisted slot holds on a miss: more assistance is not a 10% drop', () => {
+    const sets = [lb(40, 8), lb(40, 8), lb(40, 3)];
+    expect(computeOutcome(input({ loggingType: 'assisted', plannedWeight: 40, sets, missesToReset: 2, missesBefore: 1 }))).toMatchObject({
+      outcome: 'held', nextWeight: 40, missed: true,
+    });
+  });
+
+  it('your own routine never reports a miss or resets (R628)', () => {
+    expect(computeOutcome(input({ equipment: 'barbell', sets: MISS_135 }))).toMatchObject({ outcome: 'held', missed: false });
+    expect(computeOutcome(input({ equipment: 'barbell', sets: MISS_135, missesBefore: 5 }))).toMatchObject({ outcome: 'held', missed: false });
+  });
+});
+
+describe('isAllHit', () => {
+  it('is every counted set at the top of the range, as the raise reads it', () => {
+    expect(isAllHit(input({ sets: ALL_HIT_135 }))).toBe(true);
+    expect(isAllHit(input({ sets: [lb(135, 8), lb(135, 7), lb(135, 8)] }))).toBe(false);
+    expect(isAllHit(input({ sets: [lb(135, 8), lb(135, 8)] }))).toBe(false);
+    expect(isAllHit(input({ rule: null, sets: ALL_HIT_135 }))).toBe(false);
   });
 });
