@@ -185,10 +185,10 @@ A warm, almost monochrome palette of iron-black and chalk-paper neutrals with a 
 
 ### Neutral
 - **Iron Black / Chalk Paper** (bg-dark / bg-light): the page, the header, the dock and the session header.
-- **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row, entered set fields and the selected bar choice.
+- **Rubber Mat / Clean Sheet** (surface-dark / surface-light): cards, sheets, the rest row and the work clock, entered set fields and the selected bar choice.
 - **Raised Plate / Warm Stone** (surface-raised-dark / surface-raised-light): segmented-control wells, the done-set tint, the docked rest and music bars, and the track under a 3pt progress bar (macro bars, water).
 - **Seam** (border-dark / border-light): card, sheet and dock edges, the set-number chip, regular secondary buttons.
-- **Strong Seam** (border-strong-dark / border-strong-light): every field's edge (set fields, number fields, search, name and note fields, R352), compact pill outlines, the rest row's edge, the Short on food banner's bottom edge and the off track of a switch only: the edges a control or a passing prompt needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
+- **Strong Seam** (border-strong-dark / border-strong-light): every field's edge (set fields, number fields, search, name and note fields, R352), compact pill outlines, the rest row's and the work clock's edge, the Short on food banner's bottom edge and the off track of a switch only: the edges a control or a passing prompt needs to be seen at all. It holds 3:1 on bg, surface and surfaceRaised.
 - **Chalk / Ink** (text-dark / text-light): text, primary-button fill, tick fill, the progress line, the superset bar, the selected segment, the fill of the macro and water bars, the paywall's checkmarks.
 - **Worn Chalk / Worn Ink** (text-muted-dark / text-muted-light): secondary lines, labels, the rule line, previous results, open tick rings.
 - **Ghost Chalk / Ghost Ink** (text-faint-dark / text-faint-light): suggested values in empty set fields only. It holds 3:1 on bg and surface.
@@ -318,6 +318,9 @@ The exercise name (Barlow 700, 22px) with ⋯ alone at the right edge, a 44pt bo
 ### The rest row (signature)
 Under the set that started it: a surface panel with a Strong Seam edge, a REST label over a Barlow 800 countdown, then −15s, +15s and Skip as compact pills, over a 3px text-colour track that drains with the time left. At zero it holds a check and "Rest's up" at the same height.
 
+### The work clock (Task 7b)
+The rest row's twin, for a metcon, a run, intervals and an EMOM: the same surface panel, Strong Seam edge, 10px corners and 12/8 padding, 12pt above the rows it times. Its name in the REST label's role (AMRAP, FOR TIME, RUN, HARD · 2 OF 6, EMOM · MINUTE 3 OF 10, GET READY for the 10 s lead-in) over a Barlow 800 time at 32px; For Time adds a muted Barlow 600 "/ 12:00" beside it. Compact pills at the right: Start (filled, the block's one primary; dimmed while another clock goes), then Pause and Done or Reset; paused, Resume is filled. A 3px text-colour track drains with a countdown or fills toward For Time's cap. Ended, it holds a check and its line ("Time. Enter your rounds.") at the running height. The time is not pressable and the clock never ticks a set. Above it, a metcon lists its format in body strong and one line per move with the amount in its own Barlow 600 17px column; a run or intervals have one body-strong format line ("Run 29:00", "6 × 3:00 hard / 2:00 easy"). A score or a run is one row without the SET chip; an event heads its distance with its unit (FT, YD) and an empty time shows a faint dash.
+
 ### Personal records (finish summary)
 After the next-time lines, across a Seam hairline 16pt above: a PERSONAL RECORDS Label, then one row per personal record. A row is a red "PR" (Barlow 800, 14px), 8pt before the line in body text ("Bench press — heaviest: 185 lb × 5"), baseline-aligned; the mark and the line are one element read as "Personal record. {line}". On a phone that can share, a compact secondary **Share** pill ends the row, 12pt after the line, and drops under it as a unit at large text. Rows are 8pt apart. A failed share puts "Couldn't make the image. Try again." in muted body text 4pt under its row. The pill is never red; only the mark is.
 
@@ -370,7 +373,7 @@ Choices take the shape that says how many can be picked. Primary muscles, second
 - **Don't** use red #E10600 for anything but the wordmark, the active tab and PR marks.
 - **Don't** put a logo, a brand name, colour or an enlarged photo in a program picture; they are grayscale, native size, and never the hound.
 - **Don't** add shadows, gradients or glass; move a tonal step instead.
-- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but field edges (set, number, search, name and note fields), compact pill outlines, the rest row's edge, the Short on food banner's edge and a switch's off track.
+- **Don't** use textFaint for anything but suggested set values, or borderStrong for anything but field edges (set, number, search, name and note fields), compact pill outlines, the rest row's and the work clock's edge, the Short on food banner's edge and a switch's off track.
 - **Don't** put red on Fuel, water, "over" values or the paywall, or the footer on the paywall, Add food or a food editor.
 - **Don't** put the footer on the session or the finish summary, or the hound in the footer.
 - **Don't** put a footer, a quote or the light palette on the personal record card.

@@ -19,6 +19,7 @@ import { latestTickedSetId, restWaitsFor } from '../src/domain/rest';
 import { joinsNextInSuperset, replaceNeedsConfirm, startsSuperset } from '../src/domain/sessionMenu';
 import { nextSetId, progressLabel, progressParts, restUpText, workoutProgress, type Progress } from '../src/domain/sessionProgress';
 import { flushAll } from '../src/state/draftFlush';
+import { clockAt } from '../src/domain/workClock';
 import { useDbQuery } from '../src/state/dataVersion';
 import { changeRungTo, discard, finish, replaceWith } from '../src/state/sessionActions';
 import { ModifySheet } from '../src/ui/ModifySheet';
@@ -54,8 +55,8 @@ function toTrain() {
 /** Module-level so `useDbQuery` reads again only when the data changes. */
 function readSession(db: Db) {
   const settings = getSettings(db);
-  const { unit, distanceUnit, musicApp, restSeconds } = settings;
-  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds };
+  const { unit, distanceUnit, musicApp, restSeconds, workTimer } = settings;
+  return { workout: getActiveWorkoutView(db), unit, gear: gearFor(unit, settings), distanceUnit, musicApp, restSeconds, workTimer };
 }
 
 /** The question open over the session, if any. Only one at a time. */
@@ -221,7 +222,7 @@ export default function Session() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Every write reads the workout again; what did not change keeps its objects, so only the blocks that changed draw again.
-  const { workout, unit, gear, distanceUnit, musicApp, restSeconds } = useShareEqual(useDbQuery(readSession));
+  const { workout, unit, gear, distanceUnit, musicApp, restSeconds, workTimer } = useShareEqual(useDbQuery(readSession));
   /**
    * The exercise whose ⋯ menu is open, and what it opens on: its menu, its rest choices from the countdown, or its
    * Something off reasons from the name row (R81).
@@ -315,6 +316,12 @@ export default function Session() {
     restEndsAt !== null && (restSetId === null || !workout.exercises.some((ex) => ex.sets.some((set) => set.id === restSetId)));
   /** The set the rest row's words are about: the running rest's, else the one whose "Rest's up" still shows. */
   const restRowSetId = restSetId ?? restUp?.setId ?? null;
+  /**
+   * The work clock (Task 7b): one at a time, so while one is going (not yet ended) every other block's Start is dimmed.
+   * Its end writes (`workCueDealtWith`), so this is read again then.
+   */
+  const clock = workTimer ?? null;
+  const clockGoing = clock !== null && clock.workoutId === workout.id && clockAt(clock, Date.now()).phase !== 'ended';
   /** The music bar's app: the one picked in the music sheet, if this platform can have it (never on web). */
   const musicBarApp = musicAppOn(Platform.OS, musicApp);
 
@@ -464,6 +471,8 @@ export default function Session() {
                 onOpenMark={openers.mark}
                 onOpenModify={openers.modify}
                 onOpenStats={openers.stats}
+                workTimer={clock !== null && clock.workoutExerciseId === ex.id ? clock : null}
+                clockBusy={clockGoing && clock?.workoutExerciseId !== ex.id}
               />
             );
           })}

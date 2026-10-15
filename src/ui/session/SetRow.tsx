@@ -8,13 +8,14 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import {
   fieldLook,
   fieldPatch,
-  fieldVoiceLabel,
   hintText,
   isComplete,
   looksUnlikely,
   needLine,
   parseField,
   readRow,
+  rowFieldVoiceLabel,
+  rowTickLabel,
   valueText,
   type Column,
   type ColumnKey,
@@ -298,7 +299,8 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
     return (
       <TextInput
         value={drafts[key] ?? valueText(row, key, unit, distanceUnit)}
-        placeholder={hintText(row, key)}
+        // A field that may stay empty (an event's time) shows a faint dash rather than nothing (Task 7b).
+        placeholder={hintText(row, key) || (row.optional?.includes(key) && !set.done ? '–' : '')}
         placeholderTextColor={colors.textFaint}
         onChangeText={(text) => type(key, text)}
         onBlur={() => leave(key)}
@@ -306,7 +308,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         // iOS adds its own Done bar above a number pad with this key (R43); Done blurs, and the blur saves.
         returnKeyType="done"
         selectTextOnFocus
-        accessibilityLabel={fieldVoiceLabel(key, row.loggingType, row.label, header, unit, distanceUnit)}
+        accessibilityLabel={rowFieldVoiceLabel(row, key, header, unit, distanceUnit)}
         // Not on a ticked set, whose tick would untick it (B2).
         accessibilityHint={look === 'suggested' && !set.done ? SUGGESTED_HINT : undefined}
         // Capped as the body fields are, so "182.5" or "1:00" stays whole in its column at the largest text size (R562).
@@ -351,7 +353,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         return (
           <Num
             weight={600}
-            accessibilityLabel={row.previous === '' ? undefined : `Previous ${row.previous}`}
+            accessibilityLabel={row.previous === '' ? undefined : `Previous ${row.previousLabel ?? row.previous}`}
             style={{ fontSize: 17, color: colors.textMuted }}
           >
             {row.previous}
@@ -361,7 +363,7 @@ export const SetRow = memo(function SetRow({ latestEx, row, columns, unit, dista
         return (
           <Pressable
             accessibilityRole="checkbox"
-            accessibilityLabel={`Set ${row.label} done`}
+            accessibilityLabel={rowTickLabel(row)}
             aria-checked={set.done}
             accessibilityHint={!set.done && !canTick && reading.missing !== null ? needHint(reading.missing, row.loggingType) : undefined}
             onPress={toggle}

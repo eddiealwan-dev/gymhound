@@ -8,6 +8,7 @@ import { seededDb } from '../db/testing/fixtures';
 import { insertProgram } from '../db/testing/programFixture';
 import type { Db } from '../db/types';
 import { workPlanFor } from '../domain/sessionBlock';
+import { announce } from '../platform/announce';
 import { clockAt, LEAD_IN_MS } from '../domain/workClock';
 import { commitSetField, discard, finish, removeFromWorkout, replaceWith, tick } from './sessionActions';
 import {
@@ -99,6 +100,16 @@ describe('the rest after a tick, by type (R639)', () => {
     tickSetOf(0, 0);
     expect(exercisesNow()[0].sets[0].done).toBe(true);
     expect(restEndsAt()).toBeNull();
+  });
+
+  it('says the score or the run was logged, not "Set 1"', () => {
+    startDay('program-crossfit-foundations', 'a');
+    tickSetOf(3, 0, { reps: 5, extraReps: 4 });
+    expect(announce).toHaveBeenLastCalledWith('Score logged.');
+    discard(db, workoutId());
+    startDay('program-hybrid-athlete', 'fri-tempo-run');
+    tickSetOf(1, 0);
+    expect(announce).toHaveBeenLastCalledWith('Run logged.');
   });
 
   it('rests 150 s after a carry', () => {

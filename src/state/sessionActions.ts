@@ -37,7 +37,7 @@ import type { Db } from '../db/types';
 import { gearFor } from '../domain/plates';
 import { restAfterMinus15, restAfterPlus15, restAfterTick, restWaitsFor, tickAnnouncement, type RestChange } from '../domain/rest';
 import { restLengthOf } from '../domain/restKind';
-import { blockKindOf } from '../domain/sessionBlock';
+import { blockKindOf, runNoun } from '../domain/sessionBlock';
 import { resolveTick, type TickValues } from '../domain/setEntry';
 import { buildRows } from '../domain/setTable';
 import type { BellSound, DistanceUnit, ExerciseMark, WeightUnit } from '../domain/types';
@@ -121,7 +121,9 @@ export function tick(
     waitsFor = restWaitsFor(view.exercises, ex.id, settings.restSeconds);
   }
   bumpData();
-  announce(tickAnnouncement(row.label, restStarted, waitsFor));
+  // A metcon's one score and a run's one row are not numbered sets: "Score logged.", "Run logged." (no rest follows).
+  const spoken = kind === 'metcon' ? 'Score' : kind === 'run' ? runNoun(ex.exerciseId) : null;
+  announce(spoken !== null ? `${spoken} logged.` : tickAnnouncement(row.label, restStarted, waitsFor));
   return true;
 }
 

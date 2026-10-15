@@ -103,7 +103,8 @@ export function releaseHold(t: WorkTimer, now: number): WorkTimer {
   return { ...t, released: t.released + 1, pausedMs: t.pausedMs + (raw - hold) };
 }
 
-export type ClockPhase = 'ready' | 'running' | 'paused' | 'waiting' | 'ended';
+/** `idle` is before Start: nothing is stored yet (`idleClock`). */
+export type ClockPhase = 'idle' | 'ready' | 'running' | 'paused' | 'waiting' | 'ended';
 
 export type ClockState = {
   phase: ClockPhase;
@@ -184,6 +185,37 @@ function stepAt(plan: WorkPlan, ms: number): { index: number; into: number } {
   }
   const last = plan.steps.length - 1;
   return { index: last, into: plan.steps[last].seconds * 1000 };
+}
+
+/** The clock before Start: the first step full, over its name; For Time at 0:00 toward its cap. */
+export function idleClock(plan: WorkPlan): ClockState {
+  const first = plan.steps[0];
+  const up = countsUp(plan);
+  return {
+    phase: 'idle',
+    label: stepLabel(plan, first),
+    shown: up ? 0 : first.seconds,
+    fraction: up ? 0 : 1,
+    capS: up ? sumMs(plan.steps) / 1000 : null,
+    stepIndex: 0,
+    set: first.set,
+    endLine: null,
+    timeS: null,
+  };
+}
+
+/** What VoiceOver calls Start, by what it starts: "Start the AMRAP", "Start the run". */
+export function startVoiceLabel(plan: WorkPlan): string {
+  switch (plan.kind) {
+    case 'amrap':
+    case 'emom':
+      return `Start the ${plan.noun}`;
+    case 'for_time':
+      return 'Start the For Time clock';
+    case 'run':
+    case 'intervals':
+      return `Start the ${plan.noun.toLowerCase()}`;
+  }
 }
 
 /** The clock at `now`, worked out from what is stored. */
@@ -322,6 +354,7 @@ export function notificationCues(t: WorkTimer, now: number): { at: number; title
 /** What VoiceOver reads for the time: a duration with what the clock is, or the end line once ended. */
 export function clockVoiceLabel(state: ClockState, plan: WorkPlan): string {
   if (state.phase === 'ended') return state.endLine ?? '';
+  if (state.phase === 'idle') return idleVoiceLabel(plan);
   const paused = state.phase === 'paused' ? ', paused' : '';
   const time = spokenRest(state.shown);
   if (state.label === 'GET READY') return `Get ready, ${time}${paused}`;
@@ -338,5 +371,20 @@ export function clockVoiceLabel(state: ClockState, plan: WorkPlan): string {
       return `${step.kind === 'easy' ? 'Easy' : 'Hard'}, interval ${state.set} of ${n}, ${time} left${paused}`;
     case 'emom':
       return `EMOM, minute ${state.set} of ${n}, ${time} left${paused}`;
+  }
+}
+
+/** The clock before Start, read as what it will run: "AMRAP, 10 minutes", "Intervals, 6 sets of 3 minutes hard". */
+function idleVoiceLabel(plan: WorkPlan): string {
+  const total = sumMs(plan.steps) / 1000;
+  switch (plan.kind) {
+    case 'amrap':
+    case 'run':
+    case 'emom':
+      return `${plan.noun}, ${spokenRest(total)}`;
+    case 'for_time':
+      return `For Time, ${Math.round(total / 60)} minute cap`;
+    case 'intervals':
+      return `Intervals, ${setCount(plan)} sets of ${spokenRest(plan.steps[0].seconds)} hard`;
   }
 }

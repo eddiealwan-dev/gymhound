@@ -4,12 +4,14 @@ import {
   CUE_LIMIT,
   cuesOf,
   dueCue,
+  idleClock,
   LEAD_IN_MS,
   notificationCues,
   pauseTimer,
   releaseHold,
   resumeTimer,
   startTimer,
+  startVoiceLabel,
   stopTimer,
   type WorkPlan,
   type WorkTimer,
@@ -252,5 +254,32 @@ describe('clockVoiceLabel', () => {
     const paused = pauseTimer(start(amrap10), into(60));
     expect(clockVoiceLabel(clockAt(paused, into(90)), amrap10)).toBe('AMRAP, 9 minutes left, paused');
     expect(clockVoiceLabel(clockAt(start(amrap10), into(700)), amrap10)).toBe('Time. Enter your rounds.');
+  });
+});
+
+describe('the clock before Start', () => {
+  it('shows the full time over its name, and For Time at 0:00 toward its cap', () => {
+    expect(idleClock(amrap10)).toMatchObject({ phase: 'idle', label: 'AMRAP', shown: 600, fraction: 1, capS: null });
+    expect(idleClock(fran)).toMatchObject({ phase: 'idle', label: 'FOR TIME', shown: 0, fraction: 0, capS: 480 });
+    expect(idleClock(run29)).toMatchObject({ label: 'RUN', shown: 1740 });
+    expect(idleClock(intervals)).toMatchObject({ label: 'HARD · 1 OF 2', shown: 180 });
+    expect(idleClock(emom3)).toMatchObject({ label: 'EMOM · MINUTE 1 OF 3', shown: 60 });
+  });
+
+  it('reads to VoiceOver as what it will run', () => {
+    expect(clockVoiceLabel(idleClock(amrap10), amrap10)).toBe('AMRAP, 10 minutes');
+    expect(clockVoiceLabel(idleClock(fran), fran)).toBe('For Time, 8 minute cap');
+    expect(clockVoiceLabel(idleClock(run29), run29)).toBe('Run, 29 minutes');
+    expect(clockVoiceLabel(idleClock(intervals), intervals)).toBe('Intervals, 2 sets of 3 minutes hard');
+    expect(clockVoiceLabel(idleClock(emom3), emom3)).toBe('EMOM, 3 minutes');
+  });
+
+  it('names what Start starts', () => {
+    expect(startVoiceLabel(amrap10)).toBe('Start the AMRAP');
+    expect(startVoiceLabel(fran)).toBe('Start the For Time clock');
+    expect(startVoiceLabel(run29)).toBe('Start the run');
+    expect(startVoiceLabel({ ...run29, noun: 'Walk' })).toBe('Start the walk');
+    expect(startVoiceLabel(intervals)).toBe('Start the intervals');
+    expect(startVoiceLabel(emom3)).toBe('Start the EMOM');
   });
 });

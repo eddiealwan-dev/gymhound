@@ -22,6 +22,8 @@ const pullUps = (done: boolean) => ({
   program: { rule: ladderRule, warmUp: true, note: null },
 });
 let mockWorkout: Record<string, unknown>;
+/** The work clock in settings (Task 7b), or none. */
+let mockWorkTimer: Record<string, unknown> | null = null;
 
 /** What each block and the Modify sheet were last drawn with. */
 const mockBlocks = new Map<string, Record<string, unknown>>();
@@ -38,7 +40,7 @@ jest.mock('../../db/repositories/settingsRepo', () => ({ getSettings: jest.fn() 
 jest.mock('../../db/repositories/workoutsRepo', () => ({ getNextDayTitle: jest.fn(() => 'Pull A') }));
 jest.mock('../../db/repositories/workoutViewsRepo', () => ({ getActiveWorkoutView: jest.fn() }));
 jest.mock('../../state/dataVersion', () => ({
-  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km', restSeconds: 120 }),
+  useDbQuery: () => ({ workout: mockWorkout, unit: 'kg', distanceUnit: 'km', restSeconds: 120, workTimer: mockWorkTimer }),
 }));
 jest.mock('../../state/draftFlush', () => ({ flushAll: jest.fn() }));
 jest.mock('../../state/sessionActions', () => ({ finish: jest.fn(), discard: jest.fn(), restPlus15: jest.fn(), replaceWith: jest.fn(), changeRungTo: jest.fn() }));
@@ -87,6 +89,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   mockBlocks.clear();
   mockModify = {};
+  mockWorkTimer = null;
   jest.mocked(replaceWith).mockClear();
   jest.mocked(changeRungTo).mockClear();
   jest.mocked(router.push).mockClear();
@@ -143,5 +146,40 @@ describe('a program workout in the session (§18.29)', () => {
     expect(ask.props).toMatchObject({ visible: true, body: 'Its completed sets will be cleared.', confirmLabel: 'Change', cancelLabel: 'Keep' });
     call(ask.props.onConfirm);
     expect(changeRungTo).toHaveBeenCalledWith('db', 'we1', 2);
+  });
+});
+
+describe('the work clock (Task 7b)', () => {
+  const two = () => ({ ...programWorkout(), exercises: [pullUps(false), { ...pullUps(false), id: 'we2' }] });
+  const amrap = { kind: 'amrap', noun: 'AMRAP', steps: [{ kind: 'work', seconds: 600, set: 1 }] };
+  const timer = (over: Record<string, unknown> = {}) => ({
+    workoutId: 'w1',
+    workoutExerciseId: 'we1',
+    plan: amrap,
+    startsAt: Date.now(),
+    pausedAt: null,
+    pausedMs: 0,
+    released: 0,
+    rang: 0,
+    doneAtS: null,
+    ...over,
+  });
+
+  it('gives the clock to its own block only, and dims Start on the others while it goes', () => {
+    mockWorkout = two();
+    mockWorkTimer = timer();
+    mount();
+    expect(mockBlocks.get('we1')).toMatchObject({ workTimer: mockWorkTimer, clockBusy: false });
+    expect(mockBlocks.get('we2')).toMatchObject({ workTimer: null, clockBusy: true });
+  });
+
+  it('frees Start once the clock has ended, and with none', () => {
+    mockWorkout = two();
+    mockWorkTimer = timer({ doneAtS: 300 });
+    mount();
+    expect(mockBlocks.get('we2')).toMatchObject({ workTimer: null, clockBusy: false });
+    mockWorkTimer = null;
+    mount();
+    expect(mockBlocks.get('we1')).toMatchObject({ workTimer: null, clockBusy: false });
   });
 });

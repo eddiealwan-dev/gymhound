@@ -28,6 +28,7 @@ import { afterDatabaseStart, beforeDatabaseStart } from '../src/state/nativeServ
 import '../src/state/draftFlush';
 import { Button } from '../src/ui/Button';
 import { RestWatcher } from '../src/ui/session/RestWatcher';
+import { WorkClockWatcher } from '../src/ui/session/WorkClockWatcher';
 import { Sheet } from '../src/ui/Sheet';
 import { NO_EXPORTS, StartupError, type ExportFiles } from '../src/ui/StartupError';
 import { Body } from '../src/ui/Text';
@@ -157,6 +158,8 @@ function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
       </Stack>
       {/* Rings the end of the rest timer wherever the user is in the app. */}
       <RestWatcher />
+      {/* Rings the work clock's cues (a metcon, a run, intervals, an EMOM) wherever the user is in the app (Task 7b). */}
+      <WorkClockWatcher />
       {restoredFrom !== null ? <RestoredNotice restoredFrom={restoredFrom} /> : null}
     </>
   );

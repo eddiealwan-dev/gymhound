@@ -6,9 +6,26 @@ import type { WorkoutExerciseView } from '../../db/repositories/workoutViewsRepo
 import { MARK_LABELS } from '../../domain/labels';
 import { planInUnit, type Gear } from '../../domain/plates';
 import { restAfterLine, restLengthFor } from '../../domain/rest';
+import { restLengthOf } from '../../domain/restKind';
 import { lastSummary, programRuleSentence, programTodaysRead, ruleSentence, todaysRead, WARM_UP_LINE } from '../../domain/ruleLine';
 import { countLabel, exerciseProgress } from '../../domain/sessionProgress';
-import { buildRows, tableColumns, type RowModel } from '../../domain/setTable';
+import {
+  blockColumns,
+  blockKindOf,
+  blockRows,
+  easySecondsOf,
+  EVENT_LINE,
+  intervalFormat,
+  metconParts,
+  metconRuleLine,
+  metconTitle,
+  runFormat,
+  runNoun,
+  TECHNIQUE_LINE,
+  workPlanFor,
+} from '../../domain/sessionBlock';
+import { buildRows, entryDistanceUnit, tableColumns, type RowModel } from '../../domain/setTable';
+import type { WorkTimer } from '../../domain/workClock';
 import type { DistanceUnit, SetType, WeightUnit } from '../../domain/types';
 import { flushAll, useDraftFlush } from '../../state/draftFlush';
 import { addSetTo, addWarmupTo, commitSetField, removeSetFrom, saveNote } from '../../state/sessionActions';
@@ -21,9 +38,11 @@ import { Body, Display, Num } from '../Text';
 import { fonts } from '../theme';
 import { useTheme } from '../ThemeProvider';
 import { useCallbacksByKey } from '../useCallbacksByKey';
+import { FormatLine, MetconLines } from './BlockLines';
 import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow } from './SetRow';
 import { SET_HEADER_MAX_SCALE } from '../largeText';
+import { WorkClock } from './WorkClock';
 
 const SET_TYPES: { type: SetType; label: string }[] = [
   { type: 'working', label: 'Working' },
@@ -85,6 +104,10 @@ type Props = {
   onOpenModify?: () => void;
   /** Opens this exercise's stats: its chart and history (R554). Without it there is no Stats. */
   onOpenStats?: () => void;
+  /** This block's work clock (settings `work_timer`) when it is the one started; null otherwise (Task 7b). */
+  workTimer?: WorkTimer | null;
+  /** Another block's work clock is going: one at a time, so this block's Start is dimmed. */
+  clockBusy?: boolean;
 };
 
 /**
@@ -148,6 +171,16 @@ function NameRowControl({
   );
 }
 
+/**
+ * The rule line by block (Task 7b): a metcon's without the format and moves its list shows (and without last time's
+ * score, which sits beside the score row); an event's with what a tick means. The rest as they read.
+ */
+function ruleText(kind: ReturnType<typeof blockKindOf>, line: string, sentence: string, catalogName: string): string {
+  if (kind === 'metcon') return metconRuleLine(sentence, catalogName);
+  if (kind === 'event') return `${line} ${EVENT_LINE}`;
+  return line;
+}
+
 /** Space below a block. A superset's bar crosses it to join the members. */
 const BLOCK_GAP = 28;
 
@@ -183,13 +216,47 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   onOpenModify,
   onOpenStats,
   restRunning = restEndsAt !== null,
+  workTimer = null,
+  clockBusy = false,
 }: Props) {
   const db = useDb();
   const { colors } = useTheme();
-  const columns = useMemo(() => tableColumns(ex.loggingType, unit, ex.showRpe), [ex.loggingType, unit, ex.showRpe]);
+  /**
+   * How the block is drawn (Task 7b): a program's metcon, run or intervals as their own block with a clock, an event or
+   * technique sets as set rows with their own words; anything else, your own routines included, as set rows.
+   */
+  const kind = blockKindOf(ex);
+  /** A run's or an interval's target, in seconds, from the week's snapshot. */
+  const targetS = kind === 'run' || kind === 'intervals' ? (ex.rule?.repMax ?? null) : null;
+  /** An event's distance unit (ft, yd or m), which heads its column. */
+  const entryUnit = entryDistanceUnit(ex, distanceUnit) ?? 'm';
+  // The same columns while nothing they show changes, so a write to one set redraws its row alone.
+  const columns = useMemo(
+    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe), entryUnit),
+    [kind, ex.loggingType, unit, ex.showRpe, entryUnit],
+  );
   // Each row's previous is worked out once for the whole block. A row equal to the one drawn before keeps its object,
   // so only the set rows that changed draw again.
-  const rows = useShareEqual(useMemo(() => buildRows(ex, unit, gear, distanceUnit), [ex, unit, gear, distanceUnit]));
+  const rows = useShareEqual(
+    useMemo(
+      () => blockRows(kind, buildRows(ex, unit, gear, distanceUnit), { unit, targetS, noun: runNoun(ex.exerciseId) }),
+      [kind, ex, unit, gear, distanceUnit, targetS],
+    ),
+  );
+  /** The clock the block runs, if any: a metcon's format, a run's target, the intervals' steps, an EMOM's minutes. */
+  const plan = useMemo(() => workPlanFor(ex), [ex]);
+  const working = ex.sets.filter((s) => s.setType === 'working');
+  /** A metcon's score or a run, once ticked, has no more use for its clock. */
+  const scored = (kind === 'metcon' || kind === 'run') && working.length > 0 && working.every((s) => s.done);
+  const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName) : null;
+  /** The name in the name row: a metcon by the program's label for it ("Metcon A"). */
+  const name = kind === 'metcon' && ex.program ? metconTitle(ex.program.catalogName, ex.name) : ex.name;
+  const formatLine =
+    kind === 'run' && targetS !== null && targetS > 0
+      ? runFormat(ex.exerciseId, targetS)
+      : kind === 'intervals' && targetS !== null && targetS > 0 && working.length > 0
+        ? intervalFormat(working.length, targetS, easySecondsOf(ex.program?.note ?? null))
+        : null;
   /** The exercise as last drawn, for a set row's tick (`SetRow`'s `latestEx`). */
   const exRef = useRef(ex);
   exRef.current = ex;
@@ -216,7 +283,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
     : ruleSentence({ rule: ex.rule, loggingType: ex.loggingType, unit, last });
   /** A ladder slot changes its rung where any other exercise is modified (R618). */
   const ladder = program?.rule.kind === 'ladder';
-  const restLength = restLengthFor(ex.restSeconds, settingsRestSeconds);
+  // A program slot rests by its kind (R639); a length of none falls back so a rest row never has an empty track.
+  const restLength = restLengthOf(ex, settingsRestSeconds) || restLengthFor(ex.restSeconds, settingsRestSeconds);
   /** The rest to show under a set: the running one under the set that started it, else the one just up, under its set. */
   const restUnder = (setId: string): number | null => {
     if (restRunning) return setId === restSetId ? restEndsAt : null;
@@ -322,7 +390,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Show form for ${ex.name}`}
+          accessibilityLabel={`Show form for ${name}`}
           onPress={openDemo}
           hitSlop={NAME_HIT_SLOP}
           style={({ pressed }) => ({
@@ -336,7 +404,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         >
           {/* The muted ⓘ after the last word says the name opens the demo (R94), as the picker's ⓘ does. */}
           <Display weight={700} style={{ flexShrink: 1, flexBasis: 'auto', minWidth: 0, fontSize: 22 }}>
-            {ex.name}
+            {name}
             {/* A no-break space, so the glyph never sits alone on a line (R94). */}
             {'\u00A0'}
             {/* Ionicons turns font scaling off by default: the glyph grows with the name. */}
@@ -345,7 +413,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Options for ${ex.name}`}
+          accessibilityLabel={`Options for ${name}`}
           onPress={onOpenMenu}
           hitSlop={4}
           // The glyph is centred on the name's first 26pt line, and the 44pt box reaches 18pt above it without making the
@@ -392,21 +460,21 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         <NameRowControl
           icon="alert-circle-outline"
           label={ex.mark ? MARK_LABELS[ex.mark] : 'Something off'}
-          readAs={ex.mark ? `Something off for ${ex.name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${ex.name}`}
+          readAs={ex.mark ? `Something off for ${name}: ${MARK_LABELS[ex.mark]}` : `Something off for ${name}`}
           onPress={onOpenMark}
         />
         {/* Modify and Stats (R553, R554, the owner's Round 10 request), quiet like + Note. */}
         {onOpenModify ? (
           ladder ? (
-            <NameRowControl icon="swap-horizontal" label="Change rung" readAs={`Change rung for ${ex.name}`} onPress={onOpenModify} />
+            <NameRowControl icon="swap-horizontal" label="Change rung" readAs={`Change rung for ${name}`} onPress={onOpenModify} />
           ) : (
-            <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${ex.name}: swap in another exercise`} onPress={onOpenModify} />
+            <NameRowControl icon="swap-horizontal" label="Modify" readAs={`Modify ${name}: swap in another exercise`} onPress={onOpenModify} />
           )
         ) : null}
-        {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${ex.name}`} onPress={onOpenStats} /> : null}
+        {onOpenStats ? <NameRowControl icon="stats-chart-outline" label="Stats" readAs={`Stats for ${name}`} onPress={onOpenStats} /> : null}
         {/* + Note comes last (the owner's Round 11 note). */}
         {!ex.note && !editingNote ? (
-          <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${ex.name}`} onPress={openNote} />
+          <NameRowControl icon="pencil" label="+ Note" readAs={`Add a note for ${name}`} onPress={openNote} />
         ) : null}
       </View>
       {editingNote ? (
@@ -419,7 +487,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           placeholderTextColor={colors.textMuted}
           multiline
           submitBehavior="blurAndSubmit"
-          accessibilityLabel={`Note for ${ex.name}`}
+          accessibilityLabel={`Note for ${name}`}
           style={{
             minHeight: 40,
             // Clear of the name row's 10pt reach below Something off, so the two targets never overlap.
@@ -440,7 +508,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         // it otherwise read as the rule's first line, and the note looked missing (Round 5).
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Note for ${ex.name}: ${ex.note}`}
+          accessibilityLabel={`Note for ${name}: ${ex.note}`}
           accessibilityHint="Edits the note"
           onPress={openNote}
           // Clear of the name row's 10pt reach below Something off, so the two targets never overlap.
@@ -460,11 +528,18 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         </Pressable>
       ) : null}
 
+      {/* A metcon's format and moves, or a run's or intervals' format line (Task 7b), above the rule. */}
+      {metcon !== null ? <MetconLines parts={metcon} /> : formatLine !== null ? <FormatLine text={formatLine} /> : null}
       {/* No text-size cap: it wraps. It starts below the name row's 10pt reach: drawn later, it would win the hit test where
           the two overlap and cut + Note and Something off short of 44pt. */}
-      <Body muted style={{ fontSize: 14, marginTop: NAME_ROW_HIT_SLOP.bottom }}>
-        {read === null ? sentence : `${sentence} ${read}`}
+      <Body muted style={{ fontSize: 14, marginTop: metcon !== null || formatLine !== null ? 4 : NAME_ROW_HIT_SLOP.bottom }}>
+        {ruleText(kind, read === null ? sentence : `${sentence} ${read}`, sentence, ex.program?.catalogName ?? '')}
       </Body>
+      {kind === 'technique' ? (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {TECHNIQUE_LINE}
+        </Body>
+      ) : null}
       {/* A program slot's note, as the documents write it (R606), and the warm-up line under a lifting day's first slot
           (R626). Muted under the rule; they wrap at any text size. */}
       {program?.note ? (
@@ -477,6 +552,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           {WARM_UP_LINE}
         </Body>
       ) : null}
+      {/* The work clock, the rest row's twin, over the rows it times (Task 7b). */}
+      {plan !== null && !scored ? <WorkClock workoutId={workoutId} workoutExerciseId={ex.id} plan={plan} timer={workTimer} busy={clockBusy} /> : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: COLUMN_GAP, marginTop: 14, marginBottom: 4 }}>
         {columns.map((column) => (
@@ -535,22 +612,27 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       </View>
 
       {/* Quiet buttons have no edge, so the row steps back by their 12pt padding: "+ Set" lines up with the set column. */}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4, marginLeft: -12 }}>
-        <Button
-          label="+ Set"
-          variant="quiet"
-          size="compact"
-          accessibilityLabel={`Add a set to ${ex.name}`}
-          onPress={() => addSetTo(db, ex.id)}
-        />
-        <Button
-          label="+ Warmup"
-          variant="quiet"
-          size="compact"
-          accessibilityLabel={`Add a warmup to ${ex.name}`}
-          onPress={() => addWarmupTo(db, ex.id)}
-        />
-      </View>
+      {/* A metcon's one score and a run's one row add nothing; intervals add sets but no warmup (Task 7b). */}
+      {kind !== 'metcon' && kind !== 'run' ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8, marginTop: 4, marginLeft: -12 }}>
+          <Button
+            label="+ Set"
+            variant="quiet"
+            size="compact"
+            accessibilityLabel={`Add a set to ${name}`}
+            onPress={() => addSetTo(db, ex.id)}
+          />
+          {kind !== 'intervals' ? (
+            <Button
+              label="+ Warmup"
+              variant="quiet"
+              size="compact"
+              accessibilityLabel={`Add a warmup to ${name}`}
+              onPress={() => addWarmupTo(db, ex.id)}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
       <Sheet visible={typeRow !== undefined} onClose={() => setTypeFor(null)}>
         <SheetTitle>Set type</SheetTitle>
