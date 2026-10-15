@@ -7,7 +7,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   'arch-hang': [
     'Hang from a pull-up bar with an overhand grip, hands a little wider than your shoulders and arms straight.',
     'Pull your shoulder blades down and back so your chest rises and your shoulders move away from your ears.',
-    'Keep your arms straight, your ribs down and your legs still.',
+    'Keep your ribs down and your legs still.',
     'Hold for the time. It counts only while your shoulders stay pulled down, so step off when they rise.',
   ],
   'negative-pull-up': [
@@ -68,9 +68,9 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Lower your hips to end the rep.',
   ],
   'band-assisted-nordic-curl': [
-    'Kneel on a pad with your ankles held down by a partner or a heavy anchor. Hold a band fixed above you, with the band across your chest.',
+    'Kneel on a pad with your ankles held down by a partner or a heavy anchor. Fix a band high in front of you and hold it against your chest.',
     'Keep your body in a straight line from knees to head and lower forward slowly, bending only at the knees.',
-    'Let the band take over when you can no longer hold the lowering.',
+    'The band carries part of your weight all the way down. Choose a band that lets you lower with control.',
     'Pull with your hamstrings to return to the start, using the band as little as you can.',
   ],
   'eccentric-nordic-curl': [
@@ -154,20 +154,20 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   'hanging-bent-leg-raise': [
     'Hang from a bar with an overhand grip, arms straight and shoulders pulled down.',
-    'With your knees bent, raise your thighs above level with your hips, curling your hips up.',
+    'With your knees bent, raise them toward your chest, curling your hips up until your thighs are well above level.',
     'Lower slowly without swinging, until your legs hang straight down.',
   ],
   // Front lever (#16, timed)
   'tuck-front-lever': [
     'Hang from a bar with an overhand grip and pull your knees to your chest.',
     'Lean back and lift your hips until your back is level with the floor, arms straight and shoulders pulled down.',
-    'Keep your arms straight and your hips level with your shoulders.',
+    'Keep your hips level with your shoulders.',
     'Hold for the time. It counts only while your back is level and your arms stay straight.',
   ],
   'advanced-tuck-front-lever': [
     'Get into a tuck front lever: knees to your chest, back level with the floor and arms straight.',
     'Open your hips so your knees move away from your chest, with your knees still bent and your back flat.',
-    'Keep your shoulders pulled down and your arms straight.',
+    'Keep your shoulders pulled down.',
     'Hold for the time. It counts only while your back stays level with the floor.',
   ],
   'one-leg-front-lever': [
@@ -219,7 +219,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   'half-lay-back-lever': [
     'Get into an advanced tuck back lever with your back level with the floor and your arms straight.',
-    'Extend your legs halfway, so your knees stay bent but your legs reach farther back.',
+    'Open your hips so your thighs line up with your torso, with your knees still bent at about 90 degrees. In the advanced tuck your thighs are square to your torso.',
     'Keep your hips in line with your shoulders and your shoulders pulled down.',
     'Hold for the time. It counts only while your body stays level with the floor.',
   ],
@@ -238,7 +238,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   // Planche (#16, timed)
   'planche-lean': [
     'Start in a push-up position with your arms straight and your hands turned out a little.',
-    'Lean forward until your shoulders are well past your hands, pushing the floor away.',
+    'Lean your shoulders forward as far as you can control, pushing the floor away.',
     'Keep your arms straight, your body in one line and your toes on the floor.',
     'Hold for the time. It counts only while your shoulders stay past your hands.',
   ],
@@ -262,10 +262,9 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   // Muscle-up (#16, #18)
   'explosive-pull-up-and-dip': [
-    'Hang from a bar and pull up as fast as you can, aiming the bar at your lower chest.',
-    'Lower to straight arms, then move to parallel bars.',
-    'Press up to straight arms and lower until your upper arms are about level with the floor.',
-    'Press back up. One pull-up and one dip is one rep.',
+    'Hang from a bar and pull up as fast as you can, aiming the bar at your lower chest or higher.',
+    'At the top, lean over the bar and press up to straight arms above it, as in a dip on a straight bar.',
+    'Lower back to a hang. One pull-up and one dip is one rep.',
   ],
   'band-assisted-muscle-up': [
     'Loop a band over the bar and stand in it with one foot or a knee. Hang with an overhand grip, arms straight.',
@@ -283,7 +282,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Hang from rings with a false grip, the heel of each hand on top of the ring and your arms straight.',
     'Pull the rings to your lower chest, keeping them close to your body.',
     'Turn your elbows over the rings quickly and lean your chest forward.',
-    'Press to straight arms in support, then lower slowly back to a hang.',
+    'Press to straight arms in support, turning the rings out a little at the top, then lower slowly back to a hang.',
   ],
   // Handstand push-up (#16, #18)
   'elevated-pike-push-up': [
@@ -293,7 +292,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Press back up until your arms are straight.',
   ],
   'partial-wall-handstand-push-up': [
-    "Kick up into a handstand facing a wall, hands about shoulder-width apart and a hand's length from the wall. Put a stack of pads under your head.",
+    "Set a stack of pads on the floor between your hands, a hand's length from a wall. Kick up into a handstand facing the wall, hands about shoulder-width apart.",
     'Bend your elbows to lower your head until it touches the pads.',
     'Keep your core tight and your elbows angled back, not flared out.',
     'Press back up until your arms are straight. Take a pad away when the reps get easy.',
@@ -344,9 +343,9 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   // Box jump (#17)
   'box-step-up': [
-    'Stand facing a box or bench about knee height, 12 to 16 inches.',
+    'Stand facing a box or bench at about knee height or lower, 12 to 16 inches.',
     'Put one foot fully on the box and drive through that heel to stand tall on top.',
-    'Step back down slowly, leading with the same foot, and keep your hips level.',
+    'Step back down slowly, lowering the other foot first and keeping the working foot on the box.',
     'Do every rep on one side, then switch.',
   ],
   // The three ring ladders (#16)
@@ -354,7 +353,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
     "Set the rings low, about a hand's length off the floor. Put a hand on each ring and get into a push-up position with your arms straight.",
     'Keep the rings still and your body in one straight line from head to heels.',
     'Lower your chest between the rings, elbows close to your sides.',
-    'Press back up to straight arms, turning your hands in a little at the top.',
+    'Press back up to straight arms, turning your hands out a little at the top.',
   ],
   'ring-biceps-curl': [
     'Set the rings at about head height. Hold them, walk your feet forward and lean back with your arms straight and your body in one line.',

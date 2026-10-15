@@ -54,4 +54,15 @@ describe('the ladder rungs\' steps (R604)', () => {
       expect([id, /lower[^.]*3 to 5 seconds/i.test(text)]).toEqual([id, true]);
     }
   });
+
+  it('keeps the review fixes: ring turn-out, straight-bar dip, working foot on the box', () => {
+    const text = (id: string) => (RUNG_STEPS[id] ?? []).join(' ');
+    expect(text('ring-push-up')).toMatch(/hands out/);
+    expect(text('ring-push-up')).not.toMatch(/hands in/);
+    expect(text('ring-muscle-up')).toMatch(/rings out/);
+    expect(text('explosive-pull-up-and-dip')).not.toMatch(/parallel/);
+    expect(text('explosive-pull-up-and-dip')).toMatch(/straight bar/);
+    expect(text('box-step-up')).toMatch(/working foot on the box/);
+    expect(text('band-assisted-nordic-curl')).toMatch(/against your chest/);
+  });
 });
