@@ -150,6 +150,50 @@ describe('the warm-up line (R626, ruling R-t2b)', () => {
   });
 });
 
+describe('what the session blocks read of a slot (Task 7b, R639, R-t7b2)', () => {
+  const day = (db: Db, program: string, slug: string) => {
+    insertProgram(db, program);
+    setActiveProgram(db, program, NOW);
+    startWorkoutFromDay(db, `${program}:${slug}`, at(1));
+    return viewOf(db).exercises;
+  };
+
+  it("a metcon carries its structured rule and the program's name for it, and rests none", () => {
+    const db = seededDb();
+    const [, , , metcon, raise] = day(db, 'program-crossfit-foundations', 'a');
+    expect(metcon.program).toMatchObject({
+      metcon: { format: 'AMRAP', workMinutes: 10, elements: ['Goblet squat (metcon)', 'Push-up', 'Run'], capMinutes: null },
+      catalogName: 'Metcon A · AMRAP 10 min: 10 goblet squats, 10 push-ups (scaled), 200 m run',
+      countsTowardVolume: true,
+      restKind: 'none',
+    });
+    expect(raise.program).toMatchObject({ metcon: null, restKind: 'isolation' });
+  });
+
+  it('the first slot rests heavy, a barbell press too, and the technique slot does not count', () => {
+    const db = seededDb();
+    const [snatch, front, rdl, t2b] = day(db, 'program-crossfit-performance', 'wed-olympic-squat');
+    expect(snatch.program).toMatchObject({ countsTowardVolume: false, restKind: 'heavy', note: 'EMOM 10: 2 reps every minute' });
+    expect(front.program?.restKind).toBe('heavy');
+    expect(rdl.program?.restKind).toBe('heavy');
+    expect(t2b.program?.restKind).toBe('isolation');
+  });
+
+  it('events rest heavy, and runs none', () => {
+    const db = seededDb();
+    const events = day(db, 'program-strongman-prep', 'sat-events-b');
+    expect(events.slice(0, 3).map((e) => e.program?.restKind)).toEqual(['heavy', 'heavy', 'heavy']);
+    expect(events[3].program?.restKind).toBe('compound');
+  });
+
+  it('a run day rests none after a run, and the hold after it as isolation', () => {
+    const db = seededDb();
+    const [warm, tempo, plank] = day(db, 'program-hybrid-athlete', 'fri-tempo-run');
+    expect([warm, tempo].map((e) => e.program?.restKind)).toEqual(['none', 'none']);
+    expect(plank.program?.restKind).toBe('isolation');
+  });
+});
+
 describe("the slot's note (R606)", () => {
   it("names the program's exercise first wherever it differs from the library's name", () => {
     const db = seededDb();

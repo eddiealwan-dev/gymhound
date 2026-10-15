@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { BellSound } from '../../domain/types';
 import { isNativeBuild } from '../native/optional';
-import type { RestTimerSurface } from './index';
+import type { RestTimerSurface, WorkCueSurface } from './index';
 import { BELL_SOUNDS, bellChannelId, bellFile, lockScreenSound, QUIET_CHANNEL_ID, REST_CHANNEL_ID } from './lockScreenSound';
 
 /**
@@ -129,4 +129,43 @@ export const expoGoNotification: RestTimerSurface = {
   start: (endsAt, withSound, sound) => inTurn(() => schedule(endsAt, withSound, sound)),
   update: (endsAt, withSound, sound) => inTurn(() => schedule(endsAt, withSound, sound)),
   cancel: () => inTurn(() => Notifications.cancelScheduledNotificationAsync(REST_NOTIFICATION_ID)),
+};
+
+/**
+ * The work clock's cues on the lock screen (Task 7b, R-t7b1): each one its own notification, "Go.", "Easy.", "Hard. 2 of
+ * 6.", "Minute 4.", "Time.", with fixed identifiers, so every one can be cancelled after a reload or a kill. At most
+ * `WORK_CUE_LIMIT` at once; iOS keeps 64 pending for the whole app, and the rest timer takes one.
+ */
+const WORK_CUE_LIMIT = 30;
+const WORK_CUE_IDS = Array.from({ length: WORK_CUE_LIMIT }, (_, i) => `gymhound-work-${i}`);
+
+async function cancelCues(): Promise<void> {
+  await Promise.all(WORK_CUE_IDS.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+}
+
+async function scheduleCues(cues: readonly { at: number; title: string }[], withSound: boolean, sound?: BellSound): Promise<void> {
+  await cancelCues();
+  if (!(await allowed())) return;
+  const ahead = cues.filter((c) => c.at > Date.now()).slice(0, WORK_CUE_LIMIT);
+  if (ahead.length === 0) return;
+  await restChannelsReady;
+  const quiet = onAndroid && !withSound;
+  const chosen = lockScreenSound({ os, withSound, sound, customSounds });
+  for (let i = 0; i < ahead.length; i++) {
+    const { at, title } = ahead[i];
+    await Notifications.scheduleNotificationAsync({
+      identifier: WORK_CUE_IDS[i],
+      content: quiet ? { title, sound: false, vibrate: QUIET_VIBRATION } : { title, sound: chosen.sound },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: at,
+        ...(chosen.channelId !== null ? { channelId: chosen.channelId } : null),
+      },
+    });
+  }
+}
+
+export const workCueNotifications: WorkCueSurface = {
+  schedule: (cues, withSound, sound) => inTurn(() => scheduleCues(cues, withSound, sound)),
+  cancel: () => inTurn(cancelCues),
 };

@@ -59,7 +59,10 @@ const mockSurface = {
   cancel: jest.fn(() => Promise.resolve()),
   ended: jest.fn(() => Promise.resolve()),
 };
-jest.mock('../platform/restTimer', () => ({ getRestTimerSurface: () => mockSurface }));
+jest.mock('../platform/restTimer', () => ({
+  getRestTimerSurface: () => mockSurface,
+  getWorkCueSurface: () => ({ schedule: () => Promise.resolve(), cancel: () => Promise.resolve() }),
+}));
 
 // What VoiceOver is told. Its own module is a thin wrapper over AccessibilityInfo.
 const mockAnnounce = jest.fn((_text: string) => {});

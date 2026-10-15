@@ -1839,6 +1839,8 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
     manualText: null,
     ...over,
   });
+  /** What the session blocks read of a lifting slot (Task 7b): plain set rows, heavy rest. */
+  const SLOT = { metcon: null, catalogName: 'Barbell back squat', countsTowardVolume: true, restKind: 'heavy' as const };
   const squat = (program: WorkoutExerciseView['program']): WorkoutExerciseView => ({
     ...bench([set('s0', 0)]),
     name: 'Barbell back squat',
@@ -1849,7 +1851,7 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
   });
 
   it("reads the rule by its kind, with today's read, then the slot's note muted", () => {
-    const tree = mount(squat({ rule: programRule({ halved: true, missesBefore: 1 }), warmUp: false, note: 'Beginner squat: 5 lb per session, not 10' }));
+    const tree = mount(squat({ ...SLOT, rule: programRule({ halved: true, missesBefore: 1 }), warmUp: false, note: 'Beginner squat: 5 lb per session, not 10' }));
     const shown = shownText(tree);
     const line =
       'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
@@ -1859,11 +1861,11 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
   });
 
   it('shows the warm-up line only on the first slot', () => {
-    const first = shownText(mount(squat({ rule: programRule(), warmUp: true, note: null })));
+    const first = shownText(mount(squat({ ...SLOT, rule: programRule(), warmUp: true, note: null })));
     expect(first).toContain(
       '5 min easy cardio or dynamic prep, then about 40% × 8, 60% × 5, 80% × 3 before work sets. One light feeder set before each later compound.',
     );
-    const later = shownText(mount(squat({ rule: programRule(), warmUp: false, note: null })));
+    const later = shownText(mount(squat({ ...SLOT, rule: programRule(), warmUp: false, note: null })));
     expect(later.filter((s) => s.startsWith('5 min easy cardio'))).toEqual([]);
   });
 
@@ -1877,7 +1879,7 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
     act(() => {
       tree = create(
         <ExerciseBlock
-          {...block(squat({ rule: programRule({ kind: 'ladder', rung: 0, rungs }), warmUp: false, note: null })).props}
+          {...block(squat({ ...SLOT, rule: programRule({ kind: 'ladder', rung: 0, rungs }), warmUp: false, note: null })).props}
           onOpenModify={onOpenModify}
         />,
       );

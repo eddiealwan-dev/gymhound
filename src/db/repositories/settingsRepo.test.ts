@@ -48,6 +48,7 @@ const SPEC_KEYS = [
   'unit',
   'water_goal_ml',
   'weekly_workout_goal',
+  'work_timer',
 ];
 
 const storedKeys = (db: Db) =>
@@ -335,6 +336,29 @@ describe('the water goal (phase 5, R150)', () => {
     expect(getSettings(db).waterGoalMl).toBe(2000);
     setSetting(db, 'waterGoalMl', null);
     expect(getSettings(db).waterGoalMl).toBeNull();
+  });
+});
+
+describe('the work clock (Task 7b)', () => {
+  it('starts with none, and round-trips the stored start and pauses', () => {
+    expect(defaultSettings('us').workTimer).toBeNull();
+    const { db } = createTestDb();
+    ensureSettings(db, 'us');
+    const timer = {
+      workoutId: 'w1',
+      workoutExerciseId: 'we1',
+      plan: { kind: 'amrap' as const, noun: 'AMRAP', steps: [{ kind: 'work' as const, seconds: 600, set: 1 }] },
+      startsAt: 1_010_000,
+      pausedAt: null,
+      pausedMs: 0,
+      released: 0,
+      rang: 0,
+      doneAtS: null,
+    };
+    setSetting(db, 'workTimer', timer);
+    expect(getSettings(db).workTimer).toEqual(timer);
+    setSetting(db, 'workTimer', null);
+    expect(getSettings(db).workTimer).toBeNull();
   });
 });
 

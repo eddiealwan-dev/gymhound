@@ -19,10 +19,11 @@ import {
 } from '../../domain/ruleLine';
 import type { RepSchemeExtra } from '../../domain/labels';
 import { weekInfo as weekInfoFor } from '../../domain/programRules';
-import type { LoggingType, WeightUnit } from '../../domain/types';
+import { restKindOf, type RestKind } from '../../domain/restKind';
+import type { Equipment, LoggingType, Pattern, WeightUnit } from '../../domain/types';
 import { convertIncrement } from '../../domain/units';
 import { programById } from '../../seed/programs.generated';
-import type { LadderRung, Program, ProgramSlot, ProgramWeek, RuleKind, WeekKind } from '../../seed/programTypes';
+import type { LadderRung, MetconRule, Program, ProgramSlot, ProgramWeek, RuleKind, WeekKind } from '../../seed/programTypes';
 import { exercises, routineDays, routineExercises, routines, sets, workoutExercises, workouts } from '../schema';
 import type { Db } from '../types';
 import { carryUnit, changeRung, isBefore, programSlotOf, programState, runNow, slotSessions, type SlotSession } from './programRunRepo';
@@ -138,8 +139,25 @@ export function programRuleOf(
   };
 }
 
-/** A program slot in the session (§18.29): its rule's words, the warm-up line under the day's first slot and its note. */
-export type ProgramSlotView = { rule: ProgramRule; warmUp: boolean; note: string | null };
+/**
+ * A program slot in the session (§18.29): its rule's words, the warm-up line under the day's first slot and its note;
+ * and what its block reads (Task 7b): a metcon's structured rule and the program's name for the slot (R-t7b2), whether
+ * its sets count toward volume (technique sets don't) and the rest after a tick (R639).
+ */
+export type ProgramSlotView = {
+  rule: ProgramRule;
+  warmUp: boolean;
+  note: string | null;
+  metcon: MetconRule | null;
+  catalogName: string;
+  countsTowardVolume: boolean;
+  restKind: RestKind;
+};
+
+/** Whether the slot opens its program day: it rests as a heavy compound (R639). */
+function opensDay(program: Program, slot: ProgramSlot): boolean {
+  return program.days.some((d) => d.slots[0]?.id === slot.id);
+}
 
 /**
  * The program a workout runs, as the top of the session shows it (R616, R617): "Week 3 of 12" and the week's line, or
@@ -167,6 +185,8 @@ export function programPartsOf(
     ruleRung: number | null;
     rule: RuleSnapshot | null;
     loggingType: LoggingType;
+    equipment: Equipment;
+    pattern: Pattern;
   }[],
 ): { workout: ProgramWorkoutView | null; slots: Map<string, ProgramSlotView> } {
   const slots = new Map<string, ProgramSlotView>();
@@ -192,6 +212,18 @@ export function programPartsOf(
       }),
       warmUp: showsWarmUp(program, slot, row.loggingType),
       note: slotNoteText(slot.note, slot.catalogName, slot.ruleKind),
+      metcon: slot.metcon,
+      catalogName: slot.catalogName,
+      countsTowardVolume: slot.countsTowardVolume,
+      restKind: restKindOf({
+        exerciseId: row.exerciseId,
+        ruleKind: row.ruleKind,
+        loggingType: row.loggingType,
+        isMain: slot.isMain,
+        firstOfDay: opensDay(program, slot),
+        equipment: row.equipment,
+        pattern: row.pattern,
+      }),
     });
   }
   const done = runNow(db, program.id)?.done ?? workout.programWeek > program.weeks;
