@@ -65,7 +65,33 @@ const pills = () => tree.root.findAllByType(Button).map((b) => b.props.accessibi
 const pill = (label: string) => tree.root.findAllByType(Button).find((b) => (b.props.accessibilityLabel ?? b.props.label) === label)!;
 const timeBox = () => tree.root.find((n) => n.type === View && n.props.accessibilityRole === 'timer');
 const styleOf = (node: ReactTestInstance) => [node.props.style].flat(Infinity).reduce((all, s) => ({ ...all, ...s }), {});
-const track = () => tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true);
+const track = () => tree.root.find((n) => n.type === View && n.props.accessibilityElementsHidden === true && n.props.testID !== 'work-clock-label');
+
+describe("the work clock's two rows (design gate #10)", () => {
+  /** The row under the label that holds the time and the pills. */
+  const timeRow = () => tree.root.find((n) => n.type === View && n.props.testID === 'work-clock-row');
+
+  it('puts its label on a row of its own across the panel, then the time and the pills on one row that wraps as a unit', () => {
+    for (const timer of [null, started(amrap10)]) {
+      mount(timer === null ? amrap10 : amrap10, timer);
+      const label = tree.root.find((n) => n.type === View && n.props.testID === 'work-clock-label');
+      expect(styleOf(label)).toMatchObject({ width: '100%' });
+      expect(styleOf(timeRow())).toMatchObject({ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' });
+      expect(timeRow().findAllByType(ClockPills)).toHaveLength(1);
+      expect(timeRow().findAll((n) => n.type === View && n.props.accessibilityRole === 'timer')).toHaveLength(1);
+      act(() => tree.unmount());
+    }
+    mount(amrap10, null);
+  });
+
+  it('keeps the long EMOM label off the time row, so the pills never drop because of it', () => {
+    const emom: WorkPlan = { kind: 'emom', noun: 'EMOM', steps: Array.from({ length: 10 }, (_, i) => ({ kind: 'minute' as const, seconds: 60, set: i + 1 })) };
+    mount(emom, pauseTimer(started(emom), T0 + LEAD_IN_MS + 5_000));
+    const rowText = timeRow().findAllByType(Text).map((t) => [t.props.children].flat().join(''));
+    expect(rowText.some((t) => t.startsWith('EMOM'))).toBe(false);
+    expect(shownText()).toContain('EMOM · MINUTE 1 OF 10 · PAUSED');
+  });
+});
 
 describe('the work clock before Start', () => {
   it("is drawn in the rest row's own panel, pills and track, not a copy of them", () => {
@@ -160,10 +186,21 @@ describe('the work clock running (wall clock)', () => {
     expect(pills()).toEqual([]);
   });
 
-  it('holds where Done stopped it, with what to do next', () => {
+  it('holds where Done stopped it, with what to do next and a quiet Reset to undo a mis-tap (design gate #9)', () => {
     mount(fran, stopTimer(started(fran), T0 + LEAD_IN_MS + 462_000));
     expect(shownText()).toContain('Stopped at 7:42. Tick to log it.');
-    expect(pills()).toEqual([]);
+    expect(pills()).toEqual(['Reset the timer']);
+    expect(pill('Reset the timer').props).toMatchObject({ label: 'Reset', variant: 'secondary', size: 'compact' });
+    act(() => pill('Reset the timer').props.onPress());
+    expect(resetWorkClock).toHaveBeenCalledWith('db');
+  });
+
+  it('says it is paused over a muted time (design gate #8)', () => {
+    const paused = pauseTimer(started(amrap10), T0 + LEAD_IN_MS + 60_000);
+    mount(amrap10, paused);
+    expect(shownText()).toContain('AMRAP · PAUSED');
+    const time = tree.root.findAllByType(Text).find((t) => t.props.children === '9:00')!;
+    expect(styleOf(time)).toMatchObject({ color: '#a39d90' });
   });
 
   it('waits between intervals with no easy part until Start', () => {

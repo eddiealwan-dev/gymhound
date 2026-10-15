@@ -95,10 +95,23 @@ describe('clockAt: derived from the stored start, never counted', () => {
     expect(clockAt(t, into(1_200))).toMatchObject({ phase: 'ended' });
   });
 
+  it('says it is paused in its label, so a frozen time never reads as a hung timer (design gate #8)', () => {
+    expect(clockAt(pauseTimer(start(amrap10), into(100)), into(200))).toMatchObject({ phase: 'paused', label: 'AMRAP · PAUSED' });
+    expect(clockAt(pauseTimer(start(emom3), into(30)), into(40))).toMatchObject({ label: 'EMOM · MINUTE 1 OF 3 · PAUSED' });
+    expect(clockAt(start(amrap10), into(100))).toMatchObject({ phase: 'running', label: 'AMRAP' });
+  });
+
+  it('says where an EMOM or intervals stopped, not a time that means nothing there (design gate #9)', () => {
+    expect(clockAt(stopTimer(start(emom3), into(18)), into(30))).toMatchObject({ phase: 'ended', endLine: 'Stopped in minute 1 of 3.' });
+    expect(clockAt(stopTimer(start(emom3), into(75)), into(90))).toMatchObject({ endLine: 'Stopped in minute 2 of 3.' });
+    expect(clockAt(stopTimer(start(intervals), into(90)), into(100))).toMatchObject({ endLine: 'Stopped in set 1 of 2. Tick each set you ran.' });
+    expect(clockAt(stopTimer(start(intervals), into(200)), into(210))).toMatchObject({ endLine: 'Stopped in set 1 of 2. Tick each set you ran.' });
+  });
+
   it('pauses in the lead-in too', () => {
     let t = start(amrap10);
     t = pauseTimer(t, T0 + 4_000);
-    expect(clockAt(t, T0 + 60_000)).toMatchObject({ phase: 'paused', label: 'GET READY', shown: 6 });
+    expect(clockAt(t, T0 + 60_000)).toMatchObject({ phase: 'paused', label: 'GET READY · PAUSED', shown: 6 });
     t = resumeTimer(t, T0 + 60_000);
     expect(clockAt(t, T0 + 66_000)).toMatchObject({ phase: 'running', shown: 600 });
   });
