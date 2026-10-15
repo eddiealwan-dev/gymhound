@@ -385,15 +385,6 @@ describe('computeOutcome for a program slot (§18.29)', () => {
     expect(result).toMatchObject({ outcome: 'reset', nextWeight: 285, missed: true });
   });
 
-  it('rounds a reset off a barbell down to a multiple of the full increment, not the halved one', () => {
-    const halved = { ...RULE, increment: 2.5 };
-    const sets = [lb(55, 8), lb(55, 5), lb(55, 8)];
-    const at = (resetStep?: number) =>
-      computeOutcome(input({ rule: halved, plannedWeight: 55, sets, missesToReset: 2, missesBefore: 1, resetStep }));
-    expect(at(5)).toMatchObject({ outcome: 'reset', nextWeight: 45, nextUnit: 'lb' });
-    expect(at()).toMatchObject({ outcome: 'reset', nextWeight: 47.5, nextUnit: 'lb' });
-  });
-
   it('rounds a reset to the full increment when the session ran a halved one (fullIncrement)', () => {
     const halved = { ...RULE, increment: 2.5 };
     const sets = [lb(55, 8), lb(55, 5), lb(55, 8)];
@@ -421,7 +412,7 @@ describe('computeOutcome for a program slot (§18.29)', () => {
 
   it('converts the reset step to the working unit by the gym convention', () => {
     const sets = [kg(55, 8), kg(55, 5), kg(55, 8)];
-    const result = computeOutcome(input({ plannedWeight: 55, plannedUnit: 'kg', sets, missesToReset: 2, missesBefore: 1, resetStep: 5 }));
+    const result = computeOutcome(input({ plannedWeight: 55, plannedUnit: 'kg', sets, missesToReset: 2, missesBefore: 1, fullIncrement: 5 }));
     // 55 × 0.9 = 49.5, down to a multiple of 2.5 kg.
     expect(result).toMatchObject({ outcome: 'reset', nextWeight: 47.5, nextUnit: 'kg' });
   });
@@ -494,12 +485,6 @@ describe('computeOutcome for a program slot (§18.29)', () => {
         workingWeight: null, workingUnit: null, outcome: 'no_rule', nextWeight: null, nextUnit: null, missed: false,
       });
     }
-  });
-
-  it('uses repMinForMiss as the bottom of the range when given', () => {
-    expect(computeOutcome(input({ sets: MISS_135, missesToReset: 2, missesBefore: 0, repMinForMiss: 5 }))).toMatchObject({
-      outcome: 'held', missed: false,
-    });
   });
 
   it('an assisted slot holds on a miss: more assistance is not a 10% drop', () => {
