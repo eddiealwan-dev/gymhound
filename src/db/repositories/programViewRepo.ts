@@ -309,7 +309,7 @@ function roundsText(rounds: number, extraReps: number): string {
   return extraReps > 0 ? `${r} + ${extraReps} ${extraReps === 1 ? 'rep' : 'reps'}` : r;
 }
 
-/** What the finish summary says after a metcon not yet beaten twice: its rule, in the lift lines' plain words (gate #6). */
+/** What the finish summary says under a metcon not yet beaten twice: its rule, in the lift lines' plain words (gate #6). */
 const METCON_RULE = 'Beat it twice in a row to go heavier.';
 
 /** One line of the finish summary, with a muted why under it when it has one. */
@@ -386,8 +386,8 @@ export function programFinishLines(
       if (now && (loggingType !== 'for_time' || now.seconds !== null)) {
         const score = loggingType === 'for_time' ? formatRest(now.seconds ?? 0) : roundsText(now.rounds, now.extraReps);
         const at = now.weight !== null && now.weightUnit !== null ? ` at ${formatWeight(now.weight, now.weightUnit)}` : '';
-        const line = `${metconShortName(name)} — ${score}${at}.`;
-        push(beat ? line : `${line} ${METCON_RULE}`, beat ? BEAT_TWICE_WHY : null);
+        // Like a lift's line, no full stop; its rule, a sentence, is the why under it (the walkthrough).
+        push(`${metconShortName(name)} — ${score}${at}`, beat ? BEAT_TWICE_WHY : METCON_RULE);
       }
       continue;
     }
@@ -398,7 +398,7 @@ export function programFinishLines(
       const target = runTarget(slot.weekly, { sets: slot.sets, seconds: slot.repMin }, nextWeek, share);
       const shown = slotName(slot.catalogName, slot.note).name;
       const runName = shown !== slot.catalogName ? shown : name;
-      push(`${runName} — next time ${slot.weekly.kind === 'seconds' ? formatRest(target.seconds) : `${target.sets} × ${formatRest(target.seconds)}`}.`);
+      push(`${runName} — next time ${slot.weekly.kind === 'seconds' ? formatRest(target.seconds) : `${target.sets} × ${formatRest(target.seconds)}`}`);
       continue;
     }
     plain();

@@ -25,8 +25,10 @@ const SHARE_FAILED = "Couldn't make the image. Try again.";
  * failure, or a share sheet that has gone by the tap, shows a muted line under the row.
  */
 export function FinishPrs({ summary, firstWorkout = false }: { summary: FinishSummary; firstWorkout?: boolean }): ReactElement | null {
-  if (summary.prs.length === 0) return firstWorkout ? <FirstWorkoutLine afterNext={summary.next.length > 0} /> : null;
-  return <PrList prs={summary.prs} afterNext={summary.next.length > 0} />;
+  // After any line above it, a lift's or a metcon's or a run's (which has no next weight), its hairline sits 16pt below.
+  const afterNext = (summary.lines ?? summary.next).length > 0;
+  if (summary.prs.length === 0) return firstWorkout ? <FirstWorkoutLine afterNext={afterNext} /> : null;
+  return <PrList prs={summary.prs} afterNext={afterNext} />;
 }
 
 /** On the lifter's first finished workout, which never sets a personal best (R103): when they start (R405). */

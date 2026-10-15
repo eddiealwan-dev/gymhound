@@ -316,7 +316,7 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     expect(linesOf(db, id)[0].text).toMatch(/ — holds at 100 lb · Deload week$/);
   });
 
-  it('a metcon not yet beaten twice keeps its line, with no why (R622)', () => {
+  it('a metcon not yet beaten twice keeps its line, with its rule as the why (R622)', () => {
     const db = seededDb();
     const program = insertProgram(db, 'program-crossfit-foundations');
     setActiveProgram(db, program.id, NOW);
@@ -324,7 +324,8 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     const metcon = dayA.slots.find((s) => s.ruleKind === 'metcon')!;
     const id = runSession(db, `${program.id}:${dayA.slug}`, at(1), { [metcon.id]: { reps: [5] } });
     // Its outcome and its rule, in the lift lines' style (design gate #6).
-    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: 'AMRAP 10 — 5 rounds. Beat it twice in a row to go heavier.', why: null });
+    // Every line ends as a lift's does, with no full stop; the rule is the muted sentence under it (walkthrough).
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: 'AMRAP 10 — 5 rounds', why: 'Beat it twice in a row to go heavier.' });
   });
 
   it('a metcon beaten twice in a row says so (R622)', () => {
@@ -342,7 +343,7 @@ describe('the finish lines of a program workout (R613, R617, R618, R622)', () =>
     });
     expect(linesOf(db, last)).toContainEqual({
       workoutExerciseId: expect.any(String),
-      text: 'AMRAP 10 — 7 rounds.',
+      text: 'AMRAP 10 — 7 rounds',
       why: 'You beat your score twice in a row. Go heavier or take the next scaling step.',
     });
   });
@@ -358,7 +359,7 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
     const fran = tue.slots.find((s) => s.ruleKind === 'metcon')!;
     const id = runSession(db, `${program.id}:${tue.slug}`, at(1), { [fran.id]: { seconds: [13], weight: 95 } });
-    expect(linesOf(db, id).map((l) => l.text)).toContain('21-15-9 for time — 0:13 at 95 lb. Beat it twice in a row to go heavier.');
+    expect(linesOf(db, id)).toContainEqual({ workoutExerciseId: expect.any(String), text: '21-15-9 for time — 0:13 at 95 lb', why: 'Beat it twice in a row to go heavier.' });
   });
 
   it('an easy run says next week\'s time, and intervals next week\'s sets', () => {
@@ -368,12 +369,12 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
     const tue = program.days.find((d) => d.name.startsWith('Tue'))!;
     const run = tue.slots.find((s) => s.exerciseId === 'easy-run')!;
     const tueId = runSession(db, `${program.id}:${tue.slug}`, at(1), { [run.id]: { seconds: [1500] } });
-    expect(linesOf(db, tueId).map((l) => l.text)).toContain('Easy run — next time 27:00.');
+    expect(linesOf(db, tueId).map((l) => l.text)).toContain('Easy run — next time 27:00');
     const wed = program.days.find((d) => d.name.startsWith('Wed'))!;
     const [warm, intervals, cool] = wed.slots;
     const wedId = runSession(db, `${program.id}:${wed.slug}`, at(2), { [warm.id]: { seconds: [600] }, [intervals.id]: { seconds: [180, 180, 180, 180, 180, 180] }, [cool.id]: { seconds: [600] } });
     const texts = linesOf(db, wedId).map((l) => l.text);
-    expect(texts).toContain('Interval run — next time 7 × 3:00.');
+    expect(texts).toContain('Interval run — next time 7 × 3:00');
     // The warm-up and cool-down jogs stay the same every week: nothing to say.
     expect(texts.some((t) => t.startsWith('Warm-up run') || t.startsWith('Cool-down run'))).toBe(false);
   });
@@ -393,7 +394,7 @@ describe('the finish lines of the new blocks (design gate #6)', () => {
       programRuleSentence({ program: rule, rule: { setCount: 1, repMin: 1740, repMax: 1740, increment: 0, incrementUnit: 'lb' }, loggingType: 'timed', unit: 'lb', last: null }),
     ).toBe('Adds 2:00 a week, up to 40:00. Next week is lighter: 18:36.');
     finishWorkout(db, id, at(30) + HOUR);
-    expect(linesOf(db, id).map((l) => l.text)).toContain('Easy run — next time 18:36.');
+    expect(linesOf(db, id).map((l) => l.text)).toContain('Easy run — next time 18:36');
   });
 
   it('leaves technique sets out of the VOLUME, as they are out of weekly volume (walkthrough)', () => {
