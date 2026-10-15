@@ -264,6 +264,8 @@ export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions)
     case 'event':
       return rows.map((row) => ({
         ...row,
+        // The optional time hints no last time: a tick saves only a typed time, so the row shows what it records (R48, R-f4).
+        placeholders: { ...row.placeholders, durationS: null },
         ...eventPrevious(row, o.unit),
         optional: ['durationS'],
         tickLabel: o.eventWord === 'push' ? `Set ${row.label} pushed without a stop` : `Set ${row.label} carried drop-free`,
