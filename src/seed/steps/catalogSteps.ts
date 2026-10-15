@@ -1,7 +1,7 @@
 // The form demo's steps for the programs' 48 new catalog exercises (spec §18.29, R604, Appendix A): 2–4 plain steps
 // each, in GymHound's voice. Keyed by exercise id (CATALOG_NEW_IDS in src/seed/newExerciseData.ts). Metcon steps give
 // the format, the elements with their reps and loads, how to score and the cap; mobility steps say to stop short of
-// pain; the moving events carry the program notes' safety line (stop at any back rounding beyond your normal).
+// pain. The farmer's and sandbag carries keep the back-rounding line the Atlas stone row has in the program notes.
 
 export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
   // Kettlebell (#8)
@@ -13,7 +13,7 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
   ],
   'kettlebell-swing': [
     'Stand with your feet a little wider than your shoulders and the kettlebell on the floor just in front of you.',
-    'Hinge at the hips, grab the handle, hike the bell back between your legs, then drive your hips forward to swing it to chest height.',
+    'Hinge at the hips, grab the handle, hike the bell back between your legs, then drive your hips forward to swing it from chest to eye level.',
     'Keep your arms loose and let the hips do the work. Your back stays flat the whole time.',
     'Let the bell fall back and hike it into the next rep.',
   ],
@@ -24,8 +24,8 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Lower the bells slowly and keep the hinge steady between reps.',
   ],
   'armor-building-complex': [
-    'Hold a kettlebell in each hand. One round is 2 cleans, 1 press and 3 front squats, with no rest between the moves.',
-    'Clean both bells to your shoulders twice, press them overhead once, then bring them back to the rack.',
+    'Hold a kettlebell in each hand. One round is 2 cleans, 1 press and 3 front squats, with no rest between the moves. One set is 2 rounds, started on the minute.',
+    'Clean both bells to your shoulders, lower them to the hang, then clean them again. Press them overhead once, then bring them back to the rack.',
     'From the rack, squat down and stand up 3 times with your elbows tight to your ribs and your chest up.',
     'Put the bells down only at the end of the set. Log the rounds you finish as the reps.',
   ],
@@ -45,7 +45,7 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
   'paused-back-squat': [
     'Set the bar on your upper back, brace your core and step out with your feet about shoulder-width apart.',
     'Squat down under control until your thighs are at least parallel to the floor.',
-    'Hold the bottom position for a full 1 to 2 seconds, staying tight with your chest up.',
+    'Hold the bottom position for a full 2 seconds, staying tight with your chest up.',
     'Drive up through your whole foot without letting your hips shoot up first.',
   ],
   'heels-elevated-goblet-squat': [
@@ -146,15 +146,15 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Do the reps in one direction, reverse, then switch legs.',
   ],
   'jefferson-curl': [
-    'Stand on a low box or plate holding a light dumbbell in front of your thighs, legs straight and knees soft.',
-    'Tuck your chin and roll down slowly, one section of your spine at a time, until the weight hangs below your feet.',
-    'Use a light weight and move slowly. Stop short of pain, and come up before your back feels pinched.',
+    'Stand on a low box or plate, legs straight and knees soft. Start with just your bodyweight, then hold a light dumbbell in front of your thighs once the movement feels easy.',
+    'Tuck your chin and roll down slowly, one section of your spine at a time, until your hands hang below your feet.',
+    'Move slowly. Stop short of pain, and come up before your back feels pinched.',
     'Roll back up in the reverse order, head last.',
   ],
   'dumbbell-rdl-stretch-hold': [
     'Stand holding a dumbbell in each hand in front of your thighs, feet hip-width apart.',
     'Hinge at the hips and slide the weights down your legs, keeping your back flat and knees softly bent.',
-    'Stop where you feel a strong stretch in the back of your legs and stop short of pain.',
+    'Stop where you feel a firm stretch in the back of your legs and stop short of pain.',
     'Hold the bottom for the time, breathing slowly, then stand tall.',
   ],
   'pigeon-stretch': [
@@ -177,16 +177,16 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Lower slowly. Do every rep on one side, then switch.',
   ],
   'freestanding-handstand-practice': [
-    'Warm up your wrists, then kick up into a handstand away from the wall, with a clear patch of floor around you.',
-    'Spread your fingers, keep your arms locked and stack your shoulders, hips and feet in a line.',
-    'Press through your fingertips if you lean forward and the heels of your hands if you lean back.',
-    'Hold for the time, then come down under control. Learn to bail out by cartwheeling or stepping out first.',
+    'Clear a patch of floor and learn to bail out first, by cartwheeling or stepping out of the handstand, before you rely on balance.',
+    'Warm up your wrists, then kick up into a handstand away from the wall.',
+    'Spread your fingers, keep your arms locked and stack your shoulders, hips and feet in a line. Press through your fingertips if you lean forward and the heels of your hands if you lean back.',
+    'Hold for the time, then come down under control.',
   ],
   // Strongman's moving events (#19, R607)
   'yoke-carry': [
     'Set the yoke at the height of your upper back, step under it and brace your core, then drive up to lift it.',
     'Take quick, short steps for the distance, keeping your torso tall and your eyes forward.',
-    'Stop and set it down at any back rounding beyond your normal, or if you lose control of the yoke.',
+    'Keep your ribs down and your brace tight the whole way. Set it down if you lose control of the yoke.',
     'Lower the yoke to the supports with control and rest before the next run.',
   ],
   'farmers-carry-distance': [
@@ -202,9 +202,9 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Lower it to the floor with a flat back before the next run.',
   ],
   'sled-push-distance': [
-    'Load the sled and grip the handles with your arms straight and your body leaning into it at about 45 degrees.',
-    'Drive through the floor with long, powerful steps and keep your hips low.',
-    'Push for the set distance at a steady pace, and stop if your back starts to round beyond your normal.',
+    'Load the sled and grip the handles with your arms straight, leaning into it.',
+    'Keep a straight line from head to heels and drive through the floor.',
+    'Take long, strong steps and keep your hips low for the set distance.',
     'Stop at the line and rest before the next run.',
   ],
   // A strength slot in #18 (F2)
@@ -252,7 +252,7 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Log each hard row as a set with its time.',
   ],
   'incline-treadmill-walk': [
-    'Set the treadmill to a steep incline and a brisk walking speed.',
+    'Set the treadmill to a hard but steady incline and a brisk walking speed.',
     'Walk upright with your arms swinging and without holding the rails.',
     'Keep a steady pace for the whole time, breathing deeply.',
     'Log the time you walk.',
@@ -262,42 +262,42 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'This is an AMRAP for 10 minutes. Each round is 10 goblet squats, 10 push-ups (scaled as needed) and a 200 m run.',
     'Start the clock and go through the round in order, resting only when you need to.',
     'Pace the first rounds so you can hold them. Hold a dumbbell or kettlebell at your chest for the squats.',
-    'Your score is the number of complete rounds. Add the extra reps from the unfinished round as a note.',
+    'Your score is the rounds you finish, plus the extra reps from the round you did not finish.',
   ],
   'metcon-3-rounds-row-thruster-ring-row': [
     '3 rounds for time. Each round is a 200 m row, 10 thrusters and 10 ring rows.',
     'Start the clock and do the round in order. Use an empty bar or light dumbbells for the thrusters.',
-    'Stop the clock at the end of round 3. The time cap is 12 minutes.',
-    'Your score is the time. If you reach the cap, score the work you finished.',
+    'Stop the clock at the end of round 3. The time cap is 12 minutes. If the clock reaches the cap, stop and log the cap as your time.',
+    'Your score is the time you finish in.',
   ],
   'metcon-amrap-15-cindy-scaled': [
     'This is an AMRAP for 15 minutes. Each round is 5 pull-ups (scaled as needed), 10 push-ups and 15 air squats.',
     'Use ring rows if you cannot do pull-ups yet. Go through the round in order at a steady pace.',
     'Break the reps into small sets before you need to.',
-    'Your score is the number of complete rounds. Add the extra reps from the unfinished round as a note.',
+    'Your score is the rounds you finish, plus the extra reps from the round you did not finish.',
   ],
   'metcon-amrap-12-wallball-t2b-row': [
     'This is an AMRAP for 12 minutes. Each round is 10 wall balls, 10 toes-to-bar (scaled as needed) and a 12 cal row.',
     'Start the clock and go in order. Squat to depth and throw the wall ball to the target line.',
     'Scale the toes-to-bar down to knee raises if you need to.',
-    'Your score is the number of complete rounds. Add the extra reps from the unfinished round as a note.',
+    'Your score is the rounds you finish, plus the extra reps from the round you did not finish.',
   ],
   'metcon-21-15-9-thruster-pullup': [
     '21-15-9 for time. Do 21 thrusters then 21 pull-ups, then 15 and 15, then 9 and 9.',
-    'The thruster load is 95 lb, or 65 lb for the lighter standard. Scale it so you can keep the reps unbroken in rounds 2 and 3.',
-    'Scale the pull-ups as needed. Stop the clock after the last pull-up. The time cap is 8 minutes.',
-    'Your score is the time. If you reach the cap, score the work you finished.',
+    'The thruster load is 95 lb, or 65 lb for the lighter bar. Scale it so you can keep the reps unbroken in rounds 2 and 3.',
+    'Scale the pull-ups as needed. Stop the clock after the last pull-up. The time cap is 8 minutes. If the clock reaches the cap, stop and log the cap as your time.',
+    'Your score is the time you finish in.',
   ],
   'metcon-amrap-25-run-wallball-burpee': [
     'This is an AMRAP for 25 minutes. Each round is a 400 m run, 15 wall balls and 10 burpees.',
     'Hold the same round time all the way through. Start a little slower than feels necessary.',
     'Squat to depth on every wall ball and touch your chest to the floor on every burpee.',
-    'Your score is the number of complete rounds. Add the extra reps from the unfinished round as a note.',
+    'Your score is the rounds you finish, plus the extra reps from the round you did not finish.',
   ],
   'metcon-5-rounds-db-snatch-c2b': [
-    '5 rounds for time. Each round is 12 dumbbell snatches (alternating arms) and 10 chest-to-bar pull-ups.',
+    '5 rounds for time. Each round is 12 dumbbell snatches (alternating arms, 12 in all, 6 each arm) and 10 chest-to-bar pull-ups.',
     'Start the clock and do the round in order. Switch arms every rep on the snatch.',
-    'Scale the pull-ups to chin-over-bar or ring rows if you need to. Stop the clock at the end of round 5. The time cap is 15 minutes.',
-    'Your score is the time. If you reach the cap, score the work you finished.',
+    'Scale the pull-ups to chin-over-bar or ring rows if you need to. Stop the clock at the end of round 5. The time cap is 15 minutes. If the clock reaches the cap, stop and log the cap as your time.',
+    'Your score is the time you finish in.',
   ],
 };

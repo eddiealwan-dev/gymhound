@@ -109,8 +109,42 @@ describe('catalog steps', () => {
     for (const [id, re] of Object.entries(effort)) expect([id, re.test(stepsOf(id).join(' '))]).toEqual([id, true]);
   });
 
-  it('strongman moving events carry a stop-if-your-back-rounds safety line', () => {
-    for (const id of CARRIES) expect([id, /back/i.test(stepsOf(id).join(' ')) && /(stop|set it down|put it down)/i.test(stepsOf(id).join(' '))]).toEqual([id, true]);
+  it('the carries and the yoke and sled keep their own safety cues', () => {
+    for (const id of ['farmers-carry-distance', 'sandbag-carry']) {
+      expect([id, /stop and set (it|the handles) down at any back rounding beyond your normal/i.test(stepsOf(id).join(' '))]).toEqual([id, true]);
+    }
+    expect(stepsOf('yoke-carry').join(' ')).toMatch(/keep your ribs down and your brace tight/i);
+    expect(stepsOf('sled-push-distance').join(' ')).toMatch(/keep a straight line from head to heels/i);
+    expect(CARRIES).toHaveLength(4);
+  });
+
+  it('AMRAP metcons score the rounds plus the extra reps, never a note', () => {
+    for (const id of METCONS.filter((m) => m.startsWith('metcon-amrap'))) {
+      const text = stepsOf(id).join(' ');
+      expect(text).toContain('Your score is the rounds you finish, plus the extra reps from the round you did not finish.');
+      expect(text).not.toMatch(/as a note/i);
+    }
+  });
+
+  it('for-time metcons log the cap as the time when the clock reaches it', () => {
+    for (const id of METCONS.filter((m) => !m.startsWith('metcon-amrap'))) {
+      expect([id, /stop and log the cap as your time/i.test(stepsOf(id).join(' '))]).toEqual([id, true]);
+    }
+  });
+
+  it('cue fixes from review', () => {
+    expect(stepsOf('paused-back-squat').join(' ')).toMatch(/full 2 seconds/);
+    expect(stepsOf('jefferson-curl').join(' ')).toMatch(/bodyweight/i);
+    expect(stepsOf('dumbbell-rdl-stretch-hold').join(' ')).toMatch(/firm stretch/);
+    expect(stepsOf('kettlebell-swing').join(' ')).toMatch(/chest to eye level/);
+    expect(stepsOf('incline-treadmill-walk').join(' ')).toMatch(/hard but steady incline/);
+    expect(stepsOf('freestanding-handstand-practice')[0]).toMatch(/bail out/i);
+    expect(stepsOf('metcon-21-15-9-thruster-pullup').join(' ')).toMatch(/65 lb for the lighter bar/);
+    expect(stepsOf('metcon-5-rounds-db-snatch-c2b').join(' ')).toMatch(/12 in all, 6 each arm/);
+    const armor = stepsOf('armor-building-complex').join(' ');
+    expect(armor).toMatch(/hang/);
+    expect(armor).toMatch(/on the minute/);
+    expect(armor).toMatch(/one set is 2 rounds/i);
   });
 
   it('names no exercise that is not in the registry', () => {
