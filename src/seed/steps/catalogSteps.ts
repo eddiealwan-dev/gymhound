@@ -204,7 +204,7 @@ export const CATALOG_STEPS: Readonly<Record<string, readonly string[]>> = {
   'sled-push-distance': [
     'Load the sled and grip the handles with your arms straight, leaning into it.',
     'Keep a straight line from head to heels and drive through the floor.',
-    'Take long, strong steps and keep your hips low for the set distance.',
+    'Take short, driving steps and keep your hips low for the set distance.',
     'Stop at the line and rest before the next run.',
   ],
   // A strength slot in #18 (F2)

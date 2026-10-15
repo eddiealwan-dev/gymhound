@@ -115,6 +115,8 @@ describe('catalog steps', () => {
     }
     expect(stepsOf('yoke-carry').join(' ')).toMatch(/keep your ribs down and your brace tight/i);
     expect(stepsOf('sled-push-distance').join(' ')).toMatch(/keep a straight line from head to heels/i);
+    expect(stepsOf('sled-push-distance').join(' ')).toMatch(/short, driving steps/);
+    expect(stepsOf('sled-push-distance').join(' ')).not.toMatch(/long/i);
     expect(CARRIES).toHaveLength(4);
   });
 
