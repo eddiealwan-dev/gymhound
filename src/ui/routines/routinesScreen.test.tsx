@@ -182,12 +182,29 @@ describe("Routines: a program's row (R633)", () => {
     expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 46, height: 46 });
     const name = row.findAll((n) => n.type === Text && n.props.children === 'Barbell Foundations')[0];
     expect(StyleSheet.flatten(name.props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16 });
-    // No-break spaces inside each part, so a "·" never ends a line (design gate #1).
-    const line = row.findAll((n) => n.type === Text && n.props.children === '3 days a week · 12 weeks · Beginner')[0];
+    // A no-break space only between a number and its word and before each "·", so a "·" never starts or ends a line
+    // and the line wraps between words, never inside one, at large text (design gate #1, ruling R-g6).
+    const line = row.findAll((n) => n.type === Text && n.props.children === '3\u00a0days a week\u00a0· 12\u00a0weeks\u00a0· Beginner')[0];
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontSize: 14, color: '#a39d90' });
     expect(buttons(tree, 'Set active')).toHaveLength(0);
     // A program with no picture yet has none, and its row closes up.
     expect(rowTarget(tree, 'Dumbbell Full Body').findAllByType(Image)).toHaveLength(0);
+  });
+
+  it('joins no more than a number and its word, and each "·" to the word before it, for every program (ruling R-g6)', () => {
+    mockPro = false;
+    const tree = mount();
+    for (const r of TWENTY) {
+      const column = rowTarget(tree, r.name).findAll((n) => n.type === View && n.props.testID === 'program-row-text')[0];
+      const caption = column.findAll((n) => n.type === Text && typeof n.props.children === 'string' && n.props.children.includes('·'))[0];
+      const text: string = caption.props.children;
+      // Ordinary spaces everywhere else, so the line can wrap between words.
+      for (const run of text.split(' ')) {
+        const bare = run.replace(/\u00a0·$/, '');
+        expect(bare).toMatch(/^(\d+\u00a0\S+|[^\s\u00a0]+)$/);
+      }
+      expect(text).not.toMatch(/(^|[^\u00a0])·/);
+    }
   });
 
   it('a name breaks only after its slash (§18.24)', () => {
@@ -226,7 +243,7 @@ describe('Routines: a Pro program on free (R525)', () => {
     const tree = mount();
     const row = rowTarget(tree, 'Advanced Upper/Lower DUP');
     expect(row.props.accessibilityLabel).toBe('Advanced Upper/Lower DUP, 4 days a week · 6 weeks · Advanced, part of GymHound Pro');
-    const line = row.findAll((n) => n.type === Text && n.props.children === '4 days a week · 6 weeks · Advanced · Pro')[0];
+    const line = row.findAll((n) => n.type === Text && n.props.children === '4\u00a0days a week\u00a0· 6\u00a0weeks\u00a0· Advanced\u00a0· Pro')[0];
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontSize: 14, color: '#a39d90' });
     // A state is a word, never a pill: nothing in the row has an edge but the picture's.
     const edged = row.findAll((n) => n.type === View && (StyleSheet.flatten(n.props.style)?.borderWidth ?? 0) > 0);
@@ -241,7 +258,7 @@ describe('Routines: a Pro program on free (R525)', () => {
 
   it('with Pro the line does not say Pro', () => {
     const tree = mount();
-    expect(rowTarget(tree, 'Advanced Upper/Lower DUP').findAll((n) => n.type === Text && n.props.children === '4 days a week · 6 weeks · Advanced')).toHaveLength(1);
+    expect(rowTarget(tree, 'Advanced Upper/Lower DUP').findAll((n) => n.type === Text && n.props.children === '4\u00a0days a week\u00a0· 6\u00a0weeks\u00a0· Advanced')).toHaveLength(1);
   });
 
   it('gives the name and line the whole width between the picture and the chevron, at every size', () => {

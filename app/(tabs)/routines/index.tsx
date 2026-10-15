@@ -37,8 +37,11 @@ const PICK_ONE = 'Set one active and Train lines up its next workout.';
 /** Over New routine while you have none of your own (R401). */
 const YOURS_EMPTY = 'Routines you make or duplicate show here.';
 
-/** A row's line with no-break spaces inside each part, so a "·" never ends a line ("3 days a week · 12 weeks"). */
-const unbroken = (line: string) => line.split(' · ').map((part) => part.replace(/ /g, ' ')).join(' · ');
+/**
+ * A row's line with a no-break space only between a number and its word ("3 days", "12 weeks") and before each "·", so
+ * a "·" never starts or ends a line and the rest wraps between words, never inside one, at large text (ruling R-g6).
+ */
+const unbroken = (line: string) => line.replace(/(\d) (?=\S)/g, '$1\u00a0').replace(/ · /g, '\u00a0· ');
 
 /**
  * One of the twenty programs (R633): its 48pt picture, its name (a line may break after a slash) and "3 days a week ·
