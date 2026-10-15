@@ -215,8 +215,16 @@ describe('Stats: Body (R114)', () => {
     expect(chartPoints(tree)[0].value).toBeCloseTo(100.017, 2);
   });
 
-  it('shows a measurement in the unit it was logged in', () => {
+  it('shows a measurement in the chosen length unit, converted to 0.1 (a lb lifter gets inches until they choose)', () => {
     addBodyEntry(mockDb, 'waist', 86.4, 'cm', NOW - DAY);
+    expect(shownText(mount(<Stats />))).toContain('34 in · Oct 10');
+    setSetting(mockDb, 'lengthUnit', 'cm');
+    expect(shownText(mount(<Stats />))).toContain('86.4 cm · Oct 10');
+  });
+
+  it('shows a measurement in the chosen length unit whatever the weight unit', () => {
+    addBodyEntry(mockDb, 'waist', 34, 'in', NOW - DAY);
+    setSetting(mockDb, 'lengthUnit', 'cm');
     expect(shownText(mount(<Stats />))).toContain('86.4 cm · Oct 10');
   });
 
@@ -229,7 +237,7 @@ describe('Stats: Body (R114)', () => {
     expect(t).toContain('33.5 in · Oct 10');
     expect(t.filter((s) => s === 'No entries')).toHaveLength(6);
 
-    press(tree, 'Waist, 33.5 in, Oct 10');
+    press(tree, 'Waist, 33.5 inches, Oct 10');
     expect(router.push).toHaveBeenCalledWith('/body/waist');
     press(tree, 'Body fat, No entries');
     expect(router.push).toHaveBeenCalledWith('/body/body_fat');
@@ -292,7 +300,12 @@ describe('Stats: Body (R114)', () => {
 });
 
 describe('a body detail (/body/[kind], R114, R115)', () => {
-  it('shows the label, the entry row, the chart and every entry newest first, each in its own unit', () => {
+  const rowLabels = (tree: ReactTestRenderer) =>
+    tree.root
+      .findAll((n) => typeof n.props.onPress === 'function' && /^Oct \d+, /.test(n.props.accessibilityLabel ?? ''))
+      .map((n) => n.props.accessibilityLabel as string);
+
+  it('shows the label, the entry row, the chart and every entry newest first, all in the chosen length unit', () => {
     mockKind = 'waist';
     addBodyEntry(mockDb, 'waist', 86.4, 'cm', NOW - 2 * DAY);
     addBodyEntry(mockDb, 'waist', 34, 'in', NOW - DAY);
@@ -301,14 +314,55 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     const t = shownText(tree);
     expect(t).toContain('Waist');
     expect(t).toContain('Stats');
-    expect(field(tree, 'Waist, in')).toBeDefined();
-    const rows = ['Oct 11, 33.8 in', 'Oct 10, 34 in', 'Oct 9, 86.4 cm'];
-    const found = tree.root
-      .findAll((n) => typeof n.props.onPress === 'function' && rows.includes(n.props.accessibilityLabel))
-      .map((n) => n.props.accessibilityLabel);
-    expect(found).toEqual(rows);
+    expect(field(tree, 'Waist, inches')).toBeDefined();
+    expect(rowLabels(tree)).toEqual(['Oct 11, 33.8 inches', 'Oct 10, 34 inches', 'Oct 9, 34 inches']);
     expect(chartPoints(tree).map((p) => p.localDate)).toEqual(['2026-10-09', '2026-10-10', '2026-10-11']);
     expect(chartPoints(tree)[0].value).toBeCloseTo(34.016, 2);
+    expect(tree.root.findByType(LineChart).props.accessibilityLabel).toMatch(/34 in/);
+  });
+
+  it('shows the same history in centimetres once the lifter chooses cm, and logs in cm', () => {
+    mockKind = 'waist';
+    setSetting(mockDb, 'lengthUnit', 'cm');
+    addBodyEntry(mockDb, 'waist', 86.4, 'cm', NOW - 2 * DAY);
+    addBodyEntry(mockDb, 'waist', 34, 'in', NOW - DAY);
+    const tree = mount(<BodyDetail />);
+    expect(rowLabels(tree)).toEqual(['Oct 10, 86.4 centimetres', 'Oct 9, 86.4 centimetres']);
+    expect(chartPoints(tree)[0].value).toBe(86.4);
+    expect(chartPoints(tree)[1].value).toBeCloseTo(86.36, 5);
+
+    type(tree, 'Waist, centimetres', '85');
+    press(tree, 'Log');
+    expect(listBodyEntries(mockDb, 'waist')[0]).toMatchObject({ value: 85, unit: 'cm' });
+    expect(rowLabels(tree)[0]).toBe('Oct 11, 85 centimetres');
+    expect(mockAnnounce).toHaveBeenCalledWith('Logged 85 cm.');
+  });
+
+  it('logs in inches when the lifter chose inches, even on kg', () => {
+    mockKind = 'waist';
+    setSetting(mockDb, 'unit', 'kg');
+    setSetting(mockDb, 'lengthUnit', 'in');
+    const tree = mount(<BodyDetail />);
+    type(tree, 'Waist, inches', '34.5');
+    press(tree, 'Log');
+    expect(listBodyEntries(mockDb, 'waist')[0]).toMatchObject({ value: 34.5, unit: 'in' });
+  });
+
+  it('opens a logged entry in the chosen unit: untouched Save writes nothing, a new number is saved in that unit', () => {
+    mockKind = 'waist';
+    setSetting(mockDb, 'lengthUnit', 'cm');
+    const id = addBodyEntry(mockDb, 'waist', 34, 'in', NOW - DAY);
+    const tree = mount(<BodyDetail />);
+    press(tree, 'Oct 10, 86.4 centimetres');
+    const edit = () => tree.root.findAllByType(TextInput).find((n) => n.props.accessibilityLabel === 'Waist on Oct 10, centimetres')!;
+    expect(edit().props.value).toBe('86.4');
+    press(tree, 'Save');
+    expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 34, unit: 'in' })]);
+
+    press(tree, 'Oct 10, 86.4 centimetres');
+    act(() => edit().props.onChangeText('85'));
+    press(tree, 'Save');
+    expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 85, unit: 'cm' })]);
   });
 
   it('says a measurement\'s change under its chart, converted to the chart unit (R175)', () => {
@@ -332,16 +386,16 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     mockKind = 'waist';
     const id = addBodyEntry(mockDb, 'waist', 33.75, 'in', NOW - DAY);
     const tree = mount(<BodyDetail />);
-    press(tree, 'Oct 10, 33.8 in');
+    press(tree, 'Oct 10, 33.8 inches');
     expect(shownText(tree)).toContain('Waist on Oct 10');
-    const edit = () => tree.root.findAllByType(TextInput).find((n) => n.props.accessibilityLabel === 'Waist on Oct 10, in')!;
+    const edit = () => tree.root.findAllByType(TextInput).find((n) => n.props.accessibilityLabel === 'Waist on Oct 10, inches')!;
     expect(edit().props.value).toBe('33.75');
 
     press(tree, 'Save');
     expect(listBodyEntries(mockDb, 'waist')).toEqual([expect.objectContaining({ id, value: 33.75 })]);
     expect(shownText(tree)).not.toContain('Waist on Oct 10');
 
-    press(tree, 'Oct 10, 33.8 in');
+    press(tree, 'Oct 10, 33.8 inches');
     act(() => edit().props.onChangeText('200'));
     press(tree, 'Save');
     expect(shownText(tree)).toContain('Check this number');
@@ -382,7 +436,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     addBodyEntry(mockDb, 'waist', 34, 'in', NOW);
     const tree = mount(<BodyDetail />);
     const focus = jest.spyOn(AccessibilityInfo, 'sendAccessibilityEvent').mockImplementation(() => undefined);
-    press(tree, 'Oct 11, 34 in');
+    press(tree, 'Oct 11, 34 inches');
     expect(focus).not.toHaveBeenCalled();
     press(tree, 'Delete');
     expect(shownText(tree)).toContain('Delete this entry?');
@@ -412,7 +466,7 @@ describe('a body detail (/body/[kind], R114, R115)', () => {
     mockKind = 'waist';
     addBodyEntry(mockDb, 'waist', 34, 'in', NOW);
     const tree = mount(<BodyDetail />);
-    press(tree, 'Oct 11, 34 in');
+    press(tree, 'Oct 11, 34 inches');
     press(tree, 'Delete');
     expect(shownText(tree)).toContain('Delete this entry?');
     press(tree, 'Delete');

@@ -8,7 +8,7 @@ import { listBodyEntries } from '../../db/repositories/bodyRepo';
 import { getFuelTargets, isTrainingDay, listEntries } from '../../db/repositories/foodLogRepo';
 import { getSettings } from '../../db/repositories/settingsRepo';
 import type { Db } from '../../db/types';
-import { bodyUnit, dailySeries, formatBodyValue } from '../../domain/body';
+import { dailySeries, formatBodyValue, type BodyUnit } from '../../domain/body';
 import { chartSummary, pointsInRange, rangeChange } from '../../domain/chart';
 import { mondayOf, shiftDay } from '../../domain/dates';
 import { caloriesSpoken, dayTotals, fuelNumber, gramsSpoken, targetsFor } from '../../domain/fuel';
@@ -283,7 +283,7 @@ export function DailyMacrosWidget({ today, locale, onOptions }: { today: string;
 
 // ---------------------------------------------------------------- Body weight
 
-type Weight = { latest: { value: string; date: string } | null; points: { localDate: string; value: number }[]; unit: ReturnType<typeof bodyUnit> };
+type Weight = { latest: { value: string; date: string } | null; points: { localDate: string; value: number }[]; unit: BodyUnit };
 
 /**
  * Body weight (R567, free): the latest weigh-in in the display unit and the last 3 months' line with its change in
@@ -292,7 +292,7 @@ type Weight = { latest: { value: string; date: string } | null; points: { localD
 export function BodyWeightWidget({ today, locale, onOptions }: { today: string; locale: string; onOptions: () => void }) {
   const read = useCallback(
     (db: Db): Weight => {
-      const unit = bodyUnit('bodyweight', getSettings(db).unit);
+      const unit = getSettings(db).unit;
       const series = dailySeries(listBodyEntries(db, 'bodyweight'), unit);
       const last = series[series.length - 1];
       return {

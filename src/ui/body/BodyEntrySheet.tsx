@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Text, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { deleteBodyEntry, updateBodyEntry } from '../../db/repositories/bodyRepo';
-import { BODY_LABELS, parseBodyValue } from '../../domain/body';
+import { BODY_LABELS, parseBodyValue, shownEntry, spokenFieldUnit } from '../../domain/body';
 import type { BodyEntry } from '../../domain/body';
+import type { LengthUnit } from '../../domain/types';
 import { announce, focusOn } from '../../platform/announce';
 import { bumpData } from '../../state/dataVersion';
 import { Button } from '../Button';
@@ -24,10 +25,13 @@ function SheetTitle({ titleRef, children }: { titleRef: RefObject<Text | null>; 
 }
 
 /** The sheet's content for one entry; keyed by the entry so its field starts from that entry's value. */
-function EntryEditor({ entry, title, onClose }: { entry: BodyEntry; title: string; onClose: () => void }) {
+function EntryEditor({ entry, lengthUnit, title, onClose }: { entry: BodyEntry; lengthUnit: LengthUnit; title: string; onClose: () => void }) {
   const db = useDb();
-  // The stored value as it was typed, not the one-decimal display, so an untouched Save changes nothing.
-  const [draft, setDraft] = useState(`${entry.value}`);
+  // A length opens in the chosen unit (to 0.1); every other entry in the unit it was logged in.
+  const shown = shownEntry(entry, lengthUnit);
+  // The value as stored when the unit is the same, as it was typed and not the one-decimal display, so an untouched Save changes nothing.
+  const start = `${shown.value}`;
+  const [draft, setDraft] = useState(start);
   const [invalid, setInvalid] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
   const titleRef = useRef<Text>(null);
@@ -45,18 +49,18 @@ function EntryEditor({ entry, title, onClose }: { entry: BodyEntry; title: strin
 
   const save = () => {
     // Untouched, nothing is written, so a stored value is not checked again (an older one may sit outside the bounds).
-    if (draft === `${entry.value}`) {
+    if (draft === start) {
       onClose();
       return;
     }
-    const parsed = parseBodyValue(entry.kind, draft, entry.unit);
+    const parsed = parseBodyValue(entry.kind, draft, shown.unit);
     if (!parsed.valid || parsed.value === null) {
       setInvalid(true);
       announce('Check this number');
       return;
     }
-    if (parsed.value !== entry.value) {
-      updateBodyEntry(db, entry.kind, entry.id, parsed.value, entry.unit);
+    if (parsed.value !== shown.value || shown.unit !== entry.unit) {
+      updateBodyEntry(db, entry.kind, entry.id, parsed.value, shown.unit);
       bumpData();
     }
     onClose();
@@ -96,10 +100,10 @@ function EntryEditor({ entry, title, onClose }: { entry: BodyEntry; title: strin
               setInvalid(false);
             }}
             onSubmit={save}
-            accessibilityLabel={`${title}, ${entry.unit}`}
+            accessibilityLabel={`${title}, ${spokenFieldUnit(shown.unit)}`}
             invalid={invalid}
           />
-          <Body muted>{entry.unit}</Body>
+          <Body muted>{shown.unit}</Body>
         </View>
         <CheckLine shown={invalid} />
       </View>
@@ -113,13 +117,24 @@ function EntryEditor({ entry, title, onClose }: { entry: BodyEntry; title: strin
 }
 
 /**
- * Edits or deletes one body entry (R115): "{Label} on {date}", the value in the unit it was logged in, **Save**,
+ * Edits or deletes one body entry (R115): "{Label} on {date}", the value (a length in the chosen length unit, anything
+ * else in the unit it was logged in), **Save**,
  * **Delete** (asked again in the sheet: "Delete this entry?" **Delete** / **Keep**) and **Cancel**. The date stays.
  */
-export function BodyEntrySheet({ entry, dateLabel, onClose }: { entry: BodyEntry | null; dateLabel: string; onClose: () => void }) {
+export function BodyEntrySheet({
+  entry,
+  lengthUnit,
+  dateLabel,
+  onClose,
+}: {
+  entry: BodyEntry | null;
+  lengthUnit: LengthUnit;
+  dateLabel: string;
+  onClose: () => void;
+}) {
   return (
     <Sheet visible={entry !== null} onClose={onClose}>
-      {entry ? <EntryEditor key={entry.id} entry={entry} title={`${BODY_LABELS[entry.kind]} on ${dateLabel}`} onClose={onClose} /> : null}
+      {entry ? <EntryEditor key={entry.id} entry={entry} lengthUnit={lengthUnit} title={`${BODY_LABELS[entry.kind]} on ${dateLabel}`} onClose={onClose} /> : null}
     </Sheet>
   );
 }

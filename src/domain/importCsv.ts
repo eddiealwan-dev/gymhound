@@ -1,5 +1,5 @@
 import { BODY_KINDS, isBodyKind, lengthUnitFor, type BodyKind, type BodyUnit } from './body';
-import type { DistanceUnit, SetType, WeightUnit } from './types';
+import type { DistanceUnit, LengthUnit, SetType, WeightUnit } from './types';
 
 /**
  * Reading another app's export (R565, the owner's Round 11 request: "so people can leave another app without losing
@@ -65,6 +65,8 @@ export type ImportOptions = {
   weightUnit: WeightUnit;
   /** For distances a file doesn't give a unit for. */
   distanceUnit: DistanceUnit;
+  /** For body measurements a file doesn't name a unit for: the phone's length setting. Without it, the one that goes with `weightUnit`. */
+  lengthUnit?: LengthUnit;
   /** For dates like 03/04/2025 that could be either way round, when nothing in the file settles it. */
   dayFirst: boolean;
 };
@@ -145,7 +147,8 @@ const UNIT_WORDS: Record<string, string> = {
   min: 'min', mins: 'min', minutes: 'min',
   g: 'g', grams: 'g',
   kcal: 'kcal', cal: 'kcal', kj: 'kj',
-  cm: 'cm', in: 'in', inch: 'in', inches: 'in',
+  cm: 'cm', centimeter: 'cm', centimeters: 'cm', centimetre: 'cm', centimetres: 'cm',
+  in: 'in', inch: 'in', inches: 'in',
   '%': '%', percent: '%', pct: '%',
 };
 
@@ -546,7 +549,7 @@ function planBody(t: Table, o: ImportOptions): ImportPlan {
   const unitCol = col(COLUMNS.weightUnit);
   const skipped: SkippedRow[] = [];
   const entries: ImportedBody[] = [];
-  const lengthUnit = lengthUnitFor(o.weightUnit);
+  const lengthUnit = o.lengthUnit ?? lengthUnitFor(o.weightUnit);
   let weightUnitKnown = unitCol >= 0;
 
   /** The unit for a value of `kind`: the row's, the column's, or the phone's. */

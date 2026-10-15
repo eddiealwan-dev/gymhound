@@ -1,4 +1,5 @@
-import type { BellSound, DistanceUnit, FuelTargets, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
+import type { BellSound, DistanceUnit, FuelTargets, LengthUnit, MeasurementSystem, MusicAppId, ThemePreference, WeightUnit } from '../../domain/types';
+import { lengthUnitFor } from '../../domain/body';
 import { DEFAULT_WIDGETS } from '../../domain/profile';
 import { defaultUnitFor } from '../../domain/units';
 import { settings } from '../schema';
@@ -11,6 +12,11 @@ export type Settings = {
   unit: WeightUnit;
   /** mi or km: ft and yd are a carry's own, for sets only (R607). */
   distanceUnit: Extract<DistanceUnit, 'mi' | 'km'>;
+  /**
+   * in or cm, for body measurements (R639b). Stored as null until the lifter picks one, and then it follows the weight
+   * unit (lb gives in, kg gives cm); `getSettings` always returns the unit in force.
+   */
+  lengthUnit: LengthUnit;
   barLb: number;
   barKg: number;
   /** Pairs owned, by plate weight: `{ '45': 4 }` is four pairs of 45s. */
@@ -78,6 +84,7 @@ const KEYS: Record<keyof Settings, string> = {
   theme: 'theme',
   unit: 'unit',
   distanceUnit: 'distance_unit',
+  lengthUnit: 'length_unit',
   barLb: 'bar_lb',
   barKg: 'bar_kg',
   platesLb: 'plates_lb',
@@ -125,6 +132,7 @@ export function defaultSettings(m: MeasurementSystem): Settings {
     theme: 'system',
     unit,
     distanceUnit: unit === 'lb' ? 'mi' : 'km',
+    lengthUnit: lengthUnitFor(unit),
     barLb: 45,
     barKg: 20,
     platesLb: { '45': 4, '35': 1, '25': 1, '10': 2, '5': 1, '2.5': 1 },
@@ -168,7 +176,8 @@ export function defaultSettings(m: MeasurementSystem): Settings {
 /** Writes the default for every key that has no row yet. Existing rows, even null ones, are left alone. */
 export function ensureSettings(db: Db, m: MeasurementSystem): void {
   const defaults = defaultSettings(m);
-  const rows = FIELDS.map((field) => ({ key: KEYS[field], value: defaults[field] }));
+  // The length unit starts unchosen (null), so it follows the weight unit until the lifter picks one.
+  const rows = FIELDS.map((field) => ({ key: KEYS[field], value: field === 'lengthUnit' ? null : defaults[field] }));
   db.insert(settings).values(rows).onConflictDoNothing().run();
 }
 
@@ -180,6 +189,9 @@ export function getSettings(db: Db): Settings {
     const key = KEYS[field];
     if (stored.has(key)) result[field] = stored.get(key);
   }
+  // No length unit chosen (null, or a lifter who had settings before it existed): it goes with the weight unit.
+  const chosen = stored.get(KEYS.lengthUnit);
+  result.lengthUnit = chosen === 'in' || chosen === 'cm' ? chosen : lengthUnitFor(result.unit as WeightUnit);
   return result as Settings;
 }
 

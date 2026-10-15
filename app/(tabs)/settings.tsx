@@ -12,7 +12,7 @@ import { formatDateTime, formatRest } from '../../src/domain/dates';
 import { caloriesSpoken, gramsSpoken, kcalProteinText } from '../../src/domain/fuel';
 import { REST_CHOICES } from '../../src/domain/rest';
 import { formatWeight } from '../../src/domain/units';
-import type { BellSound, DistanceUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
+import type { BellSound, DistanceUnit, LengthUnit, Macros, ThemePreference, WeightUnit } from '../../src/domain/types';
 import { announce } from '../../src/platform/announce';
 import { debugUnlockAllowed, entitlementsFor, useEntitlementsState } from '../../src/platform/entitlements';
 import { buildStamp } from '../../src/platform/buildStamp';
@@ -51,6 +51,12 @@ const WEIGHT_OPTIONS: { value: WeightUnit; label: string }[] = [
 const DISTANCE_OPTIONS: { value: Extract<DistanceUnit, 'mi' | 'km'>; label: string }[] = [
   { value: 'mi', label: 'mi' },
   { value: 'km', label: 'km' },
+];
+
+/** For body measurements (R639b); VoiceOver reads the words in full. */
+const LENGTH_OPTIONS: { value: LengthUnit; label: string; spoken: string }[] = [
+  { value: 'in', label: 'in', spoken: 'inches' },
+  { value: 'cm', label: 'cm', spoken: 'centimetres' },
 ];
 
 const BELL_OPTIONS: { value: BellSound; label: string }[] = [
@@ -108,11 +114,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * The display unit for weights (switching follows spec 7.1: only the setting changes, and plans convert when a workout
- * starts) and the unit for distances.
+ * starts), the unit for distances and the unit for body measurements (inches or centimetres; it goes with the weight
+ * unit until the lifter picks one, and then it stays theirs).
  */
 function UnitsSection() {
   const db = useDb();
-  const { unit, distanceUnit } = useDbQuery(getSettings);
+  const { unit, distanceUnit, lengthUnit } = useDbQuery(getSettings);
   return (
     <Section title="Units">
       <Field label="Weight">
@@ -133,6 +140,17 @@ function UnitsSection() {
           value={distanceUnit}
           onChange={(value) => {
             setSetting(db, 'distanceUnit', value);
+            bumpData();
+          }}
+        />
+      </Field>
+      <Field label="Length">
+        <Segmented
+          label="Length"
+          options={LENGTH_OPTIONS}
+          value={lengthUnit}
+          onChange={(value) => {
+            setSetting(db, 'lengthUnit', value);
             bumpData();
           }}
         />

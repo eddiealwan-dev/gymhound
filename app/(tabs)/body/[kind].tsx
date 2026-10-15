@@ -4,9 +4,10 @@ import { Keyboard, Pressable, View } from 'react-native';
 import { listBodyEntries } from '../../../src/db/repositories/bodyRepo';
 import { getSettings } from '../../../src/db/repositories/settingsRepo';
 import type { Db } from '../../../src/db/types';
-import { BODY_LABELS, bodyUnit, formatBodyValue, isBodyKind } from '../../../src/domain/body';
+import { BODY_LABELS, bodyUnit, formatBodyValue, isBodyKind, labelBodyValue, shownEntry } from '../../../src/domain/body';
 import type { BodyEntry, BodyKind } from '../../../src/domain/body';
 import { formatEntryDate, toLocalDate } from '../../../src/domain/dates';
+import type { LengthUnit } from '../../../src/domain/types';
 import { deviceLocale } from '../../../src/platform/locale';
 import { useDbQuery } from '../../../src/state/dataVersion';
 import { flushAll } from '../../../src/state/draftFlush';
@@ -24,14 +25,15 @@ function toStats() {
   else router.navigate('/stats');
 }
 
-/** One entry: its date on the left, its value in the unit it was logged in on the right. Tapping it edits it. */
-function EntryRow({ entry, date, onPress }: { entry: BodyEntry; date: string; onPress: () => void }) {
+/** One entry: its date on the left, its value on the right (a length in the chosen length unit). Tapping it edits it. */
+function EntryRow({ stored, lengthUnit, date, onPress }: { stored: BodyEntry; lengthUnit: LengthUnit; date: string; onPress: () => void }) {
   const { colors } = useTheme();
+  const entry = shownEntry(stored, lengthUnit);
   const value = formatBodyValue(entry.value, entry.unit);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${date}, ${value}`}
+      accessibilityLabel={`${date}, ${labelBodyValue(entry.value, entry.unit)}`}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 44,
@@ -55,10 +57,13 @@ function EntryRow({ entry, date, onPress }: { entry: BodyEntry; date: string; on
 }
 
 function KindDetail({ kind }: { kind: BodyKind }) {
-  const read = useCallback((d: Db) => ({ entries: listBodyEntries(d, kind), unit: getSettings(d).unit }), [kind]);
-  const { entries, unit: displayUnit } = useDbQuery(read);
+  const read = useCallback((d: Db) => {
+    const s = getSettings(d);
+    return { entries: listBodyEntries(d, kind), weightUnit: s.unit, lengthUnit: s.lengthUnit };
+  }, [kind]);
+  const { entries, weightUnit, lengthUnit } = useDbQuery(read);
   const [editing, setEditing] = useState<BodyEntry | null>(null);
-  const unit = bodyUnit(kind, displayUnit);
+  const unit = bodyUnit(kind, weightUnit, lengthUnit);
   const today = toLocalDate(Date.now());
   const locale = deviceLocale();
   const dateOf = (entry: BodyEntry) => formatEntryDate(entry.localDate, today, locale);
@@ -81,10 +86,10 @@ function KindDetail({ kind }: { kind: BodyKind }) {
         {entries.length === 0 ? (
           <EmptyState text="No entries yet. Log one above and it shows here." />
         ) : (
-          entries.map((entry) => <EntryRow key={entry.id} entry={entry} date={dateOf(entry)} onPress={() => open(entry)} />)
+          entries.map((entry) => <EntryRow key={entry.id} stored={entry} lengthUnit={lengthUnit} date={dateOf(entry)} onPress={() => open(entry)} />)
         )}
       </View>
-      <BodyEntrySheet entry={editing} dateLabel={editing ? dateOf(editing) : ''} onClose={() => setEditing(null)} />
+      <BodyEntrySheet entry={editing} lengthUnit={lengthUnit} dateLabel={editing ? dateOf(editing) : ''} onClose={() => setEditing(null)} />
     </Screen>
   );
 }

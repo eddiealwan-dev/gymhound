@@ -28,16 +28,16 @@ export function isBodyKind(s: string): s is BodyKind {
   return (BODY_KINDS as readonly string[]).includes(s);
 }
 
-/** Lengths follow the weight unit: lb → in, kg → cm (R112). */
+/** The length unit that goes with a weight unit: lb gives in, kg gives cm. It is the lifter's until they choose one (R639b). */
 export function lengthUnitFor(unit: WeightUnit): LengthUnit {
   return unit === 'lb' ? 'in' : 'cm';
 }
 
-/** The unit a kind is logged and shown in for a user whose weight unit is `displayUnit`. */
-export function bodyUnit(kind: BodyKind, displayUnit: WeightUnit): BodyUnit {
-  if (kind === 'bodyweight') return displayUnit;
+/** The unit a kind is logged and shown in: the weight unit for bodyweight, the length unit for a measurement, % for body fat. */
+export function bodyUnit(kind: BodyKind, weightUnit: WeightUnit, lengthUnit: LengthUnit): BodyUnit {
+  if (kind === 'bodyweight') return weightUnit;
   if (kind === 'body_fat') return '%';
-  return lengthUnitFor(displayUnit);
+  return lengthUnit;
 }
 
 type Dimension = 'weight' | 'length' | 'percent';
@@ -87,6 +87,39 @@ export function parseBodyValue(kind: BodyKind, text: string, unit: BodyUnit): { 
 export function formatBodyValue(value: number, unit: BodyUnit): string {
   const n = Number(value.toFixed(1));
   return unit === '%' ? `${n}%` : `${n} ${unit}`;
+}
+
+/**
+ * An entry as it is shown: a length converts to the chosen length unit (to 0.1) and keeps the id, kind and date;
+ * bodyweight and body fat are shown as logged. The stored entry never changes (R112).
+ */
+export function shownEntry(entry: BodyEntry, lengthUnit: LengthUnit): BodyEntry {
+  if (kindDimension(entry.kind) !== 'length' || entry.unit === lengthUnit) return entry;
+  return { ...entry, value: Number(convertBody(entry.value, entry.unit, lengthUnit).toFixed(1)), unit: lengthUnit };
+}
+
+const SPOKEN: Record<BodyUnit, [string, string]> = {
+  lb: ['pound', 'pounds'],
+  kg: ['kilogram', 'kilograms'],
+  in: ['inch', 'inches'],
+  cm: ['centimetre', 'centimetres'],
+  '%': ['percent', 'percent'],
+};
+
+/** A unit for VoiceOver where a field says it: "inches", "centimetres". Weights and % keep the short form their labels already use. */
+export function spokenFieldUnit(unit: BodyUnit): string {
+  return unit === 'in' || unit === 'cm' ? SPOKEN[unit][1] : unit;
+}
+
+/** What a row's VoiceOver label says for a value: a length in full words ("34.5 inches"), the rest as shown ("182.5 lb"). */
+export function labelBodyValue(value: number, unit: BodyUnit): string {
+  return unit === 'in' || unit === 'cm' ? spokenBodyValue(value, unit) : formatBodyValue(value, unit);
+}
+
+/** A value for VoiceOver, the unit in full words: "34.5 inches", "86.4 centimetres", "18.5 percent". */
+export function spokenBodyValue(value: number, unit: BodyUnit): string {
+  const n = Number(value.toFixed(1));
+  return `${n} ${SPOKEN[unit][n === 1 ? 0 : 1]}`;
 }
 
 /** Each day's latest entry, converted to `to`, oldest day first (R115). Unrounded; format for display. */

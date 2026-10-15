@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Keyboard, View } from 'react-native';
 import { useDb } from '../../db/DbProvider';
 import { addBodyEntry } from '../../db/repositories/bodyRepo';
-import { BODY_LABELS, dailySeries, formatBodyValue, parseBodyValue } from '../../domain/body';
+import { BODY_LABELS, dailySeries, formatBodyValue, parseBodyValue, spokenFieldUnit } from '../../domain/body';
 import type { BodyEntry, BodyKind, BodyUnit } from '../../domain/body';
 import { chartSummary, pointsInRange, rangeChange } from '../../domain/chart';
 import type { ChartRange } from '../../domain/chart';
@@ -81,7 +81,7 @@ export function BodyQuickEntry({
               setFailed(false);
             }}
             onSubmit={log}
-            accessibilityLabel={fieldLabel ?? `${BODY_LABELS[kind]}, ${unit}`}
+            accessibilityLabel={fieldLabel ?? `${BODY_LABELS[kind]}, ${spokenFieldUnit(unit)}`}
             invalid={invalid}
           />
           <Body muted>{unit}</Body>

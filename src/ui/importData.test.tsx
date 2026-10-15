@@ -3,7 +3,9 @@ import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import ImportData from '../../app/(tabs)/import';
+import { listBodyEntries } from '../db/repositories/bodyRepo';
 import { listHistory } from '../db/repositories/historyRepo';
+import { setSetting } from '../db/repositories/settingsRepo';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
 import { IMPORT_SAMPLES } from '../domain/importSamples';
@@ -89,6 +91,20 @@ describe('Settings → Import data (R565)', () => {
     expect(tree.root.findByType(Segmented).props.value).toBe('kg');
     await press(tree, 'Import');
     expect(texts(tree)).toEqual(expect.arrayContaining(['Rows left out']));
+  });
+
+  it('imports a length with no unit in the length setting, and one that names its unit in that unit', async () => {
+    setSetting(mockDb, 'unit', 'lb');
+    setSetting(mockDb, 'lengthUnit', 'cm');
+    jest.mocked(pickCsvFile).mockResolvedValue({
+      name: 'body.csv',
+      text: ['Date,Waist,Chest (in),Hips (inches),Arms (centimetres)', '2026-10-01,86,41,40,35'].join('\n'),
+    });
+    const tree = mount();
+    await press(tree, 'Choose a CSV file');
+    await press(tree, 'Import');
+    const unitOf = (kind: 'waist' | 'chest' | 'hips' | 'arms') => listBodyEntries(mockDb, kind).map((e) => [e.value, e.unit]);
+    expect([unitOf('waist'), unitOf('chest'), unitOf('hips'), unitOf('arms')]).toEqual([[[86, 'cm']], [[41, 'in']], [[40, 'in']], [[35, 'cm']]]);
   });
 
   it("says when a file isn't one it can read, and when it's too big", async () => {
