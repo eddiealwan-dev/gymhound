@@ -7,6 +7,7 @@ import { PROGRAMS } from '../../seed/programs.generated';
 import { exercises, routineExercises, sets, workoutExercises } from '../schema';
 import { seededDb } from '../testing/fixtures';
 import { fakeSessions, insertProgram, runSession } from '../testing/programFixture';
+import type { LoggingType } from '../../domain/types';
 import type { Db } from '../types';
 import { changeRungToday, showsWarmUp } from './programViewRepo';
 import { changeRung, setActiveProgram, startEarlyDeload } from './programRunRepo';
@@ -130,7 +131,7 @@ describe('the session knows the block is done after an early deload (R627, R616)
 
 describe('the warm-up line (R626, ruling R-t2b)', () => {
   const firstSlots = PROGRAMS.flatMap((p) => p.days.map((d) => ({ program: p, slot: d.slots[0] })));
-  const shown = (programId: string, dayIndex: number, loggingType: 'weighted' | 'timed' = 'weighted') => {
+  const shown = (programId: string, dayIndex: number, loggingType: LoggingType = 'weighted') => {
     const program = PROGRAMS.find((p) => p.id === programId)!;
     return showsWarmUp(program, program.days[dayIndex].slots[0], loggingType);
   };
@@ -143,6 +144,16 @@ describe('the warm-up line (R626, ruling R-t2b)', () => {
     expect(shown('program-mobility-for-lifters', 0)).toBe(false);
     expect(shown('program-advanced-calisthenics', 0, 'timed')).toBe(false);
     expect(firstSlots.filter(({ program, slot }) => showsWarmUp(program, slot, 'weighted')).length).toBeGreaterThan(50);
+  });
+
+  it('never shows on a bodyweight or calisthenics day: its percentages need a working weight (R645)', () => {
+    const bodyweight = (programId: string, dayIndex: number) => shown(programId, dayIndex, 'bodyweight_plus');
+    expect(bodyweight(CALI, 0)).toBe(false);
+    expect(bodyweight(CALI, 1)).toBe(false);
+    expect(bodyweight('program-advanced-calisthenics', 1)).toBe(false);
+    expect(bodyweight('program-crossfit-performance', 1)).toBe(false);
+    expect(shown('program-strongman-prep', 2, 'weighted_distance')).toBe(true);
+    expect(shown('program-kettlebell-strength-conditioning', 1)).toBe(true);
   });
 
   it('never shows under a slot that is not the first of its day', () => {
