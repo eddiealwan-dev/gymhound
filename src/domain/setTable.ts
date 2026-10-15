@@ -189,6 +189,8 @@ export type RowModel = {
   tickLabel?: string;
   /** Its time shows as a clock even under a minute ("0:40"): a program run's or interval's (design gate #15). */
   clockTimes?: true;
+  /** A metcon score's weighted move, which its weight field is for: "Thrusters weight, kilograms" (ruling R-g3). */
+  loadName?: string;
 };
 
 /** A number to 2 decimals, as the set rows show it: 254.60000000000002 is 254.6. */
@@ -488,6 +490,7 @@ export function fieldVoiceLabel(
  */
 export function rowFieldVoiceLabel(row: RowModel, key: InputKey, header: string, unit: WeightUnit, distanceUnit: DistanceUnit): string {
   const optional = row.optional?.includes(key) ? ', optional' : '';
+  if (key === 'weight' && row.loadName !== undefined) return `${row.loadName} weight, ${WEIGHT_WORDS[unit]}${optional}`;
   if (row.spokenAs === undefined) return `${fieldVoiceLabel(key, row.loggingType, row.label, header, unit, distanceUnit)}${optional}`;
   const field = fieldVoiceLabel(key, 'rounds', '1', header, unit, distanceUnit).replace(/^Set 1 /, '');
   return `${row.spokenAs} ${key === 'reps' && row.loggingType !== 'rounds' ? 'reps' : field}${optional}`;

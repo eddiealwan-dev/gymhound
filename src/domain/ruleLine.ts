@@ -55,9 +55,11 @@ const isLoaded = (loggingType: LoggingType): boolean => !UNLOADED.includes(loggi
 
 /** An AMRAP score as "6 + 4", or "6" with no extra reps; a For Time score as "7:42" (R607). Null with no score. */
 function lastScore(last: LastSummary, loggingType: LoggingType): string | null {
-  if (loggingType === 'for_time') return last.durationS === null ? null : formatRest(last.durationS);
+  // With the load of the main move when it was logged (ruling R-g3): "6 + 4 at 16 kg".
+  const at = last.weight && last.weightUnit ? ` at ${formatWeight(last.weight, last.weightUnit)}` : '';
+  if (loggingType === 'for_time') return last.durationS === null ? null : `${formatRest(last.durationS)}${at}`;
   if (last.reps === null) return null;
-  return last.extraReps === undefined || last.extraReps === null ? `${last.reps}` : `${last.reps} + ${last.extraReps}`;
+  return `${last.extraReps === undefined || last.extraReps === null ? `${last.reps}` : `${last.reps} + ${last.extraReps}`}${at}`;
 }
 
 /** "5 km in 25:30", or whichever of the two was logged; null for neither. */

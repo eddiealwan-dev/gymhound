@@ -8,6 +8,7 @@ import {
   easySecondsOf,
   emomMinutesOf,
   intervalFormat,
+  metconLoadMove,
   metconParts,
   metconRuleLine,
   metconTitle,
@@ -318,6 +319,47 @@ describe('blockRows: what each block suggests and shows in its rows', () => {
     expect(blockRows('technique', rows, { unit: 'lb' })).toBe(rows);
     expect(rowTickLabel(rows[0])).toBe('Set 1 done');
     expect(rowFieldVoiceLabel(rows[0], 'weight', 'LB', 'lb', 'mi')).toBe('LB, set 1');
+  });
+});
+
+describe("a metcon's load (ruling R-g3)", () => {
+  const gear = { bar: 45, plates: { '45': 4 } };
+  const scoreSet: SetInput = { id: 's1', position: 0, setType: 'working', weight: null, weightUnit: null, reps: null, durationS: null, distance: null, distanceUnit: null, rpe: null, done: false };
+  const ex = (previous: ExerciseInput['previous']): ExerciseInput => ({
+    loggingType: 'for_time',
+    equipment: 'other',
+    rule: null,
+    plannedWeight: null,
+    plannedUnit: null,
+    overrideWeight: null,
+    overrideUnit: null,
+    sets: [scoreSet],
+    previous,
+  });
+
+  it('finds the main weighted move: the first that takes a load', () => {
+    expect(metconLoadMove(amrap)).toBe(0);
+    expect(metconLoadMove(fran)).toBe(0);
+    expect(metconLoadMove({ ...amrap, elements: ['Run', 'Wall ball', 'Burpee'] })).toBe(1);
+    expect(metconLoadMove({ ...amrap, elements: ['Dumbbell snatch', 'Chest-to-bar pull-up'] })).toBe(0);
+    expect(metconLoadMove({ ...amrap, elements: ['Pull-up (scaled as needed)', 'Push-up', 'Air squat'] })).toBeNull();
+  });
+
+  it('adds an optional weight column before the score, headed by the unit', () => {
+    const c = blockColumns('metcon', tableColumns('for_time', 'kg', false), 'ft', 'kg');
+    expect(c.map((x) => x.header)).toEqual(['PREVIOUS', 'KG', 'TIME', '✓']);
+    expect(blockColumns('metcon', tableColumns('rounds', 'kg', false), 'ft', 'kg').map((x) => x.key)).toEqual(['previous', 'weight', 'reps', 'extraReps', 'tick']);
+    expect(blockColumns('metcon', tableColumns('rounds', 'kg', false), 'ft').map((x) => x.key)).toEqual(['previous', 'reps', 'extraReps', 'tick']);
+  });
+
+  it("suggests last time's load, may stay empty, and is named for its move", () => {
+    const [row] = blockRows('metcon', buildRows(ex([{ ...scoreSet, durationS: 462, weight: 95, weightUnit: 'lb' }]), 'kg', gear, 'mi'), { unit: 'kg', loadName: 'Thrusters' });
+    expect(hintText(row, 'weight')).toBe('43');
+    expect(hintText(row, 'durationS')).toBe('');
+    expect(row.optional).toEqual(['weight']);
+    expect(rowFieldVoiceLabel(row, 'weight', 'KG', 'kg', 'mi')).toBe('Thrusters weight, kilograms, optional');
+    const [fresh] = blockRows('metcon', buildRows(ex([]), 'kg', gear, 'mi'), { unit: 'kg', loadName: 'Thrusters' });
+    expect(hintText(fresh, 'weight')).toBe('');
   });
 });
 

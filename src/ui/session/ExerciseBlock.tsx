@@ -17,6 +17,7 @@ import {
   emomFormat,
   eventLine,
   intervalFormat,
+  metconLoadMove,
   metconParts,
   metconRuleLine,
   metconTitle,
@@ -176,8 +177,17 @@ function NameRowControl({
  * The rule line by block (Task 7b): a metcon's without the format and moves its list shows (and without last time's
  * score, which sits beside the score row); an event's with what a tick means. The rest as they read.
  */
-function ruleText(kind: ReturnType<typeof blockKindOf>, sentence: string, read: string | null, catalogName: string, eventWord?: 'carry' | 'push'): string {
-  if (kind === 'metcon') return metconRuleLine(sentence, catalogName);
+function ruleText(
+  kind: ReturnType<typeof blockKindOf>,
+  sentence: string,
+  read: string | null,
+  catalogName: string,
+  eventWord?: 'carry' | 'push',
+  lastLoaded = false,
+): string {
+  // A metcon's last score sits beside its score row; the line names it only with the load it was done at, which the
+  // row doesn't show, so "go heavier" has a number (ruling R-g3).
+  if (kind === 'metcon') return lastLoaded && read !== null ? `${metconRuleLine(sentence, catalogName)} ${read}` : metconRuleLine(sentence, catalogName);
   // An event's tick sits with its rule and the marked day, before today's read (design gate #5).
   const rule = kind === 'event' ? `${sentence} ${eventLine(eventWord)}` : sentence;
   return read === null ? rule : `${rule} ${read}`;
@@ -232,17 +242,22 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const targetS = (kind === 'run' || kind === 'intervals') && targetSecondsOf(ex) > 0 ? targetSecondsOf(ex) : null;
   /** An event's distance unit (ft, yd or m), which heads its column. */
   const entryUnit = entryDistanceUnit(ex, distanceUnit) ?? 'm';
+  /** A metcon's format and moves, and its main weighted move, whose load the score logs (ruling R-g3). */
+  const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName, unit) : null;
+  const loadAt = kind === 'metcon' && ex.program?.metcon ? metconLoadMove(ex.program.metcon) : null;
+  const loadName =
+    loadAt === null || !ex.program?.metcon ? null : (metcon?.elements[loadAt]?.name ?? ex.program.metcon.elements[loadAt].replace(/\s*\([^)]*\)/g, '').trim());
   // The same columns while nothing they show changes, so a write to one set redraws its row alone.
   const columns = useMemo(
-    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe, entryUnit), entryUnit),
-    [kind, ex.loggingType, unit, ex.showRpe, entryUnit],
+    () => blockColumns(kind, tableColumns(ex.loggingType, unit, ex.showRpe, entryUnit), entryUnit, loadName === null ? null : unit),
+    [kind, ex.loggingType, unit, ex.showRpe, entryUnit, loadName],
   );
   // Each row's previous is worked out once for the whole block. A row equal to the one drawn before keeps its object,
   // so only the set rows that changed draw again.
   const rows = useShareEqual(
     useMemo(
-      () => blockRows(kind, buildRows(ex, unit, gear, distanceUnit), { unit, targetS, noun: runNoun(ex.exerciseId), eventWord: ex.program?.rule.eventWord }),
-      [kind, ex, unit, gear, distanceUnit, targetS],
+      () => blockRows(kind, buildRows(ex, unit, gear, distanceUnit), { unit, targetS, noun: runNoun(ex.exerciseId), eventWord: ex.program?.rule.eventWord, loadName }),
+      [kind, ex, unit, gear, distanceUnit, targetS, loadName],
     ),
   );
   /** The clock the block runs, if any: a metcon's format, a run's target, the intervals' steps, an EMOM's minutes. */
@@ -250,7 +265,6 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const working = ex.sets.filter((s) => s.setType === 'working');
   /** A metcon's score or a run, once ticked, has no more use for its clock. */
   const scored = (kind === 'metcon' || kind === 'run') && working.length > 0 && working.every((s) => s.done);
-  const metcon = kind === 'metcon' && ex.program?.metcon ? metconParts(ex.program.metcon, ex.program.catalogName, unit) : null;
   /**
    * The name in the name row: a metcon by the program's label for it ("Metcon A"); #20's easy runs by their role
    * ("Warm-up run", ruling R-g4), whose note then keeps only what the name doesn't say.
@@ -550,7 +564,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       {/* No text-size cap: it wraps. It starts below the name row's 10pt reach: drawn later, it would win the hit test where
           the two overlap and cut + Note and Something off short of 44pt. */}
       <Body muted style={{ fontSize: 14, marginTop: metcon !== null || formatLine !== null ? 4 : NAME_ROW_HIT_SLOP.bottom }}>
-        {ruleText(kind, sentence, read, ex.program?.catalogName ?? '', program?.rule.eventWord)}
+        {ruleText(kind, sentence, read, ex.program?.catalogName ?? '', program?.rule.eventWord, loadName !== null && last?.weight != null)}
       </Body>
       {kind === 'technique' ? (
         <Body muted style={{ fontSize: 14, marginTop: 4 }}>

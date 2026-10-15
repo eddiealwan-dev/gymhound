@@ -124,6 +124,9 @@ describe('ruleSentence (spec 7.4, the rule)', () => {
 
   it("the scores of programs (R607): last time's score, with or without a rule; never a weight to add", () => {
     expect(sentence(RULE_LB, 'rounds', 'lb', last({ sets: 1, reps: 6, extraReps: 4 }))).toBe('Last time: 6 + 4.');
+    // The load of a metcon's main move, when it was logged (ruling R-g3).
+    expect(sentence(RULE_LB, 'rounds', 'kg', last({ sets: 1, reps: 6, extraReps: 4, weight: 16, weightUnit: 'kg' }))).toBe('Last time: 6 + 4 at 16 kg.');
+    expect(sentence(RULE_LB, 'for_time', 'kg', last({ sets: 1, durationS: 462, weight: 43, weightUnit: 'kg' }))).toBe('Last time: 7:42 at 43 kg.');
     expect(sentence(null, 'rounds', 'lb', last({ sets: 1, reps: 6 }))).toBe('Last time: 6.');
     expect(sentence(RULE_LB, 'for_time', 'lb', last({ sets: 1, durationS: 462 }))).toBe('Last time: 7:42.');
     expect(sentence(RULE_LB, 'for_time', 'lb', NO_LAST)).toBe('First time logging this.');

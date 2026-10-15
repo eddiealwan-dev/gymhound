@@ -267,7 +267,7 @@ describe('a metcon is one block: its format, its moves, its clock and one score 
 
   it('scores in one row with no SET chip, suggesting nothing, with last time beside it', () => {
     const tree = mount(metconA({ previous: [{ ...set('p', 0), reps: 6, extraReps: 4 }] }));
-    expect(headers(tree)).toEqual(['PREVIOUS', 'ROUNDS', '+REPS', '✓']);
+    expect(headers(tree)).toEqual(['PREVIOUS', 'LB', 'ROUNDS', '+REPS', '✓']);
     expect(shownText(tree)).toContain('6 + 4');
     expect(field(tree, 'Score rounds').props.placeholder).toBe('');
     expect(field(tree, 'Score extra reps').props.placeholder).toBe('');
@@ -438,6 +438,31 @@ describe("a program note and name in the session (design gate #17, #20; ruling R
     expect(shownText(tree)).toContain('Cool-down run');
     expect(shownText(tree)).not.toContain('Cool-down');
     expect(labels(tree)).toContain('Show form for Cool-down run');
+  });
+});
+
+describe("a metcon logs the load of its main weighted move (ruling R-g3)", () => {
+  it('has an optional weight field in the score row, named for the move, in the session unit', () => {
+    const tree = mount(franEx(), null, false, 'kg');
+    expect(headers(tree)).toEqual(['PREVIOUS', 'KG', 'TIME', '✓']);
+    const load = field(tree, 'Thrusters weight, kilograms, optional');
+    expect(load.props.placeholder).toBe('–');
+  });
+
+  it("suggests last time's load", () => {
+    const ex = franEx();
+    const tree = mount({ ...ex, previous: [{ ...ex.previous[0], weight: 43, weightUnit: 'kg' }] }, null, false, 'kg');
+    expect(field(tree, 'Thrusters weight, kilograms, optional').props.placeholder).toBe('43');
+    expect(shownText(tree)).toContain('Beat your score twice in a row, then go heavier or take the next scaling step. Last time: 7:42 at 43 kg.');
+  });
+
+  it('has none when no move takes a load', () => {
+    const cindy: MetconRule = { format: 'AMRAP', workMinutes: 15, elements: ['Pull-up (scaled as needed)', 'Push-up', 'Air squat'], capMinutes: null };
+    const ex = exercise(
+      { exerciseId: 'metcon-amrap-15-cindy-scaled', name: 'AMRAP 15', loggingType: 'rounds', equipment: 'other' },
+      { rule: { kind: 'metcon' }, metcon: cindy, catalogName: 'Metcon C · AMRAP 15 min: 5 pull-ups (scaled), 10 push-ups, 15 air squats', restKind: 'none' },
+    );
+    expect(headers(mount(ex))).toEqual(['PREVIOUS', 'ROUNDS', '+REPS', '✓']);
   });
 });
 

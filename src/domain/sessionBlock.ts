@@ -4,9 +4,9 @@ import { spokenRest } from './rest';
 import { TIMED_RUN_IDS } from './restKind';
 import { metconText } from './ruleLine';
 import { weightText } from './setEntry';
-import { DISTANCE_WORDS, type Column, type RowModel } from './setTable';
+import { DISTANCE_WORDS, type Column, type InputKey, type RowModel } from './setTable';
 import type { DistanceUnit, LoggingType, SetType, WeightUnit } from './types';
-import { loadsInUnit } from './units';
+import { convertWeight, loadsInUnit, roundToHalf } from './units';
 import type { WorkPlan, WorkStep } from './workClock';
 
 /**
@@ -100,6 +100,18 @@ export function metconParts(rule: MetconRule, catalogName: string, unit: WeightU
   const plain = scheme === `amrap ${rule.workMinutes} min` || scheme === 'for time' || named !== null;
   if (plain && elements.every((e) => e.amount !== null)) return { format, elements };
   return { format: text, elements: [] };
+}
+
+/** Moves that take a load in the metcons (a dumbbell, a kettlebell, a bar or a ball). */
+const LOADED_MOVE = /\b(goblet|thruster|wall ball|snatch|swing|clean|kettlebell|dumbbell|barbell|deadlift|press|sandbag)\b/i;
+
+/**
+ * The metcon's main weighted move (ruling R-g3): the first of its moves that takes a load, as an index into its
+ * elements; null when none does (Cindy's pull-ups, push-ups and squats). Its load is logged on the score.
+ */
+export function metconLoadMove(rule: MetconRule): number | null {
+  const at = rule.elements.findIndex((e) => LOADED_MOVE.test(e));
+  return at < 0 ? null : at;
 }
 
 /** The word a timed slot is called by: a walk, a ride, a row, else a run. */
@@ -199,7 +211,14 @@ export function eventLine(word: 'carry' | 'push' = 'carry'): string {
 const WEIGHT_WORDS: Record<WeightUnit, string> = { lb: 'pounds', kg: 'kilograms' };
 
 /** What a block's rows read beyond the set rows': the weight unit shown, a run's target and its noun ("Run", "Walk"). */
-export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?: string; eventWord?: 'carry' | 'push' };
+export type BlockRowOptions = {
+  unit: WeightUnit;
+  targetS?: number | null;
+  noun?: string;
+  eventWord?: 'carry' | 'push';
+  /** A metcon's main weighted move, as its list names it ("Thrusters"): its load goes on the score (ruling R-g3). */
+  loadName?: string | null;
+};
 
 /**
  * A block's own take on its set rows (t7-design.md). A metcon's score suggests nothing (last time stays beside it) and
@@ -210,11 +229,17 @@ export type BlockRowOptions = { unit: WeightUnit; targetS?: number | null; noun?
 export function blockRows(kind: BlockKind, rows: RowModel[], o: BlockRowOptions): RowModel[] {
   switch (kind) {
     case 'metcon':
-      return rows.map((row) => ({
-        ...row,
-        spokenAs: 'Score',
-        placeholders: { weight: null, reps: null, durationS: null, distance: null, ...(row.loggingType === 'rounds' ? { extraReps: null } : {}) },
-      }));
+      return rows.map((row) => {
+        // The load of the main move is optional, and suggests last time's in the unit shown (ruling R-g3).
+        const last = row.matched;
+        const load = o.loadName && last?.weight != null ? (last.weightUnit === o.unit || last.weightUnit === null ? last.weight : roundToHalf(convertWeight(last.weight, last.weightUnit, o.unit))) : null;
+        return {
+          ...row,
+          spokenAs: 'Score',
+          placeholders: { weight: load, reps: null, durationS: null, distance: null, ...(row.loggingType === 'rounds' ? { extraReps: null } : {}) },
+          ...(o.loadName ? { optional: ['weight'] as InputKey[], loadName: o.loadName } : {}),
+        };
+      });
     case 'run':
     case 'intervals': {
       const target = o.targetS ?? null;
@@ -256,7 +281,12 @@ function eventPrevious(row: RowModel, unit: WeightUnit): Pick<RowModel, 'previou
  * A block's columns: a metcon's score and a run have one row, so no SET chip; an event heads its distance with its
  * unit ("FT", "YD"). The rest keep the set table's.
  */
-export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit): Column[] {
+export function blockColumns(kind: BlockKind, columns: Column[], eventDistanceUnit: DistanceUnit, metconLoadUnit: WeightUnit | null = null): Column[] {
+  if (kind === 'metcon' && metconLoadUnit !== null) {
+    // The load of the main weighted move, before the score, headed by the unit as a set row's weight is (ruling R-g3).
+    const rest = columns.filter((c) => c.key !== 'set');
+    return [rest[0], { key: 'weight', header: metconLoadUnit.toUpperCase() }, ...rest.slice(1)];
+  }
   if (kind === 'metcon' || kind === 'run') return columns.filter((c) => c.key !== 'set');
   // Beside three inputs, PREVIOUS can't fit at 320 wide, so an event heads it LAST (design gate #11).
   if (kind === 'event') {

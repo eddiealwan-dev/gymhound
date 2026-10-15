@@ -207,6 +207,8 @@ export function resolveTick(i: TickInput): TickValues | null {
   const durationS = entered.durationS ?? placeholders.durationS;
   const distance = entered.distance ?? placeholders.distance;
   const extraReps = entered.extraReps ?? placeholders.extraReps ?? null;
+  /** A metcon score's load: typed, else last time's suggested; never a target, which a score has none of (R-g3). */
+  const scoreLoad = entered.weight ?? placeholders.weight ?? null;
 
   switch (i.loggingType) {
     case 'weighted':
@@ -224,10 +226,10 @@ export function resolveTick(i: TickInput): TickValues | null {
       // The time is optional (R607): kept when there is one.
       return weight !== null && distance !== null ? { weight, reps: null, durationS, distance } : null;
     case 'rounds':
-      // The rounds are in `reps`; the extra reps are optional.
-      return reps !== null ? { weight: null, reps, durationS: null, distance: null, extraReps } : null;
+      // The rounds are in `reps`; the extra reps are optional, and so is the load of the main move (ruling R-g3).
+      return reps !== null ? { weight: scoreLoad, reps, durationS: null, distance: null, extraReps } : null;
     case 'for_time':
-      return durationS !== null ? { weight: null, reps: null, durationS, distance: null } : null;
+      return durationS !== null ? { weight: scoreLoad, reps: null, durationS, distance: null } : null;
   }
 }
 
