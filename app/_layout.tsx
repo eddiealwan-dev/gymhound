@@ -27,6 +27,7 @@ import { afterDatabaseStart, beforeDatabaseStart } from '../src/state/nativeServ
 // Loaded here, with the root layout, so its browser-history listener is added before the router's (see the module).
 import '../src/state/draftFlush';
 import { Button } from '../src/ui/Button';
+import { useTextSizeKey } from '../src/ui/largeText';
 import { RestWatcher } from '../src/ui/session/RestWatcher';
 import { WorkClockWatcher } from '../src/ui/session/WorkClockWatcher';
 import { Sheet } from '../src/ui/Sheet';
@@ -131,10 +132,12 @@ function RestoredNotice({ restoredFrom }: { restoredFrom: string }) {
 
 function ThemedStack({ restoredFrom }: { restoredFrom: string | null }) {
   const { scheme, colors } = useTheme();
+  // A text size changed while the app is open draws every screen afresh, measured at the new size (Round 16c).
+  const textSize = useTextSizeKey();
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack key={textSize} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         {/* The session has no swipe-down to leave: a stray drag mid-set must not close it. Its back chevron leaves the workout active. */}
         <Stack.Screen name="session" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         {/* The exercise picker rises over the session. */}
