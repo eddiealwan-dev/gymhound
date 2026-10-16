@@ -74,7 +74,7 @@ export const PROGRAMS: readonly Program[] = [
     "weekPlan": [],
     "missesToReset": 3,
     "reactiveDeload": false,
-    "picture": {"exerciseId":"dumbbell-goblet-squat","frame":1,"label":"Goblet squat"},
+    "picture": {"exerciseId":"dumbbell-bench-press","frame":1,"label":"Dumbbell bench press"},
     "days": [
       { "slug": "a", "name": "A", "slots": [
         {"id":"program-dumbbell-full-body:a:dumbbell-goblet-squat","exerciseId":"dumbbell-goblet-squat","catalogName":"Goblet squat","note":"When the heaviest dumbbell is reached, swap for Bulgarian split squat","sets":3,"repMin":8,"repMax":12,"targetUnit":"reps","ruleKind":"load","incrementLb":5,"halveAfterFirstMiss":true,"resetMultiplier":0.9,"sessionsToRaise":1,"ladder":null,"addSet":null,"weekly":null,"metcon":null,"manualText":null,"countsTowardVolume":true,"credits":[{"primary":["quads","glutes"],"secondary":["adductors","abs"]}],"creditPerSet":1,"deloadExempt":false,"isMain":true,"warmUpLine":true},
@@ -717,7 +717,7 @@ export const PROGRAMS: readonly Program[] = [
     "weekPlan": [{"week":10,"kind":"deload","halfSets":true,"holds":true,"runShare":1,"note":""}],
     "missesToReset": 2,
     "reactiveDeload": false,
-    "picture": {"exerciseId":"dumbbell-one-arm-row","frame":1,"label":"One-arm dumbbell row"},
+    "picture": {"exerciseId":"fedb-dumbbell-shoulder-press","frame":1,"label":"Dumbbell shoulder press"},
     "days": [
       { "slug": "a", "name": "A", "slots": [
         {"id":"program-dumbbell-full-body-ii:a:dumbbell-bulgarian-split-squat","exerciseId":"dumbbell-bulgarian-split-squat","catalogName":"Bulgarian split squat","note":"Per leg; heaviest leg exercise of the week","sets":4,"repMin":6,"repMax":10,"targetUnit":"reps","ruleKind":"load","incrementLb":5,"halveAfterFirstMiss":true,"resetMultiplier":0.9,"sessionsToRaise":1,"ladder":null,"addSet":null,"weekly":null,"metcon":null,"manualText":null,"countsTowardVolume":true,"credits":[{"primary":["quads","glutes"],"secondary":["adductors","hamstrings"]}],"creditPerSet":1,"deloadExempt":false,"isMain":true,"warmUpLine":true},
@@ -899,7 +899,7 @@ export const PROGRAMS: readonly Program[] = [
     "weekPlan": [{"week":5,"kind":"deload","halfSets":true,"holds":true,"runShare":1,"note":""},{"week":10,"kind":"deload","halfSets":true,"holds":true,"runShare":1,"note":""}],
     "missesToReset": 2,
     "reactiveDeload": false,
-    "picture": {"exerciseId":"fedb-kettlebell-pistol-squat","frame":1,"label":"Pistol squat"},
+    "picture": {"exerciseId":"fedb-handstand-push-ups","frame":0,"label":"Handstand push-up"},
     "days": [
       { "slug": "a-pull", "name": "A · Pull", "slots": [
         {"id":"program-advanced-calisthenics:a-pull:tuck-front-lever","exerciseId":"tuck-front-lever","catalogName":"Front lever ladder","note":"Front lever ladder. Tuck → advanced tuck → one-leg → straddle → full","sets":4,"repMin":5,"repMax":15,"targetUnit":"seconds","ruleKind":"ladder","incrementLb":0,"halveAfterFirstMiss":false,"resetMultiplier":0.9,"sessionsToRaise":1,"ladder":[{"exerciseId":"tuck-front-lever","timed":true,"repMin":5,"repMax":15,"weightedIncrementLb":null,"note":null},{"exerciseId":"advanced-tuck-front-lever","timed":true,"repMin":5,"repMax":15,"weightedIncrementLb":null,"note":null},{"exerciseId":"one-leg-front-lever","timed":true,"repMin":5,"repMax":15,"weightedIncrementLb":null,"note":null},{"exerciseId":"straddle-front-lever","timed":true,"repMin":5,"repMax":15,"weightedIncrementLb":null,"note":null},{"exerciseId":"front-lever","timed":true,"repMin":5,"repMax":15,"weightedIncrementLb":null,"note":null}],"addSet":null,"weekly":null,"metcon":null,"manualText":null,"countsTowardVolume":true,"credits":[{"primary":["lats","abs"],"secondary":["rear delts","upper back"]}],"creditPerSet":1,"deloadExempt":false,"isMain":true,"warmUpLine":true},
@@ -1072,7 +1072,7 @@ export const PROGRAMS: readonly Program[] = [
     "weekPlan": [{"week":1,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Base: events at moderate loads."},{"week":2,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Base: events at moderate loads."},{"week":3,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Base: events at moderate loads."},{"week":4,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Base: events at moderate loads."},{"week":5,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Build: events heavier, every contest event each week."},{"week":6,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Build: events heavier, every contest event each week."},{"week":7,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Build: events heavier, every contest event each week."},{"week":8,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Build: events heavier, every contest event each week."},{"week":9,"kind":"mock_meet","halfSets":false,"holds":true,"runShare":1,"note":"Mock meet: a 4–5-event medley at near-contest weights on Thursday and Saturday, 15–20 min between events."},{"week":10,"kind":"note","halfSets":false,"holds":false,"runShare":1,"note":"Heavy week."},{"week":11,"kind":"taper","halfSets":true,"holds":true,"runShare":1,"note":"Taper: events at 60–70% of contest weight."},{"week":12,"kind":"meet","halfSets":false,"holds":true,"runShare":1,"note":"Meet week: light gym work early in the week, nothing heavy in the last 7–10 days."}],
     "missesToReset": 2,
     "reactiveDeload": false,
-    "picture": {"exerciseId":"fedb-sled-push","frame":1,"label":"Sled push"},
+    "picture": {"exerciseId":"fedb-atlas-stones","frame":1,"label":"Atlas stone"},
     "days": [
       { "slug": "mon-overhead", "name": "Mon · Overhead", "slots": [
         {"id":"program-strongman-prep:mon-overhead:fedb-log-lift","exerciseId":"fedb-log-lift","catalogName":"Log clean and press","note":"Log clean and press. Clean every rep in contest prep; axle or barbell if no log","sets":4,"repMin":3,"repMax":5,"targetUnit":"reps","ruleKind":"load","incrementLb":5,"halveAfterFirstMiss":true,"resetMultiplier":0.9,"sessionsToRaise":1,"ladder":null,"addSet":null,"weekly":null,"metcon":null,"manualText":null,"countsTowardVolume":true,"credits":[{"primary":["front delts","triceps"],"secondary":["upper back","glutes","quads","side delts"]}],"creditPerSet":1,"deloadExempt":false,"isMain":true,"warmUpLine":true},
