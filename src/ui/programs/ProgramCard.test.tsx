@@ -81,10 +81,10 @@ describe('the program card (R630)', () => {
       return i;
     };
     // The title is the page's heading, in Display; a line may break after its slash (§18.24).
-    const titleAt = at('#11 · Advanced Upper/​Lower DUP');
-    const title = tree.root.findAll((n) => n.type === Text && n.props.accessibilityRole === 'header' && String(n.props.children).startsWith('#11'))[0];
+    const titleAt = at('Advanced Upper/​Lower DUP');
+    const title = tree.root.findAll((n) => n.type === Text && n.props.accessibilityRole === 'header' && String(n.props.children).startsWith('Advanced'))[0];
     expect(StyleSheet.flatten(title.props.style)).toMatchObject({ fontFamily: 'BarlowCondensed_700Bold', fontSize: 28 });
-    expect(title.props.accessibilityLabel).toBe('Program 11, Advanced Upper/Lower DUP');
+    expect(title.props.accessibilityLabel).toBe('Advanced Upper/Lower DUP');
 
     const band = at('4 days a week · 6 weeks · Advanced · Strength + size with daily undulating periodization');
     const rows = [

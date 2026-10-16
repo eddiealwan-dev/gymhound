@@ -70,7 +70,7 @@ export function ProgramCard({ program, footer, locked = false }: { program: Prog
     <View>
       <View style={{ flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'flex-start' : 'center', gap: 16 }}>
         <ProgramPicture programId={program.id} label={program.picture.label} kind="card" />
-        <ScreenTitle accessibilityLabel={`Program ${program.number}, ${program.name}`} style={{ flex: stacked ? undefined : 1, minWidth: 0 }}>
+        <ScreenTitle accessibilityLabel={program.name} style={{ flex: stacked ? undefined : 1, minWidth: 0 }}>
           {breakableName(titleOf(program))}
         </ScreenTitle>
       </View>

@@ -7,7 +7,7 @@ const programNumber = (n: number) => PROGRAMS.find((p) => p.number === n)!;
 describe('the program card (R630)', () => {
   it("summaryLine and titleOf for #11 match the owner's card example", () => {
     const p = programNumber(11);
-    expect(titleOf(p)).toBe('#11 · Advanced Upper/Lower DUP');
+    expect(titleOf(p)).toBe('Advanced Upper/Lower DUP');
     expect(summaryLine(p)).toBe('4 days a week · 6 weeks · Advanced · Strength + size with daily undulating periodization');
   });
 

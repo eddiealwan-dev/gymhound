@@ -452,7 +452,7 @@ export const WEEK_PLANS: Readonly<Record<number, readonly ProgramWeek[]>> = {
  */
 export const PICTURES: Readonly<Record<number, Program['picture']>> = {
   1: { exerciseId: 'barbell-back-squat', frame: 1, label: 'Barbell back squat' },
-  2: { exerciseId: 'dumbbell-goblet-squat', frame: 1, label: 'Goblet squat' },
+  2: { exerciseId: 'dumbbell-bench-press', frame: 1, label: 'Dumbbell bench press' }, // the lockout, both dumbbells visible
   3: { exerciseId: 'pull-up', frame: 1, label: 'Pull-up' },
   4: { exerciseId: 'barbell-overhead-press', frame: 1, label: 'Overhead press' },
   5: { exerciseId: 'barbell-row', frame: 0, label: 'Barbell row' },
@@ -463,13 +463,13 @@ export const PICTURES: Readonly<Record<number, Program['picture']>> = {
   10: { exerciseId: 'glute-bridge', frame: 1, label: 'Glute bridge' },
   11: { exerciseId: 'barbell-bench-press', frame: 1, label: 'Bench press' },
   12: { exerciseId: 'barbell-deadlift', frame: 1, label: 'Deadlift' },
-  13: { exerciseId: 'dumbbell-one-arm-row', frame: 1, label: 'One-arm dumbbell row' },
+  13: { exerciseId: 'fedb-dumbbell-shoulder-press', frame: 1, label: 'Dumbbell shoulder press' }, // the lockout, both dumbbells overhead; the dumbbell squat photos show a logo
   14: { exerciseId: 'fedb-kneeling-hip-flexor', frame: 1, label: 'Kneeling hip flexor stretch' },
   15: { exerciseId: 'barbell-curl', frame: 1, label: 'Barbell curl' },
-  16: { exerciseId: 'fedb-kettlebell-pistol-squat', frame: 1, label: 'Pistol squat' },
+  16: { exerciseId: 'fedb-handstand-push-ups', frame: 0, label: 'Handstand push-up' }, // the lockout; nearest advanced move to a planche, which has no photo
   17: { exerciseId: 'fedb-push-press', frame: 1, label: 'Push press' },
   18: { exerciseId: 'fedb-snatch', frame: 0, label: 'Snatch' },
-  19: { exerciseId: 'fedb-sled-push', frame: 1, label: 'Sled push' },
+  19: { exerciseId: 'fedb-atlas-stones', frame: 1, label: 'Atlas stone' }, // the stone lifted to the lap
   20: { exerciseId: 'fedb-running-treadmill', frame: 1, label: 'Running on a treadmill' },
 };
 

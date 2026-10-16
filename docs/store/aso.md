@@ -10,7 +10,7 @@ Drafted 2026-10-12 for the owner to review before the first store submission (pl
 |---|---|---|---|
 | App name (title) | 30 | `GymHound: Progressive Overload` | 30 |
 | Subtitle | 30 | `Lifting Log & Strength Tracker` | 30 |
-| Keywords | 100 | `workout,gym,weightlifting,routine,program,plate,calculator,rest,timer,5x5,offline,powerlifting,split` | 100 |
+| Keywords | 100 | `workout,gym,weightlifting,routine,program,plate,calculator,rest,timer,offline,powerlifting,split` | 96 |
 | Promotional text | 170 | `See the rule behind every weight. Hit the top of your range on every set and next time goes up. Mark an off day and it holds. No account. Your data stays on your phone.` | 168 |
 
 How the keywords were chosen:

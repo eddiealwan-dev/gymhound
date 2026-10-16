@@ -7,9 +7,9 @@ import { formatRest } from './dates';
 const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'} a week`;
 const weeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
 
-/** The card's title, as the owner's example writes it: "#11 · Advanced Upper/Lower DUP". */
+/** The card's title: the program's name alone, with no number (owner, round 16). */
 export function titleOf(p: Program): string {
-  return `#${p.number} · ${p.name}`;
+  return p.name;
 }
 
 /** The summary band: "4 days a week · 6 weeks · Advanced · Strength + size with daily undulating periodization". */

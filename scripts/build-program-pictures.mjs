@@ -4,7 +4,7 @@
 // Each of the twenty programs shows one bundled free-exercise-db photo (the Unlicense) of its signature movement,
 // from assets/exercises/{exerciseId}-{frame}.webp. The script writes the only copies of:
 //   assets/programs/{programId}-card.webp   360 x 240, the whole 3:2 frame
-//   assets/programs/{programId}-thumb.webp  144 x 144, a square crop centred on the lifter (the Routines row)
+//   assets/programs/{programId}-thumb.webp  192 x 192, a square crop centred on the lifter (the Routines row)
 //   src/seed/programPictures.generated.ts   the pictures as static require() calls, and each one's source
 // The treatment is one for all of them, so photos shot against different walls (some red) read as a series, and red
 // stays for the wordmark, the active tab and the PR marks: grayscale and a slight contrast lift, WebP quality 80.
@@ -27,8 +27,9 @@ const OUT = join(ROOT, 'assets', 'programs');
 const TS_OUT = join(ROOT, 'src', 'seed', 'programPictures.generated.ts');
 const MAPPING = join(ROOT, 'src', 'seed', 'programMapping.ts');
 
+// CARD is shown at 150 x 100 pt (2x = 300 x 200, so 360 x 240 is enough); THUMB at 64 x 64 pt (3x = 192, so it is not enlarged).
 const CARD = { width: 360, height: 240 };
-const THUMB = 144;
+const THUMB = 192;
 const QUALITY = 80;
 /** Slight contrast lift on the grayscale: out = in * 1.08 - 6. */
 const CONTRAST = { a: 1.08, b: -6 };
@@ -60,7 +61,7 @@ const PROGRAM_IDS = [
 /** Appendix E, keyed by program number: the movement (label, for VoiceOver "{label} photo"), its source exercise and frame. */
 const OWN_PICTURES = {
   1: { exerciseId: 'barbell-back-squat', frame: 1, label: 'Barbell back squat' }, // the bottom
-  2: { exerciseId: 'dumbbell-goblet-squat', frame: 1, label: 'Goblet squat' }, // the bottom
+  2: { exerciseId: 'dumbbell-bench-press', frame: 1, label: 'Dumbbell bench press' }, // the lockout: both dumbbells stacked over the chest, clearly visible (frame 0 hides one behind the head)
   3: { exerciseId: 'pull-up', frame: 1, label: 'Pull-up' }, // chin over the bar
   4: { exerciseId: 'barbell-overhead-press', frame: 1, label: 'Overhead press' }, // the lockout
   5: { exerciseId: 'barbell-row', frame: 0, label: 'Barbell row' }, // bent over, the pull
@@ -71,13 +72,13 @@ const OWN_PICTURES = {
   10: { exerciseId: 'glute-bridge', frame: 1, label: 'Glute bridge' }, // the top; both hip thrust frames are dominated by the plate
   11: { exerciseId: 'barbell-bench-press', frame: 1, label: 'Bench press' }, // bar at the chest
   12: { exerciseId: 'barbell-deadlift', frame: 1, label: 'Deadlift' }, // the lockout
-  13: { exerciseId: 'dumbbell-one-arm-row', frame: 1, label: 'One-arm dumbbell row' }, // the pull; landscape, so nothing is enlarged
+  13: { exerciseId: 'fedb-dumbbell-shoulder-press', frame: 1, label: 'Dumbbell shoulder press' }, // the lockout, both dumbbells overhead; the dumbbell squat photos show a logo on the shirt and shorts (owner's #13 pick was the dumbbell squat)
   14: { exerciseId: 'fedb-kneeling-hip-flexor', frame: 1, label: 'Kneeling hip flexor stretch' }, // closest to the couch stretch
   15: { exerciseId: 'barbell-curl', frame: 1, label: 'Barbell curl' }, // the top
-  16: { exerciseId: 'fedb-kettlebell-pistol-squat', frame: 1, label: 'Pistol squat' }, // the bottom; the muscle-up and ring photos show a gym logo
+  16: { exerciseId: 'fedb-handstand-push-ups', frame: 0, label: 'Handstand push-up' }, // the lockout, arms straight (frame 1 is the bottom, head near the floor); the nearest advanced move to the owner's planche, which the library has no photo of; the muscle-up and ring photos show a gym logo
   17: { exerciseId: 'fedb-push-press', frame: 1, label: 'Push press' }, // the dip
   18: { exerciseId: 'fedb-snatch', frame: 0, label: 'Snatch' }, // the bottom, wide grip
-  19: { exerciseId: 'fedb-sled-push', frame: 1, label: 'Sled push' }, // the push; the atlas stone, yoke and carry photos show a car, a pale wall or shirt text
+  19: { exerciseId: 'fedb-atlas-stones', frame: 1, label: 'Atlas stone' }, // the stone lifted to the lap, the lift's working position (frame 0 is the lifter bent over before the pull); the owner chose it over the sled push
   20: { exerciseId: 'fedb-running-treadmill', frame: 1, label: 'Running on a treadmill' }, // side on
 };
 

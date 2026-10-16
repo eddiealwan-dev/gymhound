@@ -3,7 +3,7 @@ import { PROGRAM_PICTURES } from '../../seed/programPictures.generated';
 import { useTheme } from '../ThemeProvider';
 
 /** The card's picture is 3:2 at the top left of the card; the Routines row's is a 1:1 thumbnail (R632, R633). */
-const SIZE = { card: { width: 120, height: 80 }, thumb: { width: 48, height: 48 } } as const;
+const SIZE = { card: { width: 150, height: 100 }, thumb: { width: 64, height: 64 } } as const;
 
 /**
  * A program's picture (R632): a bundled free-exercise-db photo of its signature movement, in grayscale, so the twenty

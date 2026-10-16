@@ -23,23 +23,23 @@ function render(node: React.ReactElement): ReactTestRenderer {
 }
 
 describe('the program picture (R632)', () => {
-  it('the card picture is 120 × 80 with 8pt corners and a 1px border, read as "{movement} photo"', () => {
+  it('the card picture is 150 × 100 with 8pt corners and a 1px border, read as "{movement} photo"', () => {
     const tree = render(<ProgramPicture programId="program-advanced-upper-lower-dup" label="Bench press" kind="card" />);
     const image = tree.root.findByType(Image);
     expect(image.props.source).toBe(11);
     // The photo fills the frame inside its 1px border, never over it.
-    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 118, height: 78 });
+    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 148, height: 98 });
     const frame = tree.root.findByProps({ accessibilityLabel: 'Bench press photo' });
     expect(frame.props.accessibilityRole).toBe('image');
     expect(StyleSheet.flatten(frame.props.style)).toMatchObject({ borderRadius: 8, borderWidth: 1, borderColor: '#2e2a23', overflow: 'hidden' });
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
   });
 
-  it("the row's thumbnail is a 48pt square, and inside a row it is left to the row's own label", () => {
+  it("the row's thumbnail is a 64pt square, and inside a row it is left to the row's own label", () => {
     const tree = render(<ProgramPicture programId="program-advanced-upper-lower-dup" label="Bench press" kind="thumb" decorative />);
     const image = tree.root.findByType(Image);
     expect(image.props.source).toBe(12);
-    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 46, height: 46 });
+    expect(StyleSheet.flatten(image.props.style)).toEqual({ width: 62, height: 62 });
     expect(tree.root.findAll((n) => n.props.accessibilityLabel === 'Bench press photo')).toHaveLength(0);
     expect(tree.root.findAll((n) => n.props.accessible === false).length).toBeGreaterThan(0);
   });

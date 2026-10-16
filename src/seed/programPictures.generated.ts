@@ -29,7 +29,7 @@ export const PROGRAM_PICTURES: Readonly<Record<string, { card: ImageSourcePropTy
 /** The photo each picture is made from: assets/exercises/{exerciseId}-{frame}.webp. */
 export const PROGRAM_PICTURE_SOURCES: Readonly<Record<string, { exerciseId: string; frame: 0 | 1 }>> = {
   'program-barbell-foundations': { exerciseId: 'barbell-back-squat', frame: 1 },
-  'program-dumbbell-full-body': { exerciseId: 'dumbbell-goblet-squat', frame: 1 },
+  'program-dumbbell-full-body': { exerciseId: 'dumbbell-bench-press', frame: 1 },
   'program-calisthenics-foundations': { exerciseId: 'pull-up', frame: 1 },
   'program-minimalist-two-day': { exerciseId: 'barbell-overhead-press', frame: 1 },
   'program-upper-lower-powerbuilding': { exerciseId: 'barbell-row', frame: 0 },
@@ -40,12 +40,12 @@ export const PROGRAM_PICTURE_SOURCES: Readonly<Record<string, { exerciseId: stri
   'program-glute-lower-body-emphasis': { exerciseId: 'glute-bridge', frame: 1 },
   'program-advanced-upper-lower-dup': { exerciseId: 'barbell-bench-press', frame: 1 },
   'program-strength-peaking-block': { exerciseId: 'barbell-deadlift', frame: 1 },
-  'program-dumbbell-full-body-ii': { exerciseId: 'dumbbell-one-arm-row', frame: 1 },
+  'program-dumbbell-full-body-ii': { exerciseId: 'fedb-dumbbell-shoulder-press', frame: 1 },
   'program-mobility-for-lifters': { exerciseId: 'fedb-kneeling-hip-flexor', frame: 1 },
   'program-bro-split': { exerciseId: 'barbell-curl', frame: 1 },
-  'program-advanced-calisthenics': { exerciseId: 'fedb-kettlebell-pistol-squat', frame: 1 },
+  'program-advanced-calisthenics': { exerciseId: 'fedb-handstand-push-ups', frame: 0 },
   'program-crossfit-foundations': { exerciseId: 'fedb-push-press', frame: 1 },
   'program-crossfit-performance': { exerciseId: 'fedb-snatch', frame: 0 },
-  'program-strongman-prep': { exerciseId: 'fedb-sled-push', frame: 1 },
+  'program-strongman-prep': { exerciseId: 'fedb-atlas-stones', frame: 1 },
   'program-hybrid-athlete': { exerciseId: 'fedb-running-treadmill', frame: 1 },
 };

@@ -42,7 +42,7 @@ describe('program card pictures (R632)', () => {
       const card = await sharp(asset(id, 'card')).metadata();
       const thumb = await sharp(asset(id, 'thumb')).metadata();
       expect([card.format, card.width, card.height]).toEqual(['webp', 360, 240]);
-      expect([thumb.format, thumb.width, thumb.height]).toEqual(['webp', 144, 144]);
+      expect([thumb.format, thumb.width, thumb.height]).toEqual(['webp', 192, 192]);
     }
   });
 

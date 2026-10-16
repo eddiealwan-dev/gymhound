@@ -391,9 +391,9 @@ describe('buildPrograms', () => {
     expect(new Set(Object.values(PICTURES).map((p) => p.exerciseId)).size).toBe(20);
     expect(PICTURES[9]).toEqual({ exerciseId: 'fedb-recumbent-bike', frame: 0, label: 'Recumbent bike' });
     expect(PICTURES[10]).toEqual({ exerciseId: 'glute-bridge', frame: 1, label: 'Glute bridge' });
-    expect(PICTURES[13]).toEqual({ exerciseId: 'dumbbell-one-arm-row', frame: 1, label: 'One-arm dumbbell row' });
-    expect(PICTURES[16]).toEqual({ exerciseId: 'fedb-kettlebell-pistol-squat', frame: 1, label: 'Pistol squat' });
-    expect(PICTURES[19]).toEqual({ exerciseId: 'fedb-sled-push', frame: 1, label: 'Sled push' });
+    expect(PICTURES[13]).toEqual({ exerciseId: 'fedb-dumbbell-shoulder-press', frame: 1, label: 'Dumbbell shoulder press' });
+    expect(PICTURES[16]).toEqual({ exerciseId: 'fedb-handstand-push-ups', frame: 0, label: 'Handstand push-up' });
+    expect(PICTURES[19]).toEqual({ exerciseId: 'fedb-atlas-stones', frame: 1, label: 'Atlas stone' });
     expect(PICTURES[8]).toEqual({ exerciseId: 'fedb-one-arm-kettlebell-swings', frame: 0, label: 'Kettlebell swing' });
     expect([5, 7, 8, 9, 18].every((n) => PICTURES[n].frame === 0)).toBe(true);
   });

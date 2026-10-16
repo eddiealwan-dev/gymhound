@@ -127,7 +127,7 @@ export const RUNG_STEPS: Readonly<Record<string, readonly string[]>> = {
     'Start in a push-up position with your hands about twice shoulder-width apart.',
     'Lower toward one hand, bending that elbow while the other arm stays straight out to the side.',
     'Keep your body in one straight line.',
-    'Press back up, then lower to the other side. One to each side is two reps.',
+    'Press back up, then lower to the other side. Each side counts as one rep.',
   ],
   // Plank (#3)
   'standing-ab-wheel-rollout': [

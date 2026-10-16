@@ -128,7 +128,7 @@ describe("a program's page is its card (R630, R634)", () => {
   it('shows the card, then says the days show once it is active, with Set active filled; no exercise names', () => {
     const tree = mount(DUP);
     const shown = shownText(tree);
-    expect(shown).toContain('#11 · Advanced Upper/Lower DUP');
+    expect(shown).toContain('Advanced Upper/Lower DUP');
     expect(shown).toContain('Why it works');
     expect(shown).toContain('Sources (7)');
     expect(shown.indexOf(HIDDEN)).toBeGreaterThan(shown.indexOf('Sources (7)'));

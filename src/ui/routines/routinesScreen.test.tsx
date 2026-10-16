@@ -171,15 +171,15 @@ describe("Routines: a program's row (R633)", () => {
     expect(router.push).toHaveBeenCalledWith('/routines/program-barbell-foundations');
   });
 
-  it('shows a 48pt picture, the name in Body strong and the line as a caption; no Set active pill', () => {
+  it('shows a 64pt picture, the name in Body strong and the line as a caption; no Set active pill', () => {
     mockRoutines = TWENTY;
     const tree = mount();
     const row = rowTarget(tree, 'Barbell Foundations');
     const image = row.findByType(Image);
     expect(image.props.source).toBe(2);
-    // A 48pt frame; the photo fills it inside the 1px border.
-    expect(StyleSheet.flatten(image.parent!.props.style)).toMatchObject({ width: 48, height: 48, borderWidth: 1 });
-    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 46, height: 46 });
+    // A 64pt frame; the photo fills it inside the 1px border.
+    expect(StyleSheet.flatten(image.parent!.props.style)).toMatchObject({ width: 64, height: 64, borderWidth: 1 });
+    expect(StyleSheet.flatten(image.props.style)).toMatchObject({ width: 62, height: 62 });
     const name = row.findAll((n) => n.type === Text && n.props.children === 'Barbell Foundations')[0];
     expect(StyleSheet.flatten(name.props.style)).toMatchObject({ fontFamily: 'Inter_600SemiBold', fontSize: 16 });
     // A no-break space only between a number and its word and before each "·", so a "·" never starts or ends a line
@@ -247,7 +247,7 @@ describe('Routines: a Pro program on free (R525)', () => {
     expect(StyleSheet.flatten(line.props.style)).toMatchObject({ fontSize: 14, color: '#a39d90' });
     // A state is a word, never a pill: nothing in the row has an edge but the picture's.
     const edged = row.findAll((n) => n.type === View && (StyleSheet.flatten(n.props.style)?.borderWidth ?? 0) > 0);
-    expect(edged.every((n) => StyleSheet.flatten(n.props.style)?.width === 48)).toBe(true);
+    expect(edged.every((n) => StyleSheet.flatten(n.props.style)?.width === 64)).toBe(true);
     // The mark is in the row's line, not a button of its own, and never red.
     expect(buttons(tree, 'Pro')).toHaveLength(0);
     expect(JSON.stringify(tree.toJSON())).not.toContain('#E10600');
