@@ -109,10 +109,12 @@ export function ruleSentence(a: { rule: Rule | null; loggingType: LoggingType; u
 
   const inc = formatWeight(convertIncrement(rule.increment, rule.incrementUnit, unit), unit);
   if (loggingType === 'assisted') {
-    return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off. A marked day holds it.`;
+    return `Hit ${rule.repMax} on every working set on a normal day and next time takes ${inc} of assistance off. A marked day holds it.`;
   }
-  const hits = loggingType === 'weighted_time' ? `reaches ${rule.repMax}s` : `hits ${rule.repMax}`;
-  return `If every working set ${hits} on a normal day, add ${inc}. A marked day holds the weight.`;
+  if (loggingType === 'weighted_time') {
+    return `Reach ${rule.repMax} s on every working set on a normal day and next time goes up ${inc}. A marked day holds the weight.`;
+  }
+  return `Hit ${rule.repMax} on every working set on a normal day and next time goes up ${inc}. A marked day holds the weight.`;
 }
 
 /**
@@ -145,7 +147,7 @@ export function todaysRead(a: {
 }): string | null {
   const { rule, loggingType, planned, override, mark } = a;
   if (!rule || !isLoaded(loggingType) || rule.increment <= 0) return null;
-  if (!planned) return 'Pick a starting weight. Next time builds from it.';
+  if (!planned) return 'Pick a starting weight. Next time starts from what you lift today.';
 
   // A bodyweight-plus plan of 0 added load is just bodyweight (R75); the raise from it is still a weight.
   const atBodyweight = loggingType === 'bodyweight_plus' && isZeroWeight(planned.weight, planned.unit);
@@ -433,17 +435,19 @@ function loadSentence(p: ProgramRule, rule: Rule, loggingType: LoggingType, unit
   const inc = formatWeight(convertIncrement(rule.increment, rule.incrementUnit, unit), unit);
   const halved = p.halved ? ' (halved after the first miss)' : '';
   const plates = unloadableRaise(rule, loggingType, load);
-  const add = `add ${inc}${halved}.${plates === null ? '' : ` ${plates}`}`;
+  const platesPiece = plates === null ? '' : ` ${plates}`;
   if (loggingType === 'weighted_distance') {
-    return `If every ${p.eventWord ?? 'carry'} covers ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on a normal day, ${add} A marked day holds the weight.`;
+    return `Cover ${rule.repMax} ${p.carryUnit ?? 'm'} unbroken on every ${p.eventWord ?? 'carry'} on a normal day and next time goes up ${inc}${halved}.${platesPiece} A marked day holds the weight.`;
   }
-  if (p.emom) return `Make every minute clean on a normal day and next time adds ${inc}${halved}.${plates === null ? '' : ` ${plates}`} A marked day holds the weight.`;
-  if (loggingType === 'assisted') {
-    return `If every working set hits ${rule.repMax} on a normal day, take ${inc} of assistance off${halved}. A marked day holds it.`;
-  }
-  const hits = loggingType === 'weighted_time' ? `reaches ${rule.repMax} s` : `hits ${rule.repMax}`;
+  if (p.emom) return `Make every minute clean on a normal day and next time goes up ${inc}${halved}.${platesPiece} A marked day holds the weight.`;
   const days = p.sessionsToRaise === 2 ? 'on two normal days in a row' : 'on a normal day';
-  return `If every working set ${hits} ${days}, ${add} A marked day holds the weight.`;
+  if (loggingType === 'assisted') {
+    return `Hit ${rule.repMax} on every working set ${days} and next time takes ${inc} of assistance off${halved}. A marked day holds it.`;
+  }
+  if (loggingType === 'weighted_time') {
+    return `Reach ${rule.repMax} s on every working set ${days} and next time goes up ${inc}${halved}.${platesPiece} A marked day holds the weight.`;
+  }
+  return `Hit ${rule.repMax} on every working set ${days} and next time goes up ${inc}${halved}.${platesPiece} A marked day holds the weight.`;
 }
 
 /** A library name that is a compound adjective written open: "Band assisted pull-up" reads "Band-assisted pull-up". */
@@ -575,7 +579,7 @@ export function programTodaysRead(a: ProgramReadInput): string | null {
     case 'ladder':
       return p.rungs?.[p.rung ?? 0]?.weighted ? loadRead(a) : null;
     case 'add_set':
-      return rule && rule.increment > 0 && isLoaded(loggingType) && !a.planned ? 'Pick a starting weight. Next time builds from it.' : null;
+      return rule && rule.increment > 0 && isLoaded(loggingType) && !a.planned ? 'Pick a starting weight. Next time starts from what you lift today.' : null;
     case 'hold': {
       const done = last?.durationS ?? null;
       if (done === null || !rule) return null;
@@ -595,7 +599,7 @@ export function programTodaysRead(a: ProgramReadInput): string | null {
 function loadRead(a: ProgramReadInput): string | null {
   const { program: p, rule, loggingType, planned, override, mark } = a;
   if (!rule || !isLoaded(loggingType) || rule.increment <= 0) return null;
-  if (!planned) return 'Pick a starting weight. Next time builds from it.';
+  if (!planned) return 'Pick a starting weight. Next time starts from what you lift today.';
   const atBodyweight = loggingType === 'bodyweight_plus' && isZeroWeight(planned.weight, planned.unit);
   const plan = atBodyweight ? 'bodyweight' : formatWeight(planned.weight, planned.unit);
   const holds = mark ? `${MARK_LABELS[mark]} today, so ${plan} holds.` : null;

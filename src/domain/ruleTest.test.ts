@@ -6,7 +6,7 @@ describe('the rule test screens (R581)', () => {
   it('every set hit on a normal day: the rule, the read, and next time up', () => {
     expect(rule.markLabel).toBe('Something off');
     expect(rule.ruleLine).toBe(
-      'If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb.',
+      'Hit 8 on every working set on a normal day and next time goes up 5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb.',
     );
     expect(rule.finish).toBe('Bench press — next time 140 lb ↑');
   });

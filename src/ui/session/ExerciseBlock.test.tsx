@@ -1197,7 +1197,7 @@ describe('ExerciseBlock: the note (UX item 6, R29)', () => {
     expect(drawn.indexOf(pencils[0])).toBeLessThan(drawn.indexOf(textNode(tree, SAVED)));
     expect(StyleSheet.flatten(restingStyle(line))).toMatchObject({ flexDirection: 'row', alignItems: 'center' });
     // The rule paragraph is its own line, outside the note.
-    const rule = tree.root.findAll((n) => n.type === Text && typeof n.props.children === 'string' && n.props.children.startsWith('If every working set'));
+    const rule = tree.root.findAll((n) => n.type === Text && typeof n.props.children === 'string' && n.props.children.startsWith('Hit 8 on every working set'));
     expect(rule).toHaveLength(1);
     expect(line.findAll((n) => n === rule[0])).toHaveLength(0);
   });
@@ -1269,7 +1269,7 @@ describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () =>
     plannedUnit: 'lb',
     ...over,
   });
-  const RULE = 'If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight.';
+  const RULE = 'Hit 8 on every working set on a normal day and next time goes up 5 lb. A marked day holds the weight.';
   const prev = (over: Partial<SetView>) => {
     const { id: _id, rpe: _rpe, done: _done, completedAt: _completedAt, ...p } = set('p', over.position ?? 0, over);
     return p;
@@ -1377,7 +1377,7 @@ describe("ExerciseBlock: the rule line and today's read (spec 7.4, 18.7)", () =>
   });
 
   it('with no plan yet, says to pick a starting weight', () => {
-    textNode(mount(ruled({ plannedWeight: null, plannedUnit: null })), `${RULE} Pick a starting weight. Next time builds from it.`);
+    textNode(mount(ruled({ plannedWeight: null, plannedUnit: null })), `${RULE} Pick a starting weight. Next time starts from what you lift today.`);
   });
 
   it("reads a plan in the other unit as the set table's target does, in the unit shown", () => {
@@ -1855,7 +1855,7 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
     const shown = shownText(tree);
     // The default plates can't load 137.5 lb, so the line says what they make, the read's 140 lb (ruling R-w2).
     const line =
-      'If every working set hits 8 on a normal day, add 2.5 lb (halved after the first miss). Your plates make 140 lb; add 1.25 lb plates in Settings to load 137.5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
+      'Hit 8 on every working set on a normal day and next time goes up 2.5 lb (halved after the first miss). Your plates make 140 lb; add 1.25 lb plates in Settings to load 137.5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb. One miss so far. Two more and next time drops 10%.';
     expect(shown).toContain(line);
     expect(shown.indexOf(line)).toBeLessThan(shown.indexOf('Beginner squat: 5 lb per session, not 10'));
     expect(shown.indexOf('Beginner squat: 5 lb per session, not 10')).toBeLessThan(shown.indexOf('SET'));
@@ -1894,6 +1894,6 @@ describe('ExerciseBlock: a program slot (spec §18.29, R610–R626)', () => {
 
   it('your own routine reads as it always has', () => {
     const tree = mount({ ...squat(null), rule: { setCount: 3, repMin: 5, repMax: 8, increment: 5, incrementUnit: 'lb' } });
-    expect(shownText(tree)).toContain('If every working set hits 8 on a normal day, add 5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb.');
+    expect(shownText(tree)).toContain('Hit 8 on every working set on a normal day and next time goes up 5 lb. A marked day holds the weight. Hit 8s on a normal day and next time is 140 lb.');
   });
 });

@@ -363,7 +363,7 @@ describe('an event reads as an event', () => {
     expect(labels(tree)).toContain('Previous 315 pounds for 50 feet in 22 seconds');
     expect(labels(tree)).toContain('Set 1 carried drop-free');
     expect(shownText(tree)).toContain(
-      'If every carry covers 50 ft unbroken on a normal day, add 20 lb. A marked day holds the weight. A drop ends the set: log what you carried unbroken. Cover 50 ft unbroken on every carry on a normal day and next time is 355 lb.',
+      'Cover 50 ft unbroken on every carry on a normal day and next time goes up 20 lb. A marked day holds the weight. A drop ends the set: log what you carried unbroken. Cover 50 ft unbroken on every carry on a normal day and next time is 355 lb.',
     );
     expect(buttons(tree)).toEqual(expect.arrayContaining(['+ Set', '+ Warmup']));
     expect(clock(tree)).toHaveLength(0);
@@ -382,7 +382,7 @@ describe('an event reads as an event', () => {
 describe('a sled push', () => {
   it('is a push: a stop ends the set, and the tick says so', () => {
     const tree = mount(sled());
-    expect(shownText(tree).some((t) => t.includes('If every push covers 40 yd unbroken on a normal day') && t.includes('A stop ends the set: log what you pushed unbroken.'))).toBe(true);
+    expect(shownText(tree).some((t) => t.includes('Cover 40 yd unbroken on every push on a normal day and next time goes up 20 lb') && t.includes('A stop ends the set: log what you pushed unbroken.'))).toBe(true);
     expect(labels(tree)).toContain('Set 1 pushed without a stop');
   });
 });
@@ -404,7 +404,7 @@ describe('technique sets', () => {
     );
     const shown = shownText(mount(emom));
     const format = shown.indexOf('EMOM 10 min · 2 reps every minute');
-    const rule = shown.findIndex((t) => t.startsWith('Make every minute clean on a normal day and next time adds 5 lb.') && t.includes('A marked day holds the weight.'));
+    const rule = shown.findIndex((t) => t.startsWith('Make every minute clean on a normal day and next time goes up 5 lb.') && t.includes('A marked day holds the weight.'));
     const technique = shown.indexOf('Technique set: not counted toward weekly volume.');
     expect(format).toBeGreaterThan(-1);
     expect(rule).toBeGreaterThan(format);
