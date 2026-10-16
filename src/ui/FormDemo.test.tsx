@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { AccessibilityInfo, Image, Keyboard, LayoutAnimation, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Image, Keyboard, LayoutAnimation, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ExerciseDetail } from '../db/repositories/exercisesRepo';
@@ -92,7 +92,25 @@ const MINE: ExerciseDetail = {
   sourceId: null,
 };
 
-const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK, MINE];
+/** One Commons photo with a credit (Round 16c); the generated map is stood in for below. */
+const FRONT_LEVER: ExerciseDetail = {
+  ...BENCH,
+  id: 'front-lever',
+  name: 'Front lever',
+  primaryMuscles: ['lats'],
+  secondaryMuscles: ['abs'],
+  equipment: 'bodyweight',
+  loggingType: 'timed',
+  instructions: ['Hang from the bar.', 'Pull your body up to level.'],
+  sourceId: null,
+};
+const ALL = [BENCH, HALO, WALL_SIT, SIDE_PLANK, MINE, FRONT_LEVER];
+jest.mock('../seed/webPhotos.generated', () => ({
+  WEB_PHOTOS: {
+    'front-lever': { photo: 'web-front-lever', author: 'A. Person', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0', page: 'https://commons.wikimedia.org/wiki/File:X.jpg', note: null },
+  },
+  WEB_PHOTO_ALIASES: {},
+}));
 
 const originalOS = Platform.OS;
 
@@ -228,6 +246,24 @@ describe('the form demo (R86)', () => {
 
     await act(async () => tree.update(<FormDemo exerciseId="wall-sit" onClose={() => {}} />));
     expect(texts(tree)).toContain('Wall sit');
+  });
+});
+
+describe('the form demo: a Commons photo (Round 16c)', () => {
+  it('shows the one photo still, with its credit under it, and the credit opens the photo page', async () => {
+    const open_ = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const tree = await open('front-lever');
+    expect(photo(tree, START).props.source).toBe('web-front-lever');
+    const line = 'Photo: A. Person, CC BY-SA 4.0, Wikimedia Commons';
+    expect(texts(tree)).toContain(line);
+    const link = tree.root.findAll((n) => n.props.accessibilityRole === 'link' && n.props.accessibilityLabel === line)[0];
+    await act(async () => link.props.onPress());
+    expect(open_).toHaveBeenCalledWith('https://commons.wikimedia.org/wiki/File:X.jpg');
+    act(() => tree.unmount());
+  });
+
+  it('a free-exercise-db photo has no credit line', async () => {
+    expect(texts(await open('barbell-bench-press')).some((t) => typeof t === 'string' && t.startsWith('Photo:'))).toBe(false);
   });
 });
 

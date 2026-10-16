@@ -7,9 +7,21 @@ import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { LIBRARY_EXERCISES } from '../seed/library.generated';
 import { NEW_EXERCISES, PHOTO_ALIAS } from '../seed/newExercises';
 import { bumpData, useDataVersion } from '../state/dataVersion';
-import { canHaveOwnPhotos, exercisePhotos, photoNote, useExercisePhotos } from './exercisePhotos';
+import { WEB_PHOTO_ALIASES, WEB_PHOTOS } from '../seed/webPhotos.generated';
+import { canHaveOwnPhotos, exercisePhotos, photoCredit, photoNote, useExercisePhotos } from './exercisePhotos';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// A stand-in for the generated Commons map, so these tests read the same whatever scripts/web-photos.json holds.
+jest.mock('../seed/webPhotos.generated', () => ({
+  WEB_PHOTOS: {
+    'front-lever': { photo: 'web-front-lever', author: 'A. Person', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0', page: 'https://commons.wikimedia.org/wiki/File:X.jpg', note: null },
+  },
+  WEB_PHOTO_ALIASES: {
+    'tuck-front-lever': { photosOf: 'front-lever', note: 'Shown at the full front lever.' },
+    'ring-row': { photosOf: 'fedb-inverted-row', note: 'Shown on a bar. Rings hang the same way.' },
+  },
+}));
 
 jest.mock('../db/DbProvider', () => ({ useDb: () => 'db' }));
 jest.mock('../db/repositories/exercisePhotosRepo', () => ({ getOwnPhotos: jest.fn(() => ({ start: null, end: null })) }));
@@ -62,10 +74,38 @@ describe('PHOTO_ALIAS (§18.29, R605)', () => {
     expect(exercisePhotos('paused-back-squat')).toBe(EXERCISE_PHOTOS['barbell-back-squat']);
   });
 
-  it('gives the other 100 new exercises none, so a phone build offers your own (R111)', () => {
-    const without = NEW_EXERCISES.filter((e) => !(e.id in PHOTO_ALIAS));
-    expect(without).toHaveLength(100);
+  it('gives a new exercise with no alias and no Commons photo none, so a phone build offers your own (R111)', () => {
+    const without = NEW_EXERCISES.filter((e) => !(e.id in PHOTO_ALIAS) && !(e.id in WEB_PHOTOS) && !(e.id in WEB_PHOTO_ALIASES));
+    expect(without.length).toBeGreaterThan(0);
     for (const e of without) expect([e.id, exercisePhotos(e.id), canHaveOwnPhotos(e.id)]).toEqual([e.id, undefined, true]);
+  });
+});
+
+describe('the Commons photos (Round 16c)', () => {
+  it('gives an exercise its one Commons photo with null after it, so the demo shows it still, and its credit', () => {
+    expect(exercisePhotos('front-lever')).toEqual(['web-front-lever', null]);
+    expect(photoCredit('front-lever')).toEqual({ author: 'A. Person', license: 'CC BY-SA 4.0', page: 'https://commons.wikimedia.org/wiki/File:X.jpg' });
+    expect(photoNote('front-lever')).toBeNull();
+    expect(canHaveOwnPhotos('front-lever')).toBe(false);
+  });
+
+  it("shows an aliased exercise its family's photo, with the note and the same credit", () => {
+    expect(exercisePhotos('tuck-front-lever')).toEqual(['web-front-lever', null]);
+    expect(photoNote('tuck-front-lever')).toBe('Shown at the full front lever.');
+    expect(photoCredit('tuck-front-lever')).toEqual(photoCredit('front-lever'));
+    expect(canHaveOwnPhotos('tuck-front-lever')).toBe(false);
+  });
+
+  it('an alias onto a free-exercise-db exercise shows that pair, with the note and no credit', () => {
+    expect(exercisePhotos('ring-row')).toBe(EXERCISE_PHOTOS['fedb-inverted-row']);
+    expect(photoNote('ring-row')).toBe('Shown on a bar. Rings hang the same way.');
+    expect(photoCredit('ring-row')).toBeNull();
+  });
+
+  it('gives free-exercise-db photos no credit', () => {
+    expect(photoCredit('barbell-bench-press')).toBeNull();
+    expect(photoCredit('sissy-squat')).toBeNull();
+    expect(photoCredit('constructor')).toBeNull();
   });
 });
 

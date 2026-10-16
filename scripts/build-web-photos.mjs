@@ -1,0 +1,175 @@
+// Builds the exercise photos sourced from Wikimedia Commons (§18.29, Round 16c): the program exercises free-exercise-db
+// has no photo of. Run it from the project root:
+//   npm run build:web-photos
+//
+// It reads scripts/web-photos.json, chosen with scripts/find-commons-photos.mjs: each exercise id maps to
+//   { "title": "File:….jpg", "position"?: "top" | "bottom" | "left" | "right", "note"?: "…" }   one Commons photo, or
+//   { "alias": "<exercise id>", "note": "…" }                                                   another exercise's photos
+// and writes the only copies of:
+//   assets/exercises-web/{id}.webp        the photo, a 360 x 240 (3:2) crop centred on the subject, WebP quality 50
+//                                         (the library's photos are 360 px on the long side at 50 too)
+//   src/seed/webPhotos.generated.ts       the photos as static require() calls with each one's credit, and the aliases
+//   docs/photo-credits.md                 every Commons photo's title, author, licence and page, for the store listing
+// Each source photo (the 1080px rendering, or the original when smaller) is downloaded once into
+// scripts/.cache/commons/ (gitignored) and reused on later runs. The credit (author and licence) is read from Commons
+// when the photo is downloaded and kept beside it, so a re-run never changes a credit silently. Only licences the app
+// can bundle are accepted: public domain, CC0, CC BY and CC BY-SA; CC BY and CC BY-SA need the credit shown, which
+// the form demo does under the photo. Photos in assets/exercises-web/ that the manifest no longer lists are deleted.
+// The TypeScript is written only once every photo is done. Never edit the generated files by hand.
+
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
+import { bundlable } from './commons-licence.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const MANIFEST = join(ROOT, 'scripts', 'web-photos.json');
+const CACHE = join(ROOT, 'scripts', '.cache', 'commons');
+const ASSETS = join(ROOT, 'assets', 'exercises-web');
+const TS_OUT = join(ROOT, 'src', 'seed', 'webPhotos.generated.ts');
+const CREDITS_OUT = join(ROOT, 'docs', 'photo-credits.md');
+const IDS = join(ROOT, 'src', 'seed', 'libraryIds.json');
+const LIBRARY_PHOTOS = join(ROOT, 'assets', 'exercises');
+
+const API = 'https://commons.wikimedia.org/w/api.php';
+const USER_AGENT = 'GymHound-photo-sourcing/1.0 (https://github.com/eddiealwan-dev/gymhound)';
+const SOURCE_WIDTH = 1080;
+const OUT = { width: 360, height: 240 };
+const QUALITY = 50;
+const POSITIONS = new Set(['top', 'bottom', 'left', 'right']);
+
+const stripTags = (html) => (html ?? '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+const fileKey = (title) => title.replace(/^File:/, '').replace(/[^A-Za-z0-9._-]+/g, '_');
+
+/** The photo's rendering URL and credit from Commons: the cached copy beside the photo, else asked for and cached. */
+async function sourcePhoto(title) {
+  mkdirSync(CACHE, { recursive: true });
+  const key = fileKey(title);
+  const photo = join(CACHE, `${key}.jpg`);
+  const meta = join(CACHE, `${key}.json`);
+  if (existsSync(photo) && existsSync(meta)) return { photo, credit: JSON.parse(readFileSync(meta, 'utf8')) };
+
+  const params = new URLSearchParams({
+    action: 'query',
+    format: 'json',
+    titles: title,
+    prop: 'imageinfo',
+    iiprop: 'url|extmetadata|size',
+    iiurlwidth: String(SOURCE_WIDTH),
+    iiextmetadatafilter: 'LicenseShortName|Artist|LicenseUrl',
+  });
+  const response = await fetch(`${API}?${params}`, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`Commons refused ${title}: ${response.status}`);
+  const page = Object.values((await response.json()).query?.pages ?? {})[0];
+  const info = page?.imageinfo?.[0];
+  if (!info) throw new Error(`Commons has no file ${title}`);
+  const license = stripTags(info.extmetadata?.LicenseShortName?.value);
+  if (!bundlable(license)) throw new Error(`${title} is under "${license}", which the app cannot bundle`);
+  const credit = {
+    title,
+    author: stripTags(info.extmetadata?.Artist?.value) || 'Unknown author',
+    license,
+    licenseUrl: stripTags(info.extmetadata?.LicenseUrl?.value),
+    page: info.descriptionurl,
+  };
+  const url = info.width > SOURCE_WIDTH ? info.thumburl : info.url;
+  const download = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(60_000) });
+  if (!download.ok) throw new Error(`Could not download ${title}: ${download.status}`);
+  const temporary = `${photo}.part`;
+  writeFileSync(temporary, Buffer.from(await download.arrayBuffer()));
+  renameSync(temporary, photo);
+  writeFileSync(meta, JSON.stringify(credit, null, 2));
+  return { photo, credit };
+}
+
+const HEADER = [
+  '// Generated by scripts/build-web-photos.mjs from scripts/web-photos.json and Wikimedia Commons.',
+  '// Do not edit: change the manifest and run `npm run build:web-photos`.',
+];
+
+function writeTs(photos, aliases) {
+  const rows = Object.entries(photos).map(
+    ([id, p]) =>
+      `  '${id}': { photo: require('../../assets/exercises-web/${id}.webp'), author: ${JSON.stringify(p.credit.author)}, license: ${JSON.stringify(p.credit.license)}, licenseUrl: ${JSON.stringify(p.credit.licenseUrl)}, page: ${JSON.stringify(p.credit.page)}, note: ${JSON.stringify(p.note ?? null)} },`,
+  );
+  const aliasRows = Object.entries(aliases).map(([id, a]) => `  '${id}': { photosOf: '${a.alias}', note: ${JSON.stringify(a.note)} },`);
+  const text = [
+    ...HEADER,
+    "import type { ImageSourcePropType } from 'react-native';",
+    '',
+    '/** A photo sourced from Wikimedia Commons: the file and its credit (author, licence), and what the demo says under it. */',
+    'export type WebPhoto = { photo: ImageSourcePropType; author: string; license: string; licenseUrl: string; page: string; note: string | null };',
+    '',
+    `/** The exercises with one Commons photo each (${rows.length}), keyed by exercise id. */`,
+    'export const WEB_PHOTOS: Readonly<Record<string, WebPhoto>> = {',
+    ...rows,
+    '};',
+    '',
+    `/** The exercises (${aliasRows.length}) that show another exercise's photos, with what the demo says under them. */`,
+    'export const WEB_PHOTO_ALIASES: Readonly<Record<string, { photosOf: string; note: string }>> = {',
+    ...aliasRows,
+    '};',
+    '',
+  ].join('\n');
+  writeFileSync(TS_OUT, text);
+}
+
+function writeCredits(photos) {
+  const lines = Object.entries(photos)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, p]) => `- **${id}**: [${p.credit.title.replace(/^File:/, '')}](${p.credit.page}) by ${p.credit.author}, ${p.credit.license}${p.credit.licenseUrl ? ` (${p.credit.licenseUrl})` : ''}`);
+  const text = [
+    '# Exercise photo credits',
+    '',
+    'Generated by scripts/build-web-photos.mjs. The exercise library\'s other photos are from free-exercise-db (github.com/yuhonas/free-exercise-db, the Unlicense).',
+    'These are from Wikimedia Commons, under the licence each line names; the app shows the credit under the photo.',
+    '',
+    ...lines,
+    '',
+  ].join('\n');
+  writeFileSync(CREDITS_OUT, text);
+}
+
+async function main() {
+  const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  const known = new Set(JSON.parse(readFileSync(IDS, 'utf8')));
+  const photos = {};
+  const aliases = {};
+  for (const [id, entry] of Object.entries(manifest)) {
+    if (!known.has(id)) throw new Error(`${id} is not a library exercise`);
+    if (entry.alias !== undefined) {
+      if (typeof entry.note !== 'string' || entry.note === '') throw new Error(`${id}: an alias needs a note`);
+      aliases[id] = entry;
+    } else if (typeof entry.title === 'string' && entry.title.startsWith('File:')) {
+      if (entry.position !== undefined && !POSITIONS.has(entry.position)) throw new Error(`${id}: position must be top, bottom, left or right`);
+      photos[id] = entry;
+    } else throw new Error(`${id}: needs a "title" or an "alias"`);
+  }
+  for (const [id, a] of Object.entries(aliases)) {
+    const target = a.alias;
+    if (!(target in photos) && !existsSync(join(LIBRARY_PHOTOS, `${target}-0.webp`))) throw new Error(`${id}: alias ${target} has no photos`);
+  }
+
+  mkdirSync(ASSETS, { recursive: true });
+  for (const [id, entry] of Object.entries(photos)) {
+    const { photo, credit } = await sourcePhoto(entry.title);
+    entry.credit = credit;
+    await sharp(photo)
+      .rotate()
+      .resize(OUT.width, OUT.height, { fit: 'cover', position: entry.position ?? sharp.strategy.attention })
+      .webp({ quality: QUALITY, effort: 6 })
+      .toFile(join(ASSETS, `${id}.webp`));
+  }
+  for (const file of readdirSync(ASSETS)) if (!(file.replace(/\.webp$/, '') in photos)) rmSync(join(ASSETS, file));
+
+  writeTs(photos, aliases);
+  writeCredits(photos);
+  const bytes = readdirSync(ASSETS).reduce((sum, f) => sum + readFileSync(join(ASSETS, f)).length, 0);
+  console.log(`${Object.keys(photos).length} Commons photos (${(bytes / 1024).toFixed(0)} KB) and ${Object.keys(aliases).length} aliases.`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

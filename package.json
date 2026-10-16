@@ -65,6 +65,7 @@
     "build:library": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-library.mjs",
     "build:programs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-programs.mjs",
     "build:pictures": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-program-pictures.mjs",
+    "build:web-photos": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-web-photos.mjs",
     "postinstall": "patch-package",
     "eas-build-post-install": "node scripts/leave-out-untested.js"
   },

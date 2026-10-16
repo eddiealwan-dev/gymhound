@@ -223,7 +223,9 @@ export const RUNG_NEW_IDS: readonly string[] = RUNG_NEW.map((e) => e.id);
 
 /**
  * R605: the seven new exercises that show the bundled photos of a free-exercise-db exercise whose still looks the
- * same. The other 101 have none: the form demo shows their steps, and a phone build offers your own photos (R111).
+ * same. Most of the other 101 show a Wikimedia Commons photo, or another exercise's with a note (scripts/web-photos.json,
+ * Round 16c); the rest, the seven metcons among them, have none: the form demo shows their steps, and a phone build
+ * offers your own photos (R111).
  */
 export const PHOTO_ALIAS: Readonly<Record<string, string>> = {
   'paused-back-squat': 'barbell-back-squat',

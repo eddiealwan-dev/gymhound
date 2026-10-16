@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { AccessibilityInfo, Image, Platform, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Image, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { useDb } from '../db/DbProvider';
 import { getExercise, type ExerciseDetail } from '../db/repositories/exercisesRepo';
 import { musclesLine } from '../domain/labels';
 import { Button } from './Button';
-import { canHaveOwnPhotos, photoNote, useExercisePhotos } from './exercisePhotos';
+import { canHaveOwnPhotos, photoCredit, photoNote, useExercisePhotos } from './exercisePhotos';
 import { OwnPhotos } from './OwnPhotos';
 import { afterSheetCloses, Sheet } from './Sheet';
 import { SheetTitle } from './SheetTitle';
@@ -138,6 +138,24 @@ function Steps({ steps }: { steps: readonly string[] }) {
   );
 }
 
+/**
+ * The credit under a Wikimedia Commons photo (Round 16c): "Photo: {author}, {licence}, Wikimedia Commons", as the
+ * CC BY and CC BY-SA licences ask. Tapping it opens the photo's Commons page, which carries the licence. Nothing for a
+ * free-exercise-db photo.
+ */
+function PhotoCredit({ exerciseId }: { exerciseId: string }) {
+  const credit = photoCredit(exerciseId);
+  if (credit === null) return null;
+  const line = `Photo: ${credit.author}, ${credit.license}, Wikimedia Commons`;
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={line} accessibilityHint="Opens the photo's page" onPress={() => Linking.openURL(credit.page).catch(() => undefined)}>
+      <Body muted style={{ fontSize: 12 }}>
+        {line}
+      </Body>
+    </Pressable>
+  );
+}
+
 function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => void) | null }) {
   const photos = useExercisePhotos(exercise.id);
   /** Your own exercise has no steps: the demo says so and offers its editor instead. */
@@ -156,6 +174,7 @@ function Demo({ exercise, onEdit }: { exercise: ExerciseDetail; onEdit: (() => v
               {photoNote(exercise.id)}
             </Body>
           ) : null}
+          <PhotoCredit exerciseId={exercise.id} />
         </View>
       ) : null}
       {exercise.instructions.length > 0 ? (

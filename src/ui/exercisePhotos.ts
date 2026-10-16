@@ -6,19 +6,35 @@ import { getOwnPhotos } from '../db/repositories/exercisePhotosRepo';
 import { photoFileExists, photoUri } from '../platform/exercisePhotoFiles';
 import { EXERCISE_PHOTOS } from '../seed/exercisePhotos.generated';
 import { PHOTO_ALIAS } from '../seed/newExerciseData';
+import { WEB_PHOTO_ALIASES, WEB_PHOTOS } from '../seed/webPhotos.generated';
 import { useDataVersion } from '../state/dataVersion';
 
+const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call(table, key);
+
 /**
- * An exercise's start and end photo, or undefined when none is bundled: custom exercises, a few library ones (§18.8)
- * and the programs' new exercises but seven, which show the photos of one whose still looks the same (R605).
+ * An exercise's bundled photos: the free-exercise-db start and end pair, or one Wikimedia Commons photo with null after
+ * it (Round 16c: the programs' new exercises, each with a credit); undefined when none is bundled: custom exercises, a
+ * few library ones (§18.8) and the seven metcons. An exercise can show another's photos, as the still looks the same
+ * (R605, `SHOWN_AS`, `WEB_PHOTO_ALIASES`).
  * Only the screens that show photos (the picker, the form demo and the exercise editor) import this, so the photo index
  * (about 1,746 requires) stays off the app's launch path; the exercises repository does not know about photos.
  */
-export function exercisePhotos(id: string): readonly [ImageSourcePropType, ImageSourcePropType] | undefined {
-  const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call(table, key);
+export function exercisePhotos(id: string): readonly [ImageSourcePropType, ImageSourcePropType | null] | undefined {
   if (has(EXERCISE_PHOTOS, id)) return EXERCISE_PHOTOS[id];
   if (has(SHOWN_AS, id)) return EXERCISE_PHOTOS[SHOWN_AS[id].photosOf];
-  return has(PHOTO_ALIAS, id) ? EXERCISE_PHOTOS[PHOTO_ALIAS[id]] : undefined;
+  if (has(PHOTO_ALIAS, id)) return EXERCISE_PHOTOS[PHOTO_ALIAS[id]];
+  if (has(WEB_PHOTOS, id)) return [WEB_PHOTOS[id].photo, null];
+  // One hop: an alias points at a photo of its own, never at another alias (the build checks).
+  if (has(WEB_PHOTO_ALIASES, id)) return exercisePhotos(WEB_PHOTO_ALIASES[id].photosOf);
+  return undefined;
+}
+
+/** A Commons photo's credit, for the line under it; null for free-exercise-db photos and everything else. */
+export function photoCredit(id: string): { author: string; license: string; page: string } | null {
+  const own = has(WEB_PHOTOS, id) ? id : has(WEB_PHOTO_ALIASES, id) ? WEB_PHOTO_ALIASES[id].photosOf : null;
+  if (own === null || !has(WEB_PHOTOS, own)) return null;
+  const { author, license, page } = WEB_PHOTOS[own];
+  return { author, license, page };
 }
 
 /**
@@ -29,9 +45,11 @@ const SHOWN_AS: Readonly<Record<string, { photosOf: string; note: string }>> = {
   'sissy-squat': { photosOf: 'fedb-weighted-sissy-squat', note: 'Shown with a plate held to the chest. Leave it out.' },
 };
 
-/** What the form demo says under borrowed photos, or null for an exercise showing its own. */
+/** What the form demo says under borrowed photos, or a Commons photo that needs a word; null for the rest. */
 export function photoNote(id: string): string | null {
-  return Object.prototype.hasOwnProperty.call(SHOWN_AS, id) ? SHOWN_AS[id].note : null;
+  if (has(SHOWN_AS, id)) return SHOWN_AS[id].note;
+  if (has(WEB_PHOTOS, id)) return WEB_PHOTOS[id].note;
+  return has(WEB_PHOTO_ALIASES, id) ? WEB_PHOTO_ALIASES[id].note : null;
 }
 
 /**

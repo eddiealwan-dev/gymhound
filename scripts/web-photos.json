@@ -1,0 +1,339 @@
+{
+  "advanced-tuck-back-lever": {
+    "alias": "back-lever",
+    "note": "Shown at the full back lever."
+  },
+  "advanced-tuck-front-lever": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever."
+  },
+  "advanced-tuck-front-lever-row": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever. The row starts from this position."
+  },
+  "advanced-tuck-planche": {
+    "alias": "straddle-planche",
+    "note": "Shown at the full planche."
+  },
+  "arch-hang": {
+    "alias": "fedb-scapular-pull-up",
+    "note": "Shown in the shoulders-down hang."
+  },
+  "archer-push-up": {
+    "alias": "fedb-push-up-wide",
+    "note": "Shown as a wide push-up. Shift toward one hand and keep the other arm straight."
+  },
+  "armor-building-complex": {
+    "alias": "fedb-front-squats-with-two-kettlebells",
+    "note": "Shown at the rack position with two kettlebells."
+  },
+  "assisted-squat": {
+    "alias": "bodyweight-squat",
+    "note": "Shown without support. Hold a post or a band to take some of your weight."
+  },
+  "back-lever": {
+    "title": "File:Back lever on gymnastics rings.jpg"
+  },
+  "band-assisted-muscle-up": {
+    "alias": "fedb-muscle-up",
+    "note": "Shown without the band."
+  },
+  "band-assisted-nordic-curl": {
+    "alias": "fedb-natural-glute-ham-raise",
+    "note": "Shown as a natural glute ham raise, the same kneeling lean. A band takes some of the load."
+  },
+  "band-dislocate": {
+    "alias": "fedb-round-the-world-shoulder-stretch",
+    "note": "Shown with a stick behind the back. Use a band the same way."
+  },
+  "band-face-pull": {
+    "alias": "face-pull",
+    "note": "Shown with a cable. Use a band the same way."
+  },
+  "bodyweight-romanian-deadlift": {
+    "alias": "barbell-romanian-deadlift",
+    "note": "Shown with a barbell. Hinge the same way with your arms hanging."
+  },
+  "box-pistol-squat": {
+    "alias": "pistol-squat",
+    "note": "Shown as a full pistol squat. Sit back onto a box instead of going all the way down."
+  },
+  "box-step-up": {
+    "alias": "fedb-dumbbell-step-ups",
+    "note": "Shown with dumbbells. Step onto a box the same way."
+  },
+  "chest-to-bar-pull-up": {
+    "title": "File:2008 CrossFit Games - Brandon doing chest-to-bar pull-ups.jpg"
+  },
+  "cossack-squat": {
+    "alias": "fedb-barbell-side-split-squat",
+    "note": "Shown with a barbell, in a wide side squat. Hold no weight, or one at your chest."
+  },
+  "couch-stretch": {
+    "alias": "fedb-kneeling-hip-flexor",
+    "note": "Shown as a kneeling hip flexor stretch. Put the back foot up on a wall or couch."
+  },
+  "dead-hang": {
+    "alias": "pull-up",
+    "note": "Shown at the start of a pull-up. Hold that straight-arm hang."
+  },
+  "deep-goblet-squat-hold": {
+    "alias": "dumbbell-goblet-squat",
+    "note": "Shown mid squat. Hold the weight at your chest at the bottom."
+  },
+  "deficit-push-up": {
+    "title": "File:Girl doing push-ups from the side.jpg"
+  },
+  "deficit-wall-handstand-push-up": {
+    "title": "File:Handstand pushup.jpg",
+    "position": "bottom"
+  },
+  "double-kettlebell-clean-and-press": {
+    "alias": "fedb-double-kettlebell-push-press",
+    "note": "Shown at the rack position with two kettlebells."
+  },
+  "dumbbell-hip-thrust": {
+    "alias": "barbell-hip-thrust",
+    "note": "Shown with a barbell. Rest a dumbbell across your hips."
+  },
+  "dumbbell-pullover-stretch": {
+    "alias": "fedb-bent-arm-dumbbell-pullover",
+    "note": "Shown with the bent arm pullover. Lower the weight behind your head for the stretch."
+  },
+  "dumbbell-rdl-stretch-hold": {
+    "alias": "barbell-romanian-deadlift",
+    "note": "Shown with a barbell. Hold a dumbbell in each hand and pause at the stretch."
+  },
+  "dumbbell-single-leg-romanian-deadlift": {
+    "alias": "fedb-kettlebell-one-legged-deadlift",
+    "note": "Shown with a kettlebell. Hold a dumbbell the same way."
+  },
+  "easy-run": {
+    "title": "File:500px photo (253078377).jpeg"
+  },
+  "eccentric-nordic-curl": {
+    "alias": "fedb-natural-glute-ham-raise",
+    "note": "Shown as a natural glute ham raise, the same kneeling lean."
+  },
+  "elevated-pike-push-up": {
+    "alias": "partial-wall-handstand-push-up",
+    "note": "Shown at the wall handstand push-up. Keep your feet on a box instead."
+  },
+  "explosive-pull-up-and-dip": {
+    "alias": "fedb-muscle-up",
+    "note": "Shown as the bar muscle-up: the pull-up, then the dip."
+  },
+  "feet-elevated-inverted-row": {
+    "alias": "fedb-inverted-row",
+    "note": "Shown with the feet on the floor. Rest your heels on a bench for this one."
+  },
+  "freestanding-handstand-practice": {
+    "alias": "fedb-handstand-push-ups",
+    "note": "Shown with the heels against a wall. Hold it free of the wall."
+  },
+  "front-lever": {
+    "title": "File:John Gill - Front Lever - 1962.JPG"
+  },
+  "half-lay-back-lever": {
+    "alias": "back-lever",
+    "note": "Shown at the full back lever."
+  },
+  "hamstring-walkout": {
+    "alias": "glute-bridge",
+    "note": "Shown at the top of a bridge. Walk your heels out from there."
+  },
+  "hanging-bent-leg-raise": {
+    "alias": "hanging-leg-raise",
+    "note": "Shown as a hanging leg raise. Keep your knees bent as you lift."
+  },
+  "hanging-knee-raise": {
+    "alias": "hanging-leg-raise",
+    "note": "Shown as a hanging leg raise. Bend your knees as you lift."
+  },
+  "heels-elevated-goblet-squat": {
+    "alias": "dumbbell-goblet-squat",
+    "note": "Shown with the heels flat. Raise them on small plates."
+  },
+  "hip-cars": {
+    "alias": "fedb-standing-hip-circles",
+    "note": "Shown as a standing hip circle."
+  },
+  "incline-row": {
+    "alias": "fedb-inverted-row",
+    "note": "Shown on a bar in a rack. Set the bar at about chest height."
+  },
+  "interval-run": {
+    "alias": "easy-run",
+    "note": "Shown as an easy run."
+  },
+  "kettlebell-curl": {
+    "alias": "dumbbell-curl",
+    "note": "Shown with dumbbells. Hold a kettlebell the same way."
+  },
+  "kettlebell-reverse-fly": {
+    "alias": "dumbbell-reverse-fly",
+    "note": "Shown with dumbbells. Hold kettlebells the same way."
+  },
+  "kettlebell-swing": {
+    "alias": "fedb-one-arm-kettlebell-swings",
+    "note": "Shown one-handed. Hold the bell with both hands."
+  },
+  "knee-push-up": {
+    "alias": "push-up",
+    "note": "Shown on the toes. Rest your knees on the floor for this one."
+  },
+  "l-sit": {
+    "title": "File:Bundesarchiv Bild 183-1983-0820-005, Jens Fischer.jpg"
+  },
+  "long-run": {
+    "alias": "easy-run",
+    "note": "Shown as an easy run."
+  },
+  "lying-knee-tuck": {
+    "title": "File:Zirshekam2.jpg"
+  },
+  "lying-straight-leg-raise": {
+    "title": "File:Zirshekam1.jpg"
+  },
+  "negative-dip": {
+    "alias": "dip",
+    "note": "Shown at the dip. Lower yourself slowly from the top."
+  },
+  "negative-muscle-up": {
+    "alias": "fedb-muscle-up",
+    "note": "Shown at the top. Lower slowly from there."
+  },
+  "negative-pull-up": {
+    "alias": "pull-up",
+    "note": "Shown at the pull-up. Lower yourself slowly from the top."
+  },
+  "one-leg-front-lever": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever."
+  },
+  "one-leg-l-sit": {
+    "alias": "l-sit",
+    "note": "Shown at the full L-sit."
+  },
+  "partial-wall-handstand-push-up": {
+    "title": "File:USMC-102406-M-0058D-001085.jpg"
+  },
+  "pigeon-stretch": {
+    "title": "File:IMG 0585 2-- Swan.jpg"
+  },
+  "pistol-squat": {
+    "title": "File:Pistol-squat.jpg"
+  },
+  "planche-lean": {
+    "alias": "straddle-planche",
+    "note": "Shown at the full planche. Lean the same way with your feet on the floor."
+  },
+  "ring-biceps-curl": {
+    "alias": "ring-row",
+    "note": "Shown as a ring row. For the curl, keep your elbows still and bend only at the elbow."
+  },
+  "ring-muscle-up": {
+    "alias": "fedb-muscle-up",
+    "note": "Shown on rings at the start of the muscle-up."
+  },
+  "ring-push-up": {
+    "alias": "fedb-suspended-push-up",
+    "note": "Shown on rings."
+  },
+  "ring-row": {
+    "title": "File:Man performing inverted row with suspension trainer.jpg"
+  },
+  "ring-triceps-extension": {
+    "title": "File:TRX-1.jpg"
+  },
+  "sandbag-carry": {
+    "alias": "fedb-sandbag-load",
+    "note": "Shown picking up the sandbags."
+  },
+  "shoulder-cars": {
+    "alias": "fedb-shoulder-circles",
+    "note": "Shown as a standing shoulder circle."
+  },
+  "shrimp-squat": {
+    "alias": "pistol-squat",
+    "note": "Shown as a pistol squat. In a shrimp squat the rear foot is held behind you."
+  },
+  "side-lying-hip-abduction": {
+    "title": "File:Side Leg Raise.jpg"
+  },
+  "single-leg-calf-raise": {
+    "alias": "dumbbell-standing-calf-raise",
+    "note": "Shown on both legs. Do it on one leg, the other foot lifted."
+  },
+  "standing-ab-wheel-rollout": {
+    "alias": "fedb-ab-roller",
+    "note": "Shown from the knees. Roll out from standing the same way."
+  },
+  "straddle-back-lever": {
+    "alias": "back-lever",
+    "note": "Shown at the full back lever."
+  },
+  "straddle-front-lever": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever."
+  },
+  "straddle-front-lever-row": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever. The row starts from this position."
+  },
+  "straddle-planche": {
+    "title": "File:Planche.jpg"
+  },
+  "support-hold": {
+    "alias": "fedb-dips-chest-version",
+    "note": "Shown at the top of a dip. Hold that straight-arm position."
+  },
+  "tempo-run": {
+    "alias": "easy-run",
+    "note": "Shown as an easy run."
+  },
+  "thoracic-open-book": {
+    "alias": "fedb-side-lying-floor-stretch",
+    "note": "Shown lying on the side with one arm open."
+  },
+  "toes-to-bar": {
+    "alias": "hanging-leg-raise",
+    "note": "Shown as a hanging leg raise. Bring your toes all the way to the bar."
+  },
+  "tuck-back-lever": {
+    "alias": "back-lever",
+    "note": "Shown at the full back lever."
+  },
+  "tuck-front-lever": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever."
+  },
+  "tuck-front-lever-row": {
+    "alias": "front-lever",
+    "note": "Shown at the full front lever. The row starts from this position."
+  },
+  "tuck-l-sit": {
+    "alias": "l-sit",
+    "note": "Shown at the full L-sit."
+  },
+  "tuck-planche": {
+    "alias": "straddle-planche",
+    "note": "Shown at the full planche."
+  },
+  "v-sit": {
+    "alias": "l-sit",
+    "note": "Shown as the L-sit. Lift the legs higher, toward vertical."
+  },
+  "vertical-row": {
+    "alias": "ring-row",
+    "note": "Shown at a lower angle. Stand more upright for the vertical row."
+  },
+  "wall-push-up": {
+    "alias": "fedb-incline-push-up",
+    "note": "Shown with the hands on a box. Stand and push against a wall instead."
+  },
+  "wide-grip-inverted-row": {
+    "alias": "fedb-inverted-row",
+    "note": "Shown with a regular grip. Take the bar wider than your shoulders."
+  }
+}
