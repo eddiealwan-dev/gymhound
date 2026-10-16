@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
+import { LIBRARY_EXERCISES } from './library.generated';
 import { PROGRAMS } from './programs.generated';
 import { PROGRAM_PICTURES, PROGRAM_PICTURE_SOURCES } from './programPictures.generated';
 
@@ -41,8 +42,12 @@ describe('program card pictures (R632)', () => {
       expect(existsSync(asset(id, 'thumb'))).toBe(true);
       const card = await sharp(asset(id, 'card')).metadata();
       const thumb = await sharp(asset(id, 'thumb')).metadata();
-      expect([card.format, card.width, card.height]).toEqual(['webp', 360, 240]);
-      expect([thumb.format, thumb.width, thumb.height]).toEqual(['webp', 192, 192]);
+      // The originals are 850 px wide, so a card is 850 x ~567; never enlarged past 1080 x 720, always 3:2 (to a pixel or two).
+      expect(card.format).toBe('webp');
+      expect(card.width).toBeGreaterThanOrEqual(850);
+      expect(card.width).toBeLessThanOrEqual(1080);
+      expect(Math.abs(card.width! / card.height! - 3 / 2)).toBeLessThan(0.01);
+      expect([thumb.format, thumb.width, thumb.height]).toEqual(['webp', 288, 288]);
     }
   });
 
@@ -51,7 +56,8 @@ describe('program card pictures (R632)', () => {
     for (const s of sources) {
       expect(s).toBeDefined();
       expect([0, 1]).toContain(s.frame);
-      expect(existsSync(join(ROOT, 'assets', 'exercises', `${s.exerciseId}-${s.frame}.webp`))).toBe(true);
+      // Built from the original photo: the library exercise has a free-exercise-db source id.
+      expect(LIBRARY_EXERCISES.find((e) => e.id === s.exerciseId)?.sourceId).toEqual(expect.any(String));
     }
     expect(new Set(sources.map((s) => s.exerciseId)).size).toBe(20);
     expect(new Set(sources.map((s) => `${s.exerciseId}-${s.frame}`)).size).toBe(20);

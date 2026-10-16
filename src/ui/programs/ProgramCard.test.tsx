@@ -244,21 +244,22 @@ describe('the program card (R630)', () => {
     expect(StyleSheet.flatten(marker.props.style).color).toBe('#a39d90');
   });
 
-  it("the picture sits top left, 120 × 80, read as the movement's photo; with no picture yet, there is none", () => {
+  it("the picture is a full-width 3:2 banner at the top, read as the movement's photo; with no picture yet, there is none", () => {
     const tree = mount(11);
     expect(tree.root.findAllByType(Image)).toHaveLength(1);
     expect(tree.root.findAllByProps({ accessibilityLabel: 'Bench press photo' }).length).toBeGreaterThan(0);
     expect(mount(1).root.findAllByType(Image)).toHaveLength(0);
   });
 
-  it('at a large text size the title goes under the picture rather than squeezing beside it', () => {
-    const side = mount(11);
-    const row = side.root.findAllByProps({ accessibilityLabel: 'Bench press photo' })[0].parent?.parent;
-    expect(StyleSheet.flatten(row?.props.style).flexDirection).toBe('row');
-    mockFontScale = 2;
-    const stacked = mount(11);
-    const column = stacked.root.findAllByProps({ accessibilityLabel: 'Bench press photo' })[0].parent?.parent;
-    expect(StyleSheet.flatten(column?.props.style).flexDirection).toBe('column');
+  it('the title is always under the banner, a column at every text size', () => {
+    for (const scale of [1, 2]) {
+      mockFontScale = scale;
+      const tree = mount(11);
+      const frame = tree.root.findAllByProps({ accessibilityLabel: 'Bench press photo' })[0];
+      expect(StyleSheet.flatten(frame.props.style)).toMatchObject({ width: '100%', aspectRatio: 3 / 2 });
+      const column = frame.parent?.parent;
+      expect(StyleSheet.flatten(column?.props.style).flexDirection).toBeUndefined();
+    }
   });
 
   it('every control is a 44pt target with a label', () => {

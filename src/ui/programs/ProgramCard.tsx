@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { cardText, cardWhy, citationParts, citationSpeech, detailRows, progressionParagraphs, summaryLine, titleOf } from '../../domain/programCard';
 import type { Program } from '../../seed/programTypes';
-import { breakableName, useLargeText } from '../largeText';
+import { breakableName } from '../largeText';
 import { Body, Label, ScreenTitle } from '../Text';
 import { useTheme } from '../ThemeProvider';
 import { ProgramPicture } from './ProgramPicture';
@@ -55,7 +55,7 @@ function Bullet({ text }: { text: string }) {
 
 /**
  * A program's card (R630): its page on Routines, the documents' description in GymHound's design. Top to bottom: the
- * picture at the top left with the title beside it (under it at a large text size); the summary band; the details as
+ * picture as a full-width banner with the title under it; the summary band; the details as
  * label and value (a Pro program on free says so under the band); Why it works, How it progresses (in short labelled
  * paragraphs) and After this program (`cardText`, ruling R-w3); a quiet Sources link to the Sources sheet
  * (R631); then `footer`, the program's state and actions. Never its days or exercises: those show only once it is the
@@ -63,14 +63,13 @@ function Bullet({ text }: { text: string }) {
  */
 export function ProgramCard({ program, footer, locked = false }: { program: Program; footer: ReactNode; locked?: boolean }) {
   const { colors } = useTheme();
-  const stacked = useLargeText();
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const count = program.sourceIds.length;
   return (
     <View>
-      <View style={{ flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'flex-start' : 'center', gap: 16 }}>
+      <View style={{ gap: 16 }}>
         <ProgramPicture programId={program.id} label={program.picture.label} kind="card" />
-        <ScreenTitle accessibilityLabel={program.name} style={{ flex: stacked ? undefined : 1, minWidth: 0 }}>
+        <ScreenTitle accessibilityLabel={program.name} style={{ minWidth: 0 }}>
           {breakableName(titleOf(program))}
         </ScreenTitle>
       </View>
