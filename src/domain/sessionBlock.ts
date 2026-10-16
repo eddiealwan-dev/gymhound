@@ -39,6 +39,19 @@ export const INTERVAL_IDS: ReadonlySet<string> = new Set(['interval-run', 'bike-
 /** The quiet line on a technique slot's block: what isn't counted, so it never reads as the rule not counting (design gate #4). */
 export const TECHNIQUE_LINE = 'Technique set: not counted toward weekly volume.';
 
+/**
+ * What a metcon's score is, under its rule (Round 16e): the owner asked why an AMRAP wants reps when the card already
+ * says 10 of each. The rounds are the full rounds; the reps are the ones into the round the clock stopped in.
+ */
+export const AMRAP_SCORE_LINE = 'Score: the full rounds you finish, plus the reps into the round the clock stops in.';
+export const FOR_TIME_SCORE_LINE = 'Score: your time, or the cap if it comes first.';
+
+/** The score line for a metcon's logging type, or null for anything else. */
+export function scoreLine(loggingType: string): string | null {
+  if (loggingType === 'rounds') return AMRAP_SCORE_LINE;
+  return loggingType === 'for_time' ? FOR_TIME_SCORE_LINE : null;
+}
+
 export function blockKindOf(ex: BlockInput): BlockKind {
   const p = ex.program;
   if (!p) return 'sets';

@@ -12,6 +12,7 @@ import { RestInline } from './RestInline';
 import { cellStyle, COLUMN_GAP, SetRow, SUGGESTED_HINT } from './SetRow';
 import { BODY_MAX_SCALE } from '../Text';
 import type { ProgramRule } from '../../domain/ruleLine';
+import { AMRAP_SCORE_LINE } from '../../domain/sessionBlock';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1639,6 +1640,11 @@ describe('SetRow: the three program logging types (R607)', () => {
     jest.mocked(tick).mockReturnValue(true);
     await tapTick(tree, 'Set 1 done');
     expect(tick).toHaveBeenCalledWith('db', expect.anything(), expect.anything(), expect.objectContaining({ reps: 6, extraReps: 4 }), 'lb', 'mi');
+  });
+
+  it('says what an AMRAP score is, under its rule (Round 16e), and a lift says nothing of the kind', () => {
+    expect(shownText(mount(amrap()))).toContain(AMRAP_SCORE_LINE);
+    expect(shownText(mount(yoke()))).not.toContain(AMRAP_SCORE_LINE);
   });
 
   it('shows last AMRAP score as "6 + 4"', () => {

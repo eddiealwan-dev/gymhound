@@ -22,6 +22,7 @@ import {
   metconRuleLine,
   metconTitle,
   runNoun,
+  scoreLine,
   targetSecondsOf,
   TECHNIQUE_LINE,
   workPlanFor,
@@ -569,6 +570,13 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       {kind === 'technique' ? (
         <Body muted style={{ fontSize: 14, marginTop: 4 }}>
           {TECHNIQUE_LINE}
+        </Body>
+      ) : null}
+      {/* What a metcon's score is (Round 16e): the rounds and the reps into the last one, or the time. By the logging
+          type, so an AMRAP in your own routine says it too. */}
+      {scoreLine(ex.loggingType) !== null ? (
+        <Body muted style={{ fontSize: 14, marginTop: 4 }}>
+          {scoreLine(ex.loggingType)}
         </Body>
       ) : null}
       {/* A program slot's note, as the documents write it (R606), and the warm-up line under a lifting day's first slot
