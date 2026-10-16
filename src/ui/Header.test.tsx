@@ -1,10 +1,12 @@
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { seededDb } from '../db/testing/fixtures';
 import type { Db } from '../db/types';
-import { Header } from './Header';
+import { Header, TAGLINE } from './Header';
 import { HoundMark } from './HoundMark';
+import { TITLE_MAX_SCALE } from './Text';
+import { fonts } from './theme';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,6 +86,28 @@ describe('the header keeps the wordmark whole at every width (design gate #13, r
     expect(40 + 10 + 146 + before + 36 + gap + 36).toBeLessThanOrEqual(288);
     // Their slops meet in the gap between them and never overlap.
     expect(buttons[0].props.hitSlop.right + buttons[1].props.hitSlop.left).toBeLessThanOrEqual(gap);
+  });
+
+  it('the tagline sits under the wordmark, muted, in the wordmark face, and wraps whole at the largest text (Round 16)', () => {
+    const tree = mount(390);
+    const tagline = tree.root.findAll((n) => n.type === Text && n.props.children === TAGLINE)[0];
+    expect(tagline).toBeDefined();
+    // Under GYMHOUND: both are children of the same column, the wordmark first.
+    let column = tagline.parent!;
+    while (column.type !== View) column = column.parent!;
+    expect(column.findAll((n) => n.type === Text).map((t) => t.props.children)).toEqual(['GYMHOUND', TAGLINE]);
+    const style = StyleSheet.flatten(tagline.props.style);
+    expect(style.fontFamily).toBe(fonts.display600);
+    expect(style.color).toBe('#a39d90');
+    expect(style.fontSize).toBeLessThan(38);
+    // Never cut: no line cap, no shrinking, and it scales like a title.
+    expect(tagline.props.numberOfLines).toBeUndefined();
+    expect(tagline.props.adjustsFontSizeToFit).toBeFalsy();
+    expect(tagline.props.allowFontScaling).not.toBe(false);
+    expect(tagline.props.maxFontSizeMultiplier).toBe(TITLE_MAX_SCALE);
+    // The column can wrap the tagline without pushing the buttons off the screen.
+    expect(StyleSheet.flatten(column.props.style)).toMatchObject({ flexShrink: 1, minWidth: 0 });
+    expect(tagline.props.importantForAccessibility).toBe('no');
   });
 
   it('at 360pt and wider: the 48pt hound and 40pt buttons, as before', () => {

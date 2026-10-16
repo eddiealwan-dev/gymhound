@@ -17,6 +17,9 @@ function closeSettings() {
 /** Below this width (a 320pt phone, Display Zoom) the hound and the round buttons are drawn smaller (ruling R-g2). */
 const NARROW = 360;
 
+/** The line under the wordmark on every screen (Round 16). */
+export const TAGLINE = 'Consistency and Progression by Design.';
+
 /**
  * The header's round buttons' sizes and targets. Narrow, they are 36pt, 8pt apart: each reaches 4pt past its edge, so
  * it is a 44pt target, and the two reaches meet in the gap without overlapping.
@@ -54,12 +57,24 @@ export function Header() {
           justifyContent: 'space-between',
         }}
       >
-        <View testID="header-lockup" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0, marginRight: narrow ? 8 : 12 }}>
+        <View testID="header-lockup" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minWidth: 0, marginRight: narrow ? 8 : 12 }}>
           <HoundMark size={narrow ? 40 : 48} />
-          {/* Fixed and whole: no text scaling, no shrinking, no ellipsis (PRODUCT.md's one-line wordmark). */}
-          <Display weight={800} upper allowFontScaling={false} style={{ color: colors.red, fontSize: 38, letterSpacing: -0.5, flexShrink: 0 }}>
-            GYMHOUND
-          </Display>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            {/* Fixed and whole: no text scaling, no shrinking, no ellipsis (PRODUCT.md's one-line wordmark). */}
+            <Display weight={800} upper allowFontScaling={false} style={{ color: colors.red, fontSize: 38, letterSpacing: -0.5, flexShrink: 0 }}>
+              GYMHOUND
+            </Display>
+            {/* The tagline (Round 16): the wordmark's face, muted and small, under it. It grows with the text size like a title and wraps whole; the screen reader skips it. */}
+            <Display
+              weight={600}
+              testID="header-tagline"
+              accessible={false}
+              importantForAccessibility="no"
+              style={{ color: colors.textMuted, fontSize: 13, lineHeight: 15, letterSpacing: 0.2, marginTop: -2 }}
+            >
+              {TAGLINE}
+            </Display>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: round.gap }}>
           <ProfileButton onProfile={onProfile} size={round.size} hitSlop={round.slop} />
