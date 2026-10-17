@@ -117,6 +117,31 @@ The mockups use a cool blue-black palette, cyan accents, Chakra Petch/IBM Plex, 
   - An unmapped exercise keeps its form photo.
 - **Patterns:** start with the five that exist (squat, hinge/deadlift, vertical pull, dip, elbow flexion). Add the rest of the v1 pattern table in Phase 2.
 
+## Form audit: all ~990 exercises
+
+Every exercise that shows the figure must show **correct form and correct movement for that exact exercise**, not just "something close from the same pattern". Check every one of them, not a sample.
+
+- **Script:** `scripts/motion/audit-form.ts` runs over every mapped exercise and writes `docs/motion-lab/audit/form-audit.csv`: exerciseId, name, pattern, equipment, grip, stance/angle variant, status (`pass`, `fail`, `needs-review`), and the reasons.
+- **Right movement for the name.** The mapping must match what the name says:
+  - grip (overhand, underhand, neutral, mixed) and grip width;
+  - stance (sumo vs conventional, split, single-leg) and side (single-arm or single-leg);
+  - bench or body angle (flat, incline, decline, seated, standing, prone);
+  - bar position (front squat vs back squat) and implement (barbell, dumbbell, kettlebell, cable, machine, band, bodyweight).
+  - A variant the pattern can't show correctly (for example sumo deadlift on the conventional rig, or a Nordic curl) is `needs-review` or keeps its form photo. **Never ship a wrong demo.**
+- **Proper form, checked on all 49 sampled frames of each rep:**
+  - every joint stays inside a normal human range, with no hyperextended knees or elbows and no joint bending backwards;
+  - the anchor stays fixed (feet on the floor, hands on the bar for hanging and dip work);
+  - nothing passes through the floor, the bench or the body;
+  - the bar or weight follows the right path (over midfoot for squats and hinges, close to the body on pulls);
+  - the rep reaches the pattern's full range (depth, lockout, full hang) and ends where it started;
+  - a neutral spine on hinges and squats, a straight body on pull-ups and dips, and no swinging.
+- **Right muscles:** the highlighted primary and secondary muscles match the exercise library for that exercise, and every exercise has at least one primary.
+- **Right words:** the cues and form checks fit the exercise, are in GymHound's plain voice (`design:ux-copy`), name no competitor, and never say the app notices, detects or decides an off day.
+- **Contact sheets for my eyes:** for each pattern, render the start, middle and end-of-rep frames of every exercise into `docs/motion-lab/audit/contact-sheets/<pattern>.png`, so I can scan them quickly. Put every `fail` and `needs-review` on one extra sheet at the top.
+- **Fix, then re-run.** Fix failures at the root (keyword table, pattern keyframes or solver), using `superpowers:systematic-debugging`, then re-run the whole audit, not just the fixed rows. Repeat until everything is `pass` or I've signed off on its `needs-review` decision.
+- **Keep it running:** the audit's checks run in the test suite, so any change to a pattern, solver or mapping table re-checks all ~990.
+- **Skills:** `agentic-council:skeptic-edge-case-enumeration` to list the odd variants first, `agentic-council:artisan-motion-design` to review the contact sheets, and `superpowers:verification-before-completion` before calling it done. You may split the work by pattern across sub-agents, but one final pass checks the whole CSV.
+
 ## Tests
 
 - `forwardKinematics` + solvers reproduce every `sampledFrames` joint in `motion-lab-rig.v2.json` within 0.5 units, for all five exercises.
@@ -124,6 +149,7 @@ The mockups use a cool blue-black palette, cyan accents, Chakra Petch/IBM Plex, 
 - Squat and deadlift bar x stays within ±1 of its target. The pull-up elbow is always below the shoulder–hand line.
 - `unwrapAngles` never jumps more than 180° between samples.
 - `flexScale` returns 1 at rest and hits the peak values at full effort; stabilizers never scale.
+- The form audit: zero `fail` rows, joint-range, anchor, floor/bench, bar-path and full-range checks for every mapped exercise, and the start and end frames of each rep match.
 - Tier resolution, mapping-script coverage, My week aggregation and reduced motion (a static frame at `stillT`, no flex) are covered.
 
 ## Phases (stop at each checkpoint)
@@ -136,13 +162,16 @@ The mockups use a cool blue-black palette, cyan accents, Chakra Petch/IBM Plex, 
    - Commit, then tell me how to test it in Expo Go.
    - **Stop for my review on device.**
 2. **Deadlift, Pull-up, Dips and Curl,** then the remaining patterns and equipment props.
-3. **Mapping script + `unmapped.csv`.** **Stop so I can review the CSV.**
+3. **Mapping script + `unmapped.csv`, then the full form audit of all ~990 exercises** (see "Form audit").
+   - Give me `form-audit.csv`, the contact sheets and the count of pass, fail and needs-review.
+   - **Stop so I can review the CSVs and contact sheets.**
 4. **Programs, only as decided at Phase 0.**
 5. **Polish and performance pass:**
    - the full skill review chain above;
    - profiler numbers;
    - accessibility labels for every muscle chip and the stage;
-   - reduced motion.
+   - reduced motion;
+   - **re-run the full form audit on all ~990 exercises** and confirm zero `fail` rows.
    - Then a final summary.
 
 At each stop, give me: what changed (files), test results, the review findings, open questions, and a screenshot or description of what I'll see.
