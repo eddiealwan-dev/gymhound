@@ -80,6 +80,15 @@ The mockups use a cool blue-black palette, cyan accents, Chakra Petch/IBM Plex, 
   - then design:design-critique and design:accessibility-review;
   - then hzblj-skills:polish and hzblj-skills:clean-review.
   - Fix what they find and list anything you chose not to fix.
+- **Bug prevention:**
+  - `superpowers:systematic-debugging` for any bug: root cause first, never patch a symptom;
+  - `superpowers:requesting-code-review` at the end of every phase;
+  - `agentic-council:skeptic-edge-case-enumeration` in Phase 0: odd exercises, largest text size, low-end phones, empty My week, the app resumed mid-rep;
+  - `hzblj-skills:error-handling`: bad or unmapped motion data falls back to the photo, never a crash;
+  - `agentic-council:craftsman-e2e-testing` for the exercise → ⓘ → form demo flow (play/pause, speed, mode, chip isolate, back).
+- **Platform and performance (Phase 5):** `agentic-council:pathfinder-platform-audit` (iPhone vs Android: Skia, haptics, reduced motion) and `agentic-council:tuner-performance-audit` (60fps, battery, pause on blur).
+- **Motion, visuals and copy (before each checkpoint):** `agentic-council:artisan-motion-design` (rep timing, easing, flex feel), `agentic-council:artisan-visual-audit` (consistency with `DESIGN.md`) and `design:ux-copy` (cues, muscle descriptions and labels in GymHound's plain voice).
+- **Navigation:** `hzblj-skills:react-navigation` to wire the ⓘ → form demo screen.
 - **Crash reports:** no crash or bug-reporting SDK. Rely on the TestFlight / App Store Connect and Google Play Console crash reports.
 
 ## Architecture (same as v1, updated)
