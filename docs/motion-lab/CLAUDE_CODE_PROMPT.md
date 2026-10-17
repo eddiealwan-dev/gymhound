@@ -80,11 +80,7 @@ The mockups use a cool blue-black palette, cyan accents, Chakra Petch/IBM Plex, 
   - then design:design-critique and design:accessibility-review;
   - then hzblj-skills:polish and hzblj-skills:clean-review.
   - Fix what they find and list anything you chose not to fix.
-- **Bugsee:**
-  - Use `bugsee:bugsee-workflow`, and pick the sub-skill it points to.
-  - **Do not add the Bugsee SDK to the app without asking me.** It sends crash data off the phone, and `PRODUCT.md` says nothing about the user goes online.
-  - If I approve, it may only go into internal dev/test builds behind a flag, never the store build.
-  - Before that approval, use Bugsee only for things that don't ship in the app, such as build-insights on a dev build once one exists.
+- **Crash reports:** no crash or bug-reporting SDK. Rely on the TestFlight / App Store Connect and Google Play Console crash reports.
 
 ## Architecture (same as v1, updated)
 
