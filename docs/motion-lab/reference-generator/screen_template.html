@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>@@TITLE@@ · Motion Lab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&amp;family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#06080B}
+a{color:#7FD4FF}a:hover{color:#B8E8FF}
+:root{--ease:cubic-bezier(0.2,0,0,1)}
+.hud{font-family:'Chakra Petch',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.press{transition:scale 150ms var(--ease),background-color 150ms var(--ease),border-color 150ms var(--ease),color 150ms var(--ease)}
+.press:active{scale:.96}
+.press:focus-visible{outline:2px solid #7FD4FF;outline-offset:2px}
+
+/* rig: one shared clock; sampled from the hip-rooted skeleton, so the anchor (feet or hands) never slips */
+.rig{animation-duration:var(--dur);animation-play-state:var(--play);animation-iteration-count:infinite;animation-timing-function:linear;transform-box:view-box}
+@@MOTION@@
+
+/* activation follows effort: rises through the lifting phase, eases off on the way back */
+@@EFFORT@@
+
+/* phase readout, cues and checks on the same clock */
+@@WINDOWS@@
+.fill{transform-origin:0 50%;animation-name:fill}
+@keyframes fill{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+.ring{animation:ring 8s linear infinite;animation-play-state:var(--play)}
+@keyframes ring{to{stroke-dashoffset:-120}}
+
+.gridLine{fill:none;stroke:#132130;stroke-width:.6}
+.floor{fill:none;stroke:#1C3448;stroke-width:.8}
+.pedestal{fill:none;stroke:#5EC8FF;stroke-opacity:.5;stroke-width:1;stroke-dasharray:4 6}
+.parallel{stroke:#FFC247;stroke-opacity:.55;stroke-width:1;stroke-dasharray:3 4}
+.sil{fill:#151E29;stroke:#5EC8FF;stroke-opacity:.45;stroke-width:1}
+.base{fill:#2C3948;stroke:rgba(0,0,0,.72);stroke-width:.7;stroke-linejoin:round}
+.mus{stroke:rgba(0,0,0,.72);stroke-width:.7;stroke-linejoin:round}
+.vol{fill:url(#vol);stroke:url(#rim);stroke-width:.8;pointer-events:none}
+.volHead{fill:url(#vol);pointer-events:none}
+.fib{fill:none;stroke:rgba(255,255,255,.15);stroke-width:.5;stroke-linecap:round}
+.ten{fill:none;stroke:#D3DEE8;stroke-opacity:.6;stroke-linecap:round}
+.bone{fill:#DCE6EF;fill-opacity:.9;stroke:rgba(0,0,0,.4);stroke-width:.5}
+.head{fill:#253140;stroke:#5EC8FF;stroke-opacity:.5;stroke-width:1}
+.spec{fill:none;stroke:#BFE9FF;stroke-opacity:.35;stroke-width:1.2;stroke-linecap:round}
+.plate{fill:rgba(169,182,198,.04);stroke:#A9B6C6;stroke-opacity:.55;stroke-width:1}
+.prop{fill:rgba(94,200,255,.06);stroke:#5EC8FF;stroke-opacity:.8;stroke-width:1.1;stroke-linejoin:round}
+.far{opacity:.45}
+.frame{fill:none;stroke:#2B4A63;stroke-width:1.4;stroke-linecap:round}
+.frameHi{fill:none;stroke:#5EC8FF;stroke-opacity:.7;stroke-width:1.6;stroke-linecap:round}
+.barEnd{fill:rgba(94,200,255,.1);stroke:#5EC8FF;stroke-width:1.2}
+.node{fill:#E8F6FF;stroke:#5EC8FF;stroke-width:1.4}
+.sheen{mix-blend-mode:screen;opacity:0}
+.svgLabel{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.08em;fill:#8C9AAD}
+.cueText{font-family:'Chakra Petch',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:.05em;fill:#E8EEF5}
+.cueBox{fill:#0E1520;stroke:#5EC8FF;stroke-opacity:.5;stroke-width:.8}
+.cueLead{stroke:#5EC8FF;stroke-opacity:.6;stroke-width:.8}
+.cueDot{fill:#7FD4FF}
+
+.ic{grid-area:1/1;transition:opacity 300ms var(--ease),scale 300ms var(--ease),filter 300ms var(--ease)}
+[data-on="true"] .icPlay,[data-on="false"] .icPause{opacity:0;scale:.25;filter:blur(4px)}
+[data-on="true"] .icPause,[data-on="false"] .icPlay{opacity:1;scale:1;filter:blur(0)}
+
+.seg[data-active="true"]{background:#1A2533;color:#E8EEF5;border-color:#2E4054}
+.seg[data-active="false"]{background:transparent;color:#8C9AAD;border-color:transparent}
+.chip[data-selected="true"]{border-color:#7FD4FF;background:#101A26}
+.chip[data-selected="false"]{border-color:#1C2430;background:#0B0F15}
+
+@media (prefers-reduced-motion: reduce){
+.rig,.ring{animation:none!important}
+.sheen{opacity:0!important}
+.ph0,.chk,.cue0{opacity:1}
+.fP,.fS{transform:none}
+.ic{transition:none}
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 52px 16px 20px; background: #06080B; color: #E8EEF5; font-family: 'IBM Plex Sans', sans-serif; display: flex; flex-direction: column; gap: 12px; overflow: hidden; --dur: {{dur}}; --play: {{playState}}">
+
+<div style="display: flex; align-items: center; gap: 8px; height: 44px">
+<button class="press" aria-label="Back" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #1C2430; background: #0B0F15; color: #E8EEF5; display: grid; place-items: center; cursor: pointer; padding: 0">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+</button>
+<div style="flex: 1; min-width: 0">
+<div style="font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 20px; line-height: 24px">@@TITLE@@</div>
+<div style="font-size: 12px; line-height: 16px; color: #8C9AAD">@@SUB@@</div>
+</div>
+<div class="hud mono" style="font-size: 10px; padding: 6px 8px; border-radius: 8px; border: 1px solid #1F3A4F; color: #7FD4FF">Motion Lab</div>
+</div>
+
+<div style="position: relative; height: 392px; flex: none; border-radius: 20px; background: #0A0E13; border: 1px solid #16202B; overflow: hidden">
+<svg viewBox="@@VIEWBOX@@" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%" role="img" aria-label="@@ARIA@@">
+<defs>
+<pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" class="gridLine"></path></pattern>
+<filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="6"></feGaussianBlur></filter>
+<radialGradient id="vol" cx="0.36" cy="0.3" r="0.82"><stop offset="0" style="stop-color: #ffffff; stop-opacity: .3"></stop><stop offset=".45" style="stop-color: #ffffff; stop-opacity: 0"></stop><stop offset="1" style="stop-color: #000000; stop-opacity: .6"></stop></radialGradient>
+<linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color: #E6F6FF; stop-opacity: .55"></stop><stop offset=".38" style="stop-color: #E6F6FF; stop-opacity: 0"></stop></linearGradient>
+</defs>
+@@WORLD@@
+@@FIGURE@@
+@@CUES@@
+</svg>
+
+<div style="position: absolute; top: 14px; left: 14px; display: flex; flex-direction: column; gap: 2px">
+<div class="hud mono" style="font-size: 10px; color: #8C9AAD">Phase</div>
+<div style="display: grid">
+@@PHASES@@
+</div>
+</div>
+
+<div class="rig chk" style="position: absolute; top: 16px; right: 14px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: #1E1A0C; border: 1px solid #5C4A14; opacity: 0">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFC247" style="stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
+<span class="hud mono" style="font-size: 10px; color: #FFD27A">@@CHECK@@</span>
+</div>
+
+<div class="mono" style="position: absolute; left: 14px; bottom: 12px; font-size: 10px; letter-spacing: .06em; color: #8C9AAD">TEMPO @@TEMPO@@ · FROM YOUR PROGRAM</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="position: relative; height: 6px; border-radius: 3px; background: #121A24; overflow: hidden">
+<div class="rig fill" style="position: absolute; inset: 0; background: #5EC8FF; border-radius: 3px"></div>
+</div>
+<div class="hud mono" style="display: flex; gap: 4px; font-size: 10px; color: #8C9AAD">
+@@STRIP@@
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="press" data-on="{{playingStr}}" onClick="{{togglePlay}}" aria-label="{{playLabel}}" style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid #1C2430; background: #0B0F15; color: #E8EEF5; display: grid; place-items: center; cursor: pointer; padding: 0">
+<svg class="ic icPause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+<svg class="ic icPlay" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"></path></svg>
+</button>
+<button class="press mono" onClick="{{toggleSpeed}}" aria-label="Playback speed" style="width: 52px; height: 44px; border-radius: 12px; border: 1px solid #1C2430; background: #0B0F15; color: #E8EEF5; font-size: 14px; cursor: pointer; padding: 0">{{speedLabel}}</button>
+<div role="group" aria-label="Color by" style="flex: 1; display: flex; height: 44px; padding: 3px; box-sizing: border-box; border-radius: 12px; border: 1px solid #1C2430; background: #0B0F15">
+<button class="press seg" data-active="{{isActivation}}" aria-pressed="{{isActivation}}" onClick="{{showActivation}}" style="flex: 1; border-radius: 9px; border: 1px solid transparent; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer">Activation</button>
+<button class="press seg" data-active="{{isLoad}}" aria-pressed="{{isLoad}}" onClick="{{showLoad}}" style="flex: 1; border-radius: 9px; border: 1px solid transparent; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer">My week</button>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="@@HINTCOUNT@@">
+<button class="press chip" data-selected="{{c.selectedStr}}" aria-pressed="{{c.selectedStr}}" onClick="{{c.pick}}" style="min-height: 48px; padding: 7px 8px; border-radius: 12px; min-width: 0; border: 1px solid #1C2430; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; cursor: pointer; text-align: left">
+<span style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; color: #E8EEF5; white-space: nowrap"><span style="width: 8px; height: 8px; border-radius: 4px; flex: none; background: {{c.color}}"></span>{{c.name}}</span>
+<span class="mono" style="font-size: 9px; letter-spacing: .02em; color: #8C9AAD">{{c.meta}}</span>
+</button>
+</sc-for>
+</div>
+
+<p style="margin: 0; font-size: 13px; line-height: 19px; color: #B4C0CE; text-wrap: pretty; min-height: 38px">{{info}}</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"prime":{"editor":"color","default":"#FF6A2B","options":["#FF6A2B","#FF3D6E","#B6FF3B"]},"$preview":{"width":390,"height":844}}'>
+const BASE_REP_SECONDS = @@REP@@;
+const ROLE = {
+  primary: { label: 'PRIMARY', pulse: 'pP', sheen: 'sP' },
+  secondary: { label: 'SECONDARY', pulse: 'pS', sheen: 'sS' },
+  stabilizer: { label: 'STABILIZER', pulse: 'pX', sheen: 'sX' }
+};
+const MUSCLES = [
+  @@MUSCLES@@
+];
+const ALL_GROUPS = @@ALLGROUPS@@;
+const DEFAULT_INFO = @@INFO@@;
+const FLEX = { primary: 'fP', secondary: 'fS', stabilizer: 'fN' };
+const SECONDARY_COLOR = '#FFC247';
+const STABILIZER_COLOR = '#A06E53';
+const NOT_INVOLVED_COLOR = '#2C3948';
+const DIMMED_OPACITY = 0.12;
+const loadColor = (sets) => {
+  if (sets >= 12) return '#C2EEFF';
+  if (sets >= 8) return '#4FC0FF';
+  if (sets >= 4) return '#2F86C4';
+  return '#1E4A6B';
+};
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'activation', isPlaying: true, isHalfSpeed: false, focusId: null };
+    this.togglePlay = () => this.setState({ isPlaying: !this.state.isPlaying });
+    this.toggleSpeed = () => this.setState({ isHalfSpeed: !this.state.isHalfSpeed });
+    this.showActivation = () => this.setState({ mode: 'activation' });
+    this.showLoad = () => this.setState({ mode: 'load' });
+  }
+  renderVals() {
+    const { mode, isPlaying, isHalfSpeed, focusId } = this.state;
+    const prime = this.props.prime ?? '#FF6A2B';
+    const isLoad = mode === 'load';
+    const roleColor = { primary: prime, secondary: SECONDARY_COLOR, stabilizer: STABILIZER_COLOR };
+    const fill = {}; const op = {}; const pulse = {}; const sheen = {}; const flex = {};
+    ALL_GROUPS.forEach((id) => {
+      fill[id] = NOT_INVOLVED_COLOR;
+      op[id] = focusId ? DIMMED_OPACITY : 1;
+      pulse[id] = 'pN';
+      sheen[id] = 'sN';
+      flex[id] = 'fN';
+    });
+    MUSCLES.forEach((m) => {
+      fill[m.id] = isLoad ? loadColor(m.sampleSets) : roleColor[m.role];
+      op[m.id] = focusId && focusId !== m.id ? DIMMED_OPACITY : 1;
+      pulse[m.id] = isLoad ? 'pX' : ROLE[m.role].pulse;
+      sheen[m.id] = isLoad ? 'sX' : ROLE[m.role].sheen;
+      flex[m.id] = isLoad ? 'fN' : FLEX[m.role];
+    });
+    const chips = MUSCLES.map((m) => ({
+      name: m.name,
+      color: fill[m.id],
+      meta: isLoad ? m.sampleSets + ' SETS' : ROLE[m.role].label,
+      selectedStr: String(focusId === m.id),
+      pick: () => this.setState({ focusId: this.state.focusId === m.id ? null : m.id })
+    }));
+    const focused = MUSCLES.find((m) => m.id === focusId);
+    const info = focused
+      ? (isLoad ? focused.name + ' · ' + focused.sampleSets + ' sets logged this week (sample data).' : focused.about)
+      : (isLoad ? 'Sample week: each muscle is shaded by the sets you logged. Brighter means more work this week.' : DEFAULT_INFO);
+    return {
+      dur: (isHalfSpeed ? BASE_REP_SECONDS * 2 : BASE_REP_SECONDS) + 's',
+      playState: isPlaying ? 'running' : 'paused',
+      playingStr: String(isPlaying),
+      playLabel: isPlaying ? 'Pause' : 'Play',
+      speedLabel: isHalfSpeed ? '½×' : '1×',
+      isActivation: String(!isLoad),
+      isLoad: String(isLoad),
+      togglePlay: this.togglePlay,
+      toggleSpeed: this.toggleSpeed,
+      showActivation: this.showActivation,
+      showLoad: this.showLoad,
+      fill: fill, op: op, pulse: pulse, sheen: sheen, flex: flex, chips: chips, info: info
+    };
+  }
+}
+</script>
+</body>
+</html>
